@@ -157,7 +157,7 @@ const LoginScreen = ({ navigation }: any) => {
 
         <TouchableOpacity 
           style={styles.registerButton}
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => navigation.navigate('RegisterScreen')}
         >
           <Text style={styles.registerText}>
             {t('new_patient_register_here')}

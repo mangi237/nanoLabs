@@ -4,68 +4,84 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../../context/languageContext';
 import { useTheme } from '../../../context/themeContext';
 
-const Step1_PersonalInfo = ({ navigation, route }: any) => {
+const Step2_ContactInfo = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const { primaryColor } = useTheme();
+  const { patientData } = route.params || {};
   const [formData, setFormData] = useState({
-    name: '',
-    age: '',
-    gender: 'male'
+    phone: '',
+    email: '',
+    address: '',
+    emergencyContact: '',
+    guardianName: ''
   });
 
   const handleNext = () => {
-    if (!formData.name.trim() || !formData.age.trim()) {
-      alert(t('fill_all_fields'));
+    if (!formData.phone.trim() || !formData.email.trim()) {
+      alert(t('fill_required_fields'));
       return;
     }
-    navigation.navigate('Step2_ContactInfo', { patientData: formData });
+    navigation.navigate('Step3_HealthInfo', { 
+      patientData: { ...patientData, ...formData }
+    });
   };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
       <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: '16%' }]} />
+        <View style={[styles.progressFill, { width: '33%' }]} />
       </View>
-      <Text style={styles.stepText}>Step 1/6</Text>
+      <Text style={styles.stepText}>Step 2/6</Text>
       
-      <Text style={styles.title}>{t('personal_info')}</Text>
-      <Text style={styles.subtitle}>{t('tell_us_about_yourself')}</Text>
+      <Text style={styles.title}>{t('contact_info')}</Text>
+      <Text style={styles.subtitle}>{t('how_to_reach_you')}</Text>
 
       <View style={styles.form}>
         <TextInput
           style={styles.input}
-          placeholder={t('full_name')}
-          value={formData.name}
-          onChangeText={(text) => setFormData({ ...formData, name: text })}
+          placeholder={t('phone_number')}
+          value={formData.phone}
+          onChangeText={(text) => setFormData({ ...formData, phone: text })}
+          keyboardType="phone-pad"
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
         
         <TextInput
           style={styles.input}
-          placeholder={t('age')}
-          value={formData.age}
-          onChangeText={(text) => setFormData({ ...formData, age: text })}
-          keyboardType="numeric"
+          placeholder={t('email_address')}
+          value={formData.email}
+          onChangeText={(text) => setFormData({ ...formData, email: text })}
+          keyboardType="email-address"
+          autoCapitalize="none"
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
 
-        <View style={styles.genderContainer}>
-          <Text style={styles.genderLabel}>{t('gender')}</Text>
-          <View style={styles.genderOptions}>
-            <TouchableOpacity
-              style={[styles.genderOption, formData.gender === 'male' && styles.genderSelected]}
-              onPress={() => setFormData({ ...formData, gender: 'male' })}
-            >
-              <Text style={styles.genderText}>♂ {t('male')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.genderOption, formData.gender === 'female' && styles.genderSelected]}
-              onPress={() => setFormData({ ...formData, gender: 'female' })}
-            >
-              <Text style={styles.genderText}>♀ {t('female')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder={t('address')}
+          value={formData.address}
+          onChangeText={(text) => setFormData({ ...formData, address: text })}
+          multiline
+          numberOfLines={3}
+          placeholderTextColor="rgba(255,255,255,0.7)"
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder={t('emergency_contact')}
+          value={formData.emergencyContact}
+          onChangeText={(text) => setFormData({ ...formData, emergencyContact: text })}
+          keyboardType="phone-pad"
+          placeholderTextColor="rgba(255,255,255,0.7)"
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder={t('guardian_name')}
+          value={formData.guardianName}
+          onChangeText={(text) => setFormData({ ...formData, guardianName: text })}
+          placeholderTextColor="rgba(255,255,255,0.7)"
+        />
 
         <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
           <Text style={styles.nextButtonText}>{t('next')} →</Text>
@@ -124,42 +140,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     fontFamily: 'Poppins-Regular',
   },
-  genderContainer: {
-    marginBottom: 30,
-  },
-  genderLabel: {
-    color: 'white',
-    fontSize: 16,
-    marginBottom: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  genderOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  genderOption: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  genderSelected: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderColor: 'white',
-  },
-  genderText: {
-    color: 'white',
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   nextButton: {
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 10,
   },
   nextButtonText: {
     color: '#1A237E',
@@ -169,4 +159,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Step1_PersonalInfo;
+export default Step2_ContactInfo;

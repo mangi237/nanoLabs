@@ -1,807 +1,276 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  ScrollView,
-  Image,
-  RefreshControl,
-  Dimensions,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, FlatList } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/authContext';
+import { useLanguage } from '../../context/languageContext';
+import { useTheme } from '../../context/themeContext';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import AddHospitalScreen from '../../components/superAdmin/AddHospitalModal';
-import EditHospitalModal from '../../components/superAdmin/EditHospitalModal';
-import HospitalDetailsScreen from '../superAdmin/HosptialDetailsScreen';
-import { useNavigation } from '@react-navigation/native';
-import { RootStackParamList } from '../../types/Navigation';
-import { getDoc } from 'firebase/firestore';
-const { width } = Dimensions.get('window');
-  import { StackNavigationProp } from '@react-navigation/stack';
-import { useRoute } from '@react-navigation/native';
-import Hospital from '../../types/hospital';
 
-type HospitalDetailsScreenRouteProp = StackNavigationProp<RootStackParamList, 'hospitalDetailsScreen'>;
-type HospitalTypeNavigationProp = StackNavigationProp<RootStackParamList, 'hospitalDetailsScreen'>;
-
-const SuperAdminDashboard = () => {
-
-     
-  // const [hospital, setHospital] = useState<Hospital | null>(null);
-  const [hospitals, setHospitals] = useState([]);
-  const [selectedHospital, setSelectedHospital] = useState(null);
-  const [showAddScreen, setShowAddScreen] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+const SuperAdminDashboard = ({ navigation }: any) => {
+  const { t } = useLanguage();
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const [labs, setLabs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
-    totalHospitals: 0,
-    totalRevenue: 0,
-    monthlyRevenue: 0,
-    activeHospitals: 0,
+    totalLabs: 0,
     totalPatients: 0,
-    avgPatientsPerHospital: 0,
+    totalStaff: 0,
+    totalRevenue: 0
   });
 
-// useEffect(()=> {
-//   fetchHospitalData();
-
-// })
-   
-//   const fetchHospitalData = async () => {
-// const hospitalDoc = await getDoc(doc(db, 'hospitals', hospitalId));
-//    if(hospitalDoc.exists()){
-//  const hospitalData = { id: hospitalDoc.id, ...hospitalDoc.data() } as Hospital;
-//     setHospital(hospitalData);
-//    }
-//   }
-
-const fetchHospitalStats = async () => {
-  try {
-    const hospitalsRef = collection(db, 'hospitals');
-    const hospitalsSnap = await getDocs(hospitalsRef);
-    
-    if (hospitalsSnap.empty) {
-      setStats({
-        totalHospitals: 0,
-        totalRevenue: 0,
-        monthlyRevenue: 0,
-        activeHospitals: 0,
-        totalPatients: 0,
-        avgPatientsPerHospital: 0,
-      });
-      return;
-    }
-    
-    let totalRevenue = 0;
-    let monthlyRevenue = 0;
-    let activeHospitals = 0;
-    let totalPatients = 0;
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    // Process each hospital to calculate stats
-    const hospitalPromises = hospitalsSnap.docs.map(async (hospitalDoc) => {
-      const hospitalData = hospitalDoc.data();
-      
-      // Add subscription amount to total revenue
-      totalRevenue += hospitalData.subscriptionAmount || 0;
-      
-      // Check if hospital is active (you can define your own criteria)
-      if (hospitalData.status === 'active') {
-        activeHospitals++;
-      }
-      
-      // Calculate monthly revenue (assuming subscription is monthly)
-      if (hospitalData.createdAt) {
-        const createdDate = hospitalData.createdAt.toDate();
-        if (createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear) {
-          monthlyRevenue += hospitalData.subscriptionAmount || 0;
-        }
-      }
-      
-      // Fetch patients count for this hospital
-      try {
-        const patientsRef = collection(db, `hospitals/${hospitalDoc.id}/patients`);
-        const patientsSnap = await getDocs(patientsRef);
-        totalPatients += patientsSnap.size;
-      } catch (error) {
-        console.error(`Error fetching patients for hospital ${hospitalDoc.id}:`, error);
-      }
-    });
-    
-    // Wait for all hospital data to be processed
-    await Promise.all(hospitalPromises);
-    
-    const totalHospitals = hospitalsSnap.size;
-    const avgPatientsPerHospital = totalHospitals > 0 ? totalPatients / totalHospitals : 0;
-    
-    setStats({
-      totalHospitals,
-      totalRevenue,
-      monthlyRevenue,
-      activeHospitals,
-      totalPatients,
-      avgPatientsPerHospital: parseFloat(avgPatientsPerHospital.toFixed(2)),
-    });
-    
-  } catch (error) {
-    console.error('Error fetching hospital stats:', error);
-    // Don't show alert here to avoid interrupting the user experience
-  }
-};
-
-const navigation = useNavigation<HospitalTypeNavigationProp>();
   useEffect(() => {
-    fetchHospitals();
+    fetchLabs();
   }, []);
 
-  useEffect(() => {
-    calculateStats();
-  }, [hospitals]);
-
-const fetchHospitals = async () => {
-  try {
-    setRefreshing(true);
-    const hospitalsRef = collection(db, 'hospitals');
-    const q = query(hospitalsRef, orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const hospitalsData = snap.docs.map(doc => ({ 
-      id: doc.id, 
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate() || new Date(),
-    }));
-    setHospitals(hospitalsData);
-    
-    // Fetch stats after getting hospitals
-    await fetchHospitalStats();
-  } catch (error) {
-    console.error('Error fetching hospitals:', error);
-    Alert.alert('Error', 'Failed to load hospitals');
-  } finally {
-    setRefreshing(false);
-  }
-};
-
-// Or if you want to fetch stats separately (less load on initial load):
-const fetchHospitalsAndStats = async () => {
-  await fetchHospitals();
-  fetchHospitalStats(); // Don't await this if you want parallel loading
-};
-
-  const calculateStats = () => {
-    const totalHospitals = hospitals.length;
-    const totalRevenue = hospitals.reduce((sum, hospital) => {
-      const subscriptionAmount = hospital.subscriptionAmount || 0;
-      return sum + subscriptionAmount;
-    }, 0);
-    
-    const monthlyRevenue = hospitals.reduce((sum, hospital) => {
-      if (hospital.subscriptionType === 'monthly') {
-        return sum + (hospital.subscriptionAmount || 0);
+  const fetchLabs = async () => {
+    try {
+      const labsRef = collection(db, 'labs');
+      const snapshot = await getDocs(labsRef);
+      const labList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setLabs(labList);
+      
+      let totalPatients = 0;
+      let totalStaff = 0;
+      
+      for (const lab of labList) {
+        const patientsRef = collection(db, 'labs', lab.id, 'patients');
+        const patientsSnap = await getDocs(patientsRef);
+        totalPatients += patientsSnap.size;
+        
+        const staffRef = collection(db, 'labs', lab.id, 'staff');
+        const staffSnap = await getDocs(staffRef);
+        totalStaff += staffSnap.size;
       }
-      if (hospital.subscriptionType === 'yearly') {
-        return sum + ((hospital.subscriptionAmount || 0) / 12);
-      }
-      return sum;
-    }, 0);
-    
-    const activeHospitals = hospitals.filter(h => h.status === 'active').length;
-    const totalPatients = hospitals.reduce((sum, hospital) => sum + (hospital.totalPatients || 0), 0);
-    const avgPatientsPerHospital = totalHospitals > 0 ? Math.round(totalPatients / totalHospitals) : 0;
-
-    setStats({
-      totalHospitals,
-     totalRevenue,
-      monthlyRevenue,
-      activeHospitals,
-      totalPatients,
-      avgPatientsPerHospital,
-    });
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const handleHospitalPress = (hospital) => {
-    navigation.navigate('hospitalDetailsScreen', { hospitalId: hospital.id });
-  };
-
-  const handleEditHospital = (hospital) => {
-    setSelectedHospital(hospital);
-    setShowEditModal(true);
-  };
-
-  const handleDeleteHospital = (hospitalId) => {
-    Alert.alert(
-      'Delete Hospital',
-      'Are you sure you want to delete this hospital? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'hospitals', hospitalId));
-              Alert.alert('Success', 'Hospital deleted successfully');
-              fetchHospitals();
-            } catch (error) {
-              console.error('Error deleting hospital:', error);
-              Alert.alert('Error', 'Failed to delete hospital');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const getSubscriptionColor = (type) => {
-    switch(type) {
-      case 'monthly': return '#3498db';
-      case 'yearly': return '#27ae60';
-      case 'enterprise': return '#9b59b6';
-      default: return '#7f8c8d';
+      
+      setStats({
+        totalLabs: labList.length,
+        totalPatients,
+        totalStaff,
+        totalRevenue: totalPatients * 10 // Placeholder
+      });
+    } catch (error) {
+      console.error('Error fetching labs:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderStatsCard = (icon, title, value, color, subtitle = '') => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-        {icon}
-      </View>
-      <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.statSubtitle}>{subtitle}</Text> : null}
-      </View>
-    </View>
-  );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchLabs();
+    setRefreshing(false);
+  };
 
-  const renderHospitalCard = ({ item }) => (
+  const renderLabItem = ({ item }: any) => (
     <TouchableOpacity 
-      style={styles.hospitalCard}
-      onPress={() => handleHospitalPress(item)}
-      activeOpacity={0.9}
+      style={[styles.labItem, { backgroundColor: colors.surface }]}
+      onPress={() => navigation.navigate('LabDetailsScreen', { labId: item.id })}
     >
-      <View style={styles.hospitalHeader}>
-        <View style={styles.hospitalLogo}>
-          <MaterialCommunityIcons name="hospital-building" size={28} color="#1E96A9" />
-        </View>
-        <View style={styles.hospitalInfo}>
-          <Text style={styles.hospitalName} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.hospitalMeta}>
-            <View style={styles.locationContainer}>
-              <Ionicons name="location" size={12} color="#7f8c8d" />
-              <Text style={styles.hospitalLocation} numberOfLines={1}>{item.location || item.address || 'No location'}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? '#27ae60' : '#e74c3c' }]}>
-              <Text style={styles.statusText}>{item.status || 'inactive'}</Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity 
-          style={styles.menuButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            Alert.alert(
-              'Hospital Actions',
-              'Choose an action',
-              [
-                { text: 'View Details', onPress: () => handleHospitalPress(item) },
-                { text: 'Edit Hospital', onPress: () => handleEditHospital(item) },
-                { 
-                  text: 'Delete Hospital', 
-                  style: 'destructive',
-                  onPress: () => handleDeleteHospital(item.id)
-                },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            );
-          }}
-        >
-          <Ionicons name="ellipsis-vertical" size={20} color="#95a5a6" />
-        </TouchableOpacity>
+      <View style={[styles.labColor, { backgroundColor: item.primaryColor || '#1A237E' }]} />
+      <View style={styles.labInfo}>
+        <Text style={styles.labName}>{item.name}</Text>
+        <Text style={styles.labLocation}>{item.location}</Text>
+        <Text style={styles.labStats}>
+          👥 {item.patientCount || 0} patients • 👤 {item.staffCount || 0} staff
+        </Text>
       </View>
-
-      <View style={styles.hospitalDetails}>
-        <View style={styles.detailRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="calendar" size={14} color="#95a5a6" />
-            <Text style={styles.detailText}>Created: {formatDate(item.createdAt)}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <FontAwesome5 name="users" size={12} color="#95a5a6" />
-            <Text style={styles.detailText}>{item.totalPatients || 0} patients</Text>
-          </View>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <View style={[styles.subscriptionBadge, { backgroundColor: getSubscriptionColor(item.subscriptionType) + '15' }]}>
-            <Text style={[styles.subscriptionText, { color: getSubscriptionColor(item.subscriptionType) }]}>
-              {item.subscriptionType || 'No subscription'}
-            </Text>
-          </View>
-          <Text style={styles.revenueText}>
-            {formatCurrency(item.subscriptionAmount || 0)}
-          </Text>
-        </View>
-
-        {item.slogan && (
-          <View style={styles.sloganContainer}>
-            <Ionicons name="book" size={12} color="#1E96A9" />
-            <Text style={styles.sloganText} numberOfLines={2}>{item.slogan}</Text>
-          </View>
-        )}
-      </View>
+      <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchHospitals} />
-        }
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <View style={[styles.header, { backgroundColor: colors.primary }]}>
+        <Text style={styles.title}>👑 {t('super_admin')}</Text>
+        <Text style={styles.subtitle}>{t('manage_all_labs')}</Text>
+      </View>
+
+      <View style={styles.statsGrid}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Ionicons name="business" size={24} color="#2196F3" />
+          <Text style={styles.statNumber}>{stats.totalLabs}</Text>
+          <Text style={styles.statLabel}>{t('total_labs')}</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Ionicons name="people" size={24} color="#4CAF50" />
+          <Text style={styles.statNumber}>{stats.totalPatients}</Text>
+          <Text style={styles.statLabel}>{t('total_patients')}</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Ionicons name="person-add" size={24} color="#FF9800" />
+          <Text style={styles.statNumber}>{stats.totalStaff}</Text>
+          <Text style={styles.statLabel}>{t('total_staff')}</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Ionicons name="cash" size={24} color="#4CAF50" />
+          <Text style={styles.statNumber}>${stats.totalRevenue}</Text>
+          <Text style={styles.statLabel}>{t('total_revenue')}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity 
+        style={[styles.createButton, { backgroundColor: colors.primary }]}
+        onPress={() => navigation.navigate('LabRegistrationModal')}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome, Super Admin</Text>
-            <Text style={styles.subtitle}>Manage all hospitals and subscriptions</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.addHospitalButton}
-            onPress={() => setShowAddScreen(true)}
-          >
-            <Ionicons name="add" size={24} color="white" />
-            <Text style={styles.addButtonText}>Add Hospital</Text>
-          </TouchableOpacity>
-        </View>
+        <Ionicons name="add" size={24} color="white" />
+        <Text style={styles.createButtonText}>{t('create_new_lab')}</Text>
+      </TouchableOpacity>
 
-        {/* Statistics Cards */}
-        <View style={styles.statsContainer}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statsScroll}
-          >
-            {renderStatsCard(
-              <Ionicons name="business" size={24} color="#3498db" />,
-              'Total Hospitals',
-              stats.totalHospitals.toString(),
-              '#3498db'
-            )}
-            {renderStatsCard(
-              <FontAwesome5 name="money-bill-wave" size={22} color="#27ae60" />,
-              'Total Revenue',
-              formatCurrency(stats.totalRevenue),
-              '#27ae60',
-              'All time'
-            )}
-            {renderStatsCard(
-              <MaterialIcons name="trending-up" size={24} color="#9b59b6" />,
-              'Monthly Revenue',
-              formatCurrency(stats.monthlyRevenue),
-              '#9b59b6',
-              'This month'
-            )}
-            {renderStatsCard(
-              <FontAwesome5 name="hospital-user" size={20} color="#e74c3c" />,
-              'Active Hospitals',
-              stats.activeHospitals.toString(),
-              '#e74c3c'
-            )}
-            {renderStatsCard(
-              <Ionicons name="people" size={24} color="#f39c12" />,
-              'Total Patients',
-              stats.totalPatients.toString(),
-              '#f39c12'
-            )}
-            {renderStatsCard(
-              <MaterialCommunityIcons name="chart-bar" size={22} color="#1abc9c" />,
-              'Avg. Patients',
-              stats.avgPatientsPerHospital.toString(),
-              '#1abc9c',
-              'Per hospital'
-            )}
-          </ScrollView>
-        </View>
-
-        {/* Hospital List Header */}
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>All Hospitals ({hospitals.length})</Text>
-          <TouchableOpacity style={styles.filterButton}>
-            <Ionicons name="filter" size={18} color="#1E96A9" />
-            <Text style={styles.filterText}>Filter</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hospitals List */}
-        {hospitals.length === 0 ? (
+      <Text style={styles.sectionTitle}>{t('all_labs')}</Text>
+      <FlatList
+        data={labs}
+        renderItem={renderLabItem}
+        keyExtractor={item => item.id}
+        scrollEnabled={false}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="hospital-building" size={80} color="#ecf0f1" />
-            <Text style={styles.emptyTitle}>No Hospitals Yet</Text>
-            <Text style={styles.emptySubtitle}>Add your first hospital to get started</Text>
-            <TouchableOpacity 
-              style={styles.emptyButton}
-              onPress={() => setShowAddScreen(true)}
-            >
-              <Text style={styles.emptyButtonText}>Create First Hospital</Text>
-            </TouchableOpacity>
+            <Ionicons name="business-outline" size={50} color="#ccc" />
+            <Text style={styles.emptyText}>{t('no_labs_created')}</Text>
           </View>
-        ) : (
-          <FlatList
-            data={hospitals}
-            keyExtractor={item => item.id}
-            renderItem={renderHospitalCard}
-            scrollEnabled={false}
-            contentContainerStyle={styles.hospitalsList}
-          />
-        )}
-
-        {/* Footer Info */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Showing {hospitals.length} of {hospitals.length} hospitals
-          </Text>
-          <Text style={styles.footerNote}>
-            Last updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Add Hospital Modal */}
-      <AddHospitalScreen
-        visible={showAddScreen}
-        onClose={() => setShowAddScreen(false)}
-        onHospitalAdded={() => {
-          setShowAddScreen(false);
-          fetchHospitals();
-        }}
+        }
       />
-
-      {/* Edit Hospital Modal */}
-      {selectedHospital && (
-        <EditHospitalModal
-          visible={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedHospital(null);
-          }}
-          hospital={selectedHospital}
-          onHospitalUpdated={() => {
-            setShowEditModal(false);
-            setSelectedHospital(null);
-            fetchHospitals();
-          }}
-        />
-      )}
-    </SafeAreaView>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  scrollView: {
-    flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ECF0F1',
+    padding: 20,
+    paddingTop: 40,
+    paddingBottom: 30,
   },
-  greeting: {
+  title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: 'white',
     fontFamily: 'Poppins-Bold',
   },
   subtitle: {
     fontSize: 14,
-    color: '#7F8C8D',
+    color: 'rgba(255,255,255,0.8)',
     marginTop: 4,
     fontFamily: 'Poppins-Regular',
   },
-  addHospitalButton: {
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E96A9',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  addButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  statsContainer: {
-    paddingVertical: 20,
-  },
-  statsScroll: {
-    paddingHorizontal: 20,
-    paddingRight: 10,
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 10,
   },
   statCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
+    width: '47%',
     padding: 16,
-    marginRight: 12,
-    width: 160,
-    borderLeftWidth: 4,
+    borderRadius: 12,
+    alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
   },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 22,
+  statNumber: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: '#1A237E',
+    marginVertical: 4,
     fontFamily: 'Poppins-Bold',
   },
-  statTitle: {
+  statLabel: {
     fontSize: 12,
-    color: '#7F8C8D',
-    marginTop: 4,
-    fontFamily: 'Poppins-Medium',
-  },
-  statSubtitle: {
-    fontSize: 11,
-    color: '#BDC3C7',
-    marginTop: 2,
+    color: '#666',
     fontFamily: 'Poppins-Regular',
   },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 15,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  filterButton: {
+  createButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  filterText: {
-    color: '#1E96A9',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: 'Poppins-Medium',
-  },
-  hospitalsList: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  hospitalCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    justifyContent: 'center',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
   },
-  hospitalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  hospitalLogo: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: '#E3F2FD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  hospitalInfo: {
-    flex: 1,
-  },
-  hospitalName: {
+  createButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 4,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  hospitalMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  hospitalLocation: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginLeft: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  menuButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  hospitalDetails: {
-    borderTopWidth: 1,
-    borderTopColor: '#ECF0F1',
-    paddingTop: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailText: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginLeft: 6,
-    fontFamily: 'Poppins-Regular',
-  },
-  subscriptionBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  subscriptionText: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  revenueText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#2C3E50',
     fontFamily: 'Poppins-Bold',
   },
-  sloganContainer: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    fontFamily: 'Poppins-Bold',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 30,
+  },
+  labItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  sloganText: {
-    fontSize: 12,
-    color: '#34495E',
-    fontStyle: 'italic',
-    marginLeft: 8,
+  labColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  labInfo: {
     flex: 1,
+  },
+  labName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  labLocation: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+    fontFamily: 'Poppins-Regular',
+  },
+  labStats: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
     fontFamily: 'Poppins-Regular',
   },
   emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    padding: 40,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#BDC3C7',
-    marginTop: 20,
-    marginBottom: 8,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#BDC3C7',
-    textAlign: 'center',
-    marginBottom: 24,
-    fontFamily: 'Poppins-Regular',
-  },
-  emptyButton: {
-    backgroundColor: '#1E96A9',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  footer: {
-    padding: 20,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#ECF0F1',
-    backgroundColor: 'white',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginBottom: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  footerNote: {
-    fontSize: 11,
-    color: '#BDC3C7',
-    fontFamily: 'Poppins-Regular',
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    fontFamily: 'Poppins-Medium',
   },
 });
 
