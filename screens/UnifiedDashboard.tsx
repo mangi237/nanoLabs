@@ -25,17 +25,8 @@ import ManageStaff from '../components/admin/ManageStaff';
 import PatientList from '../components/medical/PatientList';
 import PharmacyDashboard from '../screens/pharmacist/pharmacistDashboard';
 import Analytics from '../components/admin/Analatytics';
-import WardDashboard from '../screens/Ward/WardDashboard';
 import CashierDashboard from '../screens/cashier/CashierDashboard';
 import LabDashboard from '../screens/lab/LabDashboard';
-import MainDoctorDashboard from './doctor/MainDoctorDashboard';
-import NurseDashboard from './nurse/NurseDashboard';
-import RadiologyDashboard from './Radiology/RadiologyDashboard';
-import EmergencyDashboard from './Emergency/EmergencyDashboard';
-import SurgeonDashboard from './Surgeon/SurgeonDashboard';
-import MatronDashboard from './Matron/MatronDashboard';
-import AdminDashboard from './admin/adminDashboard';
-import WardManagementModal from '../components/ward/WardManagementModal';
 
 const { width } = Dimensions.get('window');
 const screenHeight = Dimensions.get('window').height;
@@ -96,13 +87,7 @@ const ALL_TABS: DashboardTab[] = [
   },
   
   // Wards - Nursing & admin roles
-  {
-    key: 'Wards',
-    icon: 'business',
-    label: 'Wards',
-    roles: ['nurse', 'matron', 'admin', 'ward'],
-    component: WardDashboard,
-  },
+ 
   
   // Billing - Cashier, Receptionist, Admin
   {
@@ -123,58 +108,7 @@ const ALL_TABS: DashboardTab[] = [
   },
   
   // Doctor - Doctor role
-  {
-    key: 'Doctor',
-    icon: 'medical',
-    label: 'Doctor',
-    roles: ['doctor', 'admin'],
-    component:MainDoctorDashboard,
-  },
   
-  // Nurse - Nurse role
-  {
-    key: 'Nurse',
-    icon: 'medkit',
-    label: 'Nurse',
-    roles: ['nurse', 'matron', 'admin'],
-    component: NurseDashboard,
-  },
-  
-  // Radiology - Radiology role
-  {
-    key: 'Radiology',
-    icon: 'scan',
-    label: 'Radiology',
-    roles: ['radiology', 'admin'],
-    component: RadiologyDashboard,
-  },
-  
-  // Emergency - Emergency role
-  {
-    key: 'Emergency',
-    icon: 'warning',
-    label: 'Emergency',
-    roles: ['emergency', 'admin'],
-    component: EmergencyDashboard,
-  },
-  
-  // Surgeon - Surgeon role
-  {
-    key: 'Surgeon',
-    icon: 'cut',
-    label: 'Surgeon',
-    roles: ['surgeon', 'admin'],
-    component: SurgeonDashboard,
-  },
-  
-  // Matron - Matron role
-  {
-    key: 'Matron',
-    icon: 'person',
-    label: 'Matron',
-    roles: ['matron', 'admin'],
-    component: MatronDashboard,
-  },
 ];
 type UnifiedDashboardParams = {
   initialRole?: RoleType;

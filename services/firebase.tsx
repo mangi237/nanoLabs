@@ -5,17 +5,17 @@ import { getStorage} from 'firebase/storage';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyASkpqZTb1mwpJTXdc0KcUkZS90_EIqfRs",
-  authDomain: "nanohealth-f53bf.firebaseapp.com",
-  projectId: "nanohealth-f53bf",
-  storageBucket: "nanohealth-f53bf.firebasestorage.app",
-  messagingSenderId: "762227664948",
-  appId: "1:762227664948:web:d6a6ff76b8a736d8e68261",
-  measurementId: "G-H9V4LZ5E0W"
+  apiKey: "AIzaSyB1tZ67LCGf2bHQxsMw7XRkQEIoSEYFlec",
+  authDomain: "nanolabs-9baf3.firebaseapp.com",
+  projectId: "nanolabs-9baf3",
+  storageBucket: "nanolabs-9baf3.firebasestorage.app",
+  messagingSenderId: "718485846076",
+  appId: "1:718485846076:web:ac3ca78827330944a9ab39",
+  measurementId: "G-SVEXC3TSNQ"
 };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -24,4 +24,4 @@ export const storage = getStorage(app);
 // Initialize Firebase Authentication
 const auth = getAuth(app);
 
-export { db, auth }; 
+export { db, auth, app,  }; 

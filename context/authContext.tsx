@@ -1,158 +1,263 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
+import {db}  from '../services/firebase';
 
 interface AuthContextType {
   user: any;
-  hospital: any;
-  hospitals: any[];
-  loading: boolean;
-  selectHospital: (hospital: any) => void;
-  checkAccessCode: (code: string) => Promise<{ success: boolean; user?: any; role?: string; error?: string }>;
+  lab: any;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (accessCode: string, labId: string) => Promise<any>;
   logout: () => void;
+  registerPatient: (labId: string, data: any) => Promise<any>;
+  getAllLabs: () => Promise<any[]>;
+  getLabDetails: (labId: string) => Promise<any>;
+  confirmPatient: (labId: string, patientId: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
-};
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
-  const [hospital, setHospital] = useState<any>(null);
-  const [hospitals, setHospitals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [lab, setLab] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch hospitals on mount
   useEffect(() => {
-    const fetchHospitals = async () => {
-      setLoading(true);
-      const snap = await getDocs(collection(db, 'hospitals'));
-      setHospitals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    };
-    fetchHospitals();
+    checkAuthStatus();
   }, []);
 
-  const selectHospital = (hosp: any) => setHospital(hosp);
-
-  // Check access code for staff, patient, or superadmin
-// context/authContext.tsx - Update checkAccessCode
-const checkAccessCode = async (code: string) => {
-  setLoading(true);
-  try {
-    // 1. Check superadmin
-    const superAdminRef = doc(db, 'superAdmin', 'superAdminId');
-    const superAdminDoc = await getDoc(superAdminRef);
-    
-  if (superAdminDoc.exists() && superAdminDoc.data().accessCode === code) {
-      const superAdmin = superAdminDoc.data();
-      const userData = { 
-        ...superAdmin, 
-        id: superAdminDoc.id, 
-        role: 'superadmin',
-        roles: ['superadmin'], // Add roles array for consistency
-        primaryRole: 'superadmin'
-      };
-      setUser(userData);
-      return { 
-        success: true, 
-        user: userData, 
-        role: 'superadmin',
-        roles: ['superadmin'],
-        primaryRole: 'superadmin',
-        id: superAdminDoc.id,
-        name: superAdmin.name || 'Super Admin'
-      };
-    }
-
-    // 2. Check all hospitals for staff/patient
-    const hospitalsSnap = await getDocs(collection(db, 'hospitals'));
-    
-    for (const hospitalDoc of hospitalsSnap.docs) {
-      const hospitalId = hospitalDoc.id;
-      const hospitalName = hospitalDoc.data().name;
-
-      // Check staff
-      const staffSnap = await getDocs(collection(db, `hospitals/${hospitalId}/staffs`));
-      for (const staffDoc of staffSnap.docs) {
-        const staff = staffDoc.data();
-       // In checkAccessCode function:
-if (staff.accessCode === code || staff.code === code) {
-  const userRoles = Array.isArray(staff.roles) ? staff.roles : [staff.role].filter(Boolean);
-  const userData = { 
-    ...staff, 
-    id: staffDoc.id, 
-    hospitalId, 
-    hospitalName, 
-    role: userRoles[0],
-    roles: userRoles,
-    primaryRole: userRoles[0]
-  };
-  setUser(userData);
-  return { 
-    success: true, 
-    user: userData,
-    role: userRoles[0],
-    roles: userRoles,
-    primaryRole: userRoles[0],
-    id: staffDoc.id,
-    hospitalId,
-    hospitalName,
-    name: staff.name || staff.fullName || staff.username || 'User'
-  };
-}
+  const checkAuthStatus = async () => {
+    try {
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedLab = await AsyncStorage.getItem('lab');
+      
+      if (storedUser && storedLab) {
+        setUser(JSON.parse(storedUser));
+        setLab(JSON.parse(storedLab));
+        setIsAuthenticated(true);
       }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      // Check patients
-      const patientSnap = await getDocs(collection(db, `hospitals/${hospitalId}/patients`));
-      for (const patientDoc of patientSnap.docs) {
-        const patient = patientDoc.data();
-        if (patient.accessCode === code) {
-          const userData = { 
-            ...patient, 
-            id: patientDoc.id, 
-            hospitalId, 
-            hospitalName, 
-            role: 'patient',
-            roles: ['patient'],
-            primaryRole: 'patient'
-          };
-          setUser(userData);
-          return { 
-            success: true, 
-            user: userData,
-            role: 'patient',
-            roles: ['patient'],
-            primaryRole: 'patient',
-            id: patientDoc.id,
-            hospitalId,
-            hospitalName,
-            name: patient.name || patient.fullName || 'Patient'
-          };
+  // Verify access code for login
+  const login = async (accessCode: string, labId: string) => {
+    try {
+      // Check if super admin
+      if (accessCode === 'SUPER123' || accessCode === 'ADMIN123') {
+        const superAdminRef = doc(db, 'superAdmin', 'settings');
+        const superAdminDoc = await getDoc(superAdminRef);
+        
+        if (superAdminDoc.exists()) {
+          const data = superAdminDoc.data();
+          if (data.accessCode === accessCode) {
+            const userData = { 
+              id: 'superAdmin', 
+              name: 'Super Admin', 
+              role: 'superadmin',
+              roles: ['superadmin']
+            };
+            setUser(userData);
+            setLab(null);
+            setIsAuthenticated(true);
+            
+            await AsyncStorage.setItem('user', JSON.stringify(userData));
+            await AsyncStorage.setItem('lab', JSON.stringify(null));
+            
+            return { 
+              success: true, 
+              user: userData, 
+              lab: null, 
+              role: 'superadmin' 
+            };
+          }
         }
       }
-    }
 
-    return { success: false, error: 'Invalid access code' };
-  } catch (error) {
-    console.error('Error checking access code:', error);
-    return { success: false, error: 'Network error. Please try again.' };
-  } finally {
-    setLoading(false);
-  }
-};
-  const logout = () => {
+      // Check staff in lab
+      const staffRef = collection(db, 'labs', labId, 'staff');
+      const staffQuery = query(staffRef, where('accessCode', '==', accessCode));
+      const staffSnapshot = await getDocs(staffQuery);
+
+      if (!staffSnapshot.empty) {
+        const staffDoc = staffSnapshot.docs[0];
+        const staffData = staffDoc.data();
+        
+        const userData = {
+          id: staffDoc.id,
+          ...staffData,
+          roles: staffData.roles || [staffData.primaryRole || staffData.role || 'staff']
+        };
+        
+        const labData = { id: labId, name: staffData.labName || 'Lab' };
+        
+        setUser(userData);
+        setLab(labData);
+        setIsAuthenticated(true);
+        
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        await AsyncStorage.setItem('lab', JSON.stringify(labData));
+        
+        return { 
+          success: true, 
+          user: userData, 
+          lab: labData, 
+          role: userData.roles[0] 
+        };
+      }
+
+      // Check patients in lab
+      const patientsRef = collection(db, 'labs', labId, 'patients');
+      const patientsQuery = query(patientsRef, where('accessCode', '==', accessCode));
+      const patientsSnapshot = await getDocs(patientsQuery);
+
+      if (!patientsSnapshot.empty) {
+        const patientDoc = patientsSnapshot.docs[0];
+        const patientData = patientDoc.data();
+        
+        const userData = {
+          id: patientDoc.id,
+          ...patientData,
+          role: 'patient',
+          roles: ['patient']
+        };
+        
+        const labData = { id: labId, name: patientData.labName || 'Lab' };
+        
+        setUser(userData);
+        setLab(labData);
+        setIsAuthenticated(true);
+        
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        await AsyncStorage.setItem('lab', JSON.stringify(labData));
+        
+        return { 
+          success: true, 
+          user: userData, 
+          lab: labData, 
+          role: 'patient' 
+        };
+      }
+
+      return { 
+        success: false, 
+        error: 'Invalid access code. Please check and try again.' 
+      };
+    } catch (error: any) {
+      console.error('Error verifying access code:', error);
+      return { 
+        success: false, 
+        error: 'Network error. Please check your connection.' 
+      };
+    }
+  };
+
+  const logout = async () => {
     setUser(null);
-    setHospital(null);
+    setLab(null);
+    setIsAuthenticated(false);
+    await AsyncStorage.removeItem('user');
+    await AsyncStorage.removeItem('lab');
+  };
+
+  // Register new patient (self-registration)
+  const registerPatient = async (labId: string, patientData: any) => {
+    try {
+      const patientsRef = collection(db, 'labs', labId, 'patients');
+      
+      const newPatient = {
+        ...patientData,
+        status: 'pending', // Waiting for receptionist confirmation
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const docRef = await addDoc(patientsRef, newPatient);
+      
+      return {
+        success: true,
+        patientId: docRef.id,
+        accessCode: patientData.accessCode
+      };
+    } catch (error: any) {
+      console.error('Error registering patient:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Get all labs
+  const getAllLabs = async () => {
+    try {
+      const labsRef = collection(db, 'labs');
+      const snapshot = await getDocs(labsRef);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error fetching labs:', error);
+      return [];
+    }
+  };
+
+  // Get lab details by ID
+  const getLabDetails = async (labId: string) => {
+    try {
+      const labRef = doc(db, 'labs', labId);
+      const labDoc = await getDoc(labRef);
+      if (labDoc.exists()) {
+        return { id: labDoc.id, ...labDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching lab details:', error);
+      return null;
+    }
+  };
+
+  // Confirm patient (Receptionist)
+  const confirmPatient = async (labId: string, patientId: string) => {
+    try {
+      const patientRef = doc(db, 'labs', labId, 'patients', patientId);
+      await updateDoc(patientRef, {
+        status: 'active',
+        confirmedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error confirming patient:', error);
+      return { success: false, error: error.message };
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, hospital, hospitals, loading, selectHospital, checkAccessCode, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      lab,
+      isAuthenticated,
+      isLoading,
+      login,
+      logout,
+      registerPatient,
+      getAllLabs,
+      getLabDetails,
+      confirmPatient
+    }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

@@ -7,26 +7,6 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from './context/authContext';
 import { initializeEmailJS } from './services/emailService';
-import CategorySelection from './screens/categorySelection';
-import LoginScreen from './screens/authentication/authScreen'; // Fixed path - from authentication/authScreen to auth/LoginScreen
-import AdminDashboard from './screens/admin/adminDashboard';
-import DoctorDashboard from './screens/doctor/ReceptionistDashboard';
-import LabDashboard from './screens/lab/LabDashboard';
-import PharmacistDashboard from './screens/pharmacist/pharmacistDashboard';
-import PatientDetailsScreen from './screens/PatientDetailsScreen';
-import PortalSelection from './screens/authentication/PortalSelection';
-import ReceptionistDashboard from './screens/doctor/ReceptionistDashboard';
-import CashierDashboard from './screens/cashier/CashierDashboard';
-import AnalyzerDashboard from './screens/Analyzer/AnalyzerDashboard';
-import PatientLogin from './screens/authentication/PatientLogin';
-import PatientViewDetailsScreen from './screens/Patient/PatientDashboard'; // Fixed path and component name
-import NurseDashboard from './screens/nurse/NurseDashboard';
-import MainDoctorDashboard from './screens/doctor/MainDoctorDashboard';
-import RadiologyDashboard from './screens/Radiology/RadiologyDashboard';
-import SurgeonDashboard from './screens/Surgeon/SurgeonDashboard';
-import WardDashboard from './screens/Ward/WardDashboard';
-import SuperAdminDashboard from './screens/superAdmin/SuperAdminDashboard';
-import EmergencyDashboard from './screens/Emergency/EmergencyDashboard';
 import DispenseMedicationModal from './screens/pharmacist/pharmacistDashboard';
 import HospitalDetailsScreen from './screens/superAdmin/HosptialDetailsScreen';
 import UnifiedDashboard from './screens/UnifiedDashboard';
@@ -109,11 +89,7 @@ export default function App() {
             }}
           >
             {/* Authentication Screens */}
-            <Stack.Screen 
-              name="PortalSelection" 
-              component={PortalSelection} 
-              options={{ headerShown: false }}
-            />
+          
             <Stack.Screen 
   name="hospitalDetailsScreen" 
   component={HospitalDetailsScreen}
@@ -122,108 +98,7 @@ export default function App() {
     headerShown: true 
   }}
 />
-            <Stack.Screen 
-              name="LoginScreen" 
-              component={LoginScreen} 
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="PatientLogin" 
-              component={PatientLogin} 
-              options={{ title: 'Patient Login' }}
-            />
-            
-            {/* Main Dashboards */}
-            <Stack.Screen 
-              name="AdminDashboard" 
-              component={AdminDashboard} 
-              options={{ title: 'Admin Dashboard' }}
-            />
-            <Stack.Screen 
-              name="SuperAdminDashboard" 
-              component={SuperAdminDashboard} 
-              options={{ title: 'Super Admin Dashboard' }}
-            />
-            <Stack.Screen 
-              name="ReceptionistDashboard" 
-              component={ReceptionistDashboard} 
-              options={{ title: 'Receptionist Dashboard' }}
-            />
-            <Stack.Screen 
-              name="DoctorDashboard" 
-              component={MainDoctorDashboard} 
-              options={{ title: 'Doctor Dashboard' }}
-            />
-            <Stack.Screen 
-              name="NurseDashboard" 
-              component={NurseDashboard} 
-              options={{ title: 'Nurse Dashboard' }}
-            />
-            <Stack.Screen 
-              name="LabDashboard" 
-              component={LabDashboard} 
-              options={{ title: 'Lab Dashboard' }}
-            />
-            <Stack.Screen 
-              name="PharmacistDashboard" 
-              component={DispenseMedicationModal} 
-              options={{ title: 'Pharmacist Dashboard' }}
-            />
-            <Stack.Screen 
-              name="CashierDashboard" 
-              component={CashierDashboard} 
-              options={{ title: 'Cashier Dashboard' }}
-            />
-            <Stack.Screen 
-              name="AnalyzerDashboard" 
-              component={AnalyzerDashboard} 
-              options={{ title: 'Analyzer Dashboard' }}
-            />
-            <Stack.Screen 
-              name="RadiologyDashboard" 
-              component={RadiologyDashboard} 
-              options={{ title: 'Radiology Dashboard' }}
-            />
-            <Stack.Screen 
-              name="SurgeonDashboard" 
-              component={SurgeonDashboard} 
-              options={{ title: 'Surgeon Dashboard' }}
-            />
-            <Stack.Screen 
-              name="WardDashboard" 
-              component={WardDashboard} 
-              options={{ title: 'Ward Dashboard' }}
-            />
-            <Stack.Screen 
-              name="EmergencyDashboard" 
-              component={EmergencyDashboard} 
-              options={{ title: 'Emergency Dashboard' }}
-            />
-            
-            {/* Patient Screens - CRITICAL FIXES HERE */}
-            <Stack.Screen 
-              name="PatientDetails" 
-              component={PatientDetailsScreen}
-              options={{ 
-                title: 'Patient Details',
-                headerShown: true
-              }}
-            />
-            <Stack.Screen 
-              name="PatientViewDetailsScreen" 
-              component={PatientViewDetailsScreen}
-              options={{
-                title: 'Patient Dashboard',
-                headerShown: true
-              }}
-            />
-            
-            {/* Other Screens */}
-            <Stack.Screen 
-              name="CategorySelection" 
-              component={CategorySelection}
-              options={{ headerShown: false }}
-            />
+      
             <Stack.Screen 
   name="UnifiedDashboard" 
   component={UnifiedDashboard}
