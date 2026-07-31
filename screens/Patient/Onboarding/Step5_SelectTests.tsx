@@ -16,33 +16,29 @@ const Step5_SelectTests = ({ navigation, route }: any) => {
   const [labId, setLabId] = useState('');
 
   useEffect(() => {
-    fetchTests();
+    const labId = route.params?.labId || route.params?.selectedLabId;
+    if (labId) {
+      fetchTests(labId);
+    }
   }, []);
 
-  const fetchTests = async () => {
-    try {
-      // Get labId from route or use default
-      const labId = route.params?.labId || 'default-lab';
-      setLabId(labId);
-      
-      const testsRef = collection(db, 'labs', labId, 'testCatalog');
-      const snapshot = await getDocs(testsRef);
-      const testList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTests(testList);
-    } catch (error) {
-      console.error('Error fetching tests:', error);
-      // Fallback tests
-      setTests([
-        { id: '1', name: 'Malaria Test', category: 'Blood', price: 10 },
-        { id: '2', name: 'HIV Screening', category: 'Blood', price: 25 },
-        { id: '3', name: 'COVID-19 Test', category: 'Swab', price: 30 },
-        { id: '4', name: 'Blood Sugar Test', category: 'Blood', price: 15 },
-        { id: '5', name: 'Urinalysis', category: 'Urine', price: 20 },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchTests = async (labId: string) => {
+    const fetchTests = async (labId: string) => {
+        try {
+          const testsRef = collection(db, 'labs', labId, 'testCatalog');
+          const snapshot = await getDocs(testsRef);
+          const testList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setTests(testList);
+        } catch (error) {
+          console.error('Error fetching tests:', error);
+          // Fallback to mock data if no tests exist
+          setTests([
+            { id: '1', name: 'Malaria Test', category: 'Blood', price: 5000 },
+            { id: '2', name: 'HIV Screening', category: 'Blood', price: 15000 },
+            { id: '3', name: 'COVID-19 Test', category: 'Swab', price: 20000 },
+          ]);
+        }
+      };
 
   const toggleTest = (testId: string) => {
     setSelectedTests(prev => 
@@ -243,5 +239,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
   },
 });
+}
 
 export default Step5_SelectTests;

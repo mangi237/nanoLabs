@@ -1,25 +1,54 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+// screens/patient/Onboarding/Step1_PersonalInfo.tsx
+// This should be the NEW Step 1 - Lab Selection
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../../context/authContext';
 import { useLanguage } from '../../../context/languageContext';
 import { useTheme } from '../../../context/themeContext';
 
 const Step1_PersonalInfo = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const { primaryColor } = useTheme();
-  const [formData, setFormData] = useState({
-    name: '',
-    age: '',
-    gender: 'male'
-  });
+  const { getAllLabs } = useAuth();
+  const [labs, setLabs] = useState<any[]>([]);
+  const [selectedLab, setSelectedLab] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLabs();
+  }, []);
+
+  const fetchLabs = async () => {
+    try {
+      const labList = await getAllLabs();
+      setLabs(labList || []);
+    } catch (error) {
+      console.error('Error fetching labs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleNext = () => {
-    if (!formData.name.trim() || !formData.age.trim()) {
-      alert(t('fill_all_fields'));
+    if (!selectedLab) {
+      alert('Please select a lab first');
       return;
     }
-    navigation.navigate('Step2_ContactInfo', { patientData: formData });
+    navigation.navigate('Step2_ContactInfo', { 
+      selectedLabId: selectedLab.id,
+      selectedLabName: selectedLab.name
+    });
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: primaryColor, justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="white" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
@@ -28,49 +57,35 @@ const Step1_PersonalInfo = ({ navigation, route }: any) => {
       </View>
       <Text style={styles.stepText}>Step 1/6</Text>
       
-      <Text style={styles.title}>{t('personal_info')}</Text>
-      <Text style={styles.subtitle}>{t('tell_us_about_yourself')}</Text>
+      <Text style={styles.title}>🏥 {t('select_your_lab')}</Text>
+      <Text style={styles.subtitle}>{t('choose_lab_for_tests')}</Text>
 
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder={t('full_name')}
-          value={formData.name}
-          onChangeText={(text) => setFormData({ ...formData, name: text })}
-          placeholderTextColor="rgba(255,255,255,0.7)"
-        />
-        
-        <TextInput
-          style={styles.input}
-          placeholder={t('age')}
-          value={formData.age}
-          onChangeText={(text) => setFormData({ ...formData, age: text })}
-          keyboardType="numeric"
-          placeholderTextColor="rgba(255,255,255,0.7)"
-        />
-
-        <View style={styles.genderContainer}>
-          <Text style={styles.genderLabel}>{t('gender')}</Text>
-          <View style={styles.genderOptions}>
-            <TouchableOpacity
-              style={[styles.genderOption, formData.gender === 'male' && styles.genderSelected]}
-              onPress={() => setFormData({ ...formData, gender: 'male' })}
-            >
-              <Text style={styles.genderText}>♂ {t('male')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.genderOption, formData.gender === 'female' && styles.genderSelected]}
-              onPress={() => setFormData({ ...formData, gender: 'female' })}
-            >
-              <Text style={styles.genderText}>♀ {t('female')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>{t('next')} →</Text>
-        </TouchableOpacity>
+      <View style={styles.labList}>
+        {labs.map((lab) => (
+          <TouchableOpacity
+            key={lab.id}
+            style={[styles.labCard, selectedLab?.id === lab.id && styles.labCardSelected]}
+            onPress={() => setSelectedLab(lab)}
+          >
+            <View style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
+            <View style={styles.labInfo}>
+              <Text style={styles.labName}>{lab.name}</Text>
+              <Text style={styles.labLocation}>{lab.location || 'Location not specified'}</Text>
+            </View>
+            {selectedLab?.id === lab.id && (
+              <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+            )}
+          </TouchableOpacity>
+        ))}
       </View>
+
+      <TouchableOpacity 
+        style={[styles.nextButton, !selectedLab && styles.disabledButton]}
+        onPress={handleNext}
+        disabled={!selectedLab}
+      >
+        <Text style={styles.nextButtonText}>{t('next')} →</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -107,65 +122,61 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-    marginBottom: 30,
+    marginBottom: 24,
     fontFamily: 'Poppins-Regular',
   },
-  form: {
+  labList: {
     flex: 1,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  labCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    color: 'white',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    fontFamily: 'Poppins-Regular',
-  },
-  genderContainer: {
-    marginBottom: 30,
-  },
-  genderLabel: {
-    color: 'white',
-    fontSize: 16,
-    marginBottom: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  genderOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  genderOption: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  genderSelected: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderColor: 'white',
+  labCardSelected: {
+    borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
   },
-  genderText: {
+  labColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  labInfo: {
+    flex: 1,
+  },
+  labName: {
     color: 'white',
     fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  labLocation: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
   },
   nextButton: {
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 20,
   },
   nextButtonText: {
     color: '#1A237E',
     fontWeight: 'bold',
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
 });
 

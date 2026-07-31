@@ -192,7 +192,7 @@ export default function App() {
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
                 />
-                <Stack.Screen 
+                {/* <Stack.Screen 
                   name="Step5_SelectTests" 
                   component={Step5_SelectTests}
                   options={{ 
@@ -200,7 +200,7 @@ export default function App() {
                     headerShown: true,
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
-                />
+                /> */}
                 <Stack.Screen 
                   name="Step6_AccessCode" 
                   component={Step6_AccessCode}

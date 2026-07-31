@@ -15,7 +15,7 @@ const Step3_HealthInfo = ({ navigation, route }: any) => {
     currentMedications: ''
   });
 
-  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-','Do not know'];
 
   const handleNext = () => {
     navigation.navigate('Step4_Insurance', { 

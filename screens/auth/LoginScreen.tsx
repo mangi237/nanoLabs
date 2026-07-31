@@ -1,3 +1,4 @@
+// screens/auth/LoginScreen.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -9,13 +10,14 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
-import Lab from '../../types/Lab';
+
 const LoginScreen = ({ navigation }: any) => {
   const { t } = useLanguage();
   const { primaryColor } = useTheme();
@@ -24,7 +26,7 @@ const LoginScreen = ({ navigation }: any) => {
   const [labId, setLabId] = useState('');
   const [labName, setLabName] = useState('');
   const [showLabSelector, setShowLabSelector] = useState(false);
-  const [labs, setLabs] = useState<Lab[]>([]); 
+  const [labs, setLabs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -34,15 +36,15 @@ const LoginScreen = ({ navigation }: any) => {
   const fetchLabs = async () => {
     try {
       const labList = await getAllLabs();
-      setLabs(labList);
+      setLabs(labList || []);
     } catch (error) {
       console.error('Error fetching labs:', error);
     }
   };
 
   const handleLogin = async () => {
-    if (!accessCode.trim() || !labId.trim()) {
-      Alert.alert(t('error'), t('fill_all_fields'));
+    if (!accessCode.trim()) {
+      Alert.alert('Error', 'Please enter your access code');
       return;
     }
 
@@ -50,7 +52,7 @@ const LoginScreen = ({ navigation }: any) => {
       const result = await login(accessCode, labId);
       
       if (result.success) {
-        const role = result.user.roles?.[0] || result.user.role || 'staff';
+        const role = result.user?.role || 'staff';
         
         switch(role) {
           case 'patient':
@@ -67,11 +69,11 @@ const LoginScreen = ({ navigation }: any) => {
         }
       }
     } catch (error: any) {
-      Alert.alert(t('error'), error.message || t('invalid_credentials'));
+      Alert.alert('Error', error.message || 'Invalid credentials');
     }
   };
 
-  const filteredLabs = labs.filter(lab =>
+  const filteredLabs = labs.filter((lab: any) =>
     lab.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     lab.location?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -81,89 +83,103 @@ const LoginScreen = ({ navigation }: any) => {
       style={[styles.container, { backgroundColor: primaryColor }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.loginContainer}>
-        <Image 
-          source={require('../../assets/images/logo.png')} 
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.logoText}>🧪 nanoLabs</Text>
-        <Text style={styles.logoSubtitle}>{t('login_to_your_lab')}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.loginContainer}>
+          <Image 
+            source={require('../../assets/images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.logoText}>🧪 nanoLabs</Text>
+          <Text style={styles.logoSubtitle}>Login to your lab</Text>
 
-        <TouchableOpacity 
-          style={styles.labSelector}
-          onPress={() => setShowLabSelector(!showLabSelector)}
-        >
-          <Ionicons name="business" size={20} color="rgba(255,255,255,0.7)" />
-          <Text style={styles.labSelectorText}>
-            {labName || t('select_your_lab')}
-          </Text>
-          <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.7)" />
-        </TouchableOpacity>
+          {/* Lab Selector */}
+          <TouchableOpacity 
+            style={styles.labSelector}
+            onPress={() => setShowLabSelector(!showLabSelector)}
+          >
+            <Ionicons name="business" size={20} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.labSelectorText}>
+              {labName || 'Select Your Lab'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
 
-        {showLabSelector && (
-          <View style={styles.labListContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('search_lab')}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-            {filteredLabs.map((lab) => (
-              <TouchableOpacity
-                key={lab.id}
-                style={styles.labItem}
-                onPress={() => {
-                  setLabId(lab.id);
-                  setLabName(lab.name);
-                  setShowLabSelector(false);
-                  setSearchQuery('');
-                }}
-              >
-                <View style={[styles.labColorDot, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
-                <View style={styles.labItemInfo}>
-                  <Text style={styles.labItemName}>{lab.name}</Text>
-                  <Text style={styles.labItemLocation}>{lab.location}</Text>
-                </View>
-                {labId === lab.id && (
-                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <TextInput
-          style={styles.input}
-          placeholder={t('access_code')}
-          value={accessCode}
-          onChangeText={setAccessCode}
-          secureTextEntry
-          placeholderTextColor="rgba(255,255,255,0.7)"
-        />
-
-        <TouchableOpacity 
-          style={styles.loginButton}
-          onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#1A237E" />
-          ) : (
-            <Text style={styles.loginButtonText}>{t('login')}</Text>
+          {showLabSelector && (
+            <View style={styles.labListContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search lab..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="rgba(0,0,0,0.5)"
+              />
+              <ScrollView style={{ maxHeight: 200 }}>
+                {filteredLabs.map((lab: any) => (
+                  <TouchableOpacity
+                    key={lab.id}
+                    style={styles.labItem}
+                    onPress={() => {
+                      setLabId(lab.id);
+                      setLabName(lab.name);
+                      setShowLabSelector(false);
+                      setSearchQuery('');
+                    }}
+                  >
+                    <View style={[styles.labColorDot, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
+                    <View style={styles.labItemInfo}>
+                      <Text style={styles.labItemName}>{lab.name}</Text>
+                      <Text style={styles.labItemLocation}>{lab.location || 'No location'}</Text>
+                    </View>
+                    {labId === lab.id && (
+                      <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           )}
-        </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.registerButton}
-          onPress={() => navigation.navigate('RegisterScreen')}
-        >
-          <Text style={styles.registerText}>
-            {t('new_patient_register_here')}
+          {/* Access Code Input */}
+          <TextInput
+            style={styles.input}
+            placeholder="Enter your access code"
+            value={accessCode}
+            onChangeText={setAccessCode}
+            secureTextEntry
+            autoCapitalize="none"
+            placeholderTextColor="rgba(255,255,255,0.7)"
+          />
+
+          {/* Super Admin Hint */}
+          <Text style={styles.superAdminHint}>
+            👑 Super Admin: Use "SUPER123"
           </Text>
-        </TouchableOpacity>
-      </View>
+
+          {/* Login Button */}
+          <TouchableOpacity 
+            style={styles.loginButton}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#1A237E" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Register Link */}
+          <TouchableOpacity 
+            style={styles.registerButton}
+            onPress={() => navigation.navigate('RegisterScreen')}
+          >
+            <Text style={styles.registerText}>
+              New patient? Register here
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -171,13 +187,16 @@ const LoginScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
   },
   loginContainer: {
     width: '100%',
     maxWidth: 400,
+    alignSelf: 'center',
     alignItems: 'center',
   },
   logo: {
@@ -220,10 +239,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     width: '100%',
-    maxHeight: 250,
+    maxHeight: 300,
     marginBottom: 16,
     position: 'absolute',
-    top: 180,
+    top: 200,
     zIndex: 1000,
     elevation: 5,
   },
@@ -268,10 +287,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 12,
     fontSize: 16,
     color: 'white',
     backgroundColor: 'rgba(255,255,255,0.1)',
+    fontFamily: 'Poppins-Regular',
+  },
+  superAdminHint: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    marginBottom: 16,
     fontFamily: 'Poppins-Regular',
   },
   loginButton: {
