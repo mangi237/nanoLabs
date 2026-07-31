@@ -1,4 +1,4 @@
-// screens/auth/LoginScreen.tsx - COMPLETE FIXED VERSION
+// screens/auth/LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -49,26 +49,35 @@ const LoginScreen = ({ navigation }: any) => {
     }
 
     try {
+      console.log('🔍 Login with:', { accessCode, labId });
       const result = await login(accessCode, labId);
+      console.log('📦 Result:', result);
       
       if (result.success) {
-        const role = result.user?.role || 'staff';
+        const role = result.user?.role || result.user?.roles?.[0] || 'staff';
+        console.log('🎯 Role detected:', role);
         
+        // Navigate based on role
         switch(role) {
           case 'patient':
+            console.log('➡️ Navigating to PatientDashboard');
             navigation.replace('PatientDashboard');
             break;
           case 'superadmin':
+            console.log('➡️ Navigating to SuperAdminDashboard');
             navigation.replace('SuperAdminDashboard');
             break;
           case 'admin':
+            console.log('➡️ Navigating to AdminDashboard');
             navigation.replace('AdminDashboard');
             break;
           default:
+            console.log('➡️ Navigating to StaffDashboard');
             navigation.replace('StaffDashboard');
         }
       }
     } catch (error: any) {
+      console.error('❌ Login error:', error);
       Alert.alert('Error', error.message || 'Invalid credentials');
     }
   };
@@ -147,7 +156,7 @@ const LoginScreen = ({ navigation }: any) => {
             value={accessCode}
             onChangeText={setAccessCode}
             secureTextEntry
-            autoCapitalize="none"
+            autoCapitalize="characters"
             placeholderTextColor="rgba(255,255,255,0.7)"
           />
 

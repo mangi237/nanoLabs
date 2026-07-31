@@ -1,3 +1,4 @@
+// screens/patient/Onboarding/Step6_AccessCode.tsx
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,8 +47,8 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
 
     setLoading(true);
     try {
-      // Get labId from route or use default
-      const labId = route.params?.labId || 'default-lab';
+      // Get labId from route
+      const labId = route.params?.labId || 'lab1';
       
       const result = await registerPatient(labId, {
         ...patientData,
@@ -57,11 +58,11 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
 
       if (result.success) {
         Alert.alert(
-          t('registration_complete'),
-          `${t('your_access_code')}: ${accessCode}\n\n${t('go_to_receptionist')}`,
+          '🎉 Registration Complete!',
+          `Your access code is: ${accessCode}\n\nPlease visit the receptionist to confirm your registration.\n\nYou will now be redirected to the login screen.`,
           [
             { 
-              text: t('ok'), 
+              text: 'Go to Login', 
               onPress: () => navigation.navigate('LoginScreen')
             }
           ]
@@ -83,7 +84,7 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
       </View>
       <Text style={styles.stepText}>Step 6/6</Text>
       
-      <Text style={styles.title}>{t('create_access_code')}</Text>
+      <Text style={styles.title}>🔐 {t('create_access_code')}</Text>
       <Text style={styles.subtitle}>{t('secure_your_account')}</Text>
 
       <View style={styles.form}>
@@ -93,18 +94,20 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
         </TouchableOpacity>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, styles.codeInput]}
           placeholder={t('enter_access_code')}
           value={accessCode}
           onChangeText={setAccessCode}
+          maxLength={6}
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, styles.codeInput]}
           placeholder={t('confirm_access_code')}
           value={confirmCode}
           onChangeText={setConfirmCode}
+          maxLength={6}
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
 
@@ -154,6 +157,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   stepText: {
+    
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     marginBottom: 20,
@@ -201,8 +205,11 @@ const styles = StyleSheet.create({
     color: 'white',
     backgroundColor: 'rgba(255,255,255,0.1)',
     fontFamily: 'Poppins-Regular',
+  },
+  codeInput: {
     textAlign: 'center',
-    letterSpacing: 4,
+    letterSpacing: 8,
+    fontSize: 20,
   },
   termsContainer: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
+// context/authContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
-import {db}  from '../services/firebase';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: any;
@@ -13,7 +13,6 @@ interface AuthContextType {
   registerPatient: (labId: string, data: any) => Promise<any>;
   getAllLabs: () => Promise<any[]>;
   getLabDetails: (labId: string) => Promise<any>;
-  confirmPatient: (labId: string, patientId: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,115 +44,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Verify access code for login
   const login = async (accessCode: string, labId: string) => {
     try {
-      // Check if super admin
-      if (accessCode === 'SUPER123' || accessCode === 'ADMIN123') {
-        const superAdminRef = doc(db, 'superAdmin', 'settings');
-        const superAdminDoc = await getDoc(superAdminRef);
+      console.log('🔍 Login attempt:', { accessCode, labId });
+      
+      const result = await authService.verifyAccessCode(accessCode, labId);
+      console.log('📦 Login result:', result);
+      
+      if (result.success) {
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
         
-        if (superAdminDoc.exists()) {
-          const data = superAdminDoc.data();
-          if (data.accessCode === accessCode) {
-            const userData = { 
-              id: 'superAdmin', 
-              name: 'Super Admin', 
-              role: 'superadmin',
-              roles: ['superadmin']
-            };
-            setUser(userData);
-            setLab(null);
-            setIsAuthenticated(true);
-            
-            await AsyncStorage.setItem('user', JSON.stringify(userData));
-            await AsyncStorage.setItem('lab', JSON.stringify(null));
-            
-            return { 
-              success: true, 
-              user: userData, 
-              lab: null, 
-              role: 'superadmin' 
-            };
-          }
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        } else {
+          await AsyncStorage.removeItem('lab');
         }
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Invalid credentials');
       }
-
-      // Check staff in lab
-      const staffRef = collection(db, 'labs', labId, 'staff');
-      const staffQuery = query(staffRef, where('accessCode', '==', accessCode));
-      const staffSnapshot = await getDocs(staffQuery);
-
-      if (!staffSnapshot.empty) {
-        const staffDoc = staffSnapshot.docs[0];
-        const staffData = staffDoc.data();
-        
-        const userData = {
-          id: staffDoc.id,
-          ...staffData,
-          roles: staffData.roles || [staffData.primaryRole || staffData.role || 'staff']
-        };
-        
-        const labData = { id: labId, name: staffData.labName || 'Lab' };
-        
-        setUser(userData);
-        setLab(labData);
-        setIsAuthenticated(true);
-        
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        await AsyncStorage.setItem('lab', JSON.stringify(labData));
-        
-        return { 
-          success: true, 
-          user: userData, 
-          lab: labData, 
-          role: userData.roles[0] 
-        };
-      }
-
-      // Check patients in lab
-      const patientsRef = collection(db, 'labs', labId, 'patients');
-      const patientsQuery = query(patientsRef, where('accessCode', '==', accessCode));
-      const patientsSnapshot = await getDocs(patientsQuery);
-
-      if (!patientsSnapshot.empty) {
-        const patientDoc = patientsSnapshot.docs[0];
-        const patientData = patientDoc.data();
-        
-        const userData = {
-          id: patientDoc.id,
-          ...patientData,
-          role: 'patient',
-          roles: ['patient']
-        };
-        
-        const labData = { id: labId, name: patientData.labName || 'Lab' };
-        
-        setUser(userData);
-        setLab(labData);
-        setIsAuthenticated(true);
-        
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        await AsyncStorage.setItem('lab', JSON.stringify(labData));
-        
-        return { 
-          success: true, 
-          user: userData, 
-          lab: labData, 
-          role: 'patient' 
-        };
-      }
-
-      return { 
-        success: false, 
-        error: 'Invalid access code. Please check and try again.' 
-      };
     } catch (error: any) {
-      console.error('Error verifying access code:', error);
-      return { 
-        success: false, 
-        error: 'Network error. Please check your connection.' 
-      };
+      console.error('❌ Login error:', error);
+      throw error;
     }
   };
 
@@ -165,75 +81,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await AsyncStorage.removeItem('lab');
   };
 
-  // Register new patient (self-registration)
-  const registerPatient = async (labId: string, patientData: any) => {
-    try {
-      const patientsRef = collection(db, 'labs', labId, 'patients');
-      
-      const newPatient = {
-        ...patientData,
-        status: 'pending', // Waiting for receptionist confirmation
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const docRef = await addDoc(patientsRef, newPatient);
-      
-      return {
-        success: true,
-        patientId: docRef.id,
-        accessCode: patientData.accessCode
-      };
-    } catch (error: any) {
-      console.error('Error registering patient:', error);
-      return { success: false, error: error.message };
-    }
+  const registerPatient = async (labId: string, data: any) => {
+    return await authService.registerPatient(labId, data);
   };
 
-  // Get all labs
   const getAllLabs = async () => {
-    try {
-      const labsRef = collection(db, 'labs');
-      const snapshot = await getDocs(labsRef);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error('Error fetching labs:', error);
-      return [];
-    }
+    return await authService.getAllLabs();
   };
 
-  // Get lab details by ID
   const getLabDetails = async (labId: string) => {
-    try {
-      const labRef = doc(db, 'labs', labId);
-      const labDoc = await getDoc(labRef);
-      if (labDoc.exists()) {
-        return { id: labDoc.id, ...labDoc.data() };
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching lab details:', error);
-      return null;
-    }
-  };
-
-  // Confirm patient (Receptionist)
-  const confirmPatient = async (labId: string, patientId: string) => {
-    try {
-      const patientRef = doc(db, 'labs', labId, 'patients', patientId);
-      await updateDoc(patientRef, {
-        status: 'active',
-        confirmedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      return { success: true };
-    } catch (error: any) {
-      console.error('Error confirming patient:', error);
-      return { success: false, error: error.message };
-    }
+    return await authService.getLabDetails(labId);
   };
 
   return (
@@ -246,8 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       registerPatient,
       getAllLabs,
-      getLabDetails,
-      confirmPatient
+      getLabDetails
     }}>
       {children}
     </AuthContext.Provider>
