@@ -157,7 +157,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   stepText: {
-    
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     marginBottom: 20,

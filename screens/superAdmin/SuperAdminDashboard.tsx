@@ -1,10 +1,21 @@
+// screens/superAdmin/SuperAdminDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, FlatList } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  TouchableOpacity, 
+  StyleSheet, 
+  RefreshControl, 
+  FlatList,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 const SuperAdminDashboard = ({ navigation }: any) => {
@@ -27,32 +38,46 @@ const SuperAdminDashboard = ({ navigation }: any) => {
 
   const fetchLabs = async () => {
     try {
+      setLoading(true);
       const labsRef = collection(db, 'labs');
       const snapshot = await getDocs(labsRef);
-      const labList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const labList = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
       setLabs(labList);
       
+      // Calculate stats
       let totalPatients = 0;
       let totalStaff = 0;
       
       for (const lab of labList) {
-        const patientsRef = collection(db, 'labs', lab.id, 'patients');
-        const patientsSnap = await getDocs(patientsRef);
-        totalPatients += patientsSnap.size;
+        try {
+          const patientsRef = collection(db, 'labs', lab.id, 'patients');
+          const patientsSnap = await getDocs(patientsRef);
+          totalPatients += patientsSnap.size;
+        } catch (e) {
+          console.log('No patients collection for lab:', lab.id);
+        }
         
-        const staffRef = collection(db, 'labs', lab.id, 'staff');
-        const staffSnap = await getDocs(staffRef);
-        totalStaff += staffSnap.size;
+        try {
+          const staffRef = collection(db, 'labs', lab.id, 'staff');
+          const staffSnap = await getDocs(staffRef);
+          totalStaff += staffSnap.size;
+        } catch (e) {
+          console.log('No staff collection for lab:', lab.id);
+        }
       }
       
       setStats({
         totalLabs: labList.length,
         totalPatients,
         totalStaff,
-        totalRevenue: totalPatients * 10 // Placeholder
+        totalRevenue: totalPatients * 10
       });
     } catch (error) {
       console.error('Error fetching labs:', error);
+      Alert.alert('Error', 'Failed to load labs');
     } finally {
       setLoading(false);
     }
@@ -64,6 +89,33 @@ const SuperAdminDashboard = ({ navigation }: any) => {
     setRefreshing(false);
   };
 
+  const handleDeleteLab = (labId: string, labName: string) => {
+    Alert.alert(
+      'Delete Lab',
+      `Are you sure you want to delete "${labName}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'labs', labId));
+              Alert.alert('Success', 'Lab deleted successfully');
+              fetchLabs();
+            } catch (error) {
+              console.error('Error deleting lab:', error);
+              Alert.alert('Error', 'Failed to delete lab');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCreateLab = () => {
+    navigation.navigate('LabRegistrationModal');
+  };
   const renderLabItem = ({ item }: any) => (
     <TouchableOpacity 
       style={[styles.labItem, { backgroundColor: colors.surface }]}
@@ -72,14 +124,30 @@ const SuperAdminDashboard = ({ navigation }: any) => {
       <View style={[styles.labColor, { backgroundColor: item.primaryColor || '#1A237E' }]} />
       <View style={styles.labInfo}>
         <Text style={styles.labName}>{item.name}</Text>
-        <Text style={styles.labLocation}>{item.location}</Text>
+        <Text style={styles.labLocation}>
+          <Ionicons name="location" size={12} color="#666" /> {item.location || 'No location'}
+        </Text>
         <Text style={styles.labStats}>
           👥 {item.patientCount || 0} patients • 👤 {item.staffCount || 0} staff
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#ccc" />
+      <TouchableOpacity 
+        style={styles.deleteButton}
+        onPress={() => handleDeleteLab(item.id, item.name)}
+      >
+        <Ionicons name="trash" size={20} color="#EF4444" />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading labs...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView 
@@ -89,55 +157,71 @@ const SuperAdminDashboard = ({ navigation }: any) => {
       }
     >
       <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <Text style={styles.title}>👑 {t('super_admin')}</Text>
-        <Text style={styles.subtitle}>{t('manage_all_labs')}</Text>
+        <Text style={styles.title}>👑 Super Admin</Text>
+        <Text style={styles.subtitle}>Manage all labs</Text>
       </View>
 
       <View style={styles.statsGrid}>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="business" size={24} color="#2196F3" />
           <Text style={styles.statNumber}>{stats.totalLabs}</Text>
-          <Text style={styles.statLabel}>{t('total_labs')}</Text>
+          <Text style={styles.statLabel}>Total Labs</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="people" size={24} color="#4CAF50" />
           <Text style={styles.statNumber}>{stats.totalPatients}</Text>
-          <Text style={styles.statLabel}>{t('total_patients')}</Text>
+          <Text style={styles.statLabel}>Total Patients</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="person-add" size={24} color="#FF9800" />
           <Text style={styles.statNumber}>{stats.totalStaff}</Text>
-          <Text style={styles.statLabel}>{t('total_staff')}</Text>
+          <Text style={styles.statLabel}>Total Staff</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="cash" size={24} color="#4CAF50" />
           <Text style={styles.statNumber}>${stats.totalRevenue}</Text>
-          <Text style={styles.statLabel}>{t('total_revenue')}</Text>
+          <Text style={styles.statLabel}>Total Revenue</Text>
         </View>
       </View>
 
       <TouchableOpacity 
         style={[styles.createButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('LabRegistrationModal')}
+        onPress={handleCreateLab}
       >
         <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.createButtonText}>{t('create_new_lab')}</Text>
+        <Text style={styles.createButtonText}>Create New Lab</Text>
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>{t('all_labs')}</Text>
-      <FlatList
-        data={labs}
-        renderItem={renderLabItem}
-        keyExtractor={item => item.id}
-        scrollEnabled={false}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="business-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_labs_created')}</Text>
+      <Text style={styles.sectionTitle}>All Labs</Text>
+      
+      {labs.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="business-outline" size={60} color="#ccc" />
+          <Text style={styles.emptyTitle}>No Labs Created</Text>
+          <Text style={styles.emptySubtext}>Click "Create New Lab" to get started</Text>
+        </View>
+      ) : (
+        labs.map((lab) => (
+          <View key={lab.id} style={[styles.labItem, { backgroundColor: colors.surface }]}>
+            <View style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
+            <View style={styles.labInfo}>
+              <Text style={styles.labName}>{lab.name}</Text>
+              <Text style={styles.labLocation}>
+                <Ionicons name="location" size={12} color="#666" /> {lab.location || 'No location'}
+              </Text>
+              <Text style={styles.labStats}>
+                👥 {lab.patientCount || 0} patients • 👤 {lab.staffCount || 0} staff
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={() => handleDeleteLab(lab.id, lab.name)}
+            >
+              <Ionicons name="trash" size={20} color="#EF4444" />
+            </TouchableOpacity>
           </View>
-        }
-      />
+        ))
+      )}
     </ScrollView>
   );
 };
@@ -145,6 +229,17 @@ const SuperAdminDashboard = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+    fontFamily: 'Poppins-Regular',
   },
   header: {
     padding: 20,
@@ -196,7 +291,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 20,
     padding: 16,
     borderRadius: 12,
     gap: 8,
@@ -220,16 +316,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontFamily: 'Poppins-Bold',
   },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 30,
-  },
   labItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 10,
     padding: 16,
     borderRadius: 12,
-    marginBottom: 10,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -263,14 +356,28 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'Poppins-Regular',
   },
+  deleteButton: {
+    padding: 8,
+  },
   emptyState: {
     alignItems: 'center',
     padding: 40,
+    marginHorizontal: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    fontFamily: 'Poppins-Medium',
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 15,
+    fontFamily: 'Poppins-Bold',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+    fontFamily: 'Poppins-Regular',
   },
 });
 

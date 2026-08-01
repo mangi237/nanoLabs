@@ -8,7 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from './context/authContext';
 import { LanguageProvider } from './context/languageContext';
 import { ThemeProvider } from './context/themeContext';
-
+import LabRegistrationModal from './screens/superAdmin/LabRegistrationModal';
 // Import ALL screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
@@ -409,6 +409,15 @@ export default function App() {
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
                 />
+                <Stack.Screen 
+  name="LabRegistrationModal" 
+  component={LabRegistrationModal}
+  options={{
+    title: 'Create New Lab',
+    headerShown: true,
+    headerStyle: { backgroundColor: '#1A237E' }
+  }}
+/>
 <Stack.Screen 
   name="RegisterScreen" 
   component={RegisterScreen}
