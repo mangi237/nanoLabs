@@ -3,7 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../../context/languageContext';
 import { useTheme } from '../../../context/themeContext';
-
+import { Alert } from 'react-native';
+import validator from '../../../utils/validators';
 const Step2_ContactInfo = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const { primaryColor } = useTheme();
@@ -15,16 +16,31 @@ const Step2_ContactInfo = ({ navigation, route }: any) => {
     emergencyContact: '',
     guardianName: ''
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const validateField = (field: string, value: string) => {
+    const rules = {
+      phone: [{ required: true, message: 'Phone number is required' }, { phone: true, message: 'Invalid phone number' }],
+      email: [{ email: true, message: 'Invalid email address' }]
+    };
 
+    const error = validator.validateField(value, rules[field as keyof typeof rules] || []);
+    setErrors(prev => ({ ...prev, [field]: error || '' }));
+    return !error;
+  };
   const handleNext = () => {
-    if (!formData.phone.trim() || !formData.email.trim()) {
-      alert(t('fill_required_fields'));
+    // Validate all fields
+    const phoneValid = validateField('phone', formData.phone);
+    
+    if (!phoneValid) {
+      Alert.alert('Validation Error', errors.phone);
       return;
     }
+
     navigation.navigate('Step3_HealthInfo', { 
       patientData: { ...patientData, ...formData }
     });
   };
+
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
@@ -37,15 +53,18 @@ const Step2_ContactInfo = ({ navigation, route }: any) => {
       <Text style={styles.subtitle}>{t('how_to_reach_you')}</Text>
 
       <View style={styles.form}>
-        <TextInput
-          style={styles.input}
+      <TextInput
+          style={[styles.input, errors.phone && styles.inputError]}
           placeholder={t('phone_number')}
           value={formData.phone}
-          onChangeText={(text) => setFormData({ ...formData, phone: text })}
+          onChangeText={(text) => {
+            setFormData({ ...formData, phone: text });
+            validateField('phone', text);
+          }}
           keyboardType="phone-pad"
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
-        
+        {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
         <TextInput
           style={styles.input}
           placeholder={t('email_address')}
@@ -83,9 +102,10 @@ const Step2_ContactInfo = ({ navigation, route }: any) => {
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
 
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>{t('next')} →</Text>
-        </TouchableOpacity>
+<TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+        <Text style={styles.nextButtonText}>{t('next')} →</Text>
+      </TouchableOpacity>
+
       </View>
     </ScrollView>
   );
@@ -119,6 +139,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     fontFamily: 'Poppins-Bold',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: 'Poppins-Regular',
   },
   subtitle: {
     fontSize: 14,

@@ -1,7 +1,8 @@
-// context/authContext.tsx
+// context/authContext.tsx - ENHANCED SECURITY
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/authService';
+import errorHandler from '../utils/errorHandler';
 
 interface AuthContextType {
   user: any;
@@ -13,9 +14,13 @@ interface AuthContextType {
   registerPatient: (labId: string, data: any) => Promise<any>;
   getAllLabs: () => Promise<any[]>;
   getLabDetails: (labId: string) => Promise<any>;
+  refreshToken: () => Promise<void>;
+  clearSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
@@ -25,12 +30,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     checkAuthStatus();
+    
+    // Auto logout on session timeout
+    const interval = setInterval(async () => {
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      if (lastLogin) {
+        const elapsed = Date.now() - parseInt(lastLogin);
+        if (elapsed > SESSION_TIMEOUT) {
+          await clearSession();
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
   }, []);
 
   const checkAuthStatus = async () => {
     try {
       const storedUser = await AsyncStorage.getItem('user');
       const storedLab = await AsyncStorage.getItem('lab');
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      
+      // Check session timeout
+      if (lastLogin) {
+        const elapsed = Date.now() - parseInt(lastLogin);
+        if (elapsed > SESSION_TIMEOUT) {
+          await clearSession();
+          return;
+        }
+      }
       
       if (storedUser && storedLab) {
         setUser(JSON.parse(storedUser));
@@ -46,39 +74,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (accessCode: string, labId: string) => {
     try {
-      console.log('🔍 Login attempt:', { accessCode, labId });
-      
       const result = await authService.verifyAccessCode(accessCode, labId);
-      console.log('📦 Login result:', result);
       
       if (result.success) {
         setUser(result.user);
         setLab(result.lab);
         setIsAuthenticated(true);
         
+        // Store session data
         await AsyncStorage.setItem('user', JSON.stringify(result.user));
         if (result.lab) {
           await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
-        } else {
-          await AsyncStorage.removeItem('lab');
         }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', accessCode);
+        await AsyncStorage.setItem('labId', labId || '');
         
         return result;
       } else {
         throw new Error(result.error || 'Invalid credentials');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      errorHandler.handleError(error);
       throw error;
     }
   };
 
   const logout = async () => {
+    await clearSession();
+  };
+
+  const clearSession = async () => {
     setUser(null);
     setLab(null);
     setIsAuthenticated(false);
-    await AsyncStorage.removeItem('user');
-    await AsyncStorage.removeItem('lab');
+    await AsyncStorage.multiRemove(['user', 'lab', 'lastLogin', 'accessCode', 'labId']);
+  };
+
+  const refreshToken = async () => {
+    // Implement token refresh logic
+    const accessCode = await AsyncStorage.getItem('accessCode');
+    const labId = await AsyncStorage.getItem('labId');
+    if (accessCode && labId) {
+      await login(accessCode, labId);
+    }
   };
 
   const registerPatient = async (labId: string, data: any) => {
@@ -103,7 +142,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       registerPatient,
       getAllLabs,
-      getLabDetails
+      getLabDetails,
+      refreshToken,
+      clearSession
     }}>
       {children}
     </AuthContext.Provider>

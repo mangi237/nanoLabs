@@ -7,7 +7,6 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   RefreshControl, 
-  FlatList,
   Alert,
   ActivityIndicator
 } from 'react-native';
@@ -47,7 +46,6 @@ const SuperAdminDashboard = ({ navigation }: any) => {
       }));
       setLabs(labList);
       
-      // Calculate stats
       let totalPatients = 0;
       let totalStaff = 0;
       
@@ -56,24 +54,20 @@ const SuperAdminDashboard = ({ navigation }: any) => {
           const patientsRef = collection(db, 'labs', lab.id, 'patients');
           const patientsSnap = await getDocs(patientsRef);
           totalPatients += patientsSnap.size;
-        } catch (e) {
-          console.log('No patients collection for lab:', lab.id);
-        }
+        } catch (e) {}
         
         try {
           const staffRef = collection(db, 'labs', lab.id, 'staff');
           const staffSnap = await getDocs(staffRef);
           totalStaff += staffSnap.size;
-        } catch (e) {
-          console.log('No staff collection for lab:', lab.id);
-        }
+        } catch (e) {}
       }
       
       setStats({
         totalLabs: labList.length,
         totalPatients,
         totalStaff,
-        totalRevenue: totalPatients * 10
+        totalRevenue: totalPatients * 1000 // 1000 FCFA per patient
       });
     } catch (error) {
       console.error('Error fetching labs:', error);
@@ -116,29 +110,10 @@ const SuperAdminDashboard = ({ navigation }: any) => {
   const handleCreateLab = () => {
     navigation.navigate('LabRegistrationModal');
   };
-  const renderLabItem = ({ item }: any) => (
-    <TouchableOpacity 
-      style={[styles.labItem, { backgroundColor: colors.surface }]}
-      onPress={() => navigation.navigate('LabDetailsScreen', { labId: item.id })}
-    >
-      <View style={[styles.labColor, { backgroundColor: item.primaryColor || '#1A237E' }]} />
-      <View style={styles.labInfo}>
-        <Text style={styles.labName}>{item.name}</Text>
-        <Text style={styles.labLocation}>
-          <Ionicons name="location" size={12} color="#666" /> {item.location || 'No location'}
-        </Text>
-        <Text style={styles.labStats}>
-          👥 {item.patientCount || 0} patients • 👤 {item.staffCount || 0} staff
-        </Text>
-      </View>
-      <TouchableOpacity 
-        style={styles.deleteButton}
-        onPress={() => handleDeleteLab(item.id, item.name)}
-      >
-        <Ionicons name="trash" size={20} color="#EF4444" />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
+
+  const handleLabPress = (lab: any) => {
+    navigation.navigate('LabDetailsScreen', { labId: lab.id });
+  };
 
   if (loading) {
     return (
@@ -179,7 +154,7 @@ const SuperAdminDashboard = ({ navigation }: any) => {
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="cash" size={24} color="#4CAF50" />
-          <Text style={styles.statNumber}>${stats.totalRevenue}</Text>
+          <Text style={styles.statNumber}>{stats.totalRevenue.toLocaleString()} FCFA</Text>
           <Text style={styles.statLabel}>Total Revenue</Text>
         </View>
       </View>
@@ -202,7 +177,12 @@ const SuperAdminDashboard = ({ navigation }: any) => {
         </View>
       ) : (
         labs.map((lab) => (
-          <View key={lab.id} style={[styles.labItem, { backgroundColor: colors.surface }]}>
+          <TouchableOpacity
+            key={lab.id}
+            style={[styles.labItem, { backgroundColor: colors.surface }]}
+            onPress={() => handleLabPress(lab)}
+            activeOpacity={0.7}
+          >
             <View style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
             <View style={styles.labInfo}>
               <Text style={styles.labName}>{lab.name}</Text>
@@ -213,13 +193,10 @@ const SuperAdminDashboard = ({ navigation }: any) => {
                 👥 {lab.patientCount || 0} patients • 👤 {lab.staffCount || 0} staff
               </Text>
             </View>
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => handleDeleteLab(lab.id, lab.name)}
-            >
-              <Ionicons name="trash" size={20} color="#EF4444" />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.labActions}>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+          </TouchableOpacity>
         ))
       )}
     </ScrollView>
@@ -356,8 +333,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'Poppins-Regular',
   },
-  deleteButton: {
-    padding: 8,
+  labActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   emptyState: {
     alignItems: 'center',

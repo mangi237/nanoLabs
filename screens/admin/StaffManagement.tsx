@@ -6,15 +6,19 @@ import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-
+import EditStaffModal from '../admin/EditStaffModal';
+import AddStaffModal from './AddStaffModal';
 const StaffManagement = ({ navigation }: any) => {
   const { t } = useLanguage();
   const { colors } = useTheme();
+  const [showEditModal, setShowEditModal] = useState(false);
+const [selectedStaff, setSelectedStaff] = useState(null);
+
   const { lab } = useAuth();
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
+  const [showAddModal, setShowAddModal ] = useState(false);
   useEffect(() => {
     fetchStaff();
   }, []);
@@ -40,47 +44,49 @@ const StaffManagement = ({ navigation }: any) => {
     setRefreshing(false);
   };
 
-  const handleDeleteStaff = (staffId: string) => {
+  const handleEditStaff = (staff: any) => {
+    setSelectedStaff(staff);
+    setShowEditModal(true);
+  };
+  const handleDeleteStaff = (staffId: string, staffName: string) => {
     Alert.alert(
-      t('confirm_delete'),
-      t('delete_staff_confirm'),
+      'Delete Staff',
+      `Are you sure you want to delete "${staffName}"?`,
       [
-        { text: t('cancel'), style: 'cancel' },
-        { 
-          text: t('delete'), 
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              if (!lab?.id) return;
-              await deleteDoc(doc(db, 'labs', lab.id, 'staff', staffId));
+              await deleteDoc(doc(db, 'labs', lab?.id, 'staff', staffId));
               await fetchStaff();
+              Alert.alert('Success', 'Staff deleted');
             } catch (error) {
-              console.error('Error deleting staff:', error);
+              Alert.alert('Error', 'Failed to delete staff');
             }
           }
         }
       ]
     );
-  };
-
+  }; 
   const renderStaffItem = ({ item }: any) => (
     <View style={[styles.staffItem, { backgroundColor: colors.surface }]}>
       <View style={styles.staffInfo}>
         <Text style={styles.staffName}>{item.name}</Text>
-        <Text style={styles.staffRoles}>
-          {item.roles?.join(', ') || item.primaryRole || 'Staff'}
-        </Text>
+        <Text style={styles.staffRoles}>{item.roles?.join(', ')}</Text>
         <Text style={styles.staffCode}>🔑 {item.accessCode}</Text>
       </View>
-      <TouchableOpacity 
-        style={styles.deleteButton}
-        onPress={() => handleDeleteStaff(item.id)}
-      >
-        <Ionicons name="trash" size={20} color="#F44336" />
-      </TouchableOpacity>
+      <View style={styles.staffActions}>
+        <TouchableOpacity onPress={() => handleEditStaff(item)} style={styles.editButton}>
+          <Ionicons name="pencil" size={20} color="#2196F3" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDeleteStaff(item.id, item.name)} style={styles.deleteButton}>
+          <Ionicons name="trash" size={20} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
-
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -106,16 +112,39 @@ const StaffManagement = ({ navigation }: any) => {
           </View>
         }
       />
+      
 
-      <TouchableOpacity 
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('AddStaffModal')}
-      >
+<TouchableOpacity 
+  style={[styles.addButton, { backgroundColor: colors.primary }]}
+  onPress={() => setShowAddModal(true)}  // ← CHANGE THIS
+>
+<AddStaffModal
+  visible={showAddModal}
+  onClose={() => setShowAddModal(false)}
+  onStaffAdded={() => {
+    setShowAddModal(false);
+    fetchStaff(); // Refresh the list
+  }}
+/>
+<EditStaffModal
+  visible={showEditModal}
+  onClose={() => setShowEditModal(false)}
+  staff={selectedStaff}
+  onStaffUpdated={() => {
+    setShowEditModal(false);
+    fetchStaff();
+  }}
+/>
         <Ionicons name="add" size={24} color="white" />
         <Text style={styles.addButtonText}>{t('add_staff')}</Text>
       </TouchableOpacity>
     </View>
+    
+    
   );
+  
+  
+
 };
 
 const styles = StyleSheet.create({

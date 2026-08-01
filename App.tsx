@@ -10,6 +10,7 @@ import { LanguageProvider } from './context/languageContext';
 import { ThemeProvider } from './context/themeContext';
 import LabRegistrationModal from './screens/superAdmin/LabRegistrationModal';
 // Import ALL screens
+import AddStaffModal from './screens/admin/AddStaffModal';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 import LabSelectionScreen from './screens/auth/LabSelectionScreen';
@@ -49,8 +50,8 @@ import ReportsScreen from './screens/admin/ReportsScreen';
 
 // Import Super Admin Screens
 import SuperAdminDashboard from './screens/superAdmin/SuperAdminDashboard';
-import LabDetailsScreen from './screens/superAdmin/HosptialDetailsScreen';
-
+import LabDetailsScreen from './screens/superAdmin/LabDetailsScreen';
+import RegistrationCompleteScreen from './screens/Patient/RegistrationCompleteScreen';
 // Import Cashier, Lab, etc.
 import CashierDashboard from './screens/cashier/CashierDashboard';
 import LabDashboard from './screens/lab/LabDashboard';
@@ -174,6 +175,13 @@ export default function App() {
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
                 />
+                <Stack.Screen 
+  name="RegistrationCompleteScreen" 
+  component={RegistrationCompleteScreen}
+  options={{ 
+    headerShown: false
+  }}
+/>
                 <Stack.Screen 
                   name="Step3_HealthInfo" 
                   component={Step3_HealthInfo}
@@ -400,6 +408,15 @@ export default function App() {
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
                 />
+                <Stack.Screen 
+  name="AddStaffModal" 
+  component={AddStaffModal}
+  options={{ 
+    title: 'Add Staff',
+    headerShown: true,
+    headerStyle: { backgroundColor: '#1A237E' }
+  }}
+/>
                 <Stack.Screen 
                   name="LabDashboard" 
                   component={LabDashboard}

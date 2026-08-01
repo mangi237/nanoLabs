@@ -57,16 +57,19 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
       });
 
       if (result.success) {
-        Alert.alert(
-          '🎉 Registration Complete!',
-          `Your access code is: ${accessCode}\n\nPlease visit the receptionist to confirm your registration.\n\nYou will now be redirected to the login screen.`,
-          [
+        navigation.reset({
+          index: 0,
+          routes: [
             { 
-              text: 'Go to Login', 
-              onPress: () => navigation.navigate('LoginScreen')
+              name: 'RegistrationCompleteScreen', 
+              params: {
+                accessCode: accessCode,
+                patientName: patientData?.name || 'Patient',
+                labName: route.params?.labName || 'Lab'
+              }
             }
-          ]
-        );
+          ],
+        });
       } else {
         Alert.alert(t('error'), result.error || t('registration_failed'));
       }

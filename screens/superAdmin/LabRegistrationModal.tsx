@@ -13,7 +13,7 @@ import {
   Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 const LabRegistrationModal = ({ navigation }: any) => {
@@ -32,19 +32,23 @@ const LabRegistrationModal = ({ navigation }: any) => {
     primaryColor: '#1A237E',
     secondaryColor: '#E91E63',
     accentColor: '#F1C40F',
-    // Subscription
-    subscriptionType: 'basic',
-    maxPatients: 100,
-    maxStaff: 5,
+    // Admin User
+    adminName: '',
+    adminEmail: '',
+    adminPhone: '',
+    adminAccessCode: '',
     // Status
     status: 'active'
   });
 
-  const subscriptionPlans = [
-    { id: 'basic', name: 'Basic', price: 99, patients: 100, staff: 5, color: '#3498db' },
-    { id: 'pro', name: 'Pro', price: 299, patients: 500, staff: 15, color: '#27ae60' },
-    { id: 'premium', name: 'Premium', price: 699, patients: 2000, staff: 50, color: '#9b59b6' }
-  ];
+  const generateAccessCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
 
   const handleCreate = async () => {
     if (!formData.name.trim() || !formData.location.trim()) {
@@ -52,35 +56,94 @@ const LabRegistrationModal = ({ navigation }: any) => {
       return;
     }
 
+    if (!formData.adminName.trim() || !formData.adminEmail.trim()) {
+      Alert.alert('Error', 'Admin name and email are required');
+      return;
+    }
+
     setLoading(true);
     try {
+      // 1. Create Lab
       const labData = {
-        ...formData,
+        name: formData.name,
+        slogan: formData.slogan,
+        location: formData.location,
+        address: formData.address,
+        phone: formData.phone,
+        email: formData.email,
+        description: formData.description,
+        primaryColor: formData.primaryColor,
+        secondaryColor: formData.secondaryColor,
+        accentColor: formData.accentColor,
         patientCount: 0,
         staffCount: 0,
+        status: 'active',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        subscription: {
-          type: formData.subscriptionType,
-          price: subscriptionPlans.find(p => p.id === formData.subscriptionType)?.price || 99,
-          maxPatients: formData.maxPatients,
-          maxStaff: formData.maxStaff,
-          status: 'active'
-        }
+        // Customer Service Fee - 1000 FCFA per patient
+        customerServiceFee: 1000,
+        currency: 'FCFA'
       };
 
-      const docRef = await addDoc(collection(db, 'labs'), labData);
-      
+      const labRef = await addDoc(collection(db, 'labs'), labData);
+      const labId = labRef.id;
+
+      // 2. Create Admin User
+      const adminAccessCode = formData.adminAccessCode || generateAccessCode();
+      const adminData = {
+        name: formData.adminName,
+        email: formData.adminEmail,
+        phone: formData.adminPhone,
+        accessCode: adminAccessCode,
+        primaryRole: 'admin',
+        roles: ['admin'],
+        status: 'active',
+        labId: labId,
+        labName: formData.name,
+        isAdmin: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await addDoc(collection(db, 'labs', labId, 'staff'), adminData);
+
+      // 3. Create default test catalog
+      const defaultTests = [
+        { name: 'Malaria Test', category: 'Blood', price: 5000 },
+        { name: 'HIV Screening', category: 'Blood', price: 15000 },
+        { name: 'COVID-19 Test', category: 'Swab', price: 20000 },
+        { name: 'Blood Sugar Test', category: 'Blood', price: 3000 },
+        { name: 'Urinalysis', category: 'Urine', price: 4000 },
+        { name: 'Widal Test', category: 'Blood', price: 6000 },
+        { name: 'Hepatitis B Test', category: 'Blood', price: 12000 },
+        { name: 'Pregnancy Test', category: 'Urine', price: 2500 }
+      ];
+
+      for (const test of defaultTests) {
+        await addDoc(collection(db, 'labs', labId, 'testCatalog'), {
+          ...test,
+          createdAt: new Date().toISOString(),
+          isActive: true
+        });
+      }
+
       Alert.alert(
-        '✅ Lab Created!',
-        `"${formData.name}" has been successfully created.\n\nLab ID: ${docRef.id}`,
+        '✅ Lab Created Successfully!',
+        `Lab: ${formData.name}\n\nAdmin Access Code: ${adminAccessCode}\n\n⚠️ Please share this code with the lab admin.\n\nCustomer Service Fee: 1000 FCFA per patient`,
         [
           { 
-            text: 'OK', 
-            onPress: () => navigation.goBack() 
+            text: 'Go to Dashboard', 
+            onPress: () => {
+              // Navigate back to Super Admin Dashboard
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SuperAdminDashboard' }],
+              });
+            }
           }
         ]
       );
+
     } catch (error: any) {
       console.error('Error creating lab:', error);
       Alert.alert('Error', error.message || 'Failed to create lab');
@@ -91,7 +154,7 @@ const LabRegistrationModal = ({ navigation }: any) => {
 
   const renderStep1 = () => (
     <View>
-      <Text style={styles.sectionTitle}>🏥 Basic Information</Text>
+      <Text style={styles.sectionTitle}>🏥 Lab Information</Text>
       <Text style={styles.sectionSubtitle}>Enter the lab's basic details</Text>
 
       <TextInput
@@ -164,7 +227,7 @@ const LabRegistrationModal = ({ navigation }: any) => {
 
       <Text style={styles.label}>Primary Color</Text>
       <View style={styles.colorGrid}>
-        {['#1A237E', '#2E7D32', '#C62828', '#E65100', '#4A148C', '#00695C', '#1A237E', '#880E4F'].map((color) => (
+        {['#1A237E', '#2E7D32', '#C62828', '#E65100', '#4A148C', '#00695C', '#0D47A1', '#880E4F'].map((color) => (
           <TouchableOpacity
             key={color}
             style={[
@@ -223,42 +286,63 @@ const LabRegistrationModal = ({ navigation }: any) => {
 
   const renderStep3 = () => (
     <View>
-      <Text style={styles.sectionTitle}>📦 Subscription Plan</Text>
-      <Text style={styles.sectionSubtitle}>Choose a plan for this lab</Text>
+      <Text style={styles.sectionTitle}>👑 Admin Account</Text>
+      <Text style={styles.sectionSubtitle}>Create the first admin for this lab</Text>
 
-      {subscriptionPlans.map((plan) => (
-        <TouchableOpacity
-          key={plan.id}
-          style={[
-            styles.planCard,
-            formData.subscriptionType === plan.id && styles.planCardSelected,
-            { borderColor: plan.color }
-          ]}
-          onPress={() => {
-            setFormData({
-              ...formData,
-              subscriptionType: plan.id,
-              maxPatients: plan.patients,
-              maxStaff: plan.staff
-            });
-          }}
+      <View style={styles.infoBox}>
+        <Ionicons name="information-circle" size={24} color="#1A237E" />
+        <Text style={styles.infoText}>
+          The admin will have full access to manage the lab, staff, and patients.
+        </Text>
+      </View>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Admin Full Name *"
+        value={formData.adminName}
+        onChangeText={(text) => setFormData({ ...formData, adminName: text })}
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Admin Email *"
+        value={formData.adminEmail}
+        onChangeText={(text) => setFormData({ ...formData, adminEmail: text })}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Admin Phone"
+        value={formData.adminPhone}
+        onChangeText={(text) => setFormData({ ...formData, adminPhone: text })}
+        keyboardType="phone-pad"
+      />
+
+      <View style={styles.codeContainer}>
+        <TextInput
+          style={[styles.input, styles.codeInput]}
+          placeholder="Access Code (auto-generated)"
+          value={formData.adminAccessCode}
+          onChangeText={(text) => setFormData({ ...formData, adminAccessCode: text })}
+          maxLength={6}
+          autoCapitalize="characters"
+        />
+        <TouchableOpacity 
+          style={styles.generateButton}
+          onPress={() => setFormData({ ...formData, adminAccessCode: generateAccessCode() })}
         >
-          <View style={[styles.planHeader, { backgroundColor: plan.color + '15' }]}>
-            <Text style={[styles.planName, { color: plan.color }]}>{plan.name}</Text>
-            <Text style={styles.planPrice}>${plan.price}/month</Text>
-          </View>
-          <View style={styles.planDetails}>
-            <Text style={styles.planFeature}>👥 Up to {plan.patients} patients/month</Text>
-            <Text style={styles.planFeature}>👤 {plan.staff} staff members</Text>
-          </View>
-          {formData.subscriptionType === plan.id && (
-            <View style={[styles.planBadge, { backgroundColor: plan.color }]}>
-              <Ionicons name="checkmark" size={16} color="white" />
-              <Text style={styles.planBadgeText}>SELECTED</Text>
-            </View>
-          )}
+          <Ionicons name="refresh" size={20} color="white" />
+          <Text style={styles.generateText}>Generate</Text>
         </TouchableOpacity>
-      ))}
+      </View>
+
+      <View style={styles.feeBox}>
+        <Text style={styles.feeTitle}>💰 Customer Service Fee</Text>
+        <Text style={styles.feeAmount}>1,000 FCFA</Text>
+        <Text style={styles.feeSubtext}>Per patient registered at this lab</Text>
+      </View>
     </View>
   );
 
@@ -306,9 +390,9 @@ const LabRegistrationModal = ({ navigation }: any) => {
             ))}
           </View>
           <View style={styles.stepLabels}>
-            <Text style={[styles.stepLabel, step === 1 && styles.stepLabelActive]}>Basic Info</Text>
+            <Text style={[styles.stepLabel, step === 1 && styles.stepLabelActive]}>Info</Text>
             <Text style={[styles.stepLabel, step === 2 && styles.stepLabelActive]}>Theme</Text>
-            <Text style={[styles.stepLabel, step === 3 && styles.stepLabelActive]}>Subscription</Text>
+            <Text style={[styles.stepLabel, step === 3 && styles.stepLabelActive]}>Admin</Text>
           </View>
         </View>
 
@@ -494,61 +578,72 @@ const styles = StyleSheet.create({
     borderColor: '#333',
     borderWidth: 3,
   },
-  planCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  planCardSelected: {
-    borderWidth: 2,
-  },
-  planHeader: {
-    padding: 16,
+  infoBox: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 10,
   },
-  planName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  planPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: 'Poppins-Bold',
-  },
-  planDetails: {
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-  },
-  planFeature: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 4,
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1A237E',
     fontFamily: 'Poppins-Regular',
   },
-  planBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+  codeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
+    gap: 10,
   },
-  planBadgeText: {
+  codeInput: {
+    flex: 1,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontSize: 18,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A237E',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
+  },
+  generateText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  feeBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  feeTitle: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontFamily: 'Poppins-Medium',
+  },
+  feeAmount: {
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#1B5E20',
+    marginVertical: 4,
     fontFamily: 'Poppins-Bold',
+  },
+  feeSubtext: {
+    fontSize: 12,
+    color: '#388E3C',
+    fontFamily: 'Poppins-Regular',
   },
   footer: {
     flexDirection: 'row',
