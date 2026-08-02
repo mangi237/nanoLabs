@@ -78,22 +78,24 @@ const TestCatalogManagement = ({ navigation }: any) => {
     }
   };
 
-  const handleDeleteTest = (testId: string) => {
+  const handleDeleteTest = (testId: string, testName: string) => {
     Alert.alert(
-      t('confirm_delete'),
-      t('delete_test_confirm'),
+      'Delete Test',
+      `Are you sure you want to delete "${testName}"? This cannot be undone.`,
       [
-        { text: t('cancel'), style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         { 
-          text: t('delete'), 
+          text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
             try {
               if (!lab?.id) return;
               await deleteDoc(doc(db, 'labs', lab.id, 'testCatalog', testId));
-              await fetchTests();
-            } catch (error) {
+              Alert.alert(' Success', 'Test deleted successfully');
+              await fetchTests(); // Refresh the list
+            } catch (error: any) {
               console.error('Error deleting test:', error);
+              Alert.alert('Error', error.message || 'Failed to delete test');
             }
           }
         }

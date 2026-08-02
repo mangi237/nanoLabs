@@ -1,3 +1,4 @@
+// screens/staff/RoleSwitcher.tsx - FIXED
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,12 +6,13 @@ import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
 
-const RoleSwitcher = ({ navigation }: any) => {
+const RoleSwitcher = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const { colors } = useTheme();
   const { user } = useAuth();
 
   const roles = user?.roles || [user?.primaryRole || 'receptionist'];
+  const currentRole = route.params?.currentRole || roles[0];
 
   const roleIcons: { [key: string]: string } = {
     receptionist: 'person-outline',
@@ -29,31 +31,44 @@ const RoleSwitcher = ({ navigation }: any) => {
   };
 
   const handleSwitchRole = (role: string) => {
-    navigation.navigate('StaffDashboard', { activeRole: role });
+    navigation.replace('StaffDashboard', { activeRole: role });
   };
 
   const renderRoleItem = ({ item }: any) => (
     <TouchableOpacity 
-      style={[styles.roleItem, { backgroundColor: colors.surface }]}
+      style={[
+        styles.roleItem, 
+        { backgroundColor: currentRole === item ? colors.primary : colors.surface },
+        currentRole === item && styles.roleItemActive
+      ]}
       onPress={() => handleSwitchRole(item)}
     >
-      <View style={[styles.roleIcon, { backgroundColor: colors.primary + '20' }]}>
-       {/* { <Ionicons name={roleIcons[item] || 'person'} size={30} color={colors.primary} /> || <Text>User</Text>} */}
-      <Text>User</Text>
+      <View style={[styles.roleIcon, { backgroundColor: currentRole === item ? 'rgba(255,255,255,0.2)' : colors.primary + '20' }]}>
+        <Ionicons 
+          name={roleIcons[item] || 'person'} 
+          size={28} 
+          color={currentRole === item ? 'white' : colors.primary} 
+        />
       </View>
       <View style={styles.roleInfo}>
-        <Text style={styles.roleName}>{roleNames[item] || item}</Text>
-        <Text style={styles.roleDescription}>{t('switch_to')} {roleNames[item] || item}</Text>
+        <Text style={[styles.roleName, currentRole === item && styles.roleNameActive]}>
+          {roleNames[item] || item}
+        </Text>
+        <Text style={[styles.roleDescription, currentRole === item && styles.roleDescriptionActive]}>
+          {currentRole === item ? 'Active Role' : 'Switch to this role'}
+        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={24} color="#ccc" />
+      {currentRole === item && (
+        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+      )}
     </TouchableOpacity>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('switch_role')}</Text>
-        <Text style={styles.subtitle}>{t('select_role_to_switch')}</Text>
+        <Text style={styles.title}>🔄 Switch Role</Text>
+        <Text style={styles.subtitle}>Select which role you want to use</Text>
       </View>
 
       <FlatList
@@ -96,10 +111,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 10,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  },
+  roleItemActive: {
+    elevation: 4,
   },
   roleIcon: {
     width: 50,
@@ -118,11 +132,17 @@ const styles = StyleSheet.create({
     color: '#333',
     fontFamily: 'Poppins-SemiBold',
   },
+  roleNameActive: {
+    color: 'white',
+  },
   roleDescription: {
     fontSize: 13,
     color: '#666',
     marginTop: 2,
     fontFamily: 'Poppins-Regular',
+  },
+  roleDescriptionActive: {
+    color: 'rgba(255,255,255,0.7)',
   },
 });
 

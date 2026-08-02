@@ -58,17 +58,18 @@ const AddStaffModal = ({ visible, onClose, onStaffAdded }: any) => {
     setFormData({ ...formData, roles: updatedRoles });
   };
 
-  const handleSubmit = async () => {
+  // Update the handleSubmit function
+const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.email.trim()) {
       Alert.alert('Error', 'Name and email are required');
       return;
     }
-
+  
     if (formData.roles.length === 0) {
       Alert.alert('Error', 'Please select at least one role');
       return;
     }
-
+  
     setLoading(true);
     try {
       const staffData = {
@@ -80,9 +81,10 @@ const AddStaffModal = ({ visible, onClose, onStaffAdded }: any) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-
+  
       await addDoc(collection(db, 'labs', lab?.id, 'staff'), staffData);
-
+  
+      // Show success and close modal
       Alert.alert(
         '✅ Staff Added!',
         `Staff: ${formData.name}\nAccess Code: ${staffData.accessCode}`,
@@ -90,8 +92,8 @@ const AddStaffModal = ({ visible, onClose, onStaffAdded }: any) => {
           { 
             text: 'OK', 
             onPress: () => {
-              onStaffAdded();
-              onClose();
+              onClose(); // Close modal
+              onStaffAdded(); // Refresh list
             }
           }
         ]

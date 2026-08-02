@@ -56,21 +56,22 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
         status: 'pending'
       });
 
-      if (result.success) {
-        navigation.reset({
-          index: 0,
-          routes: [
-            { 
-              name: 'RegistrationCompleteScreen', 
-              params: {
-                accessCode: accessCode,
-                patientName: patientData?.name || 'Patient',
-                labName: route.params?.labName || 'Lab'
-              }
-            }
-          ],
-        });
-      } else {
+     // Replace the handleRegister success with:
+if (result.success) {
+  navigation.reset({
+    index: 0,
+    routes: [
+      { 
+        name: 'RegistrationCompleteScreen', 
+        params: {
+          accessCode: accessCode,
+          patientName: patientData?.name || 'Patient',
+          labName: route.params?.labName || route.params?.selectedLabName || 'Lab'
+        }
+      }
+    ],
+  });
+}else {
         Alert.alert(t('error'), result.error || t('registration_failed'));
       }
     } catch (error: any) {

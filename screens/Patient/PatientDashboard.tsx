@@ -96,12 +96,15 @@ const PatientDashboard = ({ navigation }: any) => {
           >
             <Ionicons name="notifications" size={24} color="white" />
             <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>3</Text>
+              <Text style={styles.notificationCount}>.</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
-            <Ionicons name="person-circle" size={40} color="white" />
-          </TouchableOpacity>
+          <TouchableOpacity 
+  onPress={() => navigation.navigate('ProfileScreen')}
+  style={styles.profileButton}
+>
+  <Ionicons name="person-circle" size={40} color="white" />
+</TouchableOpacity>
         </View>
       </View>
 

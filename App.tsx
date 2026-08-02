@@ -15,7 +15,8 @@ import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 import LabSelectionScreen from './screens/auth/LabSelectionScreen';
 import ForgotCodeScreen from './screens/auth/ForgotCodeScreen';
-
+import ProfileScreen from './screens/ProfileScreen';
+import NotificationsScreen from './screens/NotificationScreen';
 // Import Patient Screens
 import PatientDashboard from './screens/Patient/PatientDashboard';
 import TestHistoryScreen from './screens/Patient/TestHistoryScreen';
@@ -276,6 +277,24 @@ export default function App() {
                     headerStyle: { backgroundColor: '#1A237E' }
                   }}
                 />
+                <Stack.Screen 
+  name="ProfileScreen" 
+  component={ProfileScreen}
+  options={{ 
+    title: 'Profile',
+    headerShown: true,
+    headerStyle: { backgroundColor: '#1A237E' }
+  }}
+/>
+<Stack.Screen 
+  name="NotificationScreen" 
+  component={NotificationsScreen}
+  options={{ 
+    title: 'Notifications',
+    headerShown: true,
+    headerStyle: { backgroundColor: '#1A237E' }
+  }}
+/>
                 <Stack.Screen 
                   name="RoleSwitcher" 
                   component={RoleSwitcher}
