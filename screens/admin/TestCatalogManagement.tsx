@@ -78,30 +78,34 @@ const TestCatalogManagement = ({ navigation }: any) => {
     }
   };
 
-  const handleDeleteTest = (testId: string, testName: string) => {
-    Alert.alert(
-      'Delete Test',
-      `Are you sure you want to delete "${testName}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!lab?.id) return;
-              await deleteDoc(doc(db, 'labs', lab.id, 'testCatalog', testId));
-              Alert.alert(' Success', 'Test deleted successfully');
-              await fetchTests(); // Refresh the list
-            } catch (error: any) {
-              console.error('Error deleting test:', error);
-              Alert.alert('Error', error.message || 'Failed to delete test');
-            }
+ 
+ 
+const handleDeleteTest = async (testId: string, testName: string) => {
+  Alert.alert(
+    'Delete Test',
+    `Are you sure you want to delete "${testName}"?`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            await deleteDoc(doc(db, 'labs', lab?.id, 'testCatalog', testId));
+            await fetchTests();
+            Alert.alert('✅ Success', 'Test deleted successfully');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to delete test');
+          } finally {
+            setLoading(false);
           }
         }
-      ]
-    );
-  };
+      }
+    ]
+  );
+};
+ 
 
   const renderTestItem = ({ item }: any) => (
     <View style={[styles.testItem, { backgroundColor: colors.surface }]}>
@@ -128,7 +132,7 @@ const TestCatalogManagement = ({ navigation }: any) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.deleteButton}
-          onPress={() => handleDeleteTest(item.id)}
+          onPress={() => handleDeleteTest(item.id, item.name)}
         >
           <Ionicons name="trash" size={20} color="#F44336" />
         </TouchableOpacity>

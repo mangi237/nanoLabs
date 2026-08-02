@@ -1,4 +1,5 @@
-// components/admin/EditStaffModal.tsx
+// components/admin/EditStaffModal.tsx - COMPLETE FIX
+
 import React, { useState } from 'react';
 import {
   View,
@@ -25,6 +26,7 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
     name: staff?.name || '',
     email: staff?.email || '',
     phone: staff?.phone || '',
+    accessCode: staff?.accessCode || '',
     roles: staff?.roles || ['receptionist']
   });
 
@@ -36,6 +38,15 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
     { value: 'admin', label: 'Admin', icon: '👑' },
     { value: 'inventory_manager', label: 'Inventory Manager', icon: '📦' }
   ];
+
+  const generateAccessCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
 
   const toggleRole = (role: string) => {
     let updatedRoles = [...formData.roles];
@@ -62,7 +73,11 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
     try {
       const staffRef = doc(db, 'labs', lab?.id, 'staff', staff.id);
       await updateDoc(staffRef, {
-        ...formData,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        accessCode: formData.accessCode,
+        roles: formData.roles,
         updatedAt: new Date().toISOString()
       });
 
@@ -115,6 +130,24 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
               keyboardType="phone-pad"
             />
 
+            <View style={styles.codeContainer}>
+              <TextInput
+                style={[styles.input, styles.codeInput]}
+                placeholder="Access Code"
+                value={formData.accessCode}
+                onChangeText={(text) => setFormData({ ...formData, accessCode: text })}
+                maxLength={6}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity 
+                style={styles.generateButton}
+                onPress={() => setFormData({ ...formData, accessCode: generateAccessCode() })}
+              >
+                <Ionicons name="refresh" size={16} color="white" />
+                <Text style={styles.generateText}>Generate</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.sectionTitle}>Roles</Text>
             <View style={styles.roleGrid}>
               {roleOptions.map((role) => (
@@ -133,6 +166,9 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
                   ]}>
                     {role.label}
                   </Text>
+                  {formData.roles.includes(role.value) && (
+                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -188,6 +224,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#F8F9FA',
     fontFamily: 'Poppins-Regular',
+  },
+  codeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  codeInput: {
+    flex: 1,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontSize: 18,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A237E',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  generateText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
   },
   sectionTitle: {
     fontSize: 16,

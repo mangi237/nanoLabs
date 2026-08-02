@@ -15,6 +15,7 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
   const [confirmCode, setConfirmCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -32,6 +33,7 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
   };
 
   const handleRegister = async () => {
+    if (isSubmitting) return; 
     if (!accessCode.trim() || !confirmCode.trim()) {
       Alert.alert(t('error'), t('enter_access_code'));
       return;
@@ -46,6 +48,7 @@ const Step6_AccessCode = ({ navigation, route }: any) => {
     }
 
     setLoading(true);
+    setIsSubmitting(true);
     try {
       // Get labId from route
       const labId = route.params?.labId || 'lab1';
@@ -78,6 +81,7 @@ if (result.success) {
       Alert.alert(t('error'), error.message || t('registration_failed'));
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 

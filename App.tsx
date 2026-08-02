@@ -10,6 +10,9 @@ import { LanguageProvider } from './context/languageContext';
 import { ThemeProvider } from './context/themeContext';
 import LabRegistrationModal from './screens/superAdmin/LabRegistrationModal';
 // Import ALL screens
+import PatientDetailsScreen from './screens/PatientDetailsScreen';
+import EditStaffModal from './screens/admin/EditStaffModal';
+import AnalyticsDashboard from './screens/admin/AnalyticsDashboard';
 import AddStaffModal from './screens/admin/AddStaffModal';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
@@ -63,7 +66,7 @@ SplashScreen.preventAutoHideAsync();
 const Stack = createStackNavigator();
 
 export default function App() {
-  const [fontsLoaded, fontError] = useFonts({
+  const [fontsLoaded] = useFonts({
     'Poppins-Regular': require('./assets/fonts/Poppins/Poppins-Regular.ttf'),
     'Poppins-Medium': require('./assets/fonts/Poppins/Poppins-Medium.ttf'),
     'Poppins-SemiBold': require('./assets/fonts/Poppins/Poppins-SemiBold.ttf'),
@@ -82,7 +85,6 @@ export default function App() {
         setAppIsReady(true);
       }
     }
-
     prepare();
   }, []);
 
@@ -95,14 +97,14 @@ export default function App() {
   if (!appIsReady || !fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#013220' }}>
-        <Text style={{ color: 'white', fontSize: 24, fontFamily: 'Poppins-Bold' }}> nanoLabs</Text>
+        <Text style={{ color: 'white', fontSize: 24, fontFamily: 'Poppins-Bold' }}>🧪 nanoLabs</Text>
         <Text style={{ color: 'white', fontSize: 16, marginTop: 10, fontFamily: 'Poppins-Regular' }}>
           Loading...
         </Text>
       </View>
     );
   }
-  console.log('App rendering, fontsLoaded:', fontsLoaded, 'appIsReady:', appIsReady);
+
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <LanguageProvider>
@@ -112,367 +114,63 @@ export default function App() {
               <Stack.Navigator 
                 initialRouteName="LoginScreen"
                 screenOptions={{ 
-                  headerShown: true,
-                  headerStyle: {
-                    backgroundColor: '#1A237E',
-                  },
-                  headerTintColor: '#fff',
-                  headerTitleStyle: {
-                    fontWeight: 'bold',
-                    fontFamily: 'Poppins-SemiBold',
-                  },
+                  headerShown: false,
                 }}
               >
                 {/* ============ AUTH SCREENS ============ */}
-                <Stack.Screen 
-                  name="LoginScreen" 
-                  component={LoginScreen}
-                  options={{ headerShown: false }}
-                />
-                {/* <Stack.Screen 
-                  name="RegisterScreen" 
-                  component={RegisterScreen}
-                  options={{ 
-                    title: 'Register as Patient',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                /> */}
-                <Stack.Screen 
-                  name="LabSelectionScreen" 
-                  component={LabSelectionScreen}
-                  options={{ 
-                    title: 'Select Your Lab',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="ForgotCodeScreen" 
-                  component={ForgotCodeScreen}
-                  options={{ 
-                    title: 'Forgot Access Code',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="LoginScreen" component={LoginScreen} />
+                <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+                <Stack.Screen name="LabSelectionScreen" component={LabSelectionScreen} />
+                <Stack.Screen name="ForgotCodeScreen" component={ForgotCodeScreen} />
 
                 {/* ============ PATIENT ONBOARDING ============ */}
-                <Stack.Screen 
-                  name="Step1_PersonalInfo" 
-                  component={Step1_PersonalInfo}
-                  options={{ 
-                    title: 'Step 1: Personal Info',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="Step2_ContactInfo" 
-                  component={Step2_ContactInfo}
-                  options={{ 
-                    title: 'Step 2: Contact Info',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-  name="RegistrationCompleteScreen" 
-  component={RegistrationCompleteScreen}
-  options={{ 
-    headerShown: false
-  }}
-/>
-                <Stack.Screen 
-                  name="Step3_HealthInfo" 
-                  component={Step3_HealthInfo}
-                  options={{ 
-                    title: 'Step 3: Health Info',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="Step4_Insurance" 
-                  component={Step4_Insurance}
-                  options={{ 
-                    title: 'Step 4: Insurance (Optional)',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                {/* <Stack.Screen 
-                  name="Step5_SelectTests" 
-                  component={Step5_SelectTests}
-                  options={{ 
-                    title: 'Step 5: Select Tests',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                /> */}
-                <Stack.Screen 
-                  name="Step6_AccessCode" 
-                  component={Step6_AccessCode}
-                  options={{ 
-                    title: 'Step 6: Create Access Code',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="Step1_PersonalInfo" component={Step1_PersonalInfo} />
+                <Stack.Screen name="Step2_ContactInfo" component={Step2_ContactInfo} />
+                <Stack.Screen name="Step3_HealthInfo" component={Step3_HealthInfo} />
+                <Stack.Screen name="Step4_Insurance" component={Step4_Insurance} />
+                <Stack.Screen name="Step5_SelectTests" component={Step5_SelectTests} />
+                <Stack.Screen name="Step6_AccessCode" component={Step6_AccessCode} />
 
                 {/* ============ PATIENT DASHBOARD ============ */}
-                <Stack.Screen 
-                  name="PatientDashboard" 
-                  component={PatientDashboard}
-                  options={{ 
-                    title: 'My Dashboard',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="TestHistoryScreen" 
-                  component={TestHistoryScreen}
-                  options={{ 
-                    title: 'Test History',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="ResultViewScreen" 
-                  component={ResultViewScreen}
-                  options={{ 
-                    title: 'Test Results',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="TransferScreen" 
-                  component={TransferScreen}
-                  options={{ 
-                    title: 'Transfer Lab',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="ShareResultsScreen" 
-                  component={ShareResultsScreen}
-                  options={{ 
-                    title: 'Share Results',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="PatientDashboard" component={PatientDashboard} />
+                <Stack.Screen name="TestHistoryScreen" component={TestHistoryScreen} />
+                <Stack.Screen name="ResultViewScreen" component={ResultViewScreen} />
+                <Stack.Screen name="TransferScreen" component={TransferScreen} />
+                <Stack.Screen name="ShareResultsScreen" component={ShareResultsScreen} />
+                <Stack.Screen name="RegistrationCompleteScreen" component={RegistrationCompleteScreen} />
+                <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+                <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
+                <Stack.Screen name="PatientDetailsScreen" component={PatientDetailsScreen} />
 
-                {/* ============ STAFF DASHBOARD (Multi-Role) ============ */}
-                <Stack.Screen 
-                  name="StaffDashboard" 
-                  component={StaffDashboard}
-                  options={{ 
-                    title: 'Staff Dashboard',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-  name="ProfileScreen" 
-  component={ProfileScreen}
-  options={{ 
-    title: 'Profile',
-    headerShown: true,
-    headerStyle: { backgroundColor: '#1A237E' }
-  }}
-/>
-<Stack.Screen 
-  name="NotificationScreen" 
-  component={NotificationsScreen}
-  options={{ 
-    title: 'Notifications',
-    headerShown: true,
-    headerStyle: { backgroundColor: '#1A237E' }
-  }}
-/>
-                <Stack.Screen 
-                  name="RoleSwitcher" 
-                  component={RoleSwitcher}
-                  options={{ 
-                    title: 'Switch Role',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="ReceptionistView" 
-                  component={ReceptionistView}
-                  options={{ 
-                    title: 'Receptionist',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="CashierView" 
-                  component={CashierView}
-                  options={{ 
-                    title: 'Cashier',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="AnalyzerView" 
-                  component={AnalyzerView}
-                  options={{ 
-                    title: 'Analyzer',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="LabTechView" 
-                  component={LabTechView}
-                  options={{ 
-                    title: 'Lab Technician',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                {/* ============ STAFF DASHBOARD ============ */}
+                <Stack.Screen name="StaffDashboard" component={StaffDashboard} />
+                <Stack.Screen name="RoleSwitcher" component={RoleSwitcher} />
+                <Stack.Screen name="ReceptionistView" component={ReceptionistView} />
+                <Stack.Screen name="CashierView" component={CashierView} />
+                <Stack.Screen name="AnalyzerView" component={AnalyzerView} />
+                <Stack.Screen name="LabTechView" component={LabTechView} />
 
                 {/* ============ ADMIN DASHBOARD ============ */}
-                <Stack.Screen 
-                  name="AdminDashboard" 
-                  component={AdminDashboard}
-                  options={{ 
-                    title: 'Admin Dashboard',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="PatientManagement" 
-                  component={PatientManagement}
-                  options={{ 
-                    title: 'Manage Patients',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="StaffManagement" 
-                  component={StaffManagement}
-                  options={{ 
-                    title: 'Manage Staff',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="TestCatalogManagement" 
-                  component={TestCatalogManagement}
-                  options={{ 
-                    title: 'Test Catalog',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="InventoryManagement" 
-                  component={InventoryManagement}
-                  options={{ 
-                    title: 'Inventory Management',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="ReportsScreen" 
-                  component={ReportsScreen}
-                  options={{ 
-                    title: 'Reports & Analytics',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
+                <Stack.Screen name="PatientManagement" component={PatientManagement} />
+                <Stack.Screen name="StaffManagement" component={StaffManagement} />
+                <Stack.Screen name="TestCatalogManagement" component={TestCatalogManagement} />
+                <Stack.Screen name="InventoryManagement" component={InventoryManagement} />
+                <Stack.Screen name="ReportsScreen" component={ReportsScreen} />
+                <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboard} />
 
                 {/* ============ SUPER ADMIN ============ */}
-                <Stack.Screen 
-                  name="SuperAdminDashboard" 
-                  component={SuperAdminDashboard}
-                  options={{ 
-                    title: 'Super Admin',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-                  name="LabDetailsScreen" 
-                  component={LabDetailsScreen}
-                  options={{ 
-                    title: 'Lab Details',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="SuperAdminDashboard" component={SuperAdminDashboard} />
+                <Stack.Screen name="LabDetailsScreen" component={LabDetailsScreen} />
+                <Stack.Screen name="LabRegistrationModal" component={LabRegistrationModal} />
+
+                {/* ============ MODALS ============ */}
+                <Stack.Screen name="AddStaffModal" component={AddStaffModal} />
+                <Stack.Screen name="EditStaffModal" component={EditStaffModal} />
 
                 {/* ============ OTHER DASHBOARDS ============ */}
-                <Stack.Screen 
-                  name="CashierDashboard" 
-                  component={CashierDashboard}
-                  options={{ 
-                    title: 'Cashier',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-  name="AddStaffModal" 
-  component={AddStaffModal}
-  options={{ 
-    title: 'Add Staff',
-    headerShown: true,
-    headerStyle: { backgroundColor: '#1A237E' }
-  }}
-/>
-                <Stack.Screen 
-                  name="LabDashboard" 
-                  component={LabDashboard}
-                  options={{ 
-                    title: 'Lab',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
-                <Stack.Screen 
-  name="LabRegistrationModal" 
-  component={LabRegistrationModal}
-  options={{
-    title: 'Create New Lab',
-    headerShown: true,
-    headerStyle: { backgroundColor: '#1A237E' }
-  }}
-/>
-<Stack.Screen 
-  name="RegisterScreen" 
-  component={RegisterScreen}
-  options={{ 
-    title: 'Register as Patient',
-    headerShown: true,
-    headerStyle: { backgroundColor: '#1A237E' }
-  }}
-/>
-                {/* ============ FALLBACK ============ */}
-                <Stack.Screen 
-                  name="UnifiedDashboard" 
-                  component={LoginScreen}
-                  options={{ 
-                    title: 'Dashboard',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: '#1A237E' }
-                  }}
-                />
+                <Stack.Screen name="CashierDashboard" component={CashierDashboard} />
+                <Stack.Screen name="LabDashboard" component={LabDashboard} />
               </Stack.Navigator>
             </NavigationContainer>
           </AuthProvider>

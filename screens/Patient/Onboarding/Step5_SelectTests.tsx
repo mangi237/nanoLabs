@@ -6,7 +6,8 @@ import { useTheme } from '../../../context/themeContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 
-const Step5_SelectTests = ({ navigation, route }: any) => {
+const Step5_SelectTests = ({ navigation, route }: any) =>  {
+
   const { t } = useLanguage();
   const { primaryColor } = useTheme();
   const { patientData } = route.params || {};

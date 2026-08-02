@@ -84,6 +84,7 @@ const LabRegistrationModal = ({ navigation }: any) => {
         customerServiceFee: 1000,
         currency: 'FCFA'
       };
+      
 
       const labRef = await addDoc(collection(db, 'labs'), labData);
       const labId = labRef.id;

@@ -29,7 +29,6 @@ const RegistrationCompleteScreen = ({ navigation, route }: any) => {
       routes: [{ name: 'LoginScreen' }],
     });
   };
-
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
       <View style={styles.content}>
