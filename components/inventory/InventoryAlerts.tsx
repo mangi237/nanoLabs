@@ -43,28 +43,28 @@ const InventoryAlerts = ({ navigation }: any) => {
   };
 
   const renderAlertItem = ({ item }: any) => (
-    <View style={[styles.alertItem, { backgroundColor: colors.surface }]}>
-      <View style={styles.alertIcon}>
+    <div style={[styles.alertItem, { backgroundColor: colors.surface }]}>
+      <div style={styles.alertIcon}>
         <Ionicons name="warning" size={24} color="#FF9800" />
-      </View>
-      <View style={styles.alertInfo}>
+      </view
+      <div style={styles.alertInfo}>
         <Text style={styles.alertTitle}>{item.name}</Text>
         <Text style={styles.alertMessage}>
           Low stock: {item.quantity} remaining (Reorder at {item.reorderLevel || 5})
         </Text>
-      </View>
+      </view
       <TouchableOpacity style={styles.reorderButton}>
         <Text style={styles.reorderText}>Reorder</Text>
       </TouchableOpacity>
-    </View>
+    </view
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+    <div style={[styles.container, { backgroundColor: colors.background }]}>
+      <div style={styles.header}>
         <Text style={styles.title}>⚠️ Inventory Alerts</Text>
         <Text style={styles.subtitle}>{alerts.length} items need attention</Text>
-      </View>
+      </view
 
       <FlatList
         data={alerts}
@@ -72,13 +72,13 @@ const InventoryAlerts = ({ navigation }: any) => {
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
+          <div style={styles.emptyState}>
             <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
             <Text style={styles.emptyText}>All items are well stocked</Text>
-          </View>
+          </view
         }
       />
-    </View>
+    </view
   );
 };
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/authContext';
 import { ThemeProvider } from './context/themeContext';
 import { LanguageProvider } from './context/languageContext';
-import { useNavigation } from '@react-navigation/native';
 
 // Import Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -39,6 +38,7 @@ type ScreenType =
   | 'register'
   | 'select-lab'
   | 'dashboard'
+  | 'admin-dashboard'
   | 'staff'
   | 'analytics'
   | 'inventory'
@@ -59,7 +59,6 @@ type ScreenType =
   | 'receptionist';
 
 const MainAppContent: React.FC = () => {
-  const navigation = useNavigation<any>();
   const { user, setUser, logout } = useAuth();
   const [screen, setScreen] = useState<ScreenType>(user ? 'dashboard' : 'login');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -68,6 +67,9 @@ const MainAppContent: React.FC = () => {
   const handleNavigateTab = (tab: string) => {
     switch (tab) {
       case 'overview': setScreen('dashboard'); break;
+      case 'admin':
+      case 'admin-dashboard': setScreen('admin-dashboard'); break;
+      case 'patient-dashboard': setScreen('patient-dashboard'); break;
       case 'staff': setScreen('staff'); break;
       case 'analytics': setScreen('analytics'); break;
       case 'inventory': setScreen('inventory'); break;
@@ -138,6 +140,19 @@ const MainAppContent: React.FC = () => {
           />
         );
 
+      case 'admin-dashboard':
+        return (
+          <AdminDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+          />
+        );
+
       case 'staff':
         return (
           <StaffManagement
@@ -193,6 +208,19 @@ const MainAppContent: React.FC = () => {
             onBack={() => setScreen('dashboard')}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'patient-dashboard':
+        return (
+          <PatientDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
           />
         );
 
@@ -264,9 +292,10 @@ const MainAppContent: React.FC = () => {
             onNavigateRegister={() => setScreen('register')}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
-            onNavigatePatientDetails={(patientId: string) => 
-              navigation.navigate('PatientDetailsScreen', { patientId }) // 👈 This accepts two arguments perfectly
-            } 
+            onNavigatePatientDetails={(patientId: string) => {
+              setSelectedPatient({ id: patientId });
+              setScreen('patient-details');
+            }}
           />
         );
 

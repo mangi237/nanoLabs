@@ -157,14 +157,14 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Register New Patient</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#7F8C8D" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.formContainer}>
             {/* Existing fields... */}
@@ -176,8 +176,8 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
               placeholder="Enter patient's full name"
             />
 
-            <View style={styles.row}>
-              <View style={styles.halfInput}>
+            <div style={styles.row}>
+              <div style={styles.halfInput}>
                 <Text style={styles.inputLabel}>Age *</Text>
                 <TextInput
                   style={styles.input}
@@ -186,10 +186,10 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
                   placeholder="Age"
                   keyboardType="number-pad"
                 />
-              </View>
-              <View style={styles.halfInput}>
+              </view
+              <div style={styles.halfInput}>
                 <Text style={styles.inputLabel}>Gender *</Text>
-                <View style={styles.genderContainer}>
+                <div style={styles.genderContainer}>
                   {['Male', 'Female', 'Other'].map(gender => (
                     <TouchableOpacity
                       key={gender}
@@ -207,9 +207,9 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
-              </View>
-            </View>
+                </view
+              </view
+            </view
 
             <Text style={styles.inputLabel}>Phone Number *</Text>
             <TextInput
@@ -275,7 +275,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
 
             {/* Existing blood type section... */}
             <Text style={styles.inputLabel}>Blood Type</Text>
-            <View style={styles.bloodTypeContainer}>
+            <div style={styles.bloodTypeContainer}>
               {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(type => (
                 <TouchableOpacity
                   key={type}
@@ -293,7 +293,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </view
 
             <Text style={styles.inputLabel}>Insurance Provider</Text>
             <TextInput
@@ -321,7 +321,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
             />
           </ScrollView>
 
-          <View style={styles.modalButtons}>
+          <div style={styles.modalButtons}>
             <TouchableOpacity 
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
@@ -339,9 +339,9 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({
                 <Text style={styles.submitButtonText}>Register Patient</Text>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

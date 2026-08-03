@@ -53,7 +53,6 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
       console.error('Error requesting new lab test:', e);
     }
   };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
@@ -221,6 +220,7 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
       )}
     </div>
   );
+ 
 };
 
 export default PatientDetailsScreen;

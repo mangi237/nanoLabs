@@ -130,8 +130,8 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
 
   if (loading) {
     return (
-      <div className="py-20 text-center text-slate-500">
-        <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+      <div  className="py-20 text-center text-slate-500">
+        <div  className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
         Loading laboratory center details...
       </div>
     );

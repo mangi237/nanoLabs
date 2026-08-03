@@ -97,13 +97,13 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
         style={styles.modalContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.modalContent}>
-          <View style={styles.header}>
+        <div style={styles.modalContent}>
+          <div style={styles.header}>
             <Text style={styles.headerTitle}>Edit Staff Member</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#333" />
             </TouchableOpacity>
-          </View>
+          </div>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <TextInput
@@ -130,7 +130,7 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
               keyboardType="phone-pad"
             />
 
-            <View style={styles.codeContainer}>
+            <div style={styles.codeContainer}>
               <TextInput
                 style={[styles.input, styles.codeInput]}
                 placeholder="Access Code"
@@ -146,10 +146,10 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
                 <Ionicons name="refresh" size={16} color="white" />
                 <Text style={styles.generateText}>Generate</Text>
               </TouchableOpacity>
-            </View>
+            </div>
 
             <Text style={styles.sectionTitle}>Roles</Text>
-            <View style={styles.roleGrid}>
+            <div style={styles.roleGrid}>
               {roleOptions.map((role) => (
                 <TouchableOpacity
                   key={role.value}
@@ -171,7 +171,7 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
                   )}
                 </TouchableOpacity>
               ))}
-            </View>
+            </div>
 
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.disabledButton]}
@@ -181,7 +181,7 @@ const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
               {loading ? <ActivityIndicator color="white" /> : <Text style={styles.submitButtonText}>Update Staff</Text>}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </div>
       </KeyboardAvoidingView>
     </Modal>
   );

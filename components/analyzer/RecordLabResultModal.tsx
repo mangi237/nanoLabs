@@ -19,13 +19,13 @@ const RecordLabResultModal = ({ visible, onClose, patientId }) => {
 
   return (
     <Modal visible={visible} animationType="slide">
-      <View>
+      <div 
         <Text>Record Lab Result</Text>
         <TextInput placeholder="Test Name" value={testName} onChangeText={setTestName} />
         <TextInput placeholder="Result" value={result} onChangeText={setResult} />
-        <Button title="Record" onPress={handleRecord} />
-        <Button title="Cancel" onPress={onClose} />
-      </View>
+        <TouchableOpacity title="Record" onPress={handleRecord} />
+        <TouchableOpacity title="Cancel" onPress={onClose} />
+      </view
     </Modal>
   );
 };

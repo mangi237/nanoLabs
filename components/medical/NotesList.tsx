@@ -80,28 +80,28 @@ const NotesList: React.FC<NotesListProps> = ({ patientId, onAddNote }) => {
         style={[styles.noteItem, isExpanded && styles.noteItemExpanded]}
         onPress={() => toggleExpand(item.id!)}
       >
-        <View style={styles.noteHeader}>
-          <View style={styles.noteTitleContainer}>
+        <div style={styles.noteHeader}>
+          <div style={styles.noteTitleContainer}>
             <Ionicons name={priorityIcon.name} size={16} color={priorityIcon.color} />
             <Text style={styles.noteTitle} numberOfLines={1}>{item.title}</Text>
-          </View>
+          </view
           <Ionicons 
             name={isExpanded ? 'chevron-up' : 'chevron-down'} 
             size={16} 
             color="#7F8C8D" 
           />
-        </View>
+        </view
 
-        <View style={styles.noteMeta}>
+        <div style={styles.noteMeta}>
           <Text style={styles.noteCategory}>{item.category}</Text>
           <Text style={styles.noteDoctor}>By: {item.doctorName}</Text>
           <Text style={styles.noteDate}>{formatDate(item.createdAt)}</Text>
-        </View>
+        </view
 
         {isExpanded && (
-          <View style={styles.noteContent}>
+          <div style={styles.noteContent}>
             <Text style={styles.noteText}>{item.content}</Text>
-          </View>
+          </view
         )}
       </TouchableOpacity>
     );
@@ -109,49 +109,49 @@ const NotesList: React.FC<NotesListProps> = ({ patientId, onAddNote }) => {
 
   if (authLoading || loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <div style={styles.container}>
+        <div style={styles.header}>
           <Text style={styles.title}>Patient Notes</Text>
-        </View>
-        <View style={styles.loadingState}>
+        </view
+        <div style={styles.loadingState}>
           <ActivityIndicator size="large" color="#3498DB" />
           <Text style={styles.loadingText}>Loading notes...</Text>
-        </View>
-      </View>
+        </view
+      </view
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <div style={styles.container}>
+        <div style={styles.header}>
           <Text style={styles.title}>Patient Notes</Text>
-        </View>
-        <View style={styles.emptyState}>
+        </view
+        <div style={styles.emptyState}>
           <Ionicons name="lock-closed" size={48} color="#D5D8DC" />
           <Text style={styles.emptyStateText}>Authentication required</Text>
           <Text style={styles.emptyStateSubtext}>Please sign in to view notes</Text>
-        </View>
-      </View>
+        </view
+      </view
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <div style={styles.container}>
+      <div style={styles.header}>
         <Text style={styles.title}>Patient Notes</Text>
         <TouchableOpacity style={styles.addButton} onPress={onAddNote}>
           <Ionicons name="add" size={20} color="white" />
           <Text style={styles.addButtonText}>Add Note</Text>
         </TouchableOpacity>
-      </View>
+      </view
 
       {notes.length === 0 ? (
-        <View style={styles.emptyState}>
+        <div style={styles.emptyState}>
           <Ionicons name="document-text" size={48} color="#D5D8DC" />
           <Text style={styles.emptyStateText}>No notes yet</Text>
           <Text style={styles.emptyStateSubtext}>Add the first note for this patient</Text>
-        </View>
+        </view
       ) : (
         <FlatList
           data={notes}
@@ -160,7 +160,7 @@ const NotesList: React.FC<NotesListProps> = ({ patientId, onAddNote }) => {
           contentContainerStyle={styles.listContainer}
         />
       )}
-    </View>
+    </view
   );
 };
 

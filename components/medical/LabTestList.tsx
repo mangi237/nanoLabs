@@ -75,8 +75,8 @@ const LabTestsList: React.FC<LabTestsListProps> = ({ patientId, onAddTest, userR
   }, [patientId]);
 
   const renderTestItem = ({ item }: { item: LabTest }) => (
-    <View style={styles.testItem}>
-      <View style={styles.testInfo}>
+    <div style={styles.testItem}>
+      <div style={styles.testInfo}>
         <Text style={styles.testName}>
           {LabTestConfig[item.testType as keyof typeof LabTestConfig]?.name || item.testType}
         </Text>
@@ -90,36 +90,36 @@ const LabTestsList: React.FC<LabTestsListProps> = ({ patientId, onAddTest, userR
         {item.technicianName && (
           <Text style={styles.technician}>By: {item.technicianName}</Text>
         )}
-      </View>
-      <View style={styles.testDate}>
+      </view
+      <div style={styles.testDate}>
         <Text style={styles.dateText}>
           {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'N/A'}
         </Text>
-      </View>
-    </View>
+      </view
+    </view
   );
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <div style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#2E86C1" />
         <Text style={styles.loadingText}>Loading lab tests...</Text>
-      </View>
+      </view
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centerContainer}>
+      <div style={styles.centerContainer}>
         <Ionicons name="alert-circle-outline" size={50} color="#E74C3C" />
         <Text style={styles.errorText}>{error}</Text>
-      </View>
+      </view
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <div style={styles.container}>
+      <div style={styles.header}>
         <Text style={styles.title}>Lab Tests</Text>
         {onAddTest && (
           <TouchableOpacity style={styles.addButton} onPress={onAddTest}>
@@ -127,10 +127,10 @@ const LabTestsList: React.FC<LabTestsListProps> = ({ patientId, onAddTest, userR
             <Text style={styles.addButtonText}>Add Test</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </view
 
       {labTests.length === 0 ? (
-        <View style={styles.emptyState}>
+        <div style={styles.emptyState}>
           <Ionicons name="flask-outline" size={50} color="#BDC3C7" />
           <Text style={styles.emptyStateText}>No lab tests found</Text>
           {onAddTest && (
@@ -138,7 +138,7 @@ const LabTestsList: React.FC<LabTestsListProps> = ({ patientId, onAddTest, userR
               <Text style={styles.addFirstButtonText}>Add First Test</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </view
       ) : (
         <FlatList
           data={labTests}
@@ -147,7 +147,7 @@ const LabTestsList: React.FC<LabTestsListProps> = ({ patientId, onAddTest, userR
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </view
   );
 };
 

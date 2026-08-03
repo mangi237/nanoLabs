@@ -505,7 +505,7 @@ const handleAddNewProduct = async () => {
     switch (addFlowStep) {
       case 'newOrRestock':
         return (
-          <View style={styles.flowStep}>
+          <div style={styles.flowStep}>
             <Text style={styles.flowTitle}>Add or Restock Product</Text>
             <Text style={styles.flowSubtitle}>Do you want to add a new product or restock an existing one?</Text>
             
@@ -517,10 +517,10 @@ const handleAddNewProduct = async () => {
               }}
             >
               <Ionicons name="add-circle" size={32} color="#4F46E5" />
-              <View style={styles.optionContent}>
+              <div style={styles.optionContent}>
                 <Text style={styles.optionTitle}>Add New Product</Text>
                 <Text style={styles.optionDesc}>Add a completely new item to inventory</Text>
-              </View>
+              </view
               <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
             </TouchableOpacity>
 
@@ -532,10 +532,10 @@ const handleAddNewProduct = async () => {
               }}
             >
               <Ionicons name="refresh" size={32} color="#10B981" />
-              <View style={styles.optionContent}>
+              <div style={styles.optionContent}>
                 <Text style={styles.optionTitle}>Restock Existing Product</Text>
                 <Text style={styles.optionDesc}>Add more quantity to an existing item</Text>
-              </View>
+              </view
               <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
             </TouchableOpacity>
 
@@ -545,7 +545,7 @@ const handleAddNewProduct = async () => {
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
+          </view
         );
 
       case 'basicInfo':
@@ -573,7 +573,7 @@ const handleAddNewProduct = async () => {
                 />
 
                 <Text style={styles.label}>Category *</Text>
-                <View style={styles.categoryGrid}>
+                <div style={styles.categoryGrid}>
                   {PRODUCT_CATEGORIES.map(category => (
                     <TouchableOpacity
                       key={category.id}
@@ -602,7 +602,7 @@ const handleAddNewProduct = async () => {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </view
 
                 <TextInput
                   style={styles.input}
@@ -652,7 +652,7 @@ const handleAddNewProduct = async () => {
               </>
             )}
 
-            <View style={styles.flowButtons}>
+            <div style={styles.flowButtons}>
               <TouchableOpacity 
                 style={styles.backButton}
                 onPress={() => setAddFlowStep('newOrRestock')}
@@ -675,7 +675,7 @@ const handleAddNewProduct = async () => {
                 </Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </TouchableOpacity>
-            </View>
+            </view
           </ScrollView>
         );
 
@@ -687,7 +687,7 @@ const handleAddNewProduct = async () => {
 
             {/* Stock Type Selection */}
             <Text style={styles.label}>Stock Type *</Text>
-            <View style={styles.stockTypeOptions}>
+            <div style={styles.stockTypeOptions}>
               <TouchableOpacity
                 style={[
                   styles.stockTypeOption,
@@ -725,14 +725,14 @@ const handleAddNewProduct = async () => {
                   Sold individually (e.g., Surgical gloves, Bandages)
                 </Text>
               </TouchableOpacity>
-            </View>
+            </view
 
             {/* Pack-based Configuration */}
             {newProduct.stockType === 'pack' && (
               <>
                 <Text style={styles.label}>Pack Details *</Text>
-                <View style={styles.row}>
-                  <View style={styles.halfInput}>
+                <div style={styles.row}>
+                  <div style={styles.halfInput}>
                     <TextInput
                       style={styles.input}
                       placeholder="Total Packs *"
@@ -741,9 +741,9 @@ const handleAddNewProduct = async () => {
                       onChangeText={(text) => setNewProduct({...newProduct, totalQuantity: parseInt(text) || 0})}
                     />
                     <Text style={styles.inputHint}>Number of packs you're adding</Text>
-                  </View>
+                  </view
                   
-                  <View style={styles.halfInput}>
+                  <div style={styles.halfInput}>
                     <TextInput
                       style={styles.input}
                       placeholder="Items per Pack *"
@@ -752,11 +752,11 @@ const handleAddNewProduct = async () => {
                       onChangeText={(text) => setNewProduct({...newProduct, itemsPerPack: parseInt(text) || 1})}
                     />
                     <Text style={styles.inputHint}>e.g., 10 tablets per pack</Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
                 <Text style={styles.label}>Measurement Unit</Text>
-                <View style={styles.unitsGrid}>
+                <div style={styles.unitsGrid}>
                   {(MEASUREMENT_UNITS[newProduct.category!] || ['Tablets']).map(unit => (
                     <TouchableOpacity
                       key={unit}
@@ -774,24 +774,24 @@ const handleAddNewProduct = async () => {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </view
 
                 {/* Retailable Option */}
                 <TouchableOpacity
                   style={styles.retailableOption}
                   onPress={() => setNewProduct({...newProduct, retailable: !newProduct.retailable})}
                 >
-                  <View style={styles.checkbox}>
+                  <div style={styles.checkbox}>
                     {newProduct.retailable && (
                       <Ionicons name="checkmark" size={20} color="#4F46E5" />
                     )}
-                  </View>
-                  <View style={styles.retailableContent}>
+                  </view
+                  <div style={styles.retailableContent}>
                     <Text style={styles.retailableTitle}>Can be sold by single item</Text>
                     <Text style={styles.retailableDesc}>
                       Check if customers can buy individual items from the pack
                     </Text>
-                  </View>
+                  </view
                 </TouchableOpacity>
               </>
             )}
@@ -810,7 +810,7 @@ const handleAddNewProduct = async () => {
                 <Text style={styles.inputHint}>Total number of individual items</Text>
 
                 <Text style={styles.label}>Measurement Unit</Text>
-                <View style={styles.unitsGrid}>
+                <div style={styles.unitsGrid}>
                   {(MEASUREMENT_UNITS[newProduct.category!] || ['Units']).map(unit => (
                     <TouchableOpacity
                       key={unit}
@@ -828,11 +828,11 @@ const handleAddNewProduct = async () => {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </view
               </>
             )}
 
-            <View style={styles.flowButtons}>
+            <div style={styles.flowButtons}>
               <TouchableOpacity 
                 style={styles.backButton}
                 onPress={() => setAddFlowStep('basicInfo')}
@@ -853,7 +853,7 @@ const handleAddNewProduct = async () => {
                 <Text style={styles.nextButtonText}>Next: Pricing</Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </TouchableOpacity>
-            </View>
+            </view
           </ScrollView>
         );
 
@@ -869,8 +869,8 @@ const handleAddNewProduct = async () => {
                   <>
                     {/* Retail pricing - show both pack and unit prices */}
                     <Text style={styles.label}>Pricing for Retailable Items</Text>
-                    <View style={styles.row}>
-                      <View style={styles.halfInput}>
+                    <div style={styles.row}>
+                      <div style={styles.halfInput}>
                         <TextInput
                           style={styles.input}
                           placeholder="Price per Pack *"
@@ -881,8 +881,8 @@ const handleAddNewProduct = async () => {
                         <Text style={styles.inputHint}>
                           Total pack price
                         </Text>
-                      </View>
-                      <View style={styles.halfInput}>
+                      </view
+                      <div style={styles.halfInput}>
                         <TextInput
                           style={styles.input}
                           placeholder="Price per Unit *"
@@ -893,39 +893,39 @@ const handleAddNewProduct = async () => {
                         <Text style={styles.inputHint}>
                           Price per single item
                         </Text>
-                      </View>
-                    </View>
+                      </view
+                    </view
                     
                     {/* Auto-calculation summary */}
-                    <View style={styles.calculationBox}>
+                    <div style={styles.calculationBox}>
                       <Text style={styles.calculationTitle}>Summary:</Text>
-                      <View style={styles.calculationRow}>
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total packs:</Text>
                         <Text style={styles.calculationValue}>{newProduct.totalQuantity || 0}</Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Items per pack:</Text>
                         <Text style={styles.calculationValue}>{newProduct.itemsPerPack || 1}</Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total items:</Text>
                         <Text style={styles.calculationValue}>
                           {(newProduct.totalQuantity || 0) * (newProduct.itemsPerPack || 1)}
                         </Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total value (packs):</Text>
                         <Text style={styles.calculationValue}>
                           ₦{((newProduct.totalQuantity || 0) * (newProduct.pricePerPack || 0)).toFixed(2)}
                         </Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total value (units):</Text>
                         <Text style={styles.calculationValue}>
                           ₦{(((newProduct.totalQuantity || 0) * (newProduct.itemsPerPack || 1)) * (newProduct.pricePerUnit || 0)).toFixed(2)}
                         </Text>
-                      </View>
-                    </View>
+                      </view
+                    </view
                   </>
                 ) : (
                   <>
@@ -943,29 +943,29 @@ const handleAddNewProduct = async () => {
                     </Text>
                     
                     {/* Auto-calculation summary */}
-                    <View style={styles.calculationBox}>
+                    <div style={styles.calculationBox}>
                       <Text style={styles.calculationTitle}>Summary:</Text>
-                      <View style={styles.calculationRow}>
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total packs:</Text>
                         <Text style={styles.calculationValue}>{newProduct.totalQuantity || 0}</Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Items per pack:</Text>
                         <Text style={styles.calculationValue}>{newProduct.itemsPerPack || 1}</Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total items:</Text>
                         <Text style={styles.calculationValue}>
                           {(newProduct.totalQuantity || 0) * (newProduct.itemsPerPack || 1)}
                         </Text>
-                      </View>
-                      <View style={styles.calculationRow}>
+                      </view
+                      <div style={styles.calculationRow}>
                         <Text style={styles.calculationLabel}>Total value:</Text>
                         <Text style={styles.calculationValue}>
                           ₦{((newProduct.totalQuantity || 0) * (newProduct.pricePerPack || 0)).toFixed(2)}
                         </Text>
-                      </View>
-                    </View>
+                      </view
+                    </view
                   </>
                 )}
               </>
@@ -985,23 +985,23 @@ const handleAddNewProduct = async () => {
                 </Text>
                 
                 {/* Auto-calculation summary */}
-                <View style={styles.calculationBox}>
+                <div style={styles.calculationBox}>
                   <Text style={styles.calculationTitle}>Summary:</Text>
-                  <View style={styles.calculationRow}>
+                  <div style={styles.calculationRow}>
                     <Text style={styles.calculationLabel}>Total units:</Text>
                     <Text style={styles.calculationValue}>{newProduct.totalQuantity || 0}</Text>
-                  </View>
-                  <View style={styles.calculationRow}>
+                  </view
+                  <div style={styles.calculationRow}>
                     <Text style={styles.calculationLabel}>Total value:</Text>
                     <Text style={styles.calculationValue}>
                       ₦{((newProduct.totalQuantity || 0) * (newProduct.pricePerItem || 0)).toFixed(2)}
                     </Text>
-                  </View>
-                </View>
+                  </view
+                </view
               </>
             )}
 
-            <View style={styles.flowButtons}>
+            <div style={styles.flowButtons}>
               <TouchableOpacity 
                 style={styles.backButton}
                 onPress={() => setAddFlowStep('stockStructure')}
@@ -1026,7 +1026,7 @@ const handleAddNewProduct = async () => {
                 <Text style={styles.nextButtonText}>Next: Finalize</Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </TouchableOpacity>
-            </View>
+            </view
           </ScrollView>
         );
 
@@ -1053,7 +1053,7 @@ const handleAddNewProduct = async () => {
   <Ionicons name="chevron-down" size={20} color="#6B7280" />
 </Pressable>
 {Platform.OS === 'web' ? (
-  <input
+  <TextInput
     type="date"
     style={{ 
       padding: '10px', 
@@ -1136,81 +1136,81 @@ const handleAddNewProduct = async () => {
             </Text>
 
             {/* Summary Preview */}
-            <View style={styles.summaryBox}>
+            <div style={styles.summaryBox}>
               <Text style={styles.summaryTitle}>Product Summary</Text>
-              <View style={styles.summaryRow}>
+              <div style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Name:</Text>
                 <Text style={styles.summaryValue}>{newProduct.name}</Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Category:</Text>
                 <Text style={styles.summaryValue}>
                   {PRODUCT_CATEGORIES.find(c => c.id === newProduct.category)?.name}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Stock Type:</Text>
                 <Text style={styles.summaryValue}>
                   {newProduct.stockType === 'pack' ? 'Pack-based' : 'Unit-based'}
                 </Text>
-              </View>
+              </view
               
               {newProduct.stockType === 'pack' && (
                 <>
-                  <View style={styles.summaryRow}>
+                  <div style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Total Packs:</Text>
                     <Text style={styles.summaryValue}>{newProduct.totalQuantity}</Text>
-                  </View>
-                  <View style={styles.summaryRow}>
+                  </view
+                  <div style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Items per Pack:</Text>
                     <Text style={styles.summaryValue}>{newProduct.itemsPerPack}</Text>
-                  </View>
-                  <View style={styles.summaryRow}>
+                  </view
+                  <div style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Total Items:</Text>
                     <Text style={styles.summaryValue}>
                       {(newProduct.totalQuantity || 0) * (newProduct.itemsPerPack || 1)}
                     </Text>
-                  </View>
+                  </view
                   {newProduct.retailable ? (
                     <>
-                      <View style={styles.summaryRow}>
+                      <div style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Price per Pack:</Text>
                         <Text style={styles.summaryValue}>₦{newProduct.pricePerPack?.toFixed(2)}</Text>
-                      </View>
-                      <View style={styles.summaryRow}>
+                      </view
+                      <div style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Price per Unit:</Text>
                         <Text style={styles.summaryValue}>₦{newProduct.pricePerUnit?.toFixed(2)}</Text>
-                      </View>
+                      </view
                     </>
                   ) : (
-                    <View style={styles.summaryRow}>
+                    <div style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Price per Pack:</Text>
                       <Text style={styles.summaryValue}>₦{newProduct.pricePerPack?.toFixed(2)}</Text>
-                    </View>
+                    </view
                   )}
                 </>
               )}
               
               {newProduct.stockType === 'unit' && (
                 <>
-                  <View style={styles.summaryRow}>
+                  <div style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Total Units:</Text>
                     <Text style={styles.summaryValue}>{newProduct.totalQuantity}</Text>
-                  </View>
-                  <View style={styles.summaryRow}>
+                  </view
+                  <div style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Price per Unit:</Text>
                     <Text style={styles.summaryValue}>₦{newProduct.pricePerItem?.toFixed(2)}</Text>
-                  </View>
+                  </view
                 </>
               )}
               
-              <View style={styles.summaryRow}>
+              <div style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Expiry Date:</Text>
                 <Text style={styles.summaryValue}>
                   {newProduct.expiryDate?.toLocaleDateString()}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Total Value:</Text>
                 <Text style={[styles.summaryValue, {color: '#059669', fontWeight: 'bold'}]}>
                   ₦{
@@ -1221,10 +1221,10 @@ const handleAddNewProduct = async () => {
                       : ((newProduct.totalQuantity || 0) * (newProduct.pricePerItem || 0)).toFixed(2)
                   }
                 </Text>
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.flowButtons}>
+            <div style={styles.flowButtons}>
               <TouchableOpacity 
                 style={styles.backButton}
                 onPress={() => setAddFlowStep('pricing')}
@@ -1243,7 +1243,7 @@ const handleAddNewProduct = async () => {
                   {isNewProduct ? 'Add Product' : 'Restock Product'}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </view
           </ScrollView>
         );
     }
@@ -1263,30 +1263,30 @@ const handleAddNewProduct = async () => {
           setShowDetailModal(true);
         }}
       >
-        <View style={styles.productHeader}>
-          <View style={[styles.categoryIcon, { backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}20` }]}>
+        <div style={styles.productHeader}>
+          <div style={[styles.categoryIcon, { backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}20` }]}>
             <Ionicons name={category?.icon as any || 'cube'} size={24} color="#4F46E5" />
-          </View>
-          <View style={styles.productTitle}>
+          </view
+          <div style={styles.productTitle}>
             <Text style={styles.productName} numberOfLines={2}>
               {item.name}
             </Text>
             <Text style={styles.productBrand} numberOfLines={1}>
               {item.brand || 'Generic'} • {item.category}
             </Text>
-          </View>
-        </View>
+          </view
+        </view
 
-        <View style={styles.productDetails}>
+        <div style={styles.productDetails}>
           {/* Stock Type Badge */}
-          <View style={styles.stockTypeBadge}>
+          <div style={styles.stockTypeBadge}>
             <Text style={styles.stockTypeText}>
               {item.stockType === 'pack' ? 'PACK-BASED' : 'UNIT-BASED'}
             </Text>
-          </View>
+          </view
 
-          <View style={styles.detailRow}>
-            <View style={styles.detailItem}>
+          <div style={styles.detailRow}>
+            <div style={styles.detailItem}>
               <Ionicons name="pricetag" size={14} color="#6B7280" />
               <Text style={styles.detailText}>
                 {item.stockType === 'pack' 
@@ -1296,8 +1296,8 @@ const handleAddNewProduct = async () => {
                   : `₦${item.pricePerItem}/unit`
                 }
               </Text>
-            </View>
-            <View style={styles.detailItem}>
+            </view
+            <div style={styles.detailItem}>
               <Ionicons name="cube" size={14} color="#6B7280" />
               <Text style={styles.detailText}>
                 {item.stockType === 'pack'
@@ -1305,23 +1305,23 @@ const handleAddNewProduct = async () => {
                   : `${item.totalQuantity} units`
                 }
               </Text>
-            </View>
-          </View>
+            </view
+          </view
 
-          <View style={styles.detailRow}>
-            <View style={styles.detailItem}>
+          <div style={styles.detailRow}>
+            <div style={styles.detailItem}>
               <Ionicons name="calendar" size={14} color={expiryStatus.color} />
               <Text style={[styles.detailText, { color: expiryStatus.color }]}>
                 {expiryStatus.label}
               </Text>
-            </View>
-            <View style={[styles.stockBadge, { backgroundColor: `${stockStatus.color}20` }]}>
+            </view
+            <div style={[styles.stockBadge, { backgroundColor: `${stockStatus.color}20` }]}>
               <Text style={[styles.stockText, { color: stockStatus.color }]}>
                 {stockStatus.label}
               </Text>
-            </View>
-          </View>
-        </View>
+            </view
+          </view
+        </view
 
         <TouchableOpacity 
           style={[styles.sellButton, item.totalQuantity === 0 && styles.sellButtonDisabled]}
@@ -1341,11 +1341,11 @@ const handleAddNewProduct = async () => {
   };
 
   const renderSaleItem = ({ item }: { item: Sale }) => (
-    <View style={styles.saleItem}>
-      <View style={styles.saleIcon}>
+    <div style={styles.saleItem}>
+      <div style={styles.saleIcon}>
         <Ionicons name="receipt" size={20} color="#10B981" />
-      </View>
-      <View style={styles.saleInfo}>
+      </view
+      <div style={styles.saleInfo}>
         <Text style={styles.saleProduct}>{item.productName}</Text>
         <Text style={styles.saleDetails}>
           {item.quantity} {item.saleType} • ₦{item.totalAmount.toFixed(2)}
@@ -1353,27 +1353,27 @@ const handleAddNewProduct = async () => {
         <Text style={styles.saleMeta}>
           {item.customerName || 'Walk-in'} • {new Date(item.soldAt).toLocaleDateString()}
         </Text>
-      </View>
-    </View>
+      </view
+    </view
   );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <div style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
         <Text style={styles.loadingText}>Loading Pharmacy...</Text>
-      </View>
+      </view
     );
   }
 
   return (
-    <View style={styles.container}>
+    <div style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
+      <div style={styles.header}>
+        <div 
           <Text style={styles.title}>Pharmacy Store</Text>
           <Text style={styles.subtitle}>Hospital Inventory & Sales</Text>
-        </View>
+        </view
         <TouchableOpacity 
           style={styles.addButton}
           onPress={() => setShowAddModal(true)}
@@ -1381,11 +1381,11 @@ const handleAddNewProduct = async () => {
           <Ionicons name="add" size={24} color="white" />
           <Text style={styles.addButtonText}>Add Product</Text>
         </TouchableOpacity>
-      </View>
+      </view
 
       {/* Search */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
+      <div style={styles.searchSection}>
+        <div style={styles.searchContainer}>
           <Ionicons name="search" size={20} color="#6B7280" />
           <TextInput
             style={styles.searchInput}
@@ -1393,8 +1393,8 @@ const handleAddNewProduct = async () => {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-        </View>
-      </View>
+        </view
+      </view
 
       {/* Categories */}
       <ScrollView 
@@ -1431,33 +1431,33 @@ const handleAddNewProduct = async () => {
       </ScrollView>
 
       {/* Stats */}
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
+      <div style={styles.statsGrid}>
+        <div style={styles.statCard}>
           <Text style={styles.statNumber}>{products.length}</Text>
           <Text style={styles.statLabel}>Total Products</Text>
-        </View>
-        <View style={styles.statCard}>
+        </view
+        <div style={styles.statCard}>
           <Text style={styles.statNumber}>
             ₦{sales.reduce((total, sale) => total + sale.totalAmount, 0).toFixed(0)}
           </Text>
           <Text style={styles.statLabel}>Total Sales</Text>
-        </View>
-        <View style={styles.statCard}>
+        </view
+        <div style={styles.statCard}>
           <Text style={styles.statNumber}>
             {products.filter(p => p.totalQuantity === 0).length}
           </Text>
           <Text style={styles.statLabel}>Out of Stock</Text>
-        </View>
-        <View style={styles.statCard}>
+        </view
+        <div style={styles.statCard}>
           <Text style={styles.statNumber}>
             {products.filter(p => getExpiryStatus(p.expiryDate).daysLeft <= 30).length}
           </Text>
           <Text style={styles.statLabel}>Expiring Soon</Text>
-        </View>
-      </View>
+        </view
+      </view
 
       {/* Products List */}
-      <View style={styles.productsSection}>
+      <div style={styles.productsSection}>
         <FlatList
           data={filteredProducts}
           renderItem={renderProductItem}
@@ -1467,22 +1467,22 @@ const handleAddNewProduct = async () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.productsGrid}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
+            <div style={styles.emptyState}>
               <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
               <Text style={styles.emptyText}>No products found</Text>
-            </View>
+            </view
           }
         />
-      </View>
+      </view
 
       {/* Recent Sales */}
-      <View style={styles.salesSection}>
-        <View style={styles.sectionHeader}>
+      <div style={styles.salesSection}>
+        <div style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Sales</Text>
           <TouchableOpacity>
             <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
-        </View>
+        </view
         
         <FlatList
           data={sales.slice(0, 3)}
@@ -1490,13 +1490,13 @@ const handleAddNewProduct = async () => {
           keyExtractor={item => item.id!}
           scrollEnabled={false}
         />
-      </View>
+      </view
 
       {/* Add Product Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContainer}>
+            <div style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {addFlowStep === 'newOrRestock' ? 'Add or Restock' : 
                  addFlowStep === 'basicInfo' ? (isNewProduct ? 'New Product' : 'Restock Product') :
@@ -1506,26 +1506,26 @@ const handleAddNewProduct = async () => {
               <TouchableOpacity onPress={resetAddFlow}>
                 <Ionicons name="close" size={24} color="#374151" />
               </TouchableOpacity>
-            </View>
+            </view
             
             {renderAddProductModal()}
-          </View>
-        </View>
+          </view
+        </view
       </Modal>
 
       {/* Sell Modal */}
       <Modal visible={showSaleModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.saleModalContainer}>
+        <div style={styles.modalOverlay}>
+          <div style={styles.saleModalContainer}>
             <Text style={styles.modalTitle}>Sell Product</Text>
             
             {selectedProduct && (
               <>
-                <View style={styles.selectedProduct}>
-                  <View style={styles.selectedProductIcon}>
+                <div style={styles.selectedProduct}>
+                  <div style={styles.selectedProductIcon}>
                     <Ionicons name="medical" size={32} color="#4F46E5" />
-                  </View>
-                  <View style={styles.selectedProductInfo}>
+                  </view
+                  <div style={styles.selectedProductInfo}>
                     <Text style={styles.selectedProductName}>{selectedProduct.name}</Text>
                     <Text style={styles.selectedProductDetails}>
                       Available: {selectedProduct.totalQuantity} {selectedProduct.stockType === 'pack' ? 'packs' : 'units'}
@@ -1537,12 +1537,12 @@ const handleAddNewProduct = async () => {
                           : `₦${selectedProduct.pricePerPack}/pack`
                         : `₦${selectedProduct.pricePerItem}/unit`}
                     </Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
                 {/* Sale Type */}
                 <Text style={styles.saleLabel}>How do you want to sell?</Text>
-                <View style={styles.saleTypeOptions}>
+                <div style={styles.saleTypeOptions}>
                   {selectedProduct.stockType === 'pack' && (
                     <TouchableOpacity
                       style={[styles.saleTypeBtn, saleType === 'pack' && styles.saleTypeBtnActive]}
@@ -1570,7 +1570,7 @@ const handleAddNewProduct = async () => {
                       </Text>
                     </TouchableOpacity>
                   )}
-                </View>
+                </view
 
                 {/* Quantity */}
                 <Text style={styles.saleLabel}>
@@ -1590,7 +1590,7 @@ const handleAddNewProduct = async () => {
 
                 {/* Customer Info */}
                 <Text style={styles.saleLabel}>Customer Information</Text>
-                <View style={styles.customerTypeRow}>
+                <div style={styles.customerTypeRow}>
                   {(['walkin', 'patient', 'staff'] as const).map(type => (
                     <TouchableOpacity
                       key={type}
@@ -1605,7 +1605,7 @@ const handleAddNewProduct = async () => {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </view
 
                 <TextInput
                   style={styles.input}
@@ -1616,7 +1616,7 @@ const handleAddNewProduct = async () => {
 
                 {/* Total Calculation */}
                 {saleQuantity && !isNaN(parseFloat(saleQuantity)) && (
-                  <View style={styles.totalBox}>
+                  <div style={styles.totalBox}>
                     <Text style={styles.totalLabel}>Total Amount</Text>
                     <Text style={styles.totalAmount}>
                       ₦{
@@ -1625,10 +1625,10 @@ const handleAddNewProduct = async () => {
                           : (parseFloat(saleQuantity) * (selectedProduct.pricePerUnit || selectedProduct.pricePerItem || 0)).toFixed(2)
                       }
                     </Text>
-                  </View>
+                  </view
                 )}
 
-                <View style={styles.saleActions}>
+                <div style={styles.saleActions}>
                   <TouchableOpacity 
                     style={styles.cancelBtn}
                     onPress={() => {
@@ -1646,142 +1646,142 @@ const handleAddNewProduct = async () => {
                   >
                     <Text style={styles.confirmBtnText}>Confirm Sale</Text>
                   </TouchableOpacity>
-                </View>
+                </view
               </>
             )}
-          </View>
-        </View>
+          </view
+        </view
       </Modal>
 
       {/* Product Detail Modal */}
       <Modal visible={showDetailModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.detailModalContainer}>
+        <div style={styles.modalOverlay}>
+          <div style={styles.detailModalContainer}>
             {selectedProduct && (
               <>
-                <View style={styles.detailHeader}>
-                  <View style={styles.detailIcon}>
+                <div style={styles.detailHeader}>
+                  <div style={styles.detailIcon}>
                     <Ionicons name="medical" size={40} color="#4F46E5" />
-                  </View>
-                  <View style={styles.detailTitle}>
+                  </view
+                  <div style={styles.detailTitle}>
                     <Text style={styles.detailName}>{selectedProduct.name}</Text>
                     <Text style={styles.detailBrand}>{selectedProduct.brand || 'Generic'}</Text>
-                  </View>
+                  </view
                   <TouchableOpacity onPress={() => setShowDetailModal(false)}>
                     <Ionicons name="close" size={24} color="#374151" />
                   </TouchableOpacity>
-                </View>
+                </view
 
                 <ScrollView style={styles.detailContent}>
-                  <View style={styles.detailSection}>
+                  <div style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>Product Information</Text>
-                    <View style={styles.detailGrid}>
-                      <View style={styles.detailItem}>
+                    <div style={styles.detailGrid}>
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Category</Text>
                         <Text style={styles.detailValue}>{selectedProduct.category}</Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Measurement Unit</Text>
                         <Text style={styles.detailValue}>{selectedProduct.measurementUnit}</Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Stock Type</Text>
                         <Text style={styles.detailValue}>
                           {selectedProduct.stockType === 'pack' ? 'Pack-based' : 'Unit-based'}
                         </Text>
-                      </View>
+                      </view
                       {selectedProduct.stockType === 'pack' && (
                         <>
-                          <View style={styles.detailItem}>
+                          <div style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Items per Pack</Text>
                             <Text style={styles.detailValue}>{selectedProduct.itemsPerPack}</Text>
-                          </View>
-                          <View style={styles.detailItem}>
+                          </view
+                          <div style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Retailable</Text>
                             <Text style={styles.detailValue}>{selectedProduct.retailable ? 'Yes' : 'No'}</Text>
-                          </View>
+                          </view
                         </>
                       )}
-                    </View>
-                  </View>
+                    </view
+                  </view
 
-                  <View style={styles.detailSection}>
+                  <div style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>Pricing</Text>
-                    <View style={styles.detailGrid}>
+                    <div style={styles.detailGrid}>
                       {selectedProduct.stockType === 'pack' && selectedProduct.retailable && (
                         <>
-                          <View style={styles.detailItem}>
+                          <div style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Price per Pack</Text>
                             <Text style={styles.detailValue}>₦{selectedProduct.pricePerPack?.toFixed(2)}</Text>
-                          </View>
-                          <View style={styles.detailItem}>
+                          </view
+                          <div style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Price per Unit</Text>
                             <Text style={styles.detailValue}>₦{selectedProduct.pricePerUnit?.toFixed(2)}</Text>
-                          </View>
+                          </view
                         </>
                       )}
                       {selectedProduct.stockType === 'pack' && !selectedProduct.retailable && (
-                        <View style={styles.detailItem}>
+                        <div style={styles.detailItem}>
                           <Text style={styles.detailLabel}>Price per Pack</Text>
                           <Text style={styles.detailValue}>₦{selectedProduct.pricePerPack?.toFixed(2)}</Text>
-                        </View>
+                        </view
                       )}
                       {selectedProduct.stockType === 'unit' && (
-                        <View style={styles.detailItem}>
+                        <div style={styles.detailItem}>
                           <Text style={styles.detailLabel}>Price per Unit</Text>
                           <Text style={styles.detailValue}>₦{selectedProduct.pricePerItem?.toFixed(2)}</Text>
-                        </View>
+                        </view
                       )}
-                      <View style={styles.detailItem}>
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Stock Value</Text>
                         <Text style={styles.detailValue}>₦{calculateTotalValue(selectedProduct).toFixed(2)}</Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Total Items</Text>
                         <Text style={styles.detailValue}>{calculateTotalItems(selectedProduct)}</Text>
-                      </View>
-                    </View>
-                  </View>
+                      </view
+                    </view
+                  </view
 
-                  <View style={styles.detailSection}>
+                  <div style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>Stock & Expiry</Text>
-                    <View style={styles.detailGrid}>
-                      <View style={styles.detailItem}>
+                    <div style={styles.detailGrid}>
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Current Stock</Text>
                         <Text style={styles.detailValue}>
                           {selectedProduct.totalQuantity} {selectedProduct.stockType === 'pack' ? 'packs' : 'units'}
                         </Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Reorder Level</Text>
                         <Text style={styles.detailValue}>{selectedProduct.reorderLevel}</Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Expiry Date</Text>
                         <Text style={[styles.detailValue, 
                           { color: getExpiryStatus(selectedProduct.expiryDate).color }]}>
                           {selectedProduct.expiryDate.toLocaleDateString()}
                         </Text>
-                      </View>
-                      <View style={styles.detailItem}>
+                      </view
+                      <div style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Batch Number</Text>
                         <Text style={styles.detailValue}>{selectedProduct.batchNumber || 'N/A'}</Text>
-                      </View>
-                    </View>
-                  </View>
+                      </view
+                    </view
+                  </view
 
                   {selectedProduct.description && (
-                    <View style={styles.detailSection}>
+                    <div style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Description</Text>
                       <Text style={styles.detailDescription}>{selectedProduct.description}</Text>
-                    </View>
+                    </view
                   )}
 
                   {selectedProduct.supplier && (
-                    <View style={styles.detailSection}>
+                    <div style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Supplier</Text>
                       <Text style={styles.detailValue}>{selectedProduct.supplier}</Text>
-                    </View>
+                    </view
                   )}
                 </ScrollView>
 
@@ -1800,10 +1800,10 @@ const handleAddNewProduct = async () => {
                 </TouchableOpacity>
               </>
             )}
-          </View>
-        </View>
+          </view
+        </view
       </Modal>
-    </View>
+    </view
   );
 };
 

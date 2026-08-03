@@ -8,18 +8,17 @@ import { Search, UserPlus, TestTube, CheckCircle2, Clock, Phone, Mail, ArrowLeft
 interface ReceptionistViewProps {
   onBack?: () => void;
   onNavigateRegister?: () => void;
-  onNavigatePatientDetails: (patientId: string) => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  onNavigatePatientDetails?: (patientId: string) => void;
 }
 
 export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
-  onNavigatePatientDetails,
   onBack,
   onNavigateRegister,
   onNotificationPress,
   onProfilePress,
-  
+  onNavigatePatientDetails
 }) => {
   const { lab } = useAuth();
   const { t } = useLanguage();
@@ -151,7 +150,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         {activeTab === 'admissions' ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden divide-y divide-slate-100">
             {filteredPatients.map(patient => (
-              <div key={patient.id} className="p-5 flex items-center justify-between gap-4">
+              <div
+                key={patient.id}
+                onClick={() => onNavigatePatientDetails && onNavigatePatientDetails(patient.id)}
+                className={`p-5 flex items-center justify-between gap-4 transition-colors ${onNavigatePatientDetails ? 'cursor-pointer hover:bg-slate-50/80' : ''}`}
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-sm">
                     {patient.name ? patient.name.slice(0, 2).toUpperCase() : 'PT'}

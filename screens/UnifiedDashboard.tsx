@@ -8,7 +8,7 @@ import { CashierView } from './staff/CashierView';
 import { AnalyzerView } from './staff/AnalyzerView';
 import { StaffDashboard } from './staff/StaffDashboard';
 import { SuperAdminDashboard } from './superAdmin/SuperAdminDashboard';
-import { useNavigation } from '@react-navigation/native';
+import { useState } from 'react';
 interface UnifiedDashboardProps {
   onNavigateTab: (tab: string) => void;
   onNotificationPress: () => void;
@@ -16,6 +16,31 @@ interface UnifiedDashboardProps {
   onSelectPatient?: (patient: any) => void;
   onSelectTest?: (test: any) => void;
 }
+type ScreenType =
+  | 'login'
+  | 'register'
+  | 'select-lab'
+  | 'dashboard'
+  | 'admin-dashboard'
+  | 'staff'
+  | 'analytics'
+  | 'inventory'
+  | 'catalog'
+  | 'patient-list'
+  | 'reports'
+  | 'patient-dashboard'
+  | 'book-appointment'
+  | 'appointment'
+  | 'test-history'
+  | 'transfer'
+  | 'share'
+  | 'result-view'
+  | 'notifications'
+  | 'patient-details'
+  | 'profile'
+  | 'role-switcher'
+  | 'receptionist';
+
 
 export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
   onNavigateTab,
@@ -30,7 +55,11 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
   if (currentRole === 'superadmin') {
     return <SuperAdminDashboard />;
   }
-const navigation = useNavigation<any>();
+
+  const [screen, setScreen] = useState<ScreenType>(user ? 'dashboard' : 'login');
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [selectedTest, setSelectedTest] = useState<any>(null);
+
   if (currentRole === 'patient') {
     return (
       <PatientDashboard
@@ -45,13 +74,15 @@ const navigation = useNavigation<any>();
   if (currentRole === 'receptionist') {
     return (
       <ReceptionistView
-        onNavigateRegister={() => onNavigateTab('register')}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onNavigatePatientDetails={(patientId: string) => 
-          navigation.navigate('PatientDetailsScreen', { patientId }) // 👈 This accepts two arguments perfectly
-        } 
-      />
+      onBack={() => setScreen('dashboard')}
+      onNavigateRegister={() => setScreen('register')}
+      onNotificationPress={() => setScreen('notifications')}
+      onProfilePress={() => setScreen('profile')}
+      onNavigatePatientDetails={(patientId: string) => {
+        setSelectedPatient({ id: patientId });
+        setScreen('patient-details');
+      }}
+    />
     );
   }
 

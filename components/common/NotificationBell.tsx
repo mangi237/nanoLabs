@@ -15,9 +15,9 @@ const NotificationBell = () => {
     >
       <Ionicons name="notifications-outline" size={24} color="#333" />
       {unreadCount > 0 && (
-        <View style={styles.badge}>
+        <div style={styles.badge}>
           <Text style={styles.badgeText}>{unreadCount}</Text>
-        </View>
+        </div>
       )}
     </TouchableOpacity>
   );

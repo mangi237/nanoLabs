@@ -138,21 +138,21 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <View>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
+            <div 
               <Text style={styles.modalTitle}>Schedule Appointment</Text>
               <Text style={styles.modalSubtitle}>For: {patientName}</Text>
-            </View>
+            </view
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#6B7280" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             {/* Title */}
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Appointment Title *</Text>
               <TextInput
                 style={styles.input}
@@ -160,12 +160,12 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 onChangeText={(text) => setAppointment(prev => ({ ...prev, title: text }))}
                 placeholder="e.g., Annual Checkup, Follow-up Visit"
               />
-            </View>
+            </view
 
             {/* Type */}
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Appointment Type *</Text>
-              <View style={styles.typeGrid}>
+              <div style={styles.typeGrid}>
                 {appointmentTypes.map((type) => (
                   <TouchableOpacity
                     key={type.value}
@@ -188,12 +188,12 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+              </view
+            </view
 
             {/* Date and Time */}
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+            <div style={styles.row}>
+              <div style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                 <Text style={styles.inputLabel}>Date *</Text>
                 <TouchableOpacity 
                   style={styles.dateTimeButton}
@@ -202,9 +202,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                   <Ionicons name="calendar" size={16} color="#6366F1" />
                   <Text style={styles.dateTimeText}>{formatDate(appointment.date)}</Text>
                 </TouchableOpacity>
-              </View>
+              </view
               
-              <View style={[styles.inputGroup, { flex: 1 }]}>
+              <div style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>Time *</Text>
                 <TouchableOpacity 
                   style={styles.dateTimeButton}
@@ -213,13 +213,13 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                   <Ionicons name="time" size={16} color="#6366F1" />
                   <Text style={styles.dateTimeText}>{formatTime(appointment.time)}</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+              </view
+            </view
 
             {/* Duration */}
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Duration (minutes) *</Text>
-              <View style={styles.durationButtons}>
+              <div style={styles.durationButtons}>
                 {['15', '30', '45', '60', '90', '120'].map((duration) => (
                   <TouchableOpacity
                     key={duration}
@@ -237,11 +237,11 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+              </view
+            </view
 
             {/* Location */}
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Location *</Text>
               <TextInput
                 style={styles.input}
@@ -249,10 +249,10 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 onChangeText={(text) => setAppointment(prev => ({ ...prev, location: text }))}
                 placeholder="e.g., Room 101, Consultation Room 2"
               />
-            </View>
+            </view
 
             {/* Notes */}
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -262,36 +262,36 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 multiline
                 numberOfLines={3}
               />
-            </View>
+            </view
 
             {/* Summary */}
-            <View style={styles.summaryCard}>
+            <div style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>Appointment Summary</Text>
-              <View style={styles.summaryRow}>
+              <div style={styles.summaryRow}>
                 <Ionicons name="person" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>Patient: {patientName}</Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="medical" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>Doctor: Dr. {doctorName}</Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="calendar" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   {formatDate(appointment.date)} at {formatTime(appointment.time)}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="time" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   Duration: {appointment.duration} minutes
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="location" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>Location: {appointment.location}</Text>
-              </View>
-            </View>
+              </view
+            </view
           </ScrollView>
 
           {/* Date Picker */}
@@ -325,7 +325,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
             />
           )}
 
-          <View style={styles.modalButtons}>
+          <div style={styles.modalButtons}>
             <TouchableOpacity 
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
@@ -346,9 +346,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 </>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

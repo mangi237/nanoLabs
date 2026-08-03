@@ -27,6 +27,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
     patientId: 'P-9021'
   };
 
+ 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header

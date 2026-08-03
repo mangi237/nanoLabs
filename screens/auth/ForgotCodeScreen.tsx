@@ -34,12 +34,12 @@ const ForgotCodeScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: primaryColor }]}>
+    <div style={[styles.container, { backgroundColor: primaryColor }]}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back" size={24} color="white" />
       </TouchableOpacity>
       
-      <View style={styles.content}>
+      <div style={styles.content}>
         <Ionicons name="key" size={60} color="white" />
         <Text style={styles.title}>{t('forgot_access_code')}</Text>
         <Text style={styles.subtitle}>{t('enter_email_to_reset')}</Text>
@@ -65,8 +65,8 @@ const ForgotCodeScreen = ({ navigation }: any) => {
             <Text style={styles.resetButtonText}>{t('send_reset_link')}</Text>
           )}
         </TouchableOpacity>
-      </View>
-    </View>
+      </div>
+    </div>
   );
 };
 

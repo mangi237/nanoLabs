@@ -81,17 +81,17 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Patient Note</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#2C3E50" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.formContainer}>
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.label}>Title *</Text>
               <TextInput
                 style={styles.input}
@@ -99,11 +99,11 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
                 value={formData.title}
                 onChangeText={(value) => setFormData(prev => ({ ...prev, title: value }))}
               />
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.label}>Category</Text>
-              <View style={styles.categoryGrid}>
+              <div style={styles.categoryGrid}>
                 {(['examination', 'diagnosis', 'treatment', 'progress', 'lab', 'other'] as const).map((category) => (
                   <TouchableOpacity
                     key={category}
@@ -115,12 +115,12 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.label}>Priority</Text>
-              <View style={styles.priorityGroup}>
+              <div style={styles.priorityGroup}>
                 {(['low', 'medium', 'high'] as const).map((priority) => (
                   <TouchableOpacity
                     key={priority}
@@ -137,10 +137,10 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.label}>Notes *</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -151,7 +151,7 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
                 numberOfLines={6}
                 textAlignVertical="top"
               />
-            </View>
+            </view
 
             <TouchableOpacity 
               style={[styles.saveButton, loading && styles.saveButtonDisabled]}
@@ -165,8 +165,8 @@ const AddNoteModal: React.FC<AddNoteModalProps> = ({
               )}
             </TouchableOpacity>
           </ScrollView>
-        </View>
-      </View>
+        </view
+      </view
     </Modal>
   );
 };

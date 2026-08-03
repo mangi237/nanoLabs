@@ -33,7 +33,7 @@ const MedicationList = ({ patientId }: { patientId: string }) => {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <div style={{ flex: 1 }}>
       <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
         <Text style={styles.addButtonText}>Add Medication</Text>
       </TouchableOpacity>
@@ -41,18 +41,18 @@ const MedicationList = ({ patientId }: { patientId: string }) => {
         data={medications}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View style={styles.item}>
+          <div style={styles.item}>
             <Text style={styles.title}>{item.name}</Text>
             <Text>Prescription: {item.prescription}</Text>
             <Text>Time: {item.timeToTake}</Text>
             <Text>Duration: {item.duration}</Text>
-          </View>
+          </view
         )}
         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 30 }}>No medications</Text>}
       />
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <div style={styles.modalContainer}>
+          <div style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Medication</Text>
             <TextInput style={styles.input} placeholder="Medication Name" value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} />
             <TextInput style={styles.input} placeholder="Prescription" value={form.prescription} onChangeText={v => setForm(f => ({ ...f, prescription: v }))} />
@@ -64,10 +64,10 @@ const MedicationList = ({ patientId }: { patientId: string }) => {
             <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </view
+        </view
       </Modal>
-    </View>
+    </view
   );
 };
 

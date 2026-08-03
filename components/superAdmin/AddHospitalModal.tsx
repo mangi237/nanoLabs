@@ -331,10 +331,10 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
   };
 
   const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
+    <div style={styles.stepIndicator}>
       {steps.map((item, index) => (
-        <View key={index} style={styles.stepContainer}>
-          <View style={[
+        <div key={index} style={styles.stepContainer}>
+          <div style={[
             styles.stepCircle,
             index <= step ? styles.stepCircleActive : styles.stepCircleInactive
           ]}>
@@ -344,7 +344,7 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
             ]}>
               {item.icon}
             </Text>
-          </View>
+          </view
           <Text style={[
             styles.stepTitle,
             index <= step ? styles.stepTitleActive : styles.stepTitleInactive
@@ -352,14 +352,14 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
             {item.title}
           </Text>
           {index < steps.length - 1 && (
-            <View style={[
+            <div style={[
               styles.stepLine,
               index < step ? styles.stepLineActive : styles.stepLineInactive
             ]} />
           )}
-        </View>
+        </view
       ))}
-    </View>
+    </view
   );
 
   const renderStepContent = () => {
@@ -370,7 +370,7 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
             <Text style={styles.sectionTitle}>Hospital Information</Text>
             <Text style={styles.sectionSubtitle}>Enter basic details about the hospital</Text>
             
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Hospital Name *</Text>
               <TextInput
                 style={styles.input}
@@ -378,9 +378,9 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 value={hospitalInfo.name}
                 onChangeText={name => setHospitalInfo({ ...hospitalInfo, name })}
               />
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Slogan / Tagline</Text>
               <TextInput
                 style={styles.input}
@@ -388,9 +388,9 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 value={hospitalInfo.slogan}
                 onChangeText={slogan => setHospitalInfo({ ...hospitalInfo, slogan })}
               />
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Location *</Text>
               <TextInput
                 style={styles.input}
@@ -398,9 +398,9 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 value={hospitalInfo.location}
                 onChangeText={location => setHospitalInfo({ ...hospitalInfo, location })}
               />
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Address</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -410,10 +410,10 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 multiline
                 numberOfLines={3}
               />
-            </View>
+            </view
 
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+            <div style={styles.row}>
+              <div style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                 <Text style={styles.inputLabel}>Email</Text>
                 <TextInput
                   style={styles.input}
@@ -423,8 +423,8 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
+              </view
+              <div style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>Phone</Text>
                 <TextInput
                   style={styles.input}
@@ -433,10 +433,10 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   onChangeText={phone => setHospitalInfo({ ...hospitalInfo, phone })}
                   keyboardType="phone-pad"
                 />
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -446,7 +446,7 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 multiline
                 numberOfLines={4}
               />
-            </View>
+            </view
           </ScrollView>
         );
 
@@ -469,101 +469,101 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 ]}
                 onPress={() => setSelectedPackage(pkg)}
               >
-                <View style={styles.packageHeader}>
-                  <View style={[styles.packageIcon, { backgroundColor: `${pkg.color}20` }]}>
+                <div style={styles.packageHeader}>
+                  <div style={[styles.packageIcon, { backgroundColor: `${pkg.color}20` }]}>
                     <Text style={[styles.packageIconText, { color: pkg.color }]}>
                       {pkg.icon}
                     </Text>
-                  </View>
-                  <View style={styles.packageInfo}>
+                  </view
+                  <div style={styles.packageInfo}>
                     <Text style={styles.packageName}>{pkg.name}</Text>
                     <Text style={styles.packageDescription}>{pkg.description}</Text>
-                  </View>
-                  <View style={styles.packagePrice}>
+                  </view
+                  <div style={styles.packagePrice}>
                     <Text style={[styles.packageAmount, { color: pkg.color }]}>
                       ${pkg.monthlyRate}/month
                     </Text>
                     <Text style={styles.packageDuration}>billed monthly</Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
-                <View style={styles.packageFeatures}>
+                <div style={styles.packageFeatures}>
                   <Text style={styles.featuresTitle}>Features:</Text>
                   {pkg.features.map((feature, index) => (
-                    <View key={index} style={styles.featureItem}>
+                    <div key={index} style={styles.featureItem}>
                       <Ionicons name="checkmark-circle" size={16} color={pkg.color} />
                       <Text style={styles.featureText}>{feature}</Text>
-                    </View>
+                    </view
                   ))}
-                </View>
+                </view
 
-                <View style={styles.packageStats}>
-                  <View style={styles.statItem}>
+                <div style={styles.packageStats}>
+                  <div style={styles.statItem}>
                     <Ionicons name="people" size={16} color={pkg.color} />
                     <Text style={[styles.statText, { color: pkg.color }]}>
                       {pkg.staff}
                     </Text>
-                  </View>
-                  <View style={styles.statItem}>
+                  </view
+                  <div style={styles.statItem}>
                     <Ionicons name="person" size={16} color={pkg.color} />
                     <Text style={[styles.statText, { color: pkg.color }]}>
                       {pkg.patients}
                     </Text>
-                  </View>
-                  <View style={styles.statItem}>
+                  </view
+                  <div style={styles.statItem}>
                     <Ionicons name="shield-checkmark" size={16} color={pkg.color} />
                     <Text style={[styles.statText, { color: pkg.color }]}>
                       {pkg.id === 'nano-premium' ? '24/7 Support' : 'Email Support'}
                     </Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
                 {selectedPackage.id === pkg.id && (
-                  <View style={[styles.selectedBadge, { backgroundColor: pkg.color }]}>
+                  <div style={[styles.selectedBadge, { backgroundColor: pkg.color }]}>
                     <Ionicons name="checkmark" size={20} color="white" />
                     <Text style={styles.selectedText}>SELECTED</Text>
-                  </View>
+                  </view
                 )}
               </TouchableOpacity>
             ))}
 
-            <View style={styles.packageComparison}>
+            <div style={styles.packageComparison}>
               <Text style={styles.comparisonTitle}>Package Comparison</Text>
-              <View style={styles.comparisonTable}>
-                <View style={styles.comparisonRow}>
+              <div style={styles.comparisonTable}>
+                <div style={styles.comparisonRow}>
                   <Text style={styles.comparisonHeader}>Feature</Text>
                   {PACKAGES.map(pkg => (
                     <Text key={pkg.id} style={[styles.comparisonHeader, { color: pkg.color }]}>
                       {pkg.name.split(' ')[1]}
                     </Text>
                   ))}
-                </View>
-                <View style={styles.comparisonRow}>
+                </view
+                <div style={styles.comparisonRow}>
                   <Text style={styles.comparisonCell}>Lab PDF Upload Only</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
                   <Text style={styles.comparisonCell}>-</Text>
                   <Text style={styles.comparisonCell}>-</Text>
-                </View>
-                <View style={styles.comparisonRow}>
+                </view
+                <div style={styles.comparisonRow}>
                   <Text style={styles.comparisonCell}>Digital Lab Orders</Text>
                   <Text style={styles.comparisonCell}>-</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
-                </View>
-                <View style={styles.comparisonRow}>
+                </view
+                <div style={styles.comparisonRow}>
                   <Text style={styles.comparisonCell}>Ward Management</Text>
                   <Text style={styles.comparisonCell}>-</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
-                </View>
-                <View style={styles.comparisonRow}>
+                </view
+                <div style={styles.comparisonRow}>
                   <Text style={styles.comparisonCell}>Advanced Reports</Text>
                   <Text style={styles.comparisonCell}>-</Text>
                   <Text style={styles.comparisonCell}>-</Text>
                   <Text style={styles.comparisonCell}>✓</Text>
-                </View>
-              </View>
-            </View>
+                </view
+              </view
+            </view
           </ScrollView>
         );
 
@@ -573,17 +573,17 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
             <Text style={styles.sectionTitle}>Admin Account Setup</Text>
             <Text style={styles.sectionSubtitle}>Create the primary admin account for hospital management</Text>
 
-            <View style={styles.adminCard}>
-              <View style={styles.adminIcon}>
+            <div style={styles.adminCard}>
+              <div style={styles.adminIcon}>
                 <MaterialIcons name="admin-panel-settings" size={28} color="#1E96A9" />
-              </View>
+              </view
               <Text style={styles.adminTitle}>Primary Administrator</Text>
               <Text style={styles.adminSubtitle}>
                 This user will have full control over {hospitalInfo.name || 'the hospital'}
               </Text>
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Admin Full Name *</Text>
               <TextInput
                 style={styles.input}
@@ -591,9 +591,9 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 value={adminInfo.name}
                 onChangeText={name => setAdminInfo({ ...adminInfo, name })}
               />
-            </View>
+            </view
 
-            <View style={styles.inputGroup}>
+            <div style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address *</Text>
               <TextInput
                 style={styles.input}
@@ -603,10 +603,10 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-            </View>
+            </view
 
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+            <div style={styles.row}>
+              <div style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                 <Text style={styles.inputLabel}>Phone Number</Text>
                 <TextInput
                   style={styles.input}
@@ -615,8 +615,8 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   onChangeText={phone => setAdminInfo({ ...adminInfo, phone })}
                   keyboardType="phone-pad"
                 />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
+              </view
+              <div style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>Access Code *</Text>
                 <TextInput
                   style={styles.input}
@@ -626,16 +626,16 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   maxLength={6}
                   autoCapitalize="characters"
                 />
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.infoBox}>
-              <View style={styles.infoHeader}>
+            <div style={styles.infoBox}>
+              <div style={styles.infoHeader}>
                 <Ionicons name="key" size={20} color="#f39c12" />
                 <Text style={styles.infoTitle}>Access Credentials</Text>
-              </View>
-              <View style={styles.credentialsBox}>
-                <View style={styles.credentialItem}>
+              </view
+              <div style={styles.credentialsBox}>
+                <div style={styles.credentialItem}>
                   <Text style={styles.credentialLabel}>Access Code:</Text>
                   <Text style={styles.credentialValue}>{adminInfo.accessCode}</Text>
                   <TouchableOpacity 
@@ -647,8 +647,8 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   >
                     <Ionicons name="copy" size={16} color="#3498db" />
                   </TouchableOpacity>
-                </View>
-                <View style={styles.credentialItem}>
+                </view
+                <div style={styles.credentialItem}>
                   <Text style={styles.credentialLabel}>Temporary Password:</Text>
                   <Text style={styles.credentialValue}>{adminInfo.password}</Text>
                   <TouchableOpacity 
@@ -660,14 +660,14 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   >
                     <Ionicons name="copy" size={16} color="#3498db" />
                   </TouchableOpacity>
-                </View>
-              </View>
+                </view
+              </view
               <Text style={styles.infoText}>
                 These credentials will be used for the initial login. Please share them securely with the hospital administrator.
               </Text>
-            </View>
+            </view
 
-            <View style={styles.regenerateSection}>
+            <div style={styles.regenerateSection}>
               <TouchableOpacity 
                 style={styles.regenerateButton}
                 onPress={() => {
@@ -681,35 +681,35 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                 <Ionicons name="refresh" size={18} color="#1E96A9" />
                 <Text style={styles.regenerateText}>Regenerate Credentials</Text>
               </TouchableOpacity>
-            </View>
+            </view
 
-            <View style={styles.summaryCard}>
+            <div style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>Setup Summary</Text>
-              <View style={styles.summaryRow}>
+              <div style={styles.summaryRow}>
                 <Ionicons name="business" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   <Text style={styles.summaryLabel}>Hospital:</Text> {hospitalInfo.name || 'Not specified'}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="cube" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   <Text style={styles.summaryLabel}>Package:</Text> {selectedPackage.name}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="cash" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   <Text style={styles.summaryLabel}>Monthly Rate:</Text> ${selectedPackage.monthlyRate}
                 </Text>
-              </View>
-              <View style={styles.summaryRow}>
+              </view
+              <div style={styles.summaryRow}>
                 <Ionicons name="person" size={16} color="#6366F1" />
                 <Text style={styles.summaryText}>
                   <Text style={styles.summaryLabel}>Admin:</Text> {adminInfo.name || 'Not specified'}
                 </Text>
-              </View>
-            </View>
+              </view
+            </view
           </ScrollView>
         );
 
@@ -727,28 +727,28 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
         style={styles.container}
       >
         <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-          <View style={styles.modal}>
+          <div style={styles.modal}>
             {/* Header */}
-            <View style={styles.header}>
-              <View>
+            <div style={styles.header}>
+              <div 
                 <Text style={styles.title}>Create New Hospital</Text>
                 <Text style={styles.subtitle}>Step {step + 1} of {steps.length}: {steps[step].title}</Text>
-              </View>
+              </view
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color="#7f8c8d" />
               </TouchableOpacity>
-            </View>
+            </view
 
             {/* Step Indicator */}
             {renderStepIndicator()}
 
             {/* Content */}
-            <View style={styles.content}>
+            <div style={styles.content}>
               {renderStepContent()}
-            </View>
+            </view
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <div style={styles.footer}>
               {step > 0 && (
                 <TouchableOpacity 
                   style={styles.backButton}
@@ -788,15 +788,15 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                   </>
                 )}
               </TouchableOpacity>
-            </View>
-          </View>
+            </view
+          </view
         </Animated.View>
 
         {/* Success Loader */}
         {showLoader && (
-          <View style={styles.successOverlay}>
-            <View style={styles.successContent}>
-              <View style={styles.successAnimation}>
+          <div style={styles.successOverlay}>
+            <div style={styles.successContent}>
+              <div style={styles.successAnimation}>
                 <Ionicons name="checkmark-circle" size={80} color="#27ae60" />
                 <Animated.View 
                   style={[
@@ -811,17 +811,17 @@ const AddHospitalModal: React.FC<AddHospitalModalProps> = ({
                     }
                   ]}
                 />
-              </View>
+              </view
               <Text style={styles.successTitle}>Hospital Created!</Text>
               <Text style={styles.successMessage}>
                 {hospitalInfo.name} has been successfully created.
                 Setting up the system...
               </Text>
-              <View style={styles.loader}>
-                <View style={styles.loaderBar} />
-              </View>
-            </View>
-          </View>
+              <div style={styles.loader}>
+                <div style={styles.loaderBar} />
+              </view
+            </view
+          </view
         )}
       </KeyboardAvoidingView>
     </Modal>

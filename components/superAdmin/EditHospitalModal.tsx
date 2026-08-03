@@ -198,28 +198,28 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
             {/* Header */}
-            <View style={styles.header}>
-              <View>
+            <div style={styles.header}>
+              <div 
                 <Text style={styles.title}>Edit Hospital</Text>
                 <Text style={styles.subtitle}>{hospital.name}</Text>
-              </View>
+              </view
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color="#7f8c8d" />
               </TouchableOpacity>
-            </View>
+            </view
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
               {/* Basic Information */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
                   <MaterialCommunityIcons name="hospital-building" size={20} color="#1E96A9" />
                   <Text style={styles.sectionTitle}>Basic Information</Text>
-                </View>
+                </view
                 
-                <View style={styles.inputGroup}>
+                <div style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Hospital Name *</Text>
                   <TextInput
                     style={styles.input}
@@ -227,9 +227,9 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                     onChangeText={name => setFormData({ ...formData, name })}
                     placeholder="Enter hospital name"
                   />
-                </View>
+                </view
 
-                <View style={styles.inputGroup}>
+                <div style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Slogan</Text>
                   <TextInput
                     style={styles.input}
@@ -237,9 +237,9 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                     onChangeText={slogan => setFormData({ ...formData, slogan })}
                     placeholder="Enter hospital slogan"
                   />
-                </View>
+                </view
 
-                <View style={styles.inputGroup}>
+                <div style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Location *</Text>
                   <TextInput
                     style={styles.input}
@@ -247,9 +247,9 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                     onChangeText={location => setFormData({ ...formData, location })}
                     placeholder="City, Country"
                   />
-                </View>
+                </view
 
-                <View style={styles.inputGroup}>
+                <div style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Full Address</Text>
                   <TextInput
                     style={[styles.input, styles.textArea]}
@@ -259,47 +259,47 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                     multiline
                     numberOfLines={3}
                   />
-                </View>
-              </View>
+                </view
+              </view
 
               {/* Package Information */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
                   <Ionicons name="cube" size={20} color="#9b59b6" />
                   <Text style={styles.sectionTitle}>Package Information</Text>
-                </View>
+                </view
 
-                <View style={styles.currentPackage}>
+                <div style={styles.currentPackage}>
                   <Text style={styles.currentPackageLabel}>Current Package:</Text>
-                  <View style={[styles.packageBadge, { backgroundColor: PACKAGES.find(p => p.id === formData.package)?.color || '#3498db' }]}>
+                  <div style={[styles.packageBadge, { backgroundColor: PACKAGES.find(p => p.id === formData.package)?.color || '#3498db' }]}>
                     <Text style={styles.packageBadgeText}>
                       {PACKAGES.find(p => p.id === formData.package)?.name || 'NANO BASIC'}
                     </Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
-                <View style={styles.packageStats}>
-                  <View style={styles.statBox}>
+                <div style={styles.packageStats}>
+                  <div style={styles.statBox}>
                     <Ionicons name="people" size={20} color="#3498db" />
                     <Text style={styles.statNumber}>{formData.maxStaff}</Text>
                     <Text style={styles.statLabel}>Max Staff</Text>
-                  </View>
-                  <View style={styles.statBox}>
+                  </view
+                  <div style={styles.statBox}>
                     <Ionicons name="person" size={20} color="#27ae60" />
                     <Text style={styles.statNumber}>{formData.maxPatients}</Text>
                     <Text style={styles.statLabel}>Max Patients/Month</Text>
-                  </View>
-                  <View style={styles.statBox}>
+                  </view
+                  <div style={styles.statBox}>
                     <Ionicons name="cash" size={20} color="#f39c12" />
                     <Text style={styles.statNumber}>
                       ${PACKAGES.find(p => p.id === formData.package)?.monthlyRate || 99}
                     </Text>
                     <Text style={styles.statLabel}>Monthly Rate</Text>
-                  </View>
-                </View>
+                  </view
+                </view
 
                 <Text style={styles.upgradeTitle}>Upgrade Package:</Text>
-                <View style={styles.packageOptions}>
+                <div style={styles.packageOptions}>
                   {PACKAGES.map(pkg => (
                     <TouchableOpacity
                       key={pkg.id}
@@ -313,40 +313,40 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                       }}
                       disabled={formData.package === pkg.id || updatingPackage}
                     >
-                      <View style={[styles.packageOptionHeader, { backgroundColor: `${pkg.color}15` }]}>
+                      <div style={[styles.packageOptionHeader, { backgroundColor: `${pkg.color}15` }]}>
                         <Text style={[styles.packageOptionName, { color: pkg.color }]}>
                           {pkg.name}
                         </Text>
                         <Text style={styles.packageOptionPrice}>${pkg.monthlyRate}/month</Text>
-                      </View>
-                      <View style={styles.packageOptionFeatures}>
+                      </view
+                      <div style={styles.packageOptionFeatures}>
                         <Text style={styles.packageOptionFeature}>
                           Max Staff: {getPackageMaxStaff(pkg.id)}
                         </Text>
                         <Text style={styles.packageOptionFeature}>
                           Max Patients: {getPackageMaxPatients(pkg.id)}/month
                         </Text>
-                      </View>
+                      </view
                       {formData.package === pkg.id && (
-                        <View style={[styles.currentBadge, { backgroundColor: pkg.color }]}>
+                        <div style={[styles.currentBadge, { backgroundColor: pkg.color }]}>
                           <Ionicons name="checkmark" size={14} color="white" />
                           <Text style={styles.currentBadgeText}>CURRENT</Text>
-                        </View>
+                        </view
                       )}
                     </TouchableOpacity>
                   ))}
-                </View>
-              </View>
+                </view
+              </view
 
               {/* Contact Information */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
                   <Ionicons name="call" size={20} color="#3498db" />
                   <Text style={styles.sectionTitle}>Contact Information</Text>
-                </View>
+                </view
 
-                <View style={styles.row}>
-                  <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                <div style={styles.row}>
+                  <div style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                     <Text style={styles.inputLabel}>Email</Text>
                     <TextInput
                       style={styles.input}
@@ -355,8 +355,8 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                       placeholder="hospital@email.com"
                       keyboardType="email-address"
                     />
-                  </View>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                  </view
+                  <div style={[styles.inputGroup, { flex: 1 }]}>
                     <Text style={styles.inputLabel}>Phone</Text>
                     <TextInput
                       style={styles.input}
@@ -365,10 +365,10 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                       placeholder="+1234567890"
                       keyboardType="phone-pad"
                     />
-                  </View>
-                </View>
+                  </view
+                </view
 
-                <View style={styles.inputGroup}>
+                <div style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Description</Text>
                   <TextInput
                     style={[styles.input, styles.textArea]}
@@ -378,20 +378,20 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                     multiline
                     numberOfLines={4}
                   />
-                </View>
-              </View>
+                </view
+              </view
 
               {/* Status */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
                   <MaterialCommunityIcons name="progress-check" size={20} color="#27ae60" />
                   <Text style={styles.sectionTitle}>Status & Subscription</Text>
-                </View>
+                </view
 
-                <View style={styles.statusRow}>
-                  <View style={styles.statusGroup}>
+                <div style={styles.statusRow}>
+                  <div style={styles.statusGroup}>
                     <Text style={styles.inputLabel}>Hospital Status</Text>
-                    <View style={styles.statusOptions}>
+                    <div style={styles.statusOptions}>
                       <TouchableOpacity
                         style={[
                           styles.statusOption,
@@ -399,7 +399,7 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                         ]}
                         onPress={() => setFormData({ ...formData, status: 'active' })}
                       >
-                        <View style={[
+                        <div style={[
                           styles.statusDot,
                           formData.status === 'active' ? styles.statusDotActive : styles.statusDotInactive
                         ]} />
@@ -418,7 +418,7 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                         ]}
                         onPress={() => setFormData({ ...formData, status: 'inactive' })}
                       >
-                        <View style={[
+                        <div style={[
                           styles.statusDot,
                           formData.status === 'inactive' ? styles.statusDotInactive : styles.statusDotInactive
                         ]} />
@@ -429,12 +429,12 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                           Inactive
                         </Text>
                       </TouchableOpacity>
-                    </View>
-                  </View>
+                    </view
+                  </view
 
-                  <View style={styles.statusGroup}>
+                  <div style={styles.statusGroup}>
                     <Text style={styles.inputLabel}>Subscription Status</Text>
-                    <View style={styles.statusOptions}>
+                    <div style={styles.statusOptions}>
                       <TouchableOpacity
                         style={[
                           styles.statusOption,
@@ -442,7 +442,7 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                         ]}
                         onPress={() => setFormData({ ...formData, subscriptionStatus: 'active' })}
                       >
-                        <View style={[
+                        <div style={[
                           styles.statusDot,
                           formData.subscriptionStatus === 'active' ? styles.statusDotActive : styles.statusDotInactive
                         ]} />
@@ -461,7 +461,7 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                         ]}
                         onPress={() => setFormData({ ...formData, subscriptionStatus: 'suspended' })}
                       >
-                        <View style={[
+                        <div style={[
                           styles.statusDot,
                           formData.subscriptionStatus === 'suspended' ? styles.statusDotInactive : styles.statusDotInactive
                         ]} />
@@ -472,14 +472,14 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                           Suspended
                         </Text>
                       </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </View>
+                    </view
+                  </view
+                </view
+              </view
             </ScrollView>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <div style={styles.footer}>
               <TouchableOpacity 
                 style={styles.cancelButton}
                 onPress={onClose}
@@ -501,9 +501,9 @@ const EditHospitalModal: React.FC<EditHospitalModalProps> = ({
                   </>
                 )}
               </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+            </view
+          </view
+        </view
       </KeyboardAvoidingView>
     </Modal>
   );

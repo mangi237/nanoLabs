@@ -253,24 +253,24 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
       ]}
       onPress={() => handleTestSelection(item.id)}
     >
-      <View style={styles.testCheckbox}>
+      <div style={styles.testCheckbox}>
         {selectedTests.has(item.id) && (
           <Ionicons name="checkmark-circle" size={24} color="#27AE60" />
         )}
-      </View>
-      <View style={styles.testInfo}>
+      </view
+      <div style={styles.testInfo}>
         <Text style={styles.testName}>{item.name}</Text>
         <Text style={styles.testDescription}>{item.description}</Text>
-        <View style={styles.testDetails}>
-          <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
+        <div style={styles.testDetails}>
+          <div style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
             <Text style={styles.categoryText}>{item.category.toUpperCase()}</Text>
-          </View>
+          </view
           <Text style={styles.testPrice}>${item.price.toFixed(2)}</Text>
-        </View>
+        </view
         <Text style={styles.testSamples}>
           Samples: {item.samples.join(', ')}
         </Text>
-      </View>
+      </view
     </TouchableOpacity>
   );
 
@@ -292,22 +292,22 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
       transparent={true}
       onRequestClose={resetForm}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <View style={styles.headerTitleContainer}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
+            <div style={styles.headerTitleContainer}>
               <Text style={styles.modalTitle}>Request Lab Tests</Text>
               <Text style={styles.patientName}>For: {patientName}</Text>
-            </View>
+            </view
             <TouchableOpacity onPress={resetForm} style={styles.closeButton}>
               <Ionicons name="close-circle" size={28} color="#7F8C8D" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             {/* Search and Filter */}
-            <View style={styles.searchSection}>
-              <View style={styles.searchContainer}>
+            <div style={styles.searchSection}>
+              <div style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color="#7F8C8D" />
                 <TextInput
                   style={styles.searchInput}
@@ -316,7 +316,7 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                   placeholder="Search lab tests..."
                   placeholderTextColor="#BDC3C7"
                 />
-              </View>
+              </view
               
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
                 {categories.map(category => (
@@ -337,18 +337,18 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
+            </view
 
             {/* Selected Tests Summary */}
             {selectedTests.size > 0 && (
-              <View style={styles.selectedSummary}>
+              <div style={styles.selectedSummary}>
                 <Text style={styles.selectedTitle}>
                   Selected Tests: {selectedTests.size}
                 </Text>
                 <Text style={styles.selectedTotal}>
                   Total: ${calculateTotal().toFixed(2)}
                 </Text>
-              </View>
+              </view
             )}
 
             {/* Predefined Tests List */}
@@ -363,8 +363,8 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
 
             {/* Custom Test Form */}
             <Text style={styles.sectionTitle}>Add Custom Test</Text>
-            <View style={styles.customTestForm}>
-              <View style={styles.rowInputs}>
+            <div style={styles.customTestForm}>
+              <div style={styles.rowInputs}>
                 <TextInput
                   style={[styles.input, { flex: 2 }]}
                   value={customTest.name}
@@ -380,7 +380,7 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                   placeholderTextColor="#BDC3C7"
                   keyboardType="decimal-pad"
                 />
-              </View>
+              </view
               
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -392,7 +392,7 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                 numberOfLines={2}
               />
               
-              <View style={styles.customTestActions}>
+              <div style={styles.customTestActions}>
                 <TouchableOpacity 
                   style={styles.addCustomButton}
                   onPress={handleAddCustomTest}
@@ -400,11 +400,11 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                   <Ionicons name="add" size={20} color="white" />
                   <Text style={styles.addCustomButtonText}>Add Custom Test</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+              </view
+            </view
           </ScrollView>
 
-          <View style={styles.modalButtons}>
+          <div style={styles.modalButtons}>
             <TouchableOpacity 
               style={[styles.button, styles.cancelButton]}
               onPress={resetForm}
@@ -428,9 +428,9 @@ const LabTestModal: React.FC<LabTestModalProps> = ({
                 </>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

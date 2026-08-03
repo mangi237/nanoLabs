@@ -122,20 +122,20 @@ const DispenseMedicationModal: React.FC<DispenseMedicationModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Dispense Medication</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#7F8C8D" />
             </TouchableOpacity>
-          </View>
+          </view
 
           {loading ? (
-            <View style={styles.loadingContainer}>
+            <div style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#1E96A9" />
               <Text style={styles.loadingText}>Loading medications...</Text>
-            </View>
+            </view
           ) : (
             <ScrollView style={styles.formContainer}>
               <Text style={styles.label}>Select Medication *</Text>
@@ -158,12 +158,12 @@ const DispenseMedicationModal: React.FC<DispenseMedicationModalProps> = ({
               </ScrollView>
 
               {selectedMedication && (
-                <View style={styles.selectedInfo}>
+                <div style={styles.selectedInfo}>
                   <Text style={styles.selectedName}>{selectedMedication.name}</Text>
                   <Text style={styles.selectedStock}>
                     Available: {selectedMedication.quantity} {selectedMedication.measurementUnit}
                   </Text>
-                </View>
+                </view
               )}
 
               <TextInput
@@ -184,17 +184,17 @@ const DispenseMedicationModal: React.FC<DispenseMedicationModalProps> = ({
               />
 
               {selectedMedication && quantity && !isNaN(parseFloat(quantity)) && (
-                <View style={styles.summary}>
+                <div style={styles.summary}>
                   <Text style={styles.summaryText}>
                     Total: {quantity} {selectedMedication.measurementUnit}
                   </Text>
                   <Text style={styles.summaryAmount}>
                     Amount: ${(parseFloat(quantity) * selectedMedication.price).toFixed(2)}
                   </Text>
-                </View>
+                </view
               )}
 
-              <View style={styles.modalButtons}>
+              <div style={styles.modalButtons}>
                 <TouchableOpacity 
                   style={styles.cancelButton}
                   onPress={() => {
@@ -212,11 +212,11 @@ const DispenseMedicationModal: React.FC<DispenseMedicationModalProps> = ({
                   <Ionicons name="medical" size={20} color="white" />
                   <Text style={styles.dispenseButtonText}>Dispense</Text>
                 </TouchableOpacity>
-              </View>
+              </view
             </ScrollView>
           )}
-        </View>
-      </View>
+        </view
+      </view
     </Modal>
   );
 };

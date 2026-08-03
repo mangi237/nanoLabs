@@ -31,14 +31,14 @@ const RegistrationCompleteScreen = ({ navigation, route }: any) => {
   };
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
-      <View style={styles.content}>
+      <div style={styles.content}>
         {/* Success Animation */}
-        <View style={styles.successIconContainer}>
-          <View style={styles.successCircle}>
+        <div style={styles.successIconContainer}>
+          <div style={styles.successCircle}>
             <Ionicons name="checkmark" size={60} color="white" />
-          </View>
-          <View style={styles.successRing} />
-        </View>
+          </view
+          <div style={styles.successRing} />
+        </view
 
         <Text style={styles.title}>🎉 Registration Complete!</Text>
         <Text style={styles.subtitle}>
@@ -46,31 +46,31 @@ const RegistrationCompleteScreen = ({ navigation, route }: any) => {
         </Text>
 
         {/* Patient Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
+        <div style={styles.infoCard}>
+          <div style={styles.infoRow}>
             <Text style={styles.infoLabel}>Patient Name</Text>
             <Text style={styles.infoValue}>{patientName || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
+          </view
+          <div style={styles.infoRow}>
             <Text style={styles.infoLabel}>Lab</Text>
             <Text style={styles.infoValue}>{labName || 'N/A'}</Text>
-          </View>
-        </View>
+          </view
+        </view
 
         {/* Access Code Card */}
-        <View style={styles.codeCard}>
+        <div style={styles.codeCard}>
           <Text style={styles.codeLabel}>🔑 Your Access Code</Text>
           <Text style={styles.codeValue}>{accessCode || 'N/A'}</Text>
           <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
             <Ionicons name="copy" size={18} color="#1A237E" />
             <Text style={styles.copyText}>Copy Code</Text>
           </TouchableOpacity>
-        </View>
+        </view
 
         {/* Warning Card */}
-        <View style={styles.warningCard}>
+        <div style={styles.warningCard}>
           <Ionicons name="information-circle" size={24} color="#FF9800" />
-          <View style={styles.warningContent}>
+          <div style={styles.warningContent}>
             <Text style={styles.warningTitle}>⚠️ Awaiting Confirmation</Text>
             <Text style={styles.warningText}>
               Please visit the receptionist at {labName || 'the lab'} to confirm your registration.
@@ -81,29 +81,29 @@ const RegistrationCompleteScreen = ({ navigation, route }: any) => {
               {'\n'}• Request virtual results
               {'\n'}• Track your test progress
             </Text>
-          </View>
-        </View>
+          </view
+        </view
 
         {/* What's Next */}
-        <View style={styles.nextStepsCard}>
+        <div style={styles.nextStepsCard}>
           <Text style={styles.nextStepsTitle}>📋 Next Steps</Text>
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>1</View>
+          <div style={styles.stepItem}>
+            <div style={styles.stepNumber}>1</view
             <Text style={styles.stepText}>Go to the receptionist at {labName || 'the lab'}</Text>
-          </View>
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>2</View>
+          </view
+          <div style={styles.stepItem}>
+            <div style={styles.stepNumber}>2</view
             <Text style={styles.stepText}>Provide your access code: {accessCode || 'N/A'}</Text>
-          </View>
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>3</View>
+          </view
+          <div style={styles.stepItem}>
+            <div style={styles.stepNumber}>3</view
             <Text style={styles.stepText}>Wait for confirmation from the receptionist</Text>
-          </View>
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>4</View>
+          </view
+          <div style={styles.stepItem}>
+            <div style={styles.stepNumber}>4</view
             <Text style={styles.stepText}>Login with your access code to access your dashboard</Text>
-          </View>
-        </View>
+          </view
+        </view
 
         {/* Button */}
         <TouchableOpacity style={styles.loginButton} onPress={handleGoToLogin}>
@@ -114,7 +114,7 @@ const RegistrationCompleteScreen = ({ navigation, route }: any) => {
         <Text style={styles.footerText}>
           Having trouble? Contact the lab support team.
         </Text>
-      </View>
+      </view
     </ScrollView>
   );
 };

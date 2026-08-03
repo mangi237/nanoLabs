@@ -213,20 +213,20 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+      <div style={styles.modalOverlay}>
+        <div style={styles.modalContainer}>
+          <div style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Record Payment</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#2C3E50" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.modalContent}>
             {patient && (
-              <View style={styles.patientInfo}>
+              <div style={styles.patientInfo}>
                 <Text style={styles.patientName}>{patient.name}</Text>
-                <View style={styles.patientDetails}>
+                <div style={styles.patientDetails}>
                   <Text style={styles.patientDetail}>
                     ID: {patient.id?.substring(0, 8)}
                   </Text>
@@ -234,12 +234,12 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                     Outstanding Balance: $
                     {(patient.outstandingBalance || 0).toFixed(2)}
                   </Text>
-                </View>
-              </View>
+                </view
+              </view
             )}
 
             {outstandingBills.length > 0 && (
-              <View style={styles.billsSection}>
+              <div style={styles.billsSection}>
                 <Text style={styles.sectionTitle}>Select Bills to Pay</Text>
                 {outstandingBills.map((bill) => (
                   <TouchableOpacity
@@ -250,19 +250,19 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                     ]}
                     onPress={() => handleBillSelection(bill.id)}
                   >
-                    <View style={styles.billOptionContent}>
-                      <View style={styles.billOptionHeader}>
+                    <div style={styles.billOptionContent}>
+                      <div style={styles.billOptionHeader}>
                         <Text style={styles.billDescription}>
                           {bill.description}
                         </Text>
                         <Text style={styles.billAmount}>
                           ${bill.amount?.toFixed(2)}
                         </Text>
-                      </View>
+                      </view
                       <Text style={styles.billCategory}>
                         {bill.category} • Created: {new Date(bill.createdAt?.toDate()).toLocaleDateString()}
                       </Text>
-                    </View>
+                    </view
                     {selectedBills.has(bill.id) && (
                       <Ionicons name="checkmark-circle" size={20} color="#27AE60" />
                     )}
@@ -270,19 +270,19 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 ))}
                 
                 {selectedBills.size > 0 && (
-                  <View style={styles.selectedTotal}>
+                  <div style={styles.selectedTotal}>
                     <Text style={styles.selectedTotalText}>
                       Selected: ${calculateSelectedAmount().toFixed(2)}
                     </Text>
-                  </View>
+                  </view
                 )}
-              </View>
+              </view
             )}
 
-            <View style={styles.formSection}>
+            <div style={styles.formSection}>
               <Text style={styles.sectionTitle}>Payment Details</Text>
 
-              <View style={styles.inputGroup}>
+              <div style={styles.inputGroup}>
                 <Text style={styles.label}>Amount ($)</Text>
                 <TextInput
                   style={styles.input}
@@ -297,11 +297,11 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                     Amount will be set to selected bills total
                   </Text>
                 )}
-              </View>
+              </view
 
-              <View style={styles.inputGroup}>
+              <div style={styles.inputGroup}>
                 <Text style={styles.label}>Payment Method</Text>
-                <View style={styles.paymentMethodOptions}>
+                <div style={styles.paymentMethodOptions}>
                   {['cash', 'card', 'insurance', 'bank_transfer'].map((method) => (
                     <TouchableOpacity
                       key={method}
@@ -321,10 +321,10 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
-              </View>
+                </view
+              </view
 
-              <View style={styles.inputGroup}>
+              <div style={styles.inputGroup}>
                 <Text style={styles.label}>Reference Number (Optional)</Text>
                 <TextInput
                   style={styles.input}
@@ -332,9 +332,9 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                   onChangeText={setReferenceNumber}
                   placeholder="Receipt/Transaction number"
                 />
-              </View>
+              </view
 
-              <View style={styles.inputGroup}>
+              <div style={styles.inputGroup}>
                 <Text style={styles.label}>Notes (Optional)</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
@@ -344,11 +344,11 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                   multiline
                   numberOfLines={3}
                 />
-              </View>
-            </View>
+              </view
+            </view
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <div style={styles.modalFooter}>
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleClose}
@@ -370,9 +370,9 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 <Text style={styles.submitButtonText}>Record Payment</Text>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

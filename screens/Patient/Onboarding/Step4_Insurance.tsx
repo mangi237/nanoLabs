@@ -29,15 +29,15 @@ const Step4_Insurance = ({ navigation, route }: any) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: '66%' }]} />
-      </View>
+      <div style={styles.progressBar}>
+        <div style={[styles.progressFill, { width: '66%' }]} />
+      </div>
       <Text style={styles.stepText}>Step 4/6</Text>
       
       <Text style={styles.title}>{t('insurance_info')}</Text>
       <Text style={styles.subtitle}>{t('optional_insurance_details')}</Text>
 
-      <View style={styles.form}>
+      <div style={styles.form}>
         <TextInput
           style={styles.input}
           placeholder={t('insurance_provider')}
@@ -54,7 +54,7 @@ const Step4_Insurance = ({ navigation, route }: any) => {
           placeholderTextColor="rgba(255,255,255,0.7)"
         />
 
-        <View style={styles.buttonRow}>
+        <div style={styles.buttonRow}>
           <TouchableOpacity style={[styles.button, styles.skipButton]} onPress={handleSkip}>
             <Text style={styles.skipButtonText}>{t('skip')}</Text>
           </TouchableOpacity>
@@ -62,8 +62,8 @@ const Step4_Insurance = ({ navigation, route }: any) => {
           <TouchableOpacity style={[styles.button, styles.nextButton]} onPress={handleNext}>
             <Text style={styles.nextButtonText}>{t('next')} →</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </div>
+      </div>
     </ScrollView>
   );
 };

@@ -116,18 +116,18 @@ const handleSubmit = async () => {
         style={styles.modalContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.modalContent}>
+        <div style={styles.modalContent}>
           {/* Header */}
-          <View style={styles.header}>
+          <div style={styles.header}>
             <Text style={styles.headerTitle}>Add Staff Member</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#333" />
             </TouchableOpacity>
-          </View>
+          </div>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Basic Info */}
-            <View style={styles.section}>
+            <div style={styles.section}>
               <Text style={styles.sectionTitle}>Basic Information</Text>
 
               <TextInput
@@ -154,7 +154,7 @@ const handleSubmit = async () => {
                 keyboardType="phone-pad"
               />
 
-              <View style={styles.codeContainer}>
+              <div style={styles.codeContainer}>
                 <TextInput
                   style={[styles.input, styles.codeInput]}
                   placeholder="Access Code"
@@ -170,15 +170,15 @@ const handleSubmit = async () => {
                   <Ionicons name="refresh" size={16} color="white" />
                   <Text style={styles.generateText}>Generate</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+              </div>
+            </div>
 
             {/* Roles Selection */}
-            <View style={styles.section}>
+            <div style={styles.section}>
               <Text style={styles.sectionTitle}>Assign Roles</Text>
               <Text style={styles.sectionSubtitle}>Select one or more roles</Text>
 
-              <View style={styles.roleGrid}>
+              <div style={styles.roleGrid}>
                 {roleOptions.map((role) => (
                   <TouchableOpacity
                     key={role.value}
@@ -200,8 +200,8 @@ const handleSubmit = async () => {
                     )}
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+              </div>
+            </div>
 
             {/* Submit Button */}
             <TouchableOpacity
@@ -216,7 +216,7 @@ const handleSubmit = async () => {
               )}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </div>
       </KeyboardAvoidingView>
     </Modal>
   );

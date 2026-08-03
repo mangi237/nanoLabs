@@ -38,22 +38,22 @@ const BillDetailsModal: React.FC<BillDetailsModalProps> = ({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+      <div style={styles.modalOverlay}>
+        <div style={styles.modalContainer}>
+          <div style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Bill Details</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#2C3E50" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.modalContent}>
-            <View style={styles.billHeader}>
-              <View>
+            <div style={styles.billHeader}>
+              <div 
                 <Text style={styles.patientName}>{bill.patientName}</Text>
                 <Text style={styles.patientId}>Patient ID: {bill.patientId.substring(0, 8)}</Text>
-              </View>
-              <View style={[
+              </view
+              <div style={[
                 styles.statusBadge,
                 isOverdue && styles.overdueBadge,
                 bill.patientStatus === 'emergency' && styles.emergencyBadge,
@@ -61,38 +61,38 @@ const BillDetailsModal: React.FC<BillDetailsModalProps> = ({
                 <Text style={styles.statusBadgeText}>
                   {isOverdue ? 'OVERDUE' : bill.patientStatus?.toUpperCase() || 'ACTIVE'}
                 </Text>
-              </View>
-            </View>
+              </view
+            </view
 
-            <View style={styles.amountSection}>
+            <div style={styles.amountSection}>
               <Text style={styles.amountLabel}>Amount</Text>
               <Text style={styles.amount}>${bill.amount?.toFixed(2) || '0.00'}</Text>
-            </View>
+            </view
 
-            <View style={styles.detailsSection}>
+            <div style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Bill Information</Text>
               
-              <View style={styles.detailRow}>
+              <div style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Description:</Text>
                 <Text style={styles.detailValue}>{bill.description}</Text>
-              </View>
+              </view
               
-              <View style={styles.detailRow}>
+              <div style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Category:</Text>
-                <View style={styles.categoryBadge}>
+                <div style={styles.categoryBadge}>
                   <Text style={styles.categoryText}>{bill.category}</Text>
-                </View>
-              </View>
+                </view
+              </view
               
-              <View style={styles.detailRow}>
+              <div style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Created:</Text>
                 <Text style={styles.detailValue}>
                   {createdDate.toLocaleDateString()} at {createdDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </Text>
-              </View>
+              </view
               
               {dueDate && (
-                <View style={styles.detailRow}>
+                <div style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Due Date:</Text>
                   <Text style={[
                     styles.detailValue,
@@ -101,36 +101,36 @@ const BillDetailsModal: React.FC<BillDetailsModalProps> = ({
                     {dueDate.toLocaleDateString()}
                     {isOverdue && ' (Overdue)'}
                   </Text>
-                </View>
+                </view
               )}
               
-              <View style={styles.detailRow}>
+              <div style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Created By:</Text>
                 <Text style={styles.detailValue}>{bill.createdByName || 'System'}</Text>
-              </View>
+              </view
               
               {bill.notes && (
-                <View style={styles.detailRow}>
+                <div style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Notes:</Text>
                   <Text style={styles.detailValue}>{bill.notes}</Text>
-                </View>
+                </view
               )}
-            </View>
+            </view
 
             {bill.items && bill.items.length > 0 && (
-              <View style={styles.itemsSection}>
+              <div style={styles.itemsSection}>
                 <Text style={styles.sectionTitle}>Bill Items</Text>
                 {bill.items.map((item, index) => (
-                  <View key={index} style={styles.itemRow}>
+                  <div key={index} style={styles.itemRow}>
                     <Text style={styles.itemName}>{item.name}</Text>
                     <Text style={styles.itemAmount}>${item.amount?.toFixed(2)}</Text>
-                  </View>
+                  </view
                 ))}
-              </View>
+              </view
             )}
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <div style={styles.modalFooter}>
             <TouchableOpacity
               style={styles.rejectButton}
               onPress={onReject}
@@ -145,9 +145,9 @@ const BillDetailsModal: React.FC<BillDetailsModalProps> = ({
               <Ionicons name="checkmark-circle" size={20} color="white" />
               <Text style={styles.approveButtonText}>Approve & Pay</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

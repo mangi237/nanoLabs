@@ -2,14 +2,13 @@
   "name": "ndam-clinic-rn",
   "version": "1.0.0",
   "main": "index.js",
+  
   "scripts": {
-    "start": "expo start",
-    "dev": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
-  },
-  "dependencies": {
+  "dev": "vite",
+  "build": "tsc && vite build",
+  "preview": "vite preview"
+},
+"dependencies": {
     "@expo/metro-runtime": "~5.0.4",
     "@react-native-async-storage/async-storage": "^1.24.0",
     "@react-native-community/datetimepicker": "github:react-native-community/datetimepicker",
@@ -35,6 +34,7 @@
     "from": "^0.1.7",
     "lucide-react": "^1.28.0",
     "multer": "^2.0.2",
+    "nativewind": "^4.2.6",
     "next": "^15.5.2",
     "react": "^19.0.0",
     "react-dom": "19.0.0",
@@ -46,14 +46,20 @@
     "react-native-paper-dates": "^0.22.56",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-vector-icons": "^10.3.0",
-    "react-native-web": "^0.20.0"
+    "react-native-web": "^0.20.0",
+    "tailwindcss": "3.4.17"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@types/formidable": "^3.5.1",
-    "@types/react": "~19.0.10",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@types/react-native": "^0.72.8",
-    "typescript": "~5.8.3"
+    "@vitejs/plugin-react": "^6.0.5",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.25",
+    "typescript": "~5.8.2",
+    "vite": "^8.2.0"
   },
   "private": true
 }

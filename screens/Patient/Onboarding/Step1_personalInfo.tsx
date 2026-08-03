@@ -44,40 +44,40 @@ const Step1_PersonalInfo = ({ navigation, route }: any) => {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: primaryColor, justifyContent: 'center' }]}>
+      <div style={[styles.container, { backgroundColor: primaryColor, justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color="white" />
-      </View>
+      </div>
     );
   }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: '16%' }]} />
-      </View>
+      <div style={styles.progressBar}>
+        <div style={[styles.progressFill, { width: '16%' }]} />
+      </div>
       <Text style={styles.stepText}>Step 1/6</Text>
       
       <Text style={styles.title}>🏥 {t('select_your_lab')}</Text>
       <Text style={styles.subtitle}>{t('choose_lab_for_tests')}</Text>
 
-      <View style={styles.labList}>
+      <div style={styles.labList}>
         {labs.map((lab) => (
           <TouchableOpacity
             key={lab.id}
             style={[styles.labCard, selectedLab?.id === lab.id && styles.labCardSelected]}
             onPress={() => setSelectedLab(lab)}
           >
-            <View style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
-            <View style={styles.labInfo}>
+            <div style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
+            <div style={styles.labInfo}>
               <Text style={styles.labName}>{lab.name}</Text>
               <Text style={styles.labLocation}>{lab.location || 'Location not specified'}</Text>
-            </View>
+            </div>
             {selectedLab?.id === lab.id && (
               <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
             )}
           </TouchableOpacity>
         ))}
-      </View>
+      </div>
 
       <TouchableOpacity 
         style={[styles.nextButton, !selectedLab && styles.disabledButton]}

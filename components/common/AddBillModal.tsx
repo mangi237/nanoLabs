@@ -110,21 +110,21 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
       transparent={true}
       onRequestClose={resetForm}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <View style={styles.headerTitleContainer}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
+          <div style={styles.modalHeader}>
+            <div style={styles.headerTitleContainer}>
               <Text style={styles.modalTitle}>Add New Bill</Text>
               <Text style={styles.patientName}>For: {patientName}</Text>
-            </View>
+            </view
             <TouchableOpacity onPress={resetForm} style={styles.closeButton}>
               <Ionicons name="close-circle" size={28} color="#7F8C8D" />
             </TouchableOpacity>
-          </View>
+          </view
 
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             <Text style={styles.inputLabel}>Bill Category</Text>
-            <View style={styles.categoriesContainer}>
+            <div style={styles.categoriesContainer}>
               {billCategories.map(category => (
                 <TouchableOpacity
                   key={category.value}
@@ -147,7 +147,7 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </view
 
             <Text style={styles.inputLabel}>Description *</Text>
             <TextInput
@@ -161,7 +161,7 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
             />
 
             <Text style={styles.inputLabel}>Amount ($) *</Text>
-            <View style={styles.amountContainer}>
+            <div style={styles.amountContainer}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={[styles.input, styles.amountInput]}
@@ -171,7 +171,7 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
                 placeholderTextColor="#BDC3C7"
                 keyboardType="decimal-pad"
               />
-            </View>
+            </view
 
             <Text style={styles.inputLabel}>Notes (Optional)</Text>
             <TextInput
@@ -185,7 +185,7 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
             />
           </ScrollView>
 
-          <View style={styles.modalButtons}>
+          <div style={styles.modalButtons}>
             <TouchableOpacity 
               style={[styles.button, styles.cancelButton]}
               onPress={resetForm}
@@ -207,9 +207,9 @@ const AddBillModal: React.FC<AddBillModalProps> = ({
                 </>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </view
+        </view
+      </view
     </Modal>
   );
 };

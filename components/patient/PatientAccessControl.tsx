@@ -214,19 +214,19 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
     const isApproved = approvedStaff.includes(item.id);
 
     return (
-      <View style={[styles.staffCard, isBlocked && styles.blockedCard]}>
-        <View style={styles.staffInfo}>
-          <View style={styles.staffHeader}>
+      <div style={[styles.staffCard, isBlocked && styles.blockedCard]}>
+        <div style={styles.staffInfo}>
+          <div style={styles.staffHeader}>
             <Text style={styles.staffName}>{item.name}</Text>
-            <View style={[styles.roleBadge, { backgroundColor: getRoleColor(item.role) }]}>
+            <div style={[styles.roleBadge, { backgroundColor: getRoleColor(item.role) }]}>
               <Text style={styles.roleText}>{item.role.toUpperCase()}</Text>
-            </View>
-          </View>
+            </view
+          </view
           <Text style={styles.staffDepartment}>{item.department || 'No Department'}</Text>
           <Text style={styles.staffEmail}>{item.email}</Text>
-        </View>
+        </view
 
-        <View style={styles.actionButtons}>
+        <div style={styles.actionButtons}>
           {accessMode === 'restricted' && (
             <TouchableOpacity
               style={[styles.approveButton, isApproved && styles.approvedButton]}
@@ -256,63 +256,63 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
               {isBlocked ? 'Unblock' : 'Block'}
             </Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </view
+      </view
     );
   };
 
   const renderAccessLogItem = ({ item }: { item: AccessLog }) => (
-    <View style={styles.logCard}>
-      <View style={styles.logHeader}>
+    <div style={styles.logCard}>
+      <div style={styles.logHeader}>
         <Text style={styles.logStaffName}>{item.staffName}</Text>
         {item.accessType === 'emergency_override' && (
-          <View style={styles.emergencyBadge}>
+          <div style={styles.emergencyBadge}>
             <Ionicons name="warning" size={12} color="#EF4444" />
             <Text style={styles.emergencyText}>Emergency</Text>
-          </View>
+          </view
         )}
-      </View>
+      </view
       <Text style={styles.logAction}>{item.action}</Text>
-      <View style={styles.logFooter}>
+      <div style={styles.logFooter}>
         <Text style={styles.logDate}>
           {item.timestamp.toLocaleDateString()}
         </Text>
         <Text style={styles.logTime}>
           {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
-      </View>
-    </View>
+      </view
+    </view
   );
 
   if (loading) {
     return (
       <Modal visible={visible} animationType="slide" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <div style={styles.modalContainer}>
+          <div style={styles.modalContent}>
             <ActivityIndicator size="large" color="#6366F1" />
             <Text style={styles.loadingText}>Loading privacy settings...</Text>
-          </View>
-        </View>
+          </view
+        </view
       </Modal>
     );
   }
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
+      <div style={styles.modalContainer}>
+        <div style={styles.modalContent}>
           {/* Header */}
-          <View style={styles.header}>
+          <div style={styles.header}>
             <Text style={styles.title}>Privacy Settings</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
-          </View>
+          </view
 
           {/* Access Mode Selector */}
-          <View style={styles.modeSection}>
+          <div style={styles.modeSection}>
             <Text style={styles.sectionTitle}>Access Control Mode</Text>
-            <View style={styles.modeButtons}>
+            <div style={styles.modeButtons}>
               <TouchableOpacity
                 style={[styles.modeButton, accessMode === 'standard' && styles.modeButtonActive]}
                 onPress={() => handleChangeAccessMode('standard')}
@@ -354,11 +354,11 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
                   High Privacy
                 </Text>
               </TouchableOpacity>
-            </View>
-          </View>
+            </view
+          </view
 
           {/* Tabs */}
-          <View style={styles.tabs}>
+          <div style={styles.tabs}>
             <TouchableOpacity
               style={[styles.tab, !showAccessLog && styles.tabActive]}
               onPress={() => setShowAccessLog(false)}
@@ -375,12 +375,12 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
                 Access Log ({accessLog.length})
               </Text>
             </TouchableOpacity>
-          </View>
+          </view
 
           {!showAccessLog ? (
             <>
               {/* Search */}
-              <View style={styles.searchContainer}>
+              <div style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color="#9CA3AF" />
                 <TextInput
                   style={styles.searchInput}
@@ -388,7 +388,7 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
-              </View>
+              </view
 
               {/* Staff List */}
               <FlatList
@@ -397,10 +397,10 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.listContainer}
                 ListEmptyComponent={
-                  <View style={styles.emptyState}>
+                  <div style={styles.emptyState}>
                     <Ionicons name="people-outline" size={64} color="#D1D5DB" />
                     <Text style={styles.emptyText}>No staff members found</Text>
-                  </View>
+                  </view
                 }
               />
             </>
@@ -413,16 +413,16 @@ const PatientAccessControl: React.FC<PatientAccessControlProps> = ({
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.listContainer}
                 ListEmptyComponent={
-                  <View style={styles.emptyState}>
+                  <div style={styles.emptyState}>
                     <Ionicons name="document-text-outline" size={64} color="#D1D5DB" />
                     <Text style={styles.emptyText}>No access history yet</Text>
-                  </View>
+                  </view
                 }
               />
             </>
           )}
-        </View>
-      </View>
+        </view
+      </view
     </Modal>
   );
 };

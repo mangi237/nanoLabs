@@ -25,17 +25,17 @@ const Step3_HealthInfo = ({ navigation, route }: any) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: primaryColor }]}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: '50%' }]} />
-      </View>
+      <div style={styles.progressBar}>
+        <div style={[styles.progressFill, { width: '50%' }]} />
+      </div>
       <Text style={styles.stepText}>Step 3/6</Text>
       
       <Text style={styles.title}>{t('health_info')}</Text>
       <Text style={styles.subtitle}>{t('tell_us_about_your_health')}</Text>
 
-      <View style={styles.form}>
+      <div style={styles.form}>
         <Text style={styles.label}>{t('blood_type')}</Text>
-        <View style={styles.bloodTypeGrid}>
+        <div style={styles.bloodTypeGrid}>
           {bloodTypes.map((type) => (
             <TouchableOpacity
               key={type}
@@ -47,7 +47,7 @@ const Step3_HealthInfo = ({ navigation, route }: any) => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </div>
 
         <TextInput
           style={styles.input}
@@ -80,7 +80,7 @@ const Step3_HealthInfo = ({ navigation, route }: any) => {
         <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
           <Text style={styles.nextButtonText}>{t('next')} →</Text>
         </TouchableOpacity>
-      </View>
+      </div>
     </ScrollView>
   );
 };

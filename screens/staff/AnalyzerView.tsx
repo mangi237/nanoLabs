@@ -102,7 +102,6 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = () => {
     t.testName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.patientCode.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
   return (
     <div className="space-y-6">
       {/* Header */}
