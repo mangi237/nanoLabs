@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 8085, // Launches on your preferred port
+    port: 8085,
+  },
+  // 👈 ADD THIS CONFIGURATION BLOCK RIGHT HERE
+  css: {
+    postcss: './postcss.config.js', 
   }
 });

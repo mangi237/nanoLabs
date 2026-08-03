@@ -24,6 +24,7 @@ import TestHistoryScreen from './screens/Patient/TestHistoryScreen';
 import TransferScreen from './screens/Patient/TransferScreen';
 import ShareResultsScreen from './screens/Patient/ShareResultsScreen';
 import ResultViewScreen from './screens/Patient/ResultViewScreen';
+import RegistrationCompleteScreen from './screens/Patient/RegistrationCompleteScreen';
 
 import ReceptionistView from './screens/staff/ReceptionistView';
 import RoleSwitcher from './screens/staff/RoleSwitcher';
@@ -36,6 +37,7 @@ import { Activity, Shield, User, Users, RefreshCw, LogOut, CheckCircle2, Chevron
 type ScreenType =
   | 'login'
   | 'register'
+  | 'registration-complete'
   | 'select-lab'
   | 'dashboard'
   | 'admin-dashboard'
@@ -63,6 +65,7 @@ const MainAppContent: React.FC = () => {
   const [screen, setScreen] = useState<ScreenType>(user ? 'dashboard' : 'login');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [selectedTest, setSelectedTest] = useState<any>(null);
+  const [registeredPatient, setRegisteredPatient] = useState<any>(null);
 
   const handleNavigateTab = (tab: string) => {
     switch (tab) {
@@ -87,7 +90,7 @@ const MainAppContent: React.FC = () => {
 
   // Render Screen Switcher
   const renderScreen = () => {
-    if (!user && screen !== 'register' && screen !== 'select-lab') {
+    if (!user && screen !== 'register' && screen !== 'registration-complete' && screen !== 'select-lab') {
       return (
         <LoginScreen
           onLoginSuccess={() => setScreen('dashboard')}
@@ -111,7 +114,33 @@ const MainAppContent: React.FC = () => {
         return (
           <RegisterScreen
             onBackToLogin={() => setScreen('login')}
-            onRegisterSuccess={() => setScreen('dashboard')}
+            onRegisterSuccess={(patientData) => {
+              setRegisteredPatient(patientData);
+              setScreen('registration-complete');
+            }}
+          />
+        );
+
+      case 'registration-complete':
+        return (
+          <RegistrationCompleteScreen
+            patientData={registeredPatient}
+            onGoToLogin={() => setScreen('login')}
+            onGoToDashboard={() => {
+              if (registeredPatient) {
+                setUser({
+                  id: registeredPatient.id || registeredPatient.patientId,
+                  patientId: registeredPatient.patientId,
+                  name: registeredPatient.name,
+                  accessCode: registeredPatient.accessCode,
+                  labId: registeredPatient.labId,
+                  labName: registeredPatient.labName,
+                  role: 'patient',
+                  roles: ['patient']
+                });
+              }
+              setScreen('patient-dashboard');
+            }}
           />
         );
 

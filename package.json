@@ -2,13 +2,13 @@
   "name": "ndam-clinic-rn",
   "version": "1.0.0",
   "main": "index.js",
-  
+  "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc && vite build",
-  "preview": "vite preview"
-},
-"dependencies": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
     "@react-native-async-storage/async-storage": "^1.24.0",
     "@react-native-community/datetimepicker": "github:react-native-community/datetimepicker",
