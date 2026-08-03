@@ -1,240 +1,210 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, getDocs, collection, updateDoc, doc, addDoc } from '../../services/firebase';
+import { Search, UserPlus, TestTube, CheckCircle2, Clock, Phone, Mail, ArrowLeft, Plus } from 'lucide-react';
 
-const ReceptionistView = ({ navigation }: any) => {
+interface ReceptionistViewProps {
+  onBack?: () => void;
+  onNavigateRegister?: () => void;
+  onNavigatePatientDetails: (patientId: string) => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
+
+export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
+  onNavigatePatientDetails,
+  onBack,
+  onNavigateRegister,
+  onNotificationPress,
+  onProfilePress,
+  
+}) => {
+  const { lab } = useAuth();
   const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user, lab } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'admissions' | 'collections'>('admissions');
 
   useEffect(() => {
-    fetchPatients();
-  }, []);
+    fetchData();
+  }, [lab?.id]);
 
-  const fetchPatients = async () => {
+  const fetchData = async () => {
     try {
-      if (!lab?.id) return;
-      
-      const patientsRef = collection(db, 'labs', lab.id, 'patients');
-      const snapshot = await getDocs(patientsRef);
-      const patientList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPatients(patientList);
-    } catch (error) {
-      console.error('Error fetching patients:', error);
+      setLoading(true);
+      const snap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setPatients(list);
+    } catch (e) {
+      console.error('Error fetching receptionist data:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchPatients();
-    setRefreshing(false);
-  };
-
-  const handleConfirmPatient = async (patientId: string) => {
+  const handleCollectSample = async (patientId: string, testId: string) => {
     try {
-      if (!lab?.id) return;
-      
-      const patientRef = doc(db, 'labs', lab.id, 'patients', patientId);
-      await updateDoc(patientRef, {
-        status: 'active',
-        confirmedAt: new Date().toISOString()
-      });
-      
-      await fetchPatients();
-    } catch (error) {
-      console.error('Error confirming patient:', error);
+      const patient = patients.find(p => p.id === patientId);
+      if (patient && patient.labTests) {
+        const updatedTests = patient.labTests.map((t: any) => {
+          if (t.id === testId) {
+            return { ...t, sampleCollected: true, status: 'collected' };
+          }
+          return t;
+        });
+
+        await updateDoc(doc(db, 'labs', lab?.id || 'lab-1', 'patients', patientId), {
+          labTests: updatedTests,
+          updatedAt: new Date().toISOString()
+        });
+        fetchData();
+      }
+    } catch (e) {
+      console.error('Error collecting sample:', e);
     }
   };
 
-  const pendingPatients = patients.filter(p => p.status === 'pending');
-  const activePatients = patients.filter(p => p.status === 'active');
-
-  const renderPatientItem = ({ item }: any) => (
-    <View style={[styles.patientItem, { backgroundColor: colors.surface }]}>
-      <View style={styles.patientInfo}>
-        <Text style={styles.patientName}>{item.name}</Text>
-        <Text style={styles.patientDetails}>
-          {item.age} years • {item.gender}
-        </Text>
-        <Text style={styles.patientPhone}>📞 {item.phone}</Text>
-      </View>
-      {item.status === 'pending' ? (
-        <TouchableOpacity 
-          style={styles.confirmButton}
-          onPress={() => handleConfirmPatient(item.id)}
-        >
-          <Text style={styles.confirmButtonText}>{t('confirm')}</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.activeBadge}>
-          <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-          <Text style={styles.activeText}>{t('active')}</Text>
-        </View>
-      )}
-    </View>
+  const filteredPatients = patients.filter(p =>
+    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.patientId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.phone?.includes(searchQuery)
   );
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.statNumber}>{pendingPatients.length}</Text>
-          <Text style={styles.statLabel}>{t('pending')}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.statNumber}>{activePatients.length}</Text>
-          <Text style={styles.statLabel}>{t('active')}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.statNumber}>{patients.length}</Text>
-          <Text style={styles.statLabel}>{t('total')}</Text>
-        </View>
-      </View>
-
-      <FlatList
-        data={patients}
-        renderItem={renderPatientItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_patients')}</Text>
-          </View>
-        }
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Reception & Sample Intake Desk"
+        subtitle="Patient check-in, registration & specimen collection"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
-    </View>
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Reception Control Desk</h2>
+            <p className="text-xs text-slate-500">Manage daily intake and sample collection processing</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onNavigateRegister && (
+              <button
+                onClick={onNavigateRegister}
+                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                New Patient Intake
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tab Selection */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveTab('admissions')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === 'admissions'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            Patient Check-In ({patients.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('collections')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === 'collections'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            Pending Sample Collections
+          </button>
+        </div>
+
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <input
+            type="text"
+            placeholder="Search patient by name, code or phone..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+          />
+        </div>
+
+        {/* Content View */}
+        {activeTab === 'admissions' ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden divide-y divide-slate-100">
+            {filteredPatients.map(patient => (
+              <div key={patient.id} className="p-5 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-sm">
+                    {patient.name ? patient.name.slice(0, 2).toUpperCase() : 'PT'}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">{patient.name}</h3>
+                    <p className="text-xs text-slate-500">
+                      ID: {patient.patientId || patient.id} • Phone: {patient.phone || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+                  {patient.status || 'Active'}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredPatients.flatMap(p => (p.labTests || []).map((t: any) => ({ ...t, patientName: p.name, patientId: p.id }))).map(test => (
+              <div key={test.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
+                    <TestTube className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">{test.testName || test.name}</h4>
+                    <p className="text-xs text-slate-500">Patient: {test.patientName}</p>
+                  </div>
+                </div>
+
+                {test.sampleCollected ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Sample Collected
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleCollectSample(test.patientId, test.id)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl shadow-xs"
+                  >
+                    <TestTube className="w-3.5 h-3.5" />
+                    Collect Specimen
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  patientItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  patientInfo: {
-    flex: 1,
-  },
-  patientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  patientDetails: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  patientPhone: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  confirmButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  confirmButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activeText: {
-    color: '#4CAF50',
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    fontFamily: 'Poppins-Medium',
-  },
-});
 
 export default ReceptionistView;

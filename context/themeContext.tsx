@@ -1,69 +1,68 @@
 import React, { createContext, useContext, useState } from 'react';
 
-interface ThemeColors {
+export interface ThemeColors {
   primary: string;
   secondary: string;
-  accent: string;
   background: string;
   surface: string;
-  text: string;
+  textPrimary: string;
   textSecondary: string;
+  border: string;
+  accentTeal: string;
+  accentBlue: string;
   success: string;
-  error: string;
   warning: string;
-  info: string;
+  danger: string;
 }
 
 interface ThemeContextType {
-  colors: ThemeColors;
-  setTheme: (colors: Partial<ThemeColors>) => void;
   primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
+  colors: ThemeColors;
+  isDark: boolean;
+  toggleTheme: () => void;
 }
 
-const defaultTheme: ThemeColors = {
-  primary: '#1A237E',
-  secondary: '#E91E63',
-  accent: '#F1C40F',
-  background: '#F5F5F5',
+const defaultColors: ThemeColors = {
+  primary: '#0D9488', // Teal 600
+  secondary: '#2563EB', // Blue 600
+  background: '#F8FAFC', // Slate 50
   surface: '#FFFFFF',
-  text: '#1A237E',
-  textSecondary: '#666666',
-  success: '#4CAF50',
-  error: '#F44336',
-  warning: '#FF9800',
-  info: '#2196F3',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  border: '#E2E8F0',
+  accentTeal: '#14B8A6',
+  accentBlue: '#3B82F6',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
 };
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = createContext<ThemeContextType>({
+  primaryColor: '#0D9488',
+  colors: defaultColors,
+  isDark: false,
+  toggleTheme: () => {},
+});
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [colors, setColors] = useState<ThemeColors>(defaultTheme);
+  const [isDark, setIsDark] = useState(false);
 
-  const setTheme = (newColors: Partial<ThemeColors>) => {
-    setColors(prev => ({ ...prev, ...newColors }));
-  };
+  const colors = isDark ? {
+    ...defaultColors,
+    background: '#0F172A',
+    surface: '#1E293B',
+    textPrimary: '#F8FAFC',
+    textSecondary: '#94A3B8',
+    border: '#334155'
+  } : defaultColors;
 
-  const value = {
-    colors,
-    setTheme,
-    primaryColor: colors.primary,
-    secondaryColor: colors.secondary,
-    accentColor: colors.accent,
-  };
+  const toggleTheme = () => setIsDark(prev => !prev);
 
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={{ primaryColor: colors.primary, colors, isDark, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
 };
 
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+export const useTheme = () => useContext(ThemeContext);

@@ -1,362 +1,287 @@
-// screens/superAdmin/SuperAdminDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  StyleSheet, 
-  RefreshControl, 
-  Alert,
-  ActivityIndicator
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+  Building2, 
+  Plus, 
+  Users, 
+  UserCheck, 
+  DollarSign, 
+  Search, 
+  RefreshCw, 
+  ChevronRight, 
+  ShieldCheck, 
+  Trash2, 
+  Sparkles,
+  MapPin,
+  CheckCircle2,
+  TrendingUp
+} from 'lucide-react';
+import { collection, getDocs, deleteDoc, doc, db } from '../../services/firebase';
+import { LabRegistrationModal } from './LabRegistrationModal';
+import { LabDetailsScreen } from './LabDetailsScreen';
 
-const SuperAdminDashboard = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user } = useAuth();
+interface SuperAdminDashboardProps {
+  onNavigate?: (screen: string, params?: any) => void;
+}
+
+export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
   const [labs, setLabs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState({
-    totalLabs: 0,
-    totalPatients: 0,
-    totalStaff: 0,
-    totalRevenue: 0
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showRegModal, setShowRegModal] = useState(false);
+  const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchLabs();
-  }, []);
-
-  const fetchLabs = async () => {
+  const fetchNetworkStats = async () => {
     try {
       setLoading(true);
-      const labsRef = collection(db, 'labs');
-      const snapshot = await getDocs(labsRef);
-      const labList = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-      setLabs(labList);
-      
-      let totalPatients = 0;
-      let totalStaff = 0;
-      
-      for (const lab of labList) {
-        try {
-          const patientsRef = collection(db, 'labs', lab.id, 'patients');
-          const patientsSnap = await getDocs(patientsRef);
-          totalPatients += patientsSnap.size;
-        } catch (e) {}
+      const labsSnap = await getDocs(collection(db, 'labs'));
+      const labsData: any[] = [];
+
+      for (const labDoc of labsSnap.docs) {
+        const labInfo = { id: labDoc.id, ...labDoc.data() };
         
+        // Count patients for this lab
         try {
-          const staffRef = collection(db, 'labs', lab.id, 'staff');
-          const staffSnap = await getDocs(staffRef);
-          totalStaff += staffSnap.size;
-        } catch (e) {}
+          const patientSnap = await getDocs(collection(db, 'labs', labDoc.id, 'patients'));
+          (labInfo as any).patientCount = patientSnap.size || (labInfo as any).patientCount || 0;
+        } catch {
+          // fallback
+        }
+
+        // Count staff for this lab
+        try {
+          const staffSnap = await getDocs(collection(db, 'labs', labDoc.id, 'staff'));
+          (labInfo as any).staffCount = staffSnap.size || (labInfo as any).staffCount || 1;
+        } catch {
+          // fallback
+        }
+
+        labsData.push(labInfo);
       }
-      
-      setStats({
-        totalLabs: labList.length,
-        totalPatients,
-        totalStaff,
-        totalRevenue: totalPatients * 1000 // 1000 FCFA per patient
-      });
-    } catch (error) {
-      console.error('Error fetching labs:', error);
-      Alert.alert('Error', 'Failed to load labs');
+
+      setLabs(labsData);
+    } catch (err) {
+      console.error('Error fetching network labs:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchLabs();
-    setRefreshing(false);
+  useEffect(() => {
+    fetchNetworkStats();
+  }, []);
+
+  const handleDeleteLab = async (labId: string, labName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${labName}"?`)) return;
+
+    try {
+      await deleteDoc(doc(db, 'labs', labId));
+      fetchNetworkStats();
+    } catch (err) {
+      console.error('Failed to delete lab:', err);
+    }
   };
 
-  const handleDeleteLab = (labId: string, labName: string) => {
-    Alert.alert(
-      'Delete Lab',
-      `Are you sure you want to delete "${labName}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'labs', labId));
-              Alert.alert('Success', 'Lab deleted successfully');
-              fetchLabs();
-            } catch (error) {
-              console.error('Error deleting lab:', error);
-              Alert.alert('Error', 'Failed to delete lab');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleCreateLab = () => {
-    navigation.navigate('LabRegistrationModal');
-  };
-
-  const handleLabPress = (lab: any) => {
-    navigation.navigate('LabDetailsScreen', { labId: lab.id });
-  };
-
-  if (loading) {
+  if (selectedLabId) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading labs...</Text>
-      </View>
+      <LabDetailsScreen 
+        labId={selectedLabId}
+        onBack={() => setSelectedLabId(null)}
+        onLabDeleted={() => {
+          setSelectedLabId(null);
+          fetchNetworkStats();
+        }}
+      />
     );
   }
 
+  // Aggregate metrics
+  const totalLabs = labs.length;
+  const totalPatients = labs.reduce((acc, l) => acc + (l.patientCount || 0), 0);
+  const totalStaff = labs.reduce((acc, l) => acc + (l.staffCount || 0), 0);
+  const totalRevenue = totalPatients * 1000; // 1,000 FCFA per patient
+
+  const filteredLabs = labs.filter(l => 
+    (l.name && l.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (l.location && l.location.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <Text style={styles.title}>👑 Super Admin</Text>
-        <Text style={styles.subtitle}>Manage all labs</Text>
-      </View>
+    <div className="space-y-6">
+      {/* Top Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold border border-teal-500/30">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-300" />
+              Super Administrator Control Panel
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Clinical Network Overseer
+            </h1>
+            <p className="text-slate-300 text-sm max-w-xl">
+              Monitor diagnostic health centers, provision new laboratory franchises, and track patient volume royalties.
+            </p>
+          </div>
 
-      <View style={styles.statsGrid}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="business" size={24} color="#2196F3" />
-          <Text style={styles.statNumber}>{stats.totalLabs}</Text>
-          <Text style={styles.statLabel}>Total Labs</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="people" size={24} color="#4CAF50" />
-          <Text style={styles.statNumber}>{stats.totalPatients}</Text>
-          <Text style={styles.statLabel}>Total Patients</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="person-add" size={24} color="#FF9800" />
-          <Text style={styles.statNumber}>{stats.totalStaff}</Text>
-          <Text style={styles.statLabel}>Total Staff</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="cash" size={24} color="#4CAF50" />
-          <Text style={styles.statNumber}>{stats.totalRevenue.toLocaleString()} FCFA</Text>
-          <Text style={styles.statLabel}>Total Revenue</Text>
-        </View>
-      </View>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setShowRegModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-2xl text-sm font-semibold shadow-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Register New Lab Center
+            </button>
+            <button
+              onClick={() => { setRefreshing(true); fetchNetworkStats(); }}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl border border-white/20 transition-colors cursor-pointer"
+              title="Refresh Network Data"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-300' : ''}`} />
+            </button>
+          </div>
+        </div>
+      </div>
 
-      <TouchableOpacity 
-        style={[styles.createButton, { backgroundColor: colors.primary }]}
-        onPress={handleCreateLab}
-      >
-        <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.createButtonText}>Create New Lab</Text>
-      </TouchableOpacity>
+      {/* Network Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{totalLabs}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Registered Labs</div>
+          </div>
+        </div>
 
-      <Text style={styles.sectionTitle}>All Labs</Text>
-      
-      {labs.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="business-outline" size={60} color="#ccc" />
-          <Text style={styles.emptyTitle}>No Labs Created</Text>
-          <Text style={styles.emptySubtext}>Click "Create New Lab" to get started</Text>
-        </View>
-      ) : (
-        labs.map((lab) => (
-          <TouchableOpacity
-            key={lab.id}
-            style={[styles.labItem, { backgroundColor: colors.surface }]}
-            onPress={() => handleLabPress(lab)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.labColor, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
-            <View style={styles.labInfo}>
-              <Text style={styles.labName}>{lab.name}</Text>
-              <Text style={styles.labLocation}>
-                <Ionicons name="location" size={12} color="#666" /> {lab.location || 'No location'}
-              </Text>
-              <Text style={styles.labStats}>
-                👥 {lab.patientCount || 0} patients • 👤 {lab.staffCount || 0} staff
-              </Text>
-            </View>
-            <View style={styles.labActions}>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </View>
-          </TouchableOpacity>
-        ))
-      )}
-    </ScrollView>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{totalPatients}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Network Patients</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
+            <UserCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{totalStaff}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Staff</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{totalRevenue.toLocaleString()} FCFA</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Royalty Earnings</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Labs List Section */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-teal-600" />
+            Registered Laboratory Centers
+          </h2>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search lab name or location..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="py-16 text-center text-slate-500">
+            <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            Loading network laboratory centers...
+          </div>
+        ) : filteredLabs.length === 0 ? (
+          <div className="py-16 text-center px-4">
+            <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="font-semibold text-slate-700">No laboratory centers registered yet</p>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+              Click "Register New Lab Center" to provision a brand-new medical laboratory in the network.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filteredLabs.map((labItem) => (
+              <div 
+                key={labItem.id} 
+                onClick={() => setSelectedLabId(labItem.id)}
+                className="p-5 hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+              >
+                <div className="flex items-start gap-4">
+                  <div 
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-xs"
+                    style={{ backgroundColor: labItem.primaryColor || '#0D9488' }}
+                  >
+                    {labItem.name ? labItem.name.charAt(0).toUpperCase() : 'L'}
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 text-base">{labItem.name}</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Active
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                      <span className="flex items-center gap-1 font-medium text-slate-700">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        {labItem.location || 'Central Region'}
+                      </span>
+                      <span>• Patients: <strong className="text-slate-900">{labItem.patientCount || 0}</strong></span>
+                      <span>• Staff: <strong className="text-slate-900">{labItem.staffCount || 1}</strong></span>
+                      <span>• Earnings: <strong className="text-teal-700">{((labItem.patientCount || 0) * 1000).toLocaleString()} FCFA</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                  <button
+                    onClick={(e) => handleDeleteLab(labItem.id, labItem.name, e)}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                    title="Delete Lab Center"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors">
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Registration Modal */}
+      <LabRegistrationModal 
+        isOpen={showRegModal}
+        onClose={() => setShowRegModal(false)}
+        onLabCreated={() => fetchNetworkStats()}
+      />
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  header: {
-    padding: 20,
-    paddingTop: 40,
-    paddingBottom: 30,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 10,
-  },
-  statCard: {
-    width: '47%',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginVertical: 4,
-    fontFamily: 'Poppins-Bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  createButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  labItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  labColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  labInfo: {
-    flex: 1,
-  },
-  labName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  labLocation: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  labStats: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  labActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-    marginHorizontal: 16,
-    backgroundColor: 'white',
-    borderRadius: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 15,
-    fontFamily: 'Poppins-Bold',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-    fontFamily: 'Poppins-Regular',
-  },
-});
-
-export default SuperAdminDashboard;

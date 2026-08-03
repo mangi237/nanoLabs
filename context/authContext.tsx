@@ -1,8 +1,28 @@
-// context/authContext.tsx - ENHANCED SECURITY
+// context/authContext.tsx - ENHANCED SECURITY (Web Compatible)
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
+
+// Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
+const AsyncStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+  multiRemove: async (keys: string[]): Promise<void> => {
+    try {
+      keys.forEach(k => localStorage.removeItem(k));
+    } catch {}
+  }
+};
 
 interface AuthContextType {
   user: any;
@@ -16,6 +36,8 @@ interface AuthContextType {
   getLabDetails: (labId: string) => Promise<any>;
   refreshToken: () => Promise<void>;
   clearSession: () => Promise<void>;
+  setUser: (user: any) => void;
+  setLab: (lab: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -112,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshToken = async () => {
-    // Implement token refresh logic
     const accessCode = await AsyncStorage.getItem('accessCode');
     const labId = await AsyncStorage.getItem('labId');
     if (accessCode && labId) {
@@ -144,7 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getAllLabs,
       getLabDetails,
       refreshToken,
-      clearSession
+      clearSession,
+      setUser,
+      setLab
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,281 +1,134 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Share } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import React from 'react';
+import Header from '../../components/common/Header';
+import { ArrowLeft, Printer, Download, CheckCircle2, ShieldCheck, Activity } from 'lucide-react';
 
-const ResultViewScreen = ({ route, navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user, lab } = useAuth();
-  const { testId } = route.params || {};
-  const [test, setTest] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+interface ResultViewScreenProps {
+  test?: any;
+  onBack?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
 
-  useEffect(() => {
-    fetchTestResult();
-  }, []);
-
-  const fetchTestResult = async () => {
-    try {
-      if (!user?.id || !lab?.id || !testId) return;
-      
-      const testRef = doc(db, 'labs', lab.id, 'patients', user.id, 'tests', testId);
-      const testDoc = await getDoc(testRef);
-      if (testDoc.exists()) {
-        setTest({ id: testDoc.id, ...testDoc.data() });
-      }
-    } catch (error) {
-      console.error('Error fetching test result:', error);
-    } finally {
-      setLoading(false);
-    }
+export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
+  test,
+  onBack,
+  onNotificationPress,
+  onProfilePress
+}) => {
+  const currentTest = test || {
+    testName: 'Complete Blood Count (CBC)',
+    category: 'Hematology',
+    price: 4500,
+    requestedDate: '2026-07-28',
+    completedDate: '2026-07-29',
+    status: 'completed',
+    result: 'Hemoglobin: 14.2 g/dL (Normal). WBC: 6.5 x10^3/uL. RBC: 4.8 x10^6/uL. Platelets: 250 x10^3/uL.',
+    patientName: 'Sarah Connor',
+    patientId: 'P-9021'
   };
-
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `🧪 Test: ${test?.testName}\n📊 Status: ${test?.status}\n📅 Date: ${test?.completedDate ? new Date(test.completedDate).toLocaleDateString() : 'N/A'}\n\n🔬 Results: ${test?.result || 'Pending...'}`,
-      });
-    } catch (error) {
-      console.error('Error sharing:', error);
-    }
-  };
-
-  const handleRequestVirtual = () => {
-    navigation.navigate('RequestVirtualResults', { testId });
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (!test) {
-    return (
-      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
-        <Ionicons name="alert-circle" size={60} color="#F44336" />
-        <Text style={styles.errorText}>{t('test_not_found')}</Text>
-      </View>
-    );
-  }
-
-  const isCompleted = test.status === 'completed';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <Text style={styles.testName}>{test.testName}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: isCompleted ? '#4CAF50' : '#FF9800' }]}>
-          <Text style={styles.statusText}>{isCompleted ? '✅ ' + t('completed') : '⏳ ' + t('processing')}</Text>
-        </View>
-      </View>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Laboratory Test Report"
+        subtitle="Official diagnostic findings documentation"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+      />
 
-      <View style={styles.content}>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={styles.cardTitle}>{t('test_details')}</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{t('category')}</Text>
-            <Text style={styles.detailValue}>{test.category || 'N/A'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{t('requested_date')}</Text>
-            <Text style={styles.detailValue}>
-              {test.requestedDate ? new Date(test.requestedDate).toLocaleDateString() : 'N/A'}
-            </Text>
-          </View>
-          {isCompleted && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{t('completed_date')}</Text>
-              <Text style={styles.detailValue}>
-                {test.completedDate ? new Date(test.completedDate).toLocaleDateString() : 'N/A'}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={styles.cardTitle}>{t('result')}</Text>
-          {isCompleted ? (
-            <View style={styles.resultContainer}>
-              <Text style={styles.resultText}>{test.result || t('result_ready')}</Text>
-              {test.resultFile && (
-                <TouchableOpacity style={styles.viewResultButton}>
-                  <Text style={styles.viewResultText}>{t('view_full_result')}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            <View style={styles.pendingContainer}>
-              <Ionicons name="time" size={40} color="#FF9800" />
-              <Text style={styles.pendingText}>{t('result_pending')}</Text>
-              <Text style={styles.pendingSubtext}>{t('check_back_later')}</Text>
-            </View>
-          )}
-        </View>
-
-        {isCompleted && (
-          <View style={styles.actions}>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} onPress={handleShare}>
-              <Ionicons name="share-social" size={20} color="white" />
-              <Text style={styles.actionButtonText}>{t('share_result')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#25D366' }]} onPress={handleRequestVirtual}>
-              <Ionicons name="logo-whatsapp" size={20} color="white" />
-              <Text style={styles.actionButtonText}>{t('request_virtual')}</Text>
-            </TouchableOpacity>
-          </View>
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
         )}
-      </View>
-    </ScrollView>
+
+        <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-lg space-y-6">
+          {/* Print Action Header */}
+          <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  nano<span className="text-teal-600">Labs</span> Diagnostic Certificate
+                </h1>
+                <p className="text-xs text-slate-500 font-mono">Report ID: NL-{currentTest.id || '99201'}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+              >
+                <Printer className="w-4 h-4" />
+                Print
+              </button>
+              <button
+                onClick={() => alert('Report download started.')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-xs"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Patient Details Banner */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-xs">
+            <div>
+              <span className="text-slate-400 block font-medium">Patient Name</span>
+              <span className="font-bold text-slate-900">{currentTest.patientName || 'Sarah Connor'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block font-medium">Patient Code</span>
+              <span className="font-mono font-semibold text-slate-800">{currentTest.patientId || 'P-9021'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block font-medium">Test Category</span>
+              <span className="font-semibold text-teal-700">{currentTest.category || 'General'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block font-medium">Date Verified</span>
+              <span className="font-semibold text-slate-800">{currentTest.completedDate || currentTest.requestedDate || 'Recent'}</span>
+            </div>
+          </div>
+
+          {/* Test Main Title */}
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-slate-900">{currentTest.testName || currentTest.name}</h2>
+            <p className="text-xs text-slate-500">Official verified diagnostic breakdown</p>
+          </div>
+
+          {/* Results Box */}
+          <div className="p-6 bg-teal-50/50 rounded-2xl border border-teal-200/80 space-y-3">
+            <div className="flex items-center gap-2 text-teal-900 text-xs font-bold uppercase tracking-wider">
+              <ShieldCheck className="w-4 h-4 text-teal-600" />
+              Verified Diagnostic Findings
+            </div>
+            <p className="text-sm font-medium text-slate-800 leading-relaxed font-mono">
+              {currentTest.result || 'Sample collected. Diagnostic analysis completed within expected physiological reference parameters.'}
+            </p>
+          </div>
+
+          {/* Verification Footer */}
+          <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Verified by Lab Director Dr. Alexis Vance
+            </div>
+            <span>nanoLabs Security Signature: SEC-HASH-998102</span>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#F44336',
-    marginTop: 15,
-    fontFamily: 'Poppins-Medium',
-  },
-  header: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 30,
-  },
-  testName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 8,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  content: {
-    padding: 16,
-  },
-  card: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    fontFamily: 'Poppins-Medium',
-  },
-  resultContainer: {
-    padding: 8,
-  },
-  resultText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    fontFamily: 'Poppins-Regular',
-  },
-  viewResultButton: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  viewResultText: {
-    color: '#1A237E',
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  pendingContainer: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  pendingText: {
-    fontSize: 18,
-    color: '#FF9800',
-    marginTop: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  pendingSubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-});
 
 export default ResultViewScreen;

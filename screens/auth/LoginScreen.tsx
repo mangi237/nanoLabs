@@ -1,33 +1,29 @@
-// screens/auth/LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Alert, 
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
+import { Activity, Building2, Key, ChevronDown, CheckCircle, Search, ArrowRight, Loader2, Shield } from 'lucide-react';
 
-const LoginScreen = ({ navigation }: any) => {
+interface LoginScreenProps {
+  onLoginSuccess?: (user: any) => void;
+  onNavigateRegister?: () => void;
+  onNavigateSelectLab?: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onLoginSuccess,
+  onNavigateRegister,
+  onNavigateSelectLab
+}) => {
   const { t } = useLanguage();
-  const { primaryColor } = useTheme();
-  const { login, isLoading, getAllLabs } = useAuth();
+  const { login, isLoading, getAllLabs, lab: currentLab } = useAuth();
   const [accessCode, setAccessCode] = useState('');
-  const [labId, setLabId] = useState('');
-  const [labName, setLabName] = useState('');
+  const [labId, setLabId] = useState(currentLab?.id || '');
+  const [labName, setLabName] = useState(currentLab?.name || '');
   const [showLabSelector, setShowLabSelector] = useState(false);
   const [labs, setLabs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     fetchLabs();
@@ -35,50 +31,37 @@ const LoginScreen = ({ navigation }: any) => {
 
   const fetchLabs = async () => {
     try {
-      const labList = await getAllLabs();
-      setLabs(labList || []);
-    } catch (error) {
-      console.error('Error fetching labs:', error);
+      const list = await getAllLabs();
+      setLabs(list || []);
+      if (list && list.length > 0 && !labId) {
+        setLabId(list[0].id);
+        setLabName(list[0].name);
+      }
+    } catch (e) {
+      console.error('Error fetching labs:', e);
     }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
     if (!accessCode.trim()) {
-      Alert.alert('Error', 'Please enter your access code');
+      setErrorMessage('Please enter your authorization access code.');
       return;
     }
 
     try {
-      console.log('🔍 Login with:', { accessCode, labId });
       const result = await login(accessCode, labId);
-      console.log('📦 Result:', result);
-      
-      if (result.success) {
-        const role = result.user?.role || result.user?.roles?.[0] || 'staff';
-        console.log('🎯 Role detected:', role);
-        
-        // Navigate based on role
-        switch(role) {
-          case 'patient':
-            console.log('➡️ Navigating to PatientDashboard');
-            navigation.replace('PatientDashboard');
-            break;
-          case 'superadmin':
-            console.log('➡️ Navigating to SuperAdminDashboard');
-            navigation.replace('SuperAdminDashboard');
-            break;
-          case 'admin':
-            console.log('➡️ Navigating to AdminDashboard');
-            navigation.replace('AdminDashboard');
-            break;
-          default:
-            console.log('➡️ Navigating to StaffDashboard');
-            navigation.replace('StaffDashboard');
+      if (result.success && result.user) {
+        if (onLoginSuccess) {
+          onLoginSuccess(result.user);
         }
+      } else {
+        setErrorMessage('Invalid access code or laboratory configuration.');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
-      Alert.alert('Error', error.message || 'Invalid credentials');
+      setErrorMessage(error?.message || 'Authentication failed. Please verify credentials.');
     }
   };
 
@@ -88,249 +71,141 @@ const LoginScreen = ({ navigation }: any) => {
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: primaryColor }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.loginContainer}>
-          <Image 
-            source={require('../../assets/images/logo.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.logoText}>🧪 nanoLabs</Text>
-          <Text style={styles.logoSubtitle}>Login to your lab</Text>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full mx-auto space-y-8">
+        {/* Brand Header */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-blue-600 text-white shadow-xl shadow-teal-500/25 mb-2">
+            <Activity className="w-8 h-8 stroke-[2.5]" />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            nano<span className="text-teal-400">Labs</span> Health Care
+          </h1>
+          <p className="text-sm text-slate-300">
+            Secure Portal Access & Laboratory Management
+          </p>
+        </div>
 
-          {/* Lab Selector */}
-          <TouchableOpacity 
-            style={styles.labSelector}
-            onPress={() => setShowLabSelector(!showLabSelector)}
-          >
-            <Ionicons name="business" size={20} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.labSelectorText}>
-              {labName || 'Select Your Lab'}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
-
-          {showLabSelector && (
-            <View style={styles.labListContainer}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search lab..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholderTextColor="rgba(0,0,0,0.5)"
-              />
-              <ScrollView style={{ maxHeight: 200 }}>
-                {filteredLabs.map((lab: any) => (
-                  <TouchableOpacity
-                    key={lab.id}
-                    style={styles.labItem}
-                    onPress={() => {
-                      setLabId(lab.id);
-                      setLabName(lab.name);
-                      setShowLabSelector(false);
-                      setSearchQuery('');
-                    }}
-                  >
-                    <View style={[styles.labColorDot, { backgroundColor: lab.primaryColor || '#1A237E' }]} />
-                    <View style={styles.labItemInfo}>
-                      <Text style={styles.labItemName}>{lab.name}</Text>
-                      <Text style={styles.labItemLocation}>{lab.location || 'No location'}</Text>
-                    </View>
-                    {labId === lab.id && (
-                      <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Access Code Input */}
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your access code"
-            value={accessCode}
-            onChangeText={setAccessCode}
-            secureTextEntry
-            autoCapitalize="characters"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-          />
-
-          {/* Super Admin Hint */}
-          <Text style={styles.superAdminHint}>
-            👑 Super Admin: Use "SUPER123"
-          </Text>
-
-          {/* Login Button */}
-          <TouchableOpacity 
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#1A237E" />
-            ) : (
-              <Text style={styles.loginButtonText}>Login</Text>
+        {/* Login Form Card */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/15 p-8 rounded-3xl shadow-2xl space-y-6">
+          <form onSubmit={handleLogin} className="space-y-5">
+            {errorMessage && (
+              <div className="p-3.5 bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs rounded-2xl font-medium">
+                {errorMessage}
+              </div>
             )}
-          </TouchableOpacity>
 
-          {/* Register Link */}
-          <TouchableOpacity 
-            style={styles.registerButton}
-            onPress={() => navigation.navigate('RegisterScreen')}
-          >
-            <Text style={styles.registerText}>
-              New patient? Register here
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {/* Lab Selector Dropdown Button */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+                Laboratory Location
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowLabSelector(!showLabSelector)}
+                className="w-full flex items-center justify-between p-3.5 bg-white/10 hover:bg-white/15 border border-white/20 rounded-2xl text-left text-sm text-white transition-all"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Building2 className="w-4 h-4 text-teal-400 shrink-0" />
+                  <span className="truncate">{labName || 'Select Laboratory Center'}</span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showLabSelector ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Lab Selector Dropdown Overlay */}
+              {showLabSelector && (
+                <div className="mt-2 bg-slate-900 border border-slate-700/80 rounded-2xl p-3 shadow-2xl space-y-2 z-20 relative animate-in fade-in zoom-in-95 duration-150">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      placeholder="Search laboratory..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    />
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                    {filteredLabs.map((l: any) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => {
+                          setLabId(l.id);
+                          setLabName(l.name);
+                          setShowLabSelector(false);
+                          setSearchQuery('');
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs text-left transition-colors ${
+                          labId === l.id ? 'bg-teal-600/30 text-teal-300 font-semibold' : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="truncate">
+                          <div className="truncate">{l.name}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{l.location}</div>
+                        </div>
+                        {labId === l.id && <CheckCircle className="w-4 h-4 text-teal-400 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Access Code Input */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+                Access Security Code
+              </label>
+              <div className="relative">
+                <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="password"
+                  placeholder="Enter your security code"
+                  value={accessCode}
+                  onChange={e => setAccessCode(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-slate-400 text-sm tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Note: Super admin password hint HAS BEEN REMOVED per user prompt request */}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3.5 px-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  Access Portal
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Register Redirect */}
+          <div className="pt-4 border-t border-white/10 text-center">
+            <button
+              type="button"
+              onClick={onNavigateRegister}
+              className="text-xs text-teal-300 hover:text-white font-medium transition-colors hover:underline"
+            >
+              New patient? Register your profile here
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  loginContainer: {
-    width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
-    alignItems: 'center',
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 10,
-  },
-  logoText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  logoSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 30,
-    fontFamily: 'Poppins-Regular',
-  },
-  labSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    padding: 16,
-    width: '100%',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  labSelectorText: {
-    flex: 1,
-    color: 'white',
-    fontSize: 16,
-    marginLeft: 10,
-    fontFamily: 'Poppins-Regular',
-  },
-  labListContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    padding: 12,
-    width: '100%',
-    maxHeight: 300,
-    marginBottom: 16,
-    position: 'absolute',
-    top: 200,
-    zIndex: 1000,
-    elevation: 5,
-  },
-  searchInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 10,
-    fontFamily: 'Poppins-Regular',
-  },
-  labItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  labColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  labItemInfo: {
-    flex: 1,
-  },
-  labItemName: {
-    fontSize: 14,
-    color: '#333',
-    fontFamily: 'Poppins-Medium',
-  },
-  labItemLocation: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 12,
-    padding: 16,
-    width: '100%',
-    marginBottom: 12,
-    fontSize: 16,
-    color: 'white',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    fontFamily: 'Poppins-Regular',
-  },
-  superAdminHint: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 11,
-    marginBottom: 16,
-    fontFamily: 'Poppins-Regular',
-  },
-  loginButton: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  loginButtonText: {
-    color: '#1A237E',
-    fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-  },
-  registerButton: {
-    padding: 8,
-  },
-  registerText: {
-    color: 'white',
-    fontSize: 14,
-    textDecorationLine: 'underline',
-    fontFamily: 'Poppins-Regular',
-  },
-});
 
 export default LoginScreen;

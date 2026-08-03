@@ -1,0 +1,7 @@
+{
+    "name": "nanoLabs Healthcare",
+    "description": "Modern Medical Laboratory & Hospital Management System with multi-role access, patient management, analytics, and billing.",
+    "requestFramePermissions": [],
+    "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  }
+  

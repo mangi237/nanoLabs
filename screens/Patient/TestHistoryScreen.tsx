@@ -1,175 +1,136 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, getDocs, collection } from '../../services/firebase';
+import { TestTube, Search, ChevronRight, FileText, ArrowLeft, Download, CheckCircle2 } from 'lucide-react';
 
-const TestHistoryScreen = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
+interface TestHistoryScreenProps {
+  onBack?: () => void;
+  onSelectTest?: (test: any) => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
+
+export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
+  onBack,
+  onSelectTest,
+  onNotificationPress,
+  onProfilePress
+}) => {
   const { user, lab } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchTests();
-  }, []);
+  }, [user?.id]);
 
   const fetchTests = async () => {
     try {
-      if (!user?.id || !lab?.id) return;
-      
-      const testsRef = collection(db, 'labs', lab.id, 'patients', user.id, 'tests');
-      const snapshot = await getDocs(testsRef);
-      const testList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTests(testList);
-    } catch (error) {
-      console.error('Error fetching tests:', error);
+      setLoading(true);
+      const snap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
+      const found = snap.docs.find(d => d.data().email === user?.email || d.data().name === user?.name);
+      if (found && found.data().labTests) {
+        setTests(found.data().labTests);
+      } else {
+        setTests([]);
+      }
+    } catch (e) {
+      setTests([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'completed': return '#4CAF50';
-      case 'processing': return '#FF9800';
-      case 'collected': return '#2196F3';
-      case 'requested': return '#9E9E9E';
-      default: return '#9E9E9E';
-    }
-  };
-
-  const renderTestItem = ({ item }: any) => (
-    <TouchableOpacity 
-      style={[styles.testItem, { backgroundColor: colors.surface }]}
-      onPress={() => navigation.navigate('ResultViewScreen', { testId: item.id })}
-    >
-      <View style={styles.testInfo}>
-        <Text style={styles.testName}>{item.testName}</Text>
-        <Text style={styles.testCategory}>{item.category}</Text>
-        <Text style={styles.testDate}>
-          {item.requestedDate ? new Date(item.requestedDate).toLocaleDateString() : 'N/A'}
-        </Text>
-      </View>
-      <View style={styles.testStatus}>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status || 'requested'}</Text>
-        </View>
-        {item.status === 'completed' && (
-          <Ionicons name="chevron-forward" size={20} color="#999" />
-        )}
-      </View>
-    </TouchableOpacity>
+  const filteredTests = tests.filter(t =>
+    (t.testName || t.name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={tests}
-        renderItem={renderTestItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="flask-outline" size={60} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_tests_found')}</Text>
-            <Text style={styles.emptySubtext}>{t('no_tests_history')}</Text>
-          </View>
-        }
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Laboratory Test History"
+        subtitle="Complete history of medical lab reports & diagnostics"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
-    </View>
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">My Lab Test Records</h2>
+            <p className="text-xs text-slate-500">View diagnostic findings, prices & results</p>
+          </div>
+          <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+            {filteredTests.length} Tests Recorded
+          </span>
+        </div>
+
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <input
+            type="text"
+            placeholder="Search test reports by name or category..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+          />
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden divide-y divide-slate-100">
+          {filteredTests.map(test => (
+            <div
+              key={test.id}
+              onClick={() => onSelectTest && onSelectTest(test)}
+              className="p-5 flex items-center justify-between gap-4 hover:bg-teal-50/40 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+                  <TestTube className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <h3 className="font-bold text-slate-900 text-sm truncate">
+                    {test.testName || test.name}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Category: {test.category || 'General'} • Requested: {test.requestedDate || 'Recent'}
+                  </p>
+                  {test.result && (
+                    <p className="text-xs text-slate-700 font-medium truncate max-w-md bg-slate-50 px-2.5 py-1 rounded border border-slate-200">
+                      Result: {test.result}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  test.status === 'completed'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {test.status || 'Processing'}
+                </span>
+                <ChevronRight className="w-5 h-5 text-slate-400" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 16,
-  },
-  testItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  testInfo: {
-    flex: 1,
-  },
-  testName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  testCategory: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  testDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  testStatus: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 50,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 15,
-    fontFamily: 'Poppins-Medium',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 5,
-    fontFamily: 'Poppins-Regular',
-  },
-});
 
 export default TestHistoryScreen;

@@ -1,149 +1,117 @@
-// screens/staff/RoleSwitcher.tsx - FIXED
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
+import { Shield, User, DollarSign, Microscope, TestTube, Package, Check, ArrowLeft, Activity } from 'lucide-react';
+import Header from '../../components/common/Header';
 
-const RoleSwitcher = ({ navigation, route }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user } = useAuth();
+interface RoleSwitcherProps {
+  onBack?: () => void;
+  onRoleSwitched?: (role: string) => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
 
-  const roles = user?.roles || [user?.primaryRole || 'receptionist'];
-  const currentRole = route.params?.currentRole || roles[0];
+export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
+  onBack,
+  onRoleSwitched,
+  onNotificationPress,
+  onProfilePress
+}) => {
+  const { user, setUser } = useAuth();
 
-  const roleIcons: { [key: string]: string } = {
-    receptionist: 'person-outline',
-    cashier: 'cash-outline',
-    analyzer: 'flask-outline',
-    lab_tech: 'medical-outline',
-    admin: 'shield-outline',
+  const availableRoles = [
+    { value: 'admin', label: 'Admin Administrator', icon: Shield, desc: 'Full hospital control, staff management & analytics' },
+    { value: 'receptionist', label: 'Receptionist Intake', icon: User, desc: 'Patient admissions & sample intake processing' },
+    { value: 'cashier', label: 'Cashier & Billing', icon: DollarSign, desc: 'Billing invoices & payment collection' },
+    { value: 'analyzer', label: 'Laboratory Analyzer', icon: Microscope, desc: 'Sample verification & diagnostic result entry' },
+    { value: 'lab_tech', label: 'Lab Technician', icon: TestTube, desc: 'Specimen processing & testing workflow' },
+    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, desc: 'Stock level monitoring & reorder orders' },
+    { value: 'patient', label: 'Patient Portal', icon: Activity, desc: 'Personal test history & appointment booking' },
+  ];
+
+  const userRoles = user?.roles || [user?.role || 'admin'];
+
+  const handleSelectRole = (roleValue: string) => {
+    if (user) {
+      setUser({
+        ...user,
+        role: roleValue as any
+      });
+      if (onRoleSwitched) onRoleSwitched(roleValue);
+      else if (onBack) onBack();
+    }
   };
-
-  const roleNames: { [key: string]: string } = {
-    receptionist: 'Receptionist',
-    cashier: 'Cashier',
-    analyzer: 'Analyzer',
-    lab_tech: 'Lab Technician',
-    admin: 'Admin',
-  };
-
-  const handleSwitchRole = (role: string) => {
-    navigation.replace('StaffDashboard', { activeRole: role });
-  };
-
-  const renderRoleItem = ({ item }: any) => (
-    <TouchableOpacity 
-      style={[
-        styles.roleItem, 
-        { backgroundColor: currentRole === item ? colors.primary : colors.surface },
-        currentRole === item && styles.roleItemActive
-      ]}
-      onPress={() => handleSwitchRole(item)}
-    >
-      <View style={[styles.roleIcon, { backgroundColor: currentRole === item ? 'rgba(255,255,255,0.2)' : colors.primary + '20' }]}>
-        <Ionicons 
-          name={roleIcons[item] || 'person'} 
-          size={28} 
-          color={currentRole === item ? 'white' : colors.primary} 
-        />
-      </View>
-      <View style={styles.roleInfo}>
-        <Text style={[styles.roleName, currentRole === item && styles.roleNameActive]}>
-          {roleNames[item] || item}
-        </Text>
-        <Text style={[styles.roleDescription, currentRole === item && styles.roleDescriptionActive]}>
-          {currentRole === item ? 'Active Role' : 'Switch to this role'}
-        </Text>
-      </View>
-      {currentRole === item && (
-        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-      )}
-    </TouchableOpacity>
-  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>🔄 Switch Role</Text>
-        <Text style={styles.subtitle}>Select which role you want to use</Text>
-      </View>
-
-      <FlatList
-        data={roles}
-        renderItem={renderRoleItem}
-        keyExtractor={item => item}
-        contentContainerStyle={styles.listContent}
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Role Switcher"
+        subtitle="Switch active operational view & permissions"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
-    </View>
+
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+        )}
+
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Switch Workspace Role</h2>
+            <p className="text-xs text-slate-500">Select an authorized role context for your session</p>
+          </div>
+
+          <div className="space-y-3">
+            {availableRoles.map(role => {
+              const Icon = role.icon;
+              const isActive = user?.role === role.value;
+              const isAssigned = userRoles.includes(role.value as any) || user?.role === 'admin' || user?.role === 'superadmin';
+
+              return (
+                <button
+                  key={role.value}
+                  onClick={() => isAssigned && handleSelectRole(role.value)}
+                  disabled={!isAssigned}
+                  className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between gap-4 transition-all ${
+                    isActive
+                      ? 'border-teal-600 bg-teal-50/80 shadow-xs'
+                      : isAssigned
+                      ? 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'
+                      : 'border-slate-100 bg-slate-50 opacity-40 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className={`p-2.5 rounded-xl border ${isActive ? 'bg-teal-600 text-white border-teal-600' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-sm truncate">{role.label}</span>
+                        {isActive && (
+                          <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full">
+                            Active Role
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 truncate">{role.desc}</p>
+                    </div>
+                  </div>
+
+                  {isActive && <Check className="w-5 h-5 text-teal-600 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    padding: 20,
-    paddingTop: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-  },
-  roleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-  },
-  roleItemActive: {
-    elevation: 4,
-  },
-  roleIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  roleInfo: {
-    flex: 1,
-  },
-  roleName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  roleNameActive: {
-    color: 'white',
-  },
-  roleDescription: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  roleDescriptionActive: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-});
 
 export default RoleSwitcher;

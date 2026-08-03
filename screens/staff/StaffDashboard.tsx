@@ -1,267 +1,117 @@
-// screens/staff/StaffDashboard.tsx - COMPLETE FIX
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { 
+  Building2, 
+  User, 
+  DollarSign, 
+  Microscope, 
+  TestTube, 
+  RefreshCw, 
+  ChevronRight,
+  ShieldCheck,
+  CheckCircle2,
+  Clock
+} from 'lucide-react';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
+import { ReceptionistView } from './ReceptionistView';
+import { CashierView } from './CashierView';
+import { AnalyzerView } from './AnalyzerView';
+import { LabTechView } from './LabTechView';
 
-const StaffDashboard = ({ navigation, route }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
+interface StaffDashboardProps {
+  onNavigate?: (screen: string, params?: any) => void;
+  onOpenRoleSwitcher?: () => void;
+}
+
+export const StaffDashboard: React.FC<StaffDashboardProps> = ({
+  onNavigate,
+  onOpenRoleSwitcher
+}) => {
   const { user, lab } = useAuth();
-  
-  // Get roles from user data
-  const userRoles = user?.roles || [user?.primaryRole || 'receptionist'];
-  const [activeRole, setActiveRole] = useState(route.params?.activeRole || userRoles[0]);
+  const activeRole = user?.role || 'receptionist';
 
-  // Update active role when route params change
-  useEffect(() => {
-    if (route.params?.activeRole) {
-      setActiveRole(route.params.activeRole);
-    }
-  }, [route.params?.activeRole]);
+  // Sub-tab selection when viewing overall staff dashboard
+  const [selectedWorkstation, setSelectedWorkstation] = useState<string>(activeRole);
 
-  // Navigate to role-specific view
-  const renderRoleView = () => {
-    switch(activeRole) {
-      case 'receptionist':
-        return navigation.navigate('ReceptionistView');
-      case 'cashier':
-        return navigation.navigate('CashierView');
-      case 'analyzer':
-        return navigation.navigate('AnalyzerView');
-      case 'lab_tech':
-        return navigation.navigate('LabTechView');
-      default:
-        return navigation.navigate('ReceptionistView');
-    }
-  };
+  const rolesConfig = [
+    { id: 'receptionist', label: 'Receptionist', icon: User, color: 'text-teal-600 bg-teal-50 border-teal-200' },
+    { id: 'cashier', label: 'Cashier', icon: DollarSign, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+    { id: 'analyzer', label: 'Analyzer', icon: Microscope, color: 'text-purple-600 bg-purple-50 border-purple-200' },
+    { id: 'lab_tech', label: 'Lab Tech', icon: TestTube, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+  ];
 
-  const handleRoleSwitch = (role: string) => {
-    setActiveRole(role);
-    // Navigate to the same screen with role param to refresh view
-    navigation.replace('StaffDashboard', { activeRole: role });
-  };
+  const currentRoleObj = rolesConfig.find(r => r.id === selectedWorkstation) || rolesConfig[0];
+  const CurrentIcon = currentRoleObj.icon;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <View>
-          <Text style={styles.greeting}>👋 Welcome,</Text>
-          <Text style={styles.userName}>{user?.name || 'Staff'}</Text>
-          <Text style={styles.roleLabel}>{activeRole.toUpperCase()}</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.switchButton}
-          onPress={() => navigation.navigate('RoleSwitcher', { currentRole: activeRole })}
-        >
-          <Ionicons name="swap-horizontal" size={20} color="white" />
-          <Text style={styles.switchText}>Switch</Text>
-        </TouchableOpacity>
-      </View>
+    <div className="space-y-6">
+      {/* Staff Header & Lab Badge */}
+      <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold border border-teal-500/30">
+              <Building2 className="w-3.5 h-3.5" />
+              {lab?.name || user?.labName || 'nanoLabs Health Network'}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Welcome back, {user?.name || 'Staff Member'}
+            </h1>
+            <p className="text-teal-100/80 text-sm max-w-xl">
+              Access staff workstations, register patients, process samples, and manage lab billing.
+            </p>
+          </div>
 
-      {/* Lab Info */}
-      <View style={styles.labCard}>
-        <Text style={styles.labName}>🧪 {lab?.name || 'Lab'}</Text>
-        <Text style={styles.labLocation}>{lab?.location || 'Location'}</Text>
-      </View>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={onOpenRoleSwitcher}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs sm:text-sm font-semibold border border-white/20 transition-all cursor-pointer backdrop-blur-xs"
+            >
+              <ShieldCheck className="w-4 h-4 text-teal-300" />
+              Active Role: <span className="uppercase tracking-wider font-bold text-teal-300">{user?.role || 'Staff'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
-      {/* Quick Stats for current role */}
-      <View style={styles.quickStats}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="people" size={24} color={colors.primary} />
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>{t('patients')}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="flask" size={24} color={colors.primary} />
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>{t('pending_tests')}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>{t('completed')}</Text>
-        </View>
-      </View>
+      {/* Workstation Selector Tabs */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap sm:flex-nowrap gap-2">
+        {rolesConfig.map((role) => {
+          const Icon = role.icon;
+          const isSelected = selectedWorkstation === role.id;
 
-      {/* Role-specific content */}
-      <View style={styles.roleContent}>
-        {activeRole === 'receptionist' && <ReceptionistContent navigation={navigation} />}
-        {activeRole === 'cashier' && <CashierContent navigation={navigation} />}
-        {activeRole === 'analyzer' && <AnalyzerContent navigation={navigation} />}
-        {activeRole === 'lab_tech' && <LabTechContent navigation={navigation} />}
-      </View>
-    </View>
+          return (
+            <button
+              key={role.id}
+              onClick={() => setSelectedWorkstation(role.id)}
+              className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-teal-700 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+              <span>{role.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Render Active Workstation View */}
+      <div className="pt-2">
+        {selectedWorkstation === 'receptionist' && (
+          <ReceptionistView 
+            onNavigatePatientDetails={(patientId) => onNavigate?.('PatientDetailsScreen', { patientId })}
+          />
+        )}
+        {selectedWorkstation === 'cashier' && (
+          <CashierView />
+        )}
+        {selectedWorkstation === 'analyzer' && (
+          <AnalyzerView />
+        )}
+        {selectedWorkstation === 'lab_tech' && (
+          <LabTechView />
+        )}
+      </div>
+    </div>
   );
 };
-
-// Role-specific content components
-const ReceptionistContent = ({ navigation }: any) => (
-  <View style={styles.rolePanel}>
-    <Text style={styles.roleTitle}>👤 Receptionist Dashboard</Text>
-    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('PatientManagement')}>
-      <Ionicons name="people" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>View Patients</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('RegisterPatientScreen')}>
-      <Ionicons name="person-add" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>Register Patient</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-const CashierContent = ({ navigation }: any) => (
-  <View style={styles.rolePanel}>
-    <Text style={styles.roleTitle}>💰 Cashier Dashboard</Text>
-    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('BillingScreen')}>
-      <Ionicons name="cash" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>Process Payments</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={styles.actionCard}>
-      <Ionicons name="receipt" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>View Transactions</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-const AnalyzerContent = ({ navigation }: any) => (
-  <View style={styles.rolePanel}>
-    <Text style={styles.roleTitle}>🔬 Analyzer Dashboard</Text>
-    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('SampleCollectionScreen')}>
-      <Ionicons name="flask" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>Collect Samples</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-const LabTechContent = ({ navigation }: any) => (
-  <View style={styles.rolePanel}>
-    <Text style={styles.roleTitle}>🧪 Lab Technician Dashboard</Text>
-    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('TestProcessingScreen')}>
-      <Ionicons name="medical" size={24} color="#1A237E" />
-      <Text style={styles.actionText}>Process Tests</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 30,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  greeting: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-  },
-  userName: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  roleLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  switchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  switchText: {
-    color: 'white',
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-  },
-  labCard: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    elevation: 2,
-  },
-  labName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  labLocation: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  quickStats: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginVertical: 4,
-    fontFamily: 'Poppins-Bold',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  roleContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 30,
-  },
-  rolePanel: {
-    gap: 12,
-  },
-  roleTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 8,
-    fontFamily: 'Poppins-Bold',
-  },
-  actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    elevation: 2,
-  },
-  actionText: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'Poppins-Medium',
-  },
-});
-
-export default StaffDashboard;

@@ -1,460 +1,124 @@
-// screens/ProfileScreen.tsx
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  RefreshControl
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import Header from '../components/common/Header';
 import { useAuth } from '../context/authContext';
-import { useLanguage } from '../context/languageContext';
-import { useTheme } from '../context/themeContext';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { User, Mail, Phone, Shield, Building2, Key, LogOut, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 
-const ProfileScreen = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
+interface ProfileScreenProps {
+  onBack?: () => void;
+  onNavigateRoleSwitcher?: () => void;
+  onLogout?: () => void;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  onBack,
+  onNavigateRoleSwitcher,
+  onLogout
+}) => {
   const { user, lab, logout } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: ''
-  });
 
-  useEffect(() => {
-    if (user) {
-      setFormData({
-        name: user.name || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || ''
-      });
-    }
-  }, [user]);
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      Alert.alert('Error', 'Name is required');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Update user in Firestore
-      const userRef = doc(db, 'labs', lab?.id, 'staff', user.id);
-      await updateDoc(userRef, {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        updatedAt: new Date().toISOString()
-      });
-
-      Alert.alert('✅ Success', 'Profile updated successfully');
-      setIsEditing(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'LoginScreen' }],
-            });
-          }
-        }
-      ]
-    );
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    // Refresh user data
-    if (user?.id && lab?.id) {
-      try {
-        const userRef = doc(db, 'labs', lab.id, 'staff', user.id);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setFormData({
-            name: data.name || '',
-            email: data.email || '',
-            phone: data.phone || '',
-            address: data.address || ''
-          });
-        }
-      } catch (error) {
-        console.error('Error refreshing profile:', error);
-      }
-    }
-    setRefreshing(false);
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const getRoleDisplay = (role: string) => {
-    const roleMap: { [key: string]: string } = {
-      receptionist: 'Receptionist',
-      cashier: 'Cashier',
-      analyzer: 'Analyzer',
-      lab_tech: 'Lab Technician',
-      admin: 'Admin',
-      superadmin: 'Super Admin',
-      patient: 'Patient'
-    };
-    return roleMap[role] || role;
+  const handleLogoutAction = async () => {
+    await logout();
+    if (onLogout) onLogout();
   };
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Profile Settings"
+        subtitle="Manage personal credentials & active workspace"
+      />
 
-      {/* Avatar Section */}
-      <View style={styles.avatarSection}>
-        <View style={[styles.avatarContainer, { backgroundColor: colors.primary + '20' }]}>
-          <Text style={styles.avatarText}>{getInitials(formData.name || 'User')}</Text>
-        </View>
-        <Text style={styles.userName}>{formData.name || 'User'}</Text>
-        <Text style={styles.userRole}>{getRoleDisplay(user?.role || 'staff')}</Text>
-        <Text style={styles.userLab}>🏥 {lab?.name || 'Lab'}</Text>
-      </View>
-
-      {/* Profile Info */}
-      <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-        <View style={styles.infoHeader}>
-          <Text style={styles.infoTitle}>Personal Information</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => setIsEditing(!isEditing)}
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
           >
-            <Ionicons name={isEditing ? 'close' : 'pencil'} size={20} color={colors.primary} />
-            <Text style={[styles.editText, { color: colors.primary }]}>
-              {isEditing ? 'Cancel' : 'Edit'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {isEditing ? (
-          <View style={styles.editForm}>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background }]}
-              placeholder="Full Name"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background }]}
-              placeholder="Email"
-              value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background }]}
-              placeholder="Phone"
-              value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              keyboardType="phone-pad"
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background }]}
-              placeholder="Address"
-              value={formData.address}
-              onChangeText={(text) => setFormData({ ...formData, address: text })}
-              multiline
-              numberOfLines={2}
-            />
-            <TouchableOpacity 
-              style={[styles.saveButton, { backgroundColor: colors.primary }]}
-              onPress={handleSave}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.infoRows}>
-            <View style={styles.infoRow}>
-              <Ionicons name="person" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Full Name</Text>
-                <Text style={styles.infoValue}>{formData.name || 'N/A'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="mail" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{formData.email || 'N/A'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="call" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{formData.phone || 'N/A'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="location" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{formData.address || 'N/A'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="business" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Lab</Text>
-                <Text style={styles.infoValue}>{lab?.name || 'N/A'}</Text>
-              </View>
-            </View>
-          </View>
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
         )}
-      </View>
 
-      {/* Account Actions */}
-      <View style={[styles.actionsCard, { backgroundColor: colors.surface }]}>
-        <Text style={styles.actionsTitle}>Account</Text>
-        
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="key" size={20} color="#1A237E" />
-          <Text style={styles.actionText}>Change Password</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+        {/* Profile Info Header */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-extrabold text-2xl shadow-md">
+              {user?.name ? user.name.slice(0, 2).toUpperCase() : 'NL'}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">{user?.name || 'Authorized Staff'}</h1>
+              <p className="text-xs text-teal-600 font-semibold capitalize mt-0.5">
+                Role: {user?.role?.replace('_', ' ') || 'Staff Member'}
+              </p>
+              <p className="text-xs text-slate-400 font-medium">
+                Lab Center: {lab?.name || 'nanoLabs Central Diagnostics'}
+              </p>
+            </div>
+          </div>
 
-        <TouchableOpacity 
-          style={[styles.actionItem, styles.logoutItem]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out" size={20} color="#F44336" />
-          <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-      </View>
+          {/* User Attributes Grid */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Personal & Security Information</h3>
 
-      {/* Version Info */}
-      <Text style={styles.versionText}>Version 1.0.0</Text>
-    </ScrollView>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                <Mail className="w-4 h-4 text-teal-600 shrink-0" />
+                <div>
+                  <span className="text-slate-400 block text-[10px] font-semibold">Email Address</span>
+                  <span className="font-semibold text-slate-800">{user?.email || 'user@nanolabs.com'}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                <Phone className="w-4 h-4 text-teal-600 shrink-0" />
+                <div>
+                  <span className="text-slate-400 block text-[10px] font-semibold">Phone Number</span>
+                  <span className="font-semibold text-slate-800">{user?.phone || '+237 670000000'}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                <Key className="w-4 h-4 text-amber-500 shrink-0" />
+                <div>
+                  <span className="text-slate-400 block text-[10px] font-semibold">Security Access Code</span>
+                  <span className="font-mono font-bold text-slate-900">{user?.accessCode || 'SUPER123'}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                <div>
+                  <span className="text-slate-400 block text-[10px] font-semibold">Assigned Lab ID</span>
+                  <span className="font-semibold text-slate-800">{lab?.id || 'lab-1'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {onNavigateRoleSwitcher && (
+              <button
+                onClick={onNavigateRoleSwitcher}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-semibold border border-teal-200 transition-all"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Switch Active Role
+              </button>
+            )}
+
+            <button
+              onClick={handleLogoutAction}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold border border-rose-200 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out of Portal
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 50,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  avatarSection: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  avatarContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  userRole: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  userLab: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  infoCard: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  editText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  infoRows: {
-    gap: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    fontFamily: 'Poppins-Regular',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#333',
-    fontFamily: 'Poppins-Regular',
-  },
-  editForm: {
-    gap: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    fontFamily: 'Poppins-Regular',
-  },
-  saveButton: {
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  actionsCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  actionsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  logoutItem: {
-    borderBottomWidth: 0,
-  },
-  actionText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 12,
-    fontFamily: 'Poppins-Regular',
-  },
-  logoutText: {
-    color: '#F44336',
-  },
-  versionText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 12,
-    marginBottom: 20,
-    fontFamily: 'Poppins-Regular',
-  },
-});
 
 export default ProfileScreen;

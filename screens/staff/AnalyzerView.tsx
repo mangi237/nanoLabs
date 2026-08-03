@@ -1,265 +1,271 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { 
+  Microscope, 
+  CheckCircle2, 
+  Clock, 
+  Search, 
+  RefreshCw, 
+  Syringe, 
+  User, 
+  AlertCircle
+} from 'lucide-react';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
 
-const AnalyzerView = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user, lab } = useAuth();
+interface AnalyzerViewProps {
+  onNavigate?: (screen: string, params?: any) => void;
+}
+
+export const AnalyzerView: React.FC<AnalyzerViewProps> = () => {
+  const { lab, user } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  useEffect(() => {
-    fetchTests();
-  }, []);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'pending' | 'collected'>('pending');
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const fetchTests = async () => {
     try {
-      if (!lab?.id) return;
-      
-      const patientsRef = collection(db, 'labs', lab.id, 'patients');
-      const patientsSnapshot = await getDocs(patientsRef);
-      
-      let allTests: any[] = [];
-      
-      for (const patientDoc of patientsSnapshot.docs) {
-        const testsRef = collection(db, 'labs', lab.id, 'patients', patientDoc.id, 'tests');
-        const testsSnapshot = await getDocs(testsRef);
-        const patientTests = testsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          patientId: patientDoc.id,
-          patientName: patientDoc.data().name
-        }));
-        allTests = [...allTests, ...patientTests];
-      }
-      
+      setLoading(true);
+      const patientsSnapshot = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
+      const allTests: any[] = [];
+
+      patientsSnapshot.docs.forEach(docSnap => {
+        const patientData = docSnap.data();
+        if (patientData.labTests && Array.isArray(patientData.labTests)) {
+          patientData.labTests.forEach((test: any) => {
+            allTests.push({
+              ...test,
+              patientId: docSnap.id,
+              patientName: patientData.name || patientData.fullName || 'Unknown Patient',
+              patientCode: patientData.patientId || 'P-000',
+              age: patientData.age,
+              gender: patientData.gender
+            });
+          });
+        }
+      });
+
       setTests(allTests);
-    } catch (error) {
-      console.error('Error fetching tests:', error);
+    } catch (err) {
+      console.error('Error fetching sample collection tests:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchTests();
-    setRefreshing(false);
-  };
+  useEffect(() => {
+    fetchTests();
+  }, [lab?.id]);
 
-  const handleCollectSample = async (test: any) => {
+  const handleCollectSpecimen = async (test: any) => {
+    setProcessingId(`${test.patientId}-${test.id}`);
     try {
-      if (!lab?.id) return;
-      
-      const testRef = doc(db, 'labs', lab.id, 'patients', test.patientId, 'tests', test.id);
-      await updateDoc(testRef, {
-        status: 'collected',
-        collectedDate: new Date().toISOString(),
-        collectedBy: user?.id
-      });
-      
-      await fetchTests();
-    } catch (error) {
-      console.error('Error collecting sample:', error);
+      const patientRef = doc(db, 'labs', lab?.id || 'lab-1', 'patients', test.patientId);
+      const patientsSnap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
+      const targetDoc = patientsSnap.docs.find(d => d.id === test.patientId);
+
+      if (targetDoc) {
+        const patientData = targetDoc.data();
+        const updatedTests = (patientData.labTests || []).map((t: any) => {
+          if (t.id === test.id) {
+            return {
+              ...t,
+              status: 'collected',
+              sampleCollected: true,
+              collectedDate: new Date().toISOString().split('T')[0],
+              collectedBy: user?.name || 'Phlebotomist/Analyzer'
+            };
+          }
+          return t;
+        });
+        await updateDoc(patientRef, { labTests: updatedTests });
+      }
+
+      fetchTests();
+    } catch (err) {
+      console.error('Failed to collect specimen:', err);
+      alert('Failed to mark sample as collected. Please try again.');
+    } finally {
+      setProcessingId(null);
     }
   };
 
-  const pendingTests = tests.filter(t => t.status === 'requested' || t.status === 'paid');
-  const collectedTests = tests.filter(t => t.status === 'collected');
+  const pendingCollection = tests.filter(t => t.status === 'requested' || !t.sampleCollected);
+  const collectedSamples = tests.filter(t => t.sampleCollected || t.status === 'collected' || t.status === 'completed');
 
-  const renderTestItem = ({ item }: any) => (
-    <View style={[styles.testItem, { backgroundColor: colors.surface }]}>
-      <View style={styles.testInfo}>
-        <Text style={styles.patientName}>{item.patientName}</Text>
-        <Text style={styles.testName}>{item.testName}</Text>
-        <Text style={styles.testCategory}>{item.category}</Text>
-      </View>
-      <View style={styles.testRight}>
-        <Text style={styles.testStatus}>{item.status}</Text>
-        {item.status !== 'collected' ? (
-          <TouchableOpacity 
-            style={styles.collectButton}
-            onPress={() => handleCollectSample(item)}
-          >
-            <Ionicons name="checkmark-circle" size={20} color="white" />
-            <Text style={styles.collectButtonText}>{t('collect')}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.collectedBadge}>
-            <Ionicons name="checkmark-done" size={16} color="#4CAF50" />
-            <Text style={styles.collectedText}>{t('collected')}</Text>
-          </View>
-        )}
-      </View>
-    </View>
+  const filteredTests = (activeTab === 'pending' ? pendingCollection : collectedSamples).filter(t => 
+    t.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.testName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.patientCode.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.statNumber}>{pendingTests.length}</Text>
-          <Text style={styles.statLabel}>{t('pending_collection')}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.statNumber}>{collectedTests.length}</Text>
-          <Text style={styles.statLabel}>{t('collected')}</Text>
-        </View>
-      </View>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <Microscope className="w-6 h-6 text-purple-600" />
+            <h1 className="text-2xl font-bold text-slate-900">Analyzer & Sample Collection Station</h1>
+          </div>
+          <p className="text-slate-500 text-sm mt-1">
+            Collect biological specimens (blood, urine, swabs) and verify sample integrity.
+          </p>
+        </div>
+        <button 
+          onClick={() => { setRefreshing(true); fetchTests(); }}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl transition-colors cursor-pointer self-start md:self-auto"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-purple-600' : ''}`} />
+          Refresh Station
+        </button>
+      </div>
 
-      <FlatList
-        data={pendingTests}
-        renderItem={renderTestItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="flask-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_pending_tests')}</Text>
-          </View>
-        }
-      />
-    </View>
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-purple-50/80 border border-purple-200/80 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
+            <Syringe className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{pendingCollection.length}</div>
+            <div className="text-sm font-medium text-purple-800">Pending Collection</div>
+            <p className="text-xs text-purple-700/80 mt-0.5">Patients queued for phlebotomy & specimen sampling</p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50/80 border border-blue-200/80 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{collectedSamples.length}</div>
+            <div className="text-sm font-medium text-blue-800">Specimens Collected</div>
+            <p className="text-xs text-blue-700/80 mt-0.5">Samples accessioned into lab queue</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === 'pending'
+                  ? 'bg-white text-purple-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Pending Collection ({pendingCollection.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('collected')}
+              className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === 'collected'
+                  ? 'bg-white text-purple-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Collected Samples ({collectedSamples.length})
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search patient, test..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="py-16 text-center text-slate-500">
+            <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            Loading sample queue...
+          </div>
+        ) : filteredTests.length === 0 ? (
+          <div className="py-16 text-center px-4">
+            <Syringe className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="font-semibold text-slate-700">No tests found</p>
+            <p className="text-sm text-slate-500 mt-1">
+              {activeTab === 'pending' 
+                ? 'No patients waiting for sample collection right now.' 
+                : 'No historical specimen logs found.'}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filteredTests.map((test) => {
+              const testKey = `${test.patientId}-${test.id}`;
+              const isProcessing = processingId === testKey;
+
+              return (
+                <div key={testKey} className="p-5 hover:bg-slate-50/70 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-900 text-base">{test.testName}</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                        {test.category || 'Specimen Test'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                      <span className="flex items-center gap-1.5 font-medium text-slate-900">
+                        <User className="w-4 h-4 text-slate-400" />
+                        {test.patientName} ({test.patientCode})
+                      </span>
+                      {test.age && <span>• {test.age} yrs, {test.gender}</span>}
+                    </div>
+
+                    {test.requestedDate && (
+                      <div className="text-xs text-slate-400">
+                        Requested: {test.requestedDate}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {test.sampleCollected || test.status === 'collected' || test.status === 'completed' ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold">
+                        <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                        Specimen Accessioned
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleCollectSpecimen(test)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Collecting...
+                          </>
+                        ) : (
+                          <>
+                            <Syringe className="w-4 h-4" />
+                            Collect Specimen
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  testItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  testInfo: {
-    flex: 1,
-  },
-  patientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  testName: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  testCategory: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  testRight: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  testStatus: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  collectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
-  },
-  collectButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  collectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  collectedText: {
-    color: '#4CAF50',
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    fontFamily: 'Poppins-Medium',
-  },
-});
-
-export default AnalyzerView;

@@ -1,299 +1,174 @@
-// screens/patient/BookAppointmentScreen.tsx
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useTheme } from '../../context/themeContext';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { db, addDoc, collection } from '../../services/firebase';
+import { Calendar, Clock, User, MapPin, FileText, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 
-const BookAppointmentScreen = ({ navigation }: any) => {
-  const { colors } = useTheme();
+interface BookAppointmentScreenProps {
+  onBack?: () => void;
+  onSuccess?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
+
+export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
+  onBack,
+  onSuccess,
+  onNotificationPress,
+  onProfilePress
+}) => {
   const { user, lab } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState({
-    title: '',
-    date: new Date(),
-    time: new Date(),
-    duration: '30',
-    location: '',
-    notes: '',
-    type: 'consultation'
+    title: 'Laboratory Diagnostic Screening',
+    date: '2026-08-10',
+    time: '09:30 AM',
+    doctorName: 'Dr. Alexis Vance',
+    notes: ''
   });
 
-  const appointmentTypes = [
-    { value: 'consultation', label: 'Consultation', icon: 'chatbubbles' },
-    { value: 'follow-up', label: 'Follow-up', icon: 'refresh' },
-    { value: 'test', label: 'Test', icon: 'flask' },
-    { value: 'emergency', label: 'Emergency', icon: 'warning' }
-  ];
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
 
-  const handleSubmit = async () => {
-    if (!formData.title.trim() || !formData.location.trim()) {
-      Alert.alert('Error', 'Please fill all required fields');
+    if (!formData.title.trim() || !formData.date.trim()) {
+      setErrorMessage('Please specify an appointment title and preferred date.');
       return;
     }
 
     setLoading(true);
     try {
-      const appointmentDateTime = new Date(formData.date);
-      appointmentDateTime.setHours(formData.time.getHours());
-      appointmentDateTime.setMinutes(formData.time.getMinutes());
+      await addDoc(collection(db, 'labs', lab?.id || 'lab-1', 'appointments'), {
+        ...formData,
+        patientName: user?.name || 'Valued Patient',
+        patientId: user?.id || 'pat-1',
+        status: 'scheduled',
+        location: lab?.name || 'nanoLabs Central Diagnostics',
+        createdAt: new Date().toISOString()
+      });
 
-      await addDoc(
-        collection(db, 'labs', lab?.id, 'patients', user?.id, 'appointments'),
-        {
-          ...formData,
-          date: Timestamp.fromDate(appointmentDateTime),
-          time: `${formData.time.getHours().toString().padStart(2, '0')}:${formData.time.getMinutes().toString().padStart(2, '0')}`,
-          status: 'scheduled',
-          patientName: user?.name,
-          patientId: user?.id,
-          createdAt: Timestamp.now()
-        }
-      );
-
-      Alert.alert('✅ Success', 'Appointment booked successfully');
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to book appointment');
+      if (onSuccess) onSuccess();
+      else if (onBack) onBack();
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Failed to book appointment. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>📅 Book Appointment</Text>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Book Appointment"
+        subtitle="Schedule a consultation or test appointment"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+      />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Appointment Title *"
-          value={formData.title}
-          onChangeText={(text) => setFormData({ ...formData, title: text })}
-        />
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+        )}
 
-        <Text style={styles.label}>Type</Text>
-        <View style={styles.typeGrid}>
-          {appointmentTypes.map((type) => (
-            <TouchableOpacity
-              key={type.value}
-              style={[
-                styles.typeButton,
-                formData.type === type.value && styles.typeButtonSelected
-              ]}
-              onPress={() => setFormData({ ...formData, type: type.value })}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Appointment Request Form</h2>
+            <p className="text-xs text-slate-500">Select preferred medical service timing</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+                {errorMessage}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose / Test Title</label>
+              <input
+                type="text"
+                required
+                value={formData.title}
+                onChange={e => setFormData({ ...formData, title: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Date</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.date}
+                  onChange={e => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Time</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="09:30 AM"
+                  value={formData.time}
+                  onChange={e => setFormData({ ...formData, time: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Attending Physician / Specialist</label>
+              <input
+                type="text"
+                value={formData.doctorName}
+                onChange={e => setFormData({ ...formData, doctorName: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes / Symptoms</label>
+              <textarea
+                rows={3}
+                placeholder="Mention any relevant symptoms or instructions..."
+                value={formData.notes}
+                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
             >
-              <Ionicons name={type.icon as any} size={20} color={formData.type === type.value ? '#1A237E' : '#666'} />
-              <Text style={[styles.typeText, formData.type === type.value && styles.typeTextSelected]}>
-                {type.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Date</Text>
-        <TouchableOpacity style={styles.dateTimeButton} onPress={() => setShowDatePicker(true)}>
-          <Ionicons name="calendar" size={20} color="#1A237E" />
-          <Text style={styles.dateTimeText}>{formatDate(formData.date)}</Text>
-        </TouchableOpacity>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={formData.date}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) setFormData({ ...formData, date: selectedDate });
-            }}
-            minimumDate={new Date()}
-          />
-        )}
-
-        <Text style={styles.label}>Time</Text>
-        <TouchableOpacity style={styles.dateTimeButton} onPress={() => setShowTimePicker(true)}>
-          <Ionicons name="time" size={20} color="#1A237E" />
-          <Text style={styles.dateTimeText}>{formatTime(formData.time)}</Text>
-        </TouchableOpacity>
-
-        {showTimePicker && (
-          <DateTimePicker
-            value={formData.time}
-            mode="time"
-            display="default"
-            onChange={(event, selectedTime) => {
-              setShowTimePicker(false);
-              if (selectedTime) setFormData({ ...formData, time: selectedTime });
-            }}
-          />
-        )}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Duration (minutes)"
-          value={formData.duration}
-          onChangeText={(text) => setFormData({ ...formData, duration: text })}
-          keyboardType="numeric"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Location *"
-          value={formData.location}
-          onChangeText={(text) => setFormData({ ...formData, location: text })}
-        />
-
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Notes"
-          value={formData.notes}
-          onChangeText={(text) => setFormData({ ...formData, notes: text })}
-          multiline
-          numberOfLines={3}
-        />
-
-        <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: colors.primary }, loading && styles.disabledButton]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="white" /> : <Text style={styles.submitButtonText}>Book Appointment</Text>}
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Booking Appointment...
+                </>
+              ) : (
+                <>
+                  Confirm Appointment Booking
+                  <CheckCircle2 className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 20,
-    fontFamily: 'Poppins-Bold',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 15,
-    marginBottom: 12,
-    backgroundColor: 'white',
-    fontFamily: 'Poppins-Regular',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  typeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  typeButtonSelected: {
-    borderColor: '#1A237E',
-    backgroundColor: '#E8EAF6',
-  },
-  typeText: {
-    fontSize: 13,
-    color: '#555',
-    fontFamily: 'Poppins-Regular',
-  },
-  typeTextSelected: {
-    color: '#1A237E',
-    fontWeight: '600',
-  },
-  dateTimeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
-    gap: 10,
-  },
-  dateTimeText: {
-    fontSize: 15,
-    color: '#333',
-    fontFamily: 'Poppins-Regular',
-  },
-  submitButton: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-});
 
 export default BookAppointmentScreen;

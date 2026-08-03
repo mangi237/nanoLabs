@@ -11,7 +11,7 @@ const NotificationBell = () => {
   return (
     <TouchableOpacity 
       style={styles.container}
-      onPress={() => navigation.navigate('NotificationsScreen')}
+      onPress={() => (navigation as any).navigate('NotificationScreen')}
     >
       <Ionicons name="notifications-outline" size={24} color="#333" />
       {unreadCount > 0 && (

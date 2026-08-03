@@ -1,398 +1,292 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Modal, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, getDocs, collection, addDoc, updateDoc, deleteDoc, doc } from '../../services/firebase';
+import { TestTube, Plus, Search, Edit3, Trash2, ArrowLeft, X, DollarSign, Tag } from 'lucide-react';
 
-const TestCatalogManagement = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
+interface TestCatalogManagementProps {
+  onBack?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
+
+export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
+  onBack,
+  onNotificationPress,
+  onProfilePress
+}) => {
   const { lab } = useAuth();
-  const [tests, setTests] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingTest, setEditingTest] = useState<any>(null);
+  const [editingTest, setEditingTest] = useState<any | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    category: '',
-    price: '',
+    category: 'Hematology',
+    price: 4500,
     description: ''
   });
 
   useEffect(() => {
-    fetchTests();
-  }, []);
+    fetchCatalog();
+  }, [lab?.id]);
 
-  const fetchTests = async () => {
+  const fetchCatalog = async () => {
     try {
-      if (!lab?.id) return;
-      
-      const testsRef = collection(db, 'labs', lab.id, 'testCatalog');
-      const snapshot = await getDocs(testsRef);
-      const testList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTests(testList);
-    } catch (error) {
-      console.error('Error fetching tests:', error);
+      setLoading(true);
+      const ref = collection(db, 'labs', lab?.id || 'lab-1', 'testCatalog');
+      const snap = await getDocs(ref);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCatalog(list);
+    } catch (e) {
+      console.error('Test catalog fetch error:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchTests();
-    setRefreshing(false);
+  const handleOpenAdd = () => {
+    setEditingTest(null);
+    setFormData({ name: '', category: 'Hematology', price: 5000, description: '' });
+    setShowModal(true);
   };
 
-  const handleSaveTest = async () => {
-    if (!formData.name.trim() || !formData.price.trim()) {
-      Alert.alert(t('error'), t('fill_required_fields'));
-      return;
-    }
+  const handleOpenEdit = (test: any) => {
+    setEditingTest(test);
+    setFormData({
+      name: test.name || test.testName || '',
+      category: test.category || 'Hematology',
+      price: test.price || 4500,
+      description: test.description || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
 
     try {
-      if (!lab?.id) return;
-      
-      const testData = {
-        ...formData,
-        price: parseFloat(formData.price) || 0,
-        createdAt: new Date().toISOString()
-      };
-
       if (editingTest) {
-        await updateDoc(doc(db, 'labs', lab.id, 'testCatalog', editingTest.id), testData);
+        await updateDoc(doc(db, 'labs', lab?.id || 'lab-1', 'testCatalog', editingTest.id), {
+          ...formData,
+          updatedAt: new Date().toISOString()
+        });
       } else {
-        await addDoc(collection(db, 'labs', lab.id, 'testCatalog'), testData);
+        await addDoc(collection(db, 'labs', lab?.id || 'lab-1', 'testCatalog'), {
+          ...formData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
       }
-
       setShowModal(false);
-      setEditingTest(null);
-      setFormData({ name: '', category: '', price: '', description: '' });
-      await fetchTests();
-    } catch (error) {
-      console.error('Error saving test:', error);
+      fetchCatalog();
+    } catch (err) {
+      console.error('Error saving test catalog item:', err);
     }
   };
 
- 
- 
-const handleDeleteTest = async (testId: string, testName: string) => {
-  Alert.alert(
-    'Delete Test',
-    `Are you sure you want to delete "${testName}"?`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            await deleteDoc(doc(db, 'labs', lab?.id, 'testCatalog', testId));
-            await fetchTests();
-            Alert.alert('✅ Success', 'Test deleted successfully');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete test');
-          } finally {
-            setLoading(false);
-          }
-        }
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to remove this test from the catalog?')) {
+      try {
+        await deleteDoc(doc(db, 'labs', lab?.id || 'lab-1', 'testCatalog', id));
+        fetchCatalog();
+      } catch (err) {
+        console.error('Error deleting catalog item:', err);
       }
-    ]
-  );
-};
- 
+    }
+  };
 
-  const renderTestItem = ({ item }: any) => (
-    <View style={[styles.testItem, { backgroundColor: colors.surface }]}>
-      <View style={styles.testInfo}>
-        <Text style={styles.testName}>{item.name}</Text>
-        <Text style={styles.testCategory}>{item.category}</Text>
-        <Text style={styles.testPrice}>${item.price?.toFixed(2) || '0.00'}</Text>
-      </View>
-      <View style={styles.testActions}>
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={() => {
-            setEditingTest(item);
-            setFormData({
-              name: item.name,
-              category: item.category,
-              price: String(item.price),
-              description: item.description || ''
-            });
-            setShowModal(true);
-          }}
-        >
-          <Ionicons name="pencil" size={20} color="#2196F3" />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.deleteButton}
-          onPress={() => handleDeleteTest(item.id, item.name)}
-        >
-          <Ionicons name="trash" size={20} color="#F44336" />
-        </TouchableOpacity>
-      </View>
-    </View>
+  const filteredCatalog = catalog.filter(t =>
+    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={tests}
-        renderItem={renderTestItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="flask-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_tests_in_catalog')}</Text>
-          </View>
-        }
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Diagnostic Test Catalog"
+        subtitle="Configure medical tests, categories & pricing"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
 
-      <TouchableOpacity 
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-        onPress={() => {
-          setEditingTest(null);
-          setFormData({ name: '', category: '', price: '', description: '' });
-          setShowModal(true);
-        }}
-      >
-        <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.addButtonText}>{t('add_test')}</Text>
-      </TouchableOpacity>
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+        )}
 
-      <Modal visible={showModal} transparent animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={styles.modalTitle}>
-              {editingTest ? t('edit_test') : t('add_new_test')}
-            </Text>
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('test_name')}
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('category')}
-              value={formData.category}
-              onChangeText={(text) => setFormData({ ...formData, category: text })}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('price')}
-              value={formData.price}
-              onChangeText={(text) => setFormData({ ...formData, price: text })}
-              keyboardType="numeric"
-            />
-            
-            <TextInput
-              style={[styles.modalInput, styles.modalTextArea, { backgroundColor: colors.background }]}
-              placeholder={t('description')}
-              value={formData.description}
-              onChangeText={(text) => setFormData({ ...formData, description: text })}
-              multiline
-              numberOfLines={3}
-            />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Medical Test Directory</h2>
+            <p className="text-xs text-slate-500">Configure offered laboratory procedures and standard pricing</p>
+          </div>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowModal(false);
-                  setEditingTest(null);
-                  setFormData({ name: '', category: '', price: '', description: '' });
-                }}
-              >
-                <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSaveTest}
-              >
-                <Text style={styles.saveButtonText}>{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Test
+          </button>
+        </div>
+
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <input
+            type="text"
+            placeholder="Search catalog by test name or category..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+          />
+        </div>
+
+        {/* Catalog Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCatalog.map(item => (
+            <div
+              key={item.id}
+              className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+            >
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-200">
+                      <TestTube className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm leading-tight">{item.name || item.testName}</h3>
+                      <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase">
+                        {item.category}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEdit(item)}
+                      className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+                  {item.description || 'Standard laboratory diagnostic procedure.'}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">Standard Price</span>
+                <span className="text-sm font-bold text-slate-900 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+                  {item.price ? `${item.price.toLocaleString()} FCFA` : '4,500 FCFA'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-teal-700 text-white">
+              <h3 className="font-bold text-base">
+                {editingTest ? 'Edit Test Details' : 'Add Catalog Test'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Test Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                  <select
+                    value={formData.category}
+                    onChange={e => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="Hematology">Hematology</option>
+                    <option value="Biochemistry">Biochemistry</option>
+                    <option value="Endocrinology">Endocrinology</option>
+                    <option value="Urinalysis">Urinalysis</option>
+                    <option value="Microbiology">Microbiology</option>
+                    <option value="Nephrology">Nephrology</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Price (FCFA)</label>
+                  <input
+                    type="number"
+                    value={formData.price}
+                    onChange={e => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold shadow-md"
+                >
+                  Save Test
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  testItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  testInfo: {
-    flex: 1,
-  },
-  testName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  testCategory: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  testPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginTop: 2,
-    fontFamily: 'Poppins-Bold',
-  },
-  testActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  editButton: {
-    padding: 8,
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    fontFamily: 'Poppins-Medium',
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
-    right: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 20,
-    textAlign: 'center',
-    fontFamily: 'Poppins-Bold',
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 12,
-    fontFamily: 'Poppins-Regular',
-  },
-  modalTextArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-});
 
 export default TestCatalogManagement;

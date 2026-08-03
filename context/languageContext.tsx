@@ -1,203 +1,180 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {getLocales} from 'expo-localization';
-
-type Language = 'en' | 'fr' ;
+import React, { createContext, useContext, useState } from 'react';
 
 interface LanguageContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  t: (key: string, params?: any) => string;
-  isRTL: boolean;
+  language: string;
+  setLanguage: (lang: string) => void;
+  t: (key: string) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
-const locales = getLocales();
-// const currentLocale = locales[0].languageCode;
-const currentLocale = getLocales()[0].languageTag || 'en-US';
-// Translations
-const translations = {
+const translations: Record<string, Record<string, string>> = {
   en: {
-    app_name: 'nanoLabs',
-    welcome: 'Welcome',
-    login: 'Login',
-    logout: 'Logout',
-    access_code: 'Access Code',
-    lab_id: 'Lab ID',
-    select_your_lab: 'Select Your Lab',
-    search_lab: 'Search lab...',
-    no_labs_found: 'No labs found',
-    login_to_your_lab: 'Login to your lab',
-    new_patient_register_here: 'New patient? Register here',
-    patient_registration: 'Patient Registration',
-    create_your_account: 'Create your account to get started',
-    start_registration: 'Start Registration',
-    error: 'Error',
-    fill_all_fields: 'Please fill all fields',
-    invalid_credentials: 'Invalid credentials',
-    register: 'Register',
-    confirm: 'Confirm',
-    cancel: 'Cancel',
-    save: 'Save',
-    delete: 'Delete',
-    edit: 'Edit',
-    add: 'Add',
-    search: 'Search',
-    filter: 'Filter',
-    status: 'Status',
-    date: 'Date',
-    time: 'Time',
-    amount: 'Amount',
-    actions: 'Actions',
-    dashboard: 'Dashboard',
-    settings: 'Settings',
-    profile: 'Profile',
-    notifications: 'Notifications',
-    patients: 'Patients',
-    tests: 'Tests',
-    billing: 'Billing',
-    reports: 'Reports',
-    inventory: 'Inventory',
-    staff: 'Staff',
-    pending: 'Pending',
-    completed: 'Completed',
-    processing: 'Processing',
-    collected: 'Sample Collected',
-    requested: 'Requested',
-    paid: 'Paid',
-    virtual_results: 'Virtual Results',
-    transfer: 'Transfer',
-    share_results: 'Share Results',
-    choose_lab_to_continue: 'Choose a lab to continue',
-    try_different_search: 'Try a different search term',
-    registration_complete: 'Registration Complete!',
-    waiting_for_confirmation: 'Waiting for confirmation from receptionist',
-    go_to_receptionist: 'Please visit the receptionist to confirm your registration',
+    select_your_lab: "Select Your Lab",
+    choose_lab_to_continue: "Choose a laboratory center to continue to login",
+    search_lab: "Search laboratory name or location...",
+    no_labs_found: "No laboratory found",
+    try_different_search: "Try searching with a different key phrase",
+    admin_dashboard: "Admin Control Center",
+    patients: "Patients",
+    staff: "Staff Members",
+    tests: "Tests",
+    revenue: "Revenue",
+    quick_actions: "Quick Actions",
+    test_catalog: "Test Catalog",
+    inventory: "Inventory",
+    reports: "Reports & Analytics",
+    total_patients: "Total Patients",
+    total_tests: "Total Tests",
+    completed: "Completed",
+    pending: "Pending",
+    revenue_summary: "Revenue Summary",
+    total_revenue: "Total Revenue",
+    pending_revenue: "Pending Revenue",
+    recent_activity: "Recent Activity",
+    no_recent_activity: "No recent activity recorded",
+    search_patients: "Search patients by name, ID or phone number...",
+    no_patients_found: "No patients found",
+    add_item: "Add Inventory Item",
+    no_inventory_items: "No inventory items available",
+    edit_item: "Edit Inventory Item",
+    add_inventory_item: "Add Inventory Item",
+    item_name: "Item Name",
+    category: "Category",
+    quantity: "Quantity",
+    reorder_level: "Reorder Threshold Level",
+    supplier: "Supplier Vendor",
+    cancel: "Cancel",
+    save: "Save",
+    confirm_delete: "Confirm Deletion",
+    delete_item_confirm: "Are you sure you want to delete this inventory item?",
+    delete: "Delete",
+    no_staff: "No staff members registered",
+    add_staff: "Add Staff Member",
+    add_test: "Add Catalog Test",
+    no_tests_in_catalog: "No tests currently in catalog",
+    add_new_test: "Add New Test",
+    edit_test: "Edit Test Details",
+    test_name: "Test Name",
+    price: "Price",
+    description: "Description",
+    welcome: "Welcome back",
+    total_tests_stats: "Total Tests",
+    processing: "Processing",
+    my_tests: "My Tests",
+    transfer: "Transfer Records",
+    share: "Share Results",
+    profile: "Profile Settings",
+    recent_tests: "Recent Test Requests",
+    no_tests_yet: "No lab test records found",
+    visit_lab_for_tests: "Visit our laboratory to request your medical tests",
+    view_all: "View All Records",
+    loading: "Loading information...",
+    pending_collection: "Pending Sample Collection",
+    collect: "Collect Sample",
+    collected: "Sample Collected",
+    no_pending_tests: "No pending sample collections",
+    active: "Active",
+    confirm: "Confirm",
+    no_patients: "No pending patient registrations"
   },
   fr: {
-    app_name: 'nanoLabs',
-    welcome: 'Bienvenue',
-    login: 'Connexion',
-    logout: 'Déconnexion',
-    access_code: "Code d'accès",
-    lab_id: 'ID Laboratoire',
-    select_your_lab: 'Sélectionnez votre laboratoire',
-    search_lab: 'Rechercher un laboratoire...',
-    no_labs_found: 'Aucun laboratoire trouvé',
-    login_to_your_lab: 'Connectez-vous à votre laboratoire',
-    new_patient_register_here: 'Nouveau patient ? Inscrivez-vous ici',
-    patient_registration: 'Inscription du patient',
-    create_your_account: 'Créez votre compte pour commencer',
-    start_registration: "Commencer l'inscription",
-    error: 'Erreur',
-    fill_all_fields: 'Veuillez remplir tous les champs',
-    invalid_credentials: 'Identifiants invalides',
-    register: "S'inscrire",
-    confirm: 'Confirmer',
-    cancel: 'Annuler',
-    save: 'Enregistrer',
-    delete: 'Supprimer',
-    edit: 'Modifier',
-    add: 'Ajouter',
-    search: 'Rechercher',
-    filter: 'Filtrer',
-    status: 'Statut',
-    date: 'Date',
-    time: 'Heure',
-    amount: 'Montant',
-    actions: 'Actions',
-    dashboard: 'Tableau de bord',
-    settings: 'Paramètres',
-    profile: 'Profil',
-    notifications: 'Notifications',
-    patients: 'Patients',
-    tests: 'Tests',
-    billing: 'Facturation',
-    reports: 'Rapports',
-    inventory: 'Inventaire',
-    staff: 'Personnel',
-    pending: 'En attente',
-    completed: 'Terminé',
-    processing: 'En cours',
-    collected: 'Échantillon collecté',
-    requested: 'Demandé',
-    paid: 'Payé',
-    virtual_results: 'Résultats virtuels',
-    transfer: 'Transfert',
-    share_results: 'Partager les résultats',
-    choose_lab_to_continue: 'Choisissez un laboratoire pour continuer',
-    try_different_search: 'Essayez un autre terme de recherche',
-    registration_complete: 'Inscription terminée !',
-    waiting_for_confirmation: "En attente de confirmation du réceptionniste",
-    go_to_receptionist: 'Veuillez vous rendre au réceptionniste pour confirmer votre inscription',
+    select_your_lab: "Sélectionnez Votre Laboratoire",
+    choose_lab_to_continue: "Choisissez un centre de laboratoire pour continuer",
+    search_lab: "Rechercher un nom de laboratoire ou lieu...",
+    no_labs_found: "Aucun laboratoire trouvé",
+    try_different_search: "Essayez une autre recherche",
+    admin_dashboard: "Tableau de Bord Administration",
+    patients: "Patients",
+    staff: "Membres du Personnel",
+    tests: "Analyses",
+    revenue: "Chiffre d'Affaires",
+    quick_actions: "Actions Rapides",
+    test_catalog: "Catalogue des Tests",
+    inventory: "Gestion de Stock",
+    reports: "Rapports et Analyses",
+    total_patients: "Total des Patients",
+    total_tests: "Total des Analyses",
+    completed: "Terminé",
+    pending: "En Attente",
+    revenue_summary: "Résumé des Revenus",
+    total_revenue: "Revenu Total",
+    pending_revenue: "Revenu En Attente",
+    recent_activity: "Activité Récente",
+    no_recent_activity: "Aucune activité récente",
+    search_patients: "Rechercher par nom, ID ou téléphone...",
+    no_patients_found: "Aucun patient trouvé",
+    add_item: "Ajouter un Article",
+    no_inventory_items: "Aucun article en stock",
+    edit_item: "Modifier l'Article",
+    add_inventory_item: "Ajouter au Stock",
+    item_name: "Nom de l'Article",
+    category: "Catégorie",
+    quantity: "Quantité",
+    reorder_level: "Seuil de Réapprovisionnement",
+    supplier: "Fournisseur",
+    cancel: "Annuler",
+    save: "Enregistrer",
+    confirm_delete: "Confirmer la Suppression",
+    delete_item_confirm: "Êtes-vous sûr de vouloir supprimer cet article ?",
+    delete: "Supprimer",
+    no_staff: "Aucun membre du personnel enregistré",
+    add_staff: "Ajouter un Membre",
+    add_test: "Ajouter un Test",
+    no_tests_in_catalog: "Aucun test dans le catalogue",
+    add_new_test: "Nouveau Test Catalogue",
+    edit_test: "Modifier le Test",
+    test_name: "Nom du Test",
+    price: "Prix",
+    description: "Description",
+    welcome: "Bienvenue",
+    total_tests_stats: "Total des Tests",
+    processing: "En Cours",
+    my_tests: "Mes Analyses",
+    transfer: "Transférer les Dossiers",
+    share: "Partager Résultats",
+    profile: "Paramètres de Profil",
+    recent_tests: "Analyses Récentes",
+    no_tests_yet: "Aucun résultat d'analyse trouvé",
+    visit_lab_for_tests: "Rendez-vous à notre laboratoire pour effectuer vos examens",
+    view_all: "Tout Afficher",
+    loading: "Chargement en cours...",
+    pending_collection: "Prélèvements en Attente",
+    collect: "Prélever",
+    collected: "Prélèvement Effectué",
+    no_pending_tests: "Aucun prélèvement en attente",
+    active: "Actif",
+    confirm: "Confirmer",
+    no_patients: "Aucune inscription en attente"
   }
 };
 
+const LanguageContext = createContext<LanguageContextType>({
+  language: 'en',
+  setLanguage: () => {},
+  t: (key: string) => key,
+});
+
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
-  const [isLoading, setIsLoading] = useState(true);
+  const [language, setLanguage] = useState('en');
 
-  useEffect(() => {
-    loadLanguage();
-  }, []);
-
-  const loadLanguage = async () => {
-    try {
-      const savedLang = await AsyncStorage.getItem('appLanguage');
-      if (savedLang) {
-        setLanguage(savedLang as Language);
-      } else {
-        const deviceLang = currentLocale.split('-')[0];
-        setLanguage(deviceLang === 'fr' ? 'fr' : 'en');
-      }
-    } catch (error) {
-      console.error('Error loading language:', error);
-    } finally {
-      setIsLoading(false);
+  const t = (key: string): string => {
+    // If exact key found, return translated string
+    if (translations[language]?.[key]) {
+      return translations[language][key];
     }
-  };
-
-  const t = (key: string, params?: any): string => {
-    const translation = translations[language];
-    let text = translation[key as keyof typeof translation] || key;
-    
-    if (params) {
-      Object.keys(params).forEach(param => {
-        text = text.replace(`{{${param}}}`, params[param]);
-      });
+    if (translations.en?.[key]) {
+      return translations.en[key];
     }
-    
-    return text;
+    // Fallback: replace underscores with spaces and capitalize words nicely
+    return key
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, l => l.toUpperCase());
   };
-
- 
-
-  const value = {
-    language,
-    setLanguage: async (lang: Language) => {
-      setLanguage(lang);
-      await AsyncStorage.setItem('appLanguage', lang);
-    },
-    t,
-    isRTL: false,
- 
-  };
-
-  if (isLoading) {
-    return null; // Or a loading spinner
-  }
 
   return (
-    <LanguageContext.Provider value={value}>
+    <LanguageContext.Provider value={{ language, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );
 };
 
-export const useLanguage = () => {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
-  return context;
-};
+export const useLanguage = () => useContext(LanguageContext);

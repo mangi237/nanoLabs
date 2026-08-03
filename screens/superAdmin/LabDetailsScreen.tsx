@@ -1,342 +1,374 @@
-// screens/superAdmin/LabDetailsScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { 
+  Building2, 
+  ArrowLeft, 
+  Users, 
+  UserCheck, 
+  DollarSign, 
+  Trash2, 
+  Edit3, 
+  CheckCircle2, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  ShieldAlert,
+  X,
+  Plus
+} from 'lucide-react';
+import { collection, getDocs, doc, deleteDoc, updateDoc, db } from '../../services/firebase';
 
-const LabDetailsScreen = ({ route, navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { labId } = route.params || {};
+interface LabDetailsScreenProps {
+  labId: string;
+  onBack: () => void;
+  onLabDeleted?: () => void;
+}
+
+export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
+  labId,
+  onBack,
+  onLabDeleted
+}) => {
   const [lab, setLab] = useState<any>(null);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [patientCount, setPatientCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffect(() => {
-    if (!labId) {
-      Alert.alert('Error', 'No lab ID provided');
-      navigation.goBack();
-      return;
-    }
-    fetchLabDetails();
-  }, [labId]);
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    name: '',
+    location: '',
+    phone: '',
+    email: '',
+    address: ''
+  });
 
   const fetchLabDetails = async () => {
     try {
       setLoading(true);
-      const labRef = doc(db, 'labs', labId);
-      const labDoc = await getDoc(labRef);
-      if (labDoc.exists()) {
-        setLab({ id: labDoc.id, ...labDoc.data() });
-      } else {
-        Alert.alert('Error', 'Lab not found');
-        navigation.goBack();
+      // Fetch labs
+      const labsSnap = await getDocs(collection(db, 'labs'));
+      const foundLabDoc = labsSnap.docs.find(d => d.id === labId);
+
+      if (foundLabDoc) {
+        const data = foundLabDoc.data();
+        setLab({ id: foundLabDoc.id, ...data });
+        setEditForm({
+          name: data.name || '',
+          location: data.location || '',
+          phone: data.phone || '',
+          email: data.email || '',
+          address: data.address || ''
+        });
       }
-    } catch (error) {
-      console.error('Error fetching lab:', error);
-      Alert.alert('Error', 'Failed to load lab details');
-      navigation.goBack();
+
+      // Fetch lab staff
+      const staffSnap = await getDocs(collection(db, 'labs', labId, 'staff'));
+      const staffDocs = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setStaffList(staffDocs);
+
+      // Fetch lab patients
+      const patientSnap = await getDocs(collection(db, 'labs', labId, 'patients'));
+      setPatientCount(patientSnap.size || foundLabDoc?.data()?.patientCount || 0);
+
+    } catch (err) {
+      console.error('Error fetching lab details:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchLabDetails();
-    setRefreshing(false);
+  useEffect(() => {
+    fetchLabDetails();
+  }, [labId]);
+
+  const handleDeleteLab = async () => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${lab?.name}" and all associated staff and patient records?`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'labs', labId));
+      if (onLabDeleted) onLabDeleted();
+      onBack();
+    } catch (err) {
+      console.error('Error deleting lab:', err);
+      alert('Failed to delete lab. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleDeleteLab = () => {
-    Alert.alert(
-      'Delete Lab',
-      `Are you sure you want to delete "${lab?.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'labs', labId));
-              Alert.alert('Success', 'Lab deleted successfully');
-              navigation.goBack();
-            } catch (error) {
-              console.error('Error deleting lab:', error);
-              Alert.alert('Error', 'Failed to delete lab');
-            }
-          }
-        }
-      ]
-    );
+  const handleSaveEdit = async () => {
+    try {
+      await updateDoc(doc(db, 'labs', labId), {
+        name: editForm.name.trim(),
+        location: editForm.location.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+        address: editForm.address.trim()
+      });
+      setShowEditModal(false);
+      fetchLabDetails();
+    } catch (err) {
+      console.error('Error updating lab details:', err);
+      alert('Failed to update lab information.');
+    }
+  };
+
+  const handleDeleteStaff = async (staffId: string, staffName: string) => {
+    if (!window.confirm(`Remove admin/staff user "${staffName}"?`)) return;
+    try {
+      await deleteDoc(doc(db, 'labs', labId, 'staff', staffId));
+      fetchLabDetails();
+    } catch (err) {
+      console.error('Failed to remove staff member:', err);
+    }
   };
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading lab details...</Text>
-      </View>
+      <div className="py-20 text-center text-slate-500">
+        <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        Loading laboratory center details...
+      </div>
     );
   }
 
   if (!lab) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
-        <Ionicons name="alert-circle" size={60} color="#EF4444" />
-        <Text style={styles.errorText}>Lab not found</Text>
-        <TouchableOpacity 
-          style={styles.goBackButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.goBackText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <div className="py-16 text-center space-y-4">
+        <p className="text-slate-600 font-semibold">Laboratory center not found.</p>
+        <button onClick={onBack} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold">
+          Return to Dashboard
+        </button>
+      </div>
     );
   }
 
+  const calculatedRevenue = patientCount * (lab.feePerPatient || 1000);
+
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={[styles.header, { backgroundColor: lab.primaryColor || colors.primary }]}>
-        <Text style={styles.labName}>{lab.name}</Text>
-        <Text style={styles.labLocation}>{lab.location || 'No location'}</Text>
-        <View style={styles.labStatus}>
-          <Text style={styles.statusText}>Active</Text>
-        </View>
-      </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Lab Information</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Name</Text>
-          <Text style={styles.infoValue}>{lab.name}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Location</Text>
-          <Text style={styles.infoValue}>{lab.location || 'N/A'}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Address</Text>
-          <Text style={styles.infoValue}>{lab.address || 'N/A'}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Phone</Text>
-          <Text style={styles.infoValue}>{lab.phone || 'N/A'}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Email</Text>
-          <Text style={styles.infoValue}>{lab.email || 'N/A'}</Text>
-        </View>
-      </View>
-
-      <View style={styles.statsCard}>
-        <Text style={styles.infoTitle}>Statistics</Text>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{lab.patientCount || 0}</Text>
-            <Text style={styles.statLabel}>Patients</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{lab.staffCount || 0}</Text>
-            <Text style={styles.statLabel}>Staff</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{lab.subscription?.type || 'N/A'}</Text>
-            <Text style={styles.statLabel}>Subscription</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: colors.primary }]}
-          onPress={() => Alert.alert('Edit', 'Edit lab functionality coming soon')}
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
         >
-          <Ionicons name="pencil" size={20} color="white" />
-          <Text style={styles.actionButtonText}>Edit Lab</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={handleDeleteLab}
-        >
-          <Ionicons name="trash" size={20} color="white" />
-          <Text style={styles.actionButtonText}>Delete Lab</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <ArrowLeft className="w-4 h-4" />
+          Back to Super Admin Dashboard
+        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:border-slate-300 bg-white text-slate-700 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          >
+            <Edit3 className="w-4 h-4 text-slate-500" />
+            Edit Center
+          </button>
+          <button
+            onClick={handleDeleteLab}
+            disabled={deleting}
+            className="inline-flex items-center gap-1.5 px-4 py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Lab
+          </button>
+        </div>
+      </div>
+
+      {/* Lab Main Card */}
+      <div 
+        className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+        style={{ backgroundColor: lab.primaryColor || '#0D9488' }}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
+              <Building2 className="w-3.5 h-3.5" />
+              {lab.status === 'active' ? 'Active Network Center' : 'Inactive'}
+            </span>
+            <h1 className="text-3xl font-bold">{lab.name}</h1>
+            <p className="text-white/80 text-sm">{lab.slogan || 'Diagnostic & Clinical Laboratory'}</p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-right min-w-[200px]">
+            <div className="text-xs text-white/80 uppercase font-bold tracking-wider">Computed Royalty Fee</div>
+            <div className="text-2xl font-bold mt-0.5">{calculatedRevenue.toLocaleString()} FCFA</div>
+            <div className="text-[11px] text-white/70">@ 1,000 FCFA / patient</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{patientCount}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Patients</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+            <UserCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{staffList.length}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Accounts</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+            <DollarSign className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{calculatedRevenue.toLocaleString()} FCFA</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Network Earnings</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contact & Location Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-teal-600" />
+            Location & Contact Details
+          </h3>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center gap-3 text-slate-700">
+              <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+              <span><strong>Region / Location:</strong> {lab.location || 'N/A'}</span>
+            </div>
+            {lab.address && (
+              <div className="flex items-center gap-3 text-slate-700">
+                <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                <span><strong>Address:</strong> {lab.address}</span>
+              </div>
+            )}
+            {lab.phone && (
+              <div className="flex items-center gap-3 text-slate-700">
+                <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                <span><strong>Phone:</strong> {lab.phone}</span>
+              </div>
+            )}
+            {lab.email && (
+              <div className="flex items-center gap-3 text-slate-700">
+                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                <span><strong>Email:</strong> {lab.email}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Staff & Admin List */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-teal-600" />
+            Assigned Staff & Administrators ({staffList.length})
+          </h3>
+
+          {staffList.length === 0 ? (
+            <p className="text-sm text-slate-400 py-4 text-center">No staff accounts registered yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {staffList.map((member) => (
+                <div key={member.id} className="p-3 bg-slate-50 rounded-xl flex items-center justify-between border border-slate-100">
+                  <div>
+                    <div className="font-bold text-slate-900 text-sm">{member.name}</div>
+                    <div className="text-xs text-slate-500">
+                      {member.email} • Code: <span className="font-mono text-teal-700 font-bold">{member.accessCode}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteStaff(member.id, member.name)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-lg text-slate-900">Edit Lab Center Details</h3>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Lab Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Location / Region</label>
+                <input
+                  type="text"
+                  value={editForm.location}
+                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Phone</label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Email</label>
+                <input
+                  type="text"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold shadow-xs"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#EF4444',
-    marginTop: 15,
-    fontFamily: 'Poppins-Medium',
-  },
-  goBackButton: {
-    marginTop: 20,
-    padding: 12,
-    backgroundColor: '#1A237E',
-    borderRadius: 8,
-  },
-  goBackText: {
-    color: 'white',
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  header: {
-    padding: 24,
-    paddingTop: 40,
-    paddingBottom: 30,
-  },
-  labName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  labLocation: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  labStatus: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  infoCard: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Poppins-Regular',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    fontFamily: 'Poppins-Medium',
-  },
-  statsCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    fontFamily: 'Poppins-Regular',
-  },
-  actions: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 30,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  deleteButton: {
-    backgroundColor: '#EF4444',
-  },
-});
-
-export default LabDetailsScreen;

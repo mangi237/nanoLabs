@@ -1,427 +1,308 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Modal, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, getDocs, collection, addDoc, updateDoc, deleteDoc, doc } from '../../services/firebase';
+import { Package, Plus, Search, Edit3, Trash2, AlertTriangle, ArrowLeft, CheckCircle2, X } from 'lucide-react';
 
-const InventoryManagement = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
+interface InventoryManagementProps {
+  onBack?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
+
+export const InventoryManagement: React.FC<InventoryManagementProps> = ({
+  onBack,
+  onNotificationPress,
+  onProfilePress
+}) => {
   const { lab } = useAuth();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    category: '',
-    quantity: '',
-    reorderLevel: '',
+    category: 'Reagents',
+    quantity: 10,
+    reorderLevel: 5,
     supplier: ''
   });
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [lab?.id]);
 
   const fetchInventory = async () => {
     try {
-      if (!lab?.id) return;
-      
-      const inventoryRef = collection(db, 'labs', lab.id, 'inventory');
-      const snapshot = await getDocs(inventoryRef);
-      const itemList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setItems(itemList);
-    } catch (error) {
-      console.error('Error fetching inventory:', error);
+      setLoading(true);
+      const invRef = collection(db, 'labs', lab?.id || 'lab-1', 'inventory');
+      const snap = await getDocs(invRef);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setItems(list);
+    } catch (e) {
+      console.error('Inventory fetch error:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchInventory();
-    setRefreshing(false);
+  const handleOpenAdd = () => {
+    setEditingItem(null);
+    setFormData({ name: '', category: 'Reagents', quantity: 20, reorderLevel: 10, supplier: 'MedTech Supplies' });
+    setShowModal(true);
   };
 
-  const handleSaveItem = async () => {
-    if (!formData.name.trim() || !formData.quantity.trim()) {
-      Alert.alert(t('error'), t('fill_required_fields'));
-      return;
-    }
+  const handleOpenEdit = (item: any) => {
+    setEditingItem(item);
+    setFormData({
+      name: item.name || '',
+      category: item.category || 'Reagents',
+      quantity: item.quantity || 0,
+      reorderLevel: item.reorderLevel || 5,
+      supplier: item.supplier || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
 
     try {
-      if (!lab?.id) return;
-      
-      const itemData = {
-        ...formData,
-        quantity: parseInt(formData.quantity) || 0,
-        reorderLevel: parseInt(formData.reorderLevel) || 5,
-        updatedAt: new Date().toISOString()
-      };
-
       if (editingItem) {
-        await updateDoc(doc(db, 'labs', lab.id, 'inventory', editingItem.id), itemData);
+        await updateDoc(doc(db, 'labs', lab?.id || 'lab-1', 'inventory', editingItem.id), {
+          ...formData,
+          updatedAt: new Date().toISOString()
+        });
       } else {
-        itemData.createdAt = new Date().toISOString();
-        await addDoc(collection(db, 'labs', lab.id, 'inventory'), itemData);
+        await addDoc(collection(db, 'labs', lab?.id || 'lab-1', 'inventory'), {
+          ...formData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
       }
-
       setShowModal(false);
-      setEditingItem(null);
-      setFormData({ name: '', category: '', quantity: '', reorderLevel: '', supplier: '' });
-      await fetchInventory();
-    } catch (error) {
-      console.error('Error saving inventory item:', error);
+      fetchInventory();
+    } catch (err) {
+      console.error('Error saving inventory item:', err);
     }
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    Alert.alert(
-      t('confirm_delete'),
-      t('delete_item_confirm'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        { 
-          text: t('delete'), 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!lab?.id) return;
-              await deleteDoc(doc(db, 'labs', lab.id, 'inventory', itemId));
-              await fetchInventory();
-            } catch (error) {
-              console.error('Error deleting item:', error);
-            }
-          }
-        }
-      ]
-    );
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this inventory item?')) {
+      try {
+        await deleteDoc(doc(db, 'labs', lab?.id || 'lab-1', 'inventory', id));
+        fetchInventory();
+      } catch (err) {
+        console.error('Error deleting item:', err);
+      }
+    }
   };
 
-  const renderItem = ({ item }: any) => {
-    const isLowStock = item.quantity <= item.reorderLevel;
-    
-    return (
-      <View style={[styles.inventoryItem, { backgroundColor: colors.surface }]}>
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemCategory}>{item.category}</Text>
-          <Text style={styles.itemSupplier}>🏢 {item.supplier || 'N/A'}</Text>
-        </View>
-        <View style={styles.itemRight}>
-          <View style={[styles.quantityBadge, { backgroundColor: isLowStock ? '#F44336' : '#4CAF50' }]}>
-            <Text style={styles.quantityText}>{item.quantity}</Text>
-          </View>
-          <Text style={styles.reorderLevel}>Reorder: {item.reorderLevel}</Text>
-          <View style={styles.itemActions}>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => {
-                setEditingItem(item);
-                setFormData({
-                  name: item.name,
-                  category: item.category,
-                  quantity: String(item.quantity),
-                  reorderLevel: String(item.reorderLevel),
-                  supplier: item.supplier || ''
-                });
-                setShowModal(true);
-              }}
-            >
-              <Ionicons name="pencil" size={18} color="#2196F3" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => handleDeleteItem(item.id)}
-            >
-              <Ionicons name="trash" size={18} color="#F44336" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const filteredItems = items.filter(item =>
+    item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.supplier?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_inventory_items')}</Text>
-          </View>
-        }
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Inventory Management"
+        subtitle="Track reagents, consumables & equipment"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
 
-      <TouchableOpacity 
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-        onPress={() => {
-          setEditingItem(null);
-          setFormData({ name: '', category: '', quantity: '', reorderLevel: '', supplier: '' });
-          setShowModal(true);
-        }}
-      >
-        <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.addButtonText}>{t('add_item')}</Text>
-      </TouchableOpacity>
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+        )}
 
-      <Modal visible={showModal} transparent animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={styles.modalTitle}>
-              {editingItem ? t('edit_item') : t('add_inventory_item')}
-            </Text>
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('item_name')}
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('category')}
-              value={formData.category}
-              onChangeText={(text) => setFormData({ ...formData, category: text })}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('quantity')}
-              value={formData.quantity}
-              onChangeText={(text) => setFormData({ ...formData, quantity: text })}
-              keyboardType="numeric"
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('reorder_level')}
-              value={formData.reorderLevel}
-              onChangeText={(text) => setFormData({ ...formData, reorderLevel: text })}
-              keyboardType="numeric"
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.background }]}
-              placeholder={t('supplier')}
-              value={formData.supplier}
-              onChangeText={(text) => setFormData({ ...formData, supplier: text })}
-            />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Laboratory Supplies & Reagents</h2>
+            <p className="text-xs text-slate-500">Monitor stock levels and automated reorder alerts</p>
+          </div>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowModal(false);
-                  setEditingItem(null);
-                  setFormData({ name: '', category: '', quantity: '', reorderLevel: '', supplier: '' });
-                }}
-              >
-                <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSaveItem}
-              >
-                <Text style={styles.saveButtonText}>{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Inventory Item
+          </button>
+        </div>
+
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <input
+            type="text"
+            placeholder="Search inventory by name, category, or vendor..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+          />
+        </div>
+
+        {/* Inventory List Table */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-3.5">Item Description</th>
+                <th className="px-6 py-3.5">Category</th>
+                <th className="px-6 py-3.5">Stock Quantity</th>
+                <th className="px-6 py-3.5">Reorder Threshold</th>
+                <th className="px-6 py-3.5">Supplier</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              {filteredItems.map(item => {
+                const isLow = item.quantity <= item.reorderLevel;
+                return (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-semibold text-slate-900">{item.name}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span>{item.quantity} units</span>
+                        {isLow && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            Low Stock
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-slate-500">{item.reorderLevel} units</td>
+                    <td className="px-6 py-4 text-slate-600">{item.supplier || 'N/A'}</td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button
+                        onClick={() => handleOpenEdit(item)}
+                        className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-teal-700 text-white">
+              <h3 className="font-bold text-base">
+                {editingItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Item Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                  <select
+                    value={formData.category}
+                    onChange={e => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="Reagents">Reagents</option>
+                    <option value="Consumables">Consumables</option>
+                    <option value="PPE">PPE Equipment</option>
+                    <option value="Sanitization">Sanitization</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier</label>
+                  <input
+                    type="text"
+                    value={formData.supplier}
+                    onChange={e => setFormData({ ...formData, supplier: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Current Quantity</label>
+                  <input
+                    type="number"
+                    value={formData.quantity}
+                    onChange={e => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Reorder Threshold Level</label>
+                  <input
+                    type="number"
+                    value={formData.reorderLevel}
+                    onChange={e => setFormData({ ...formData, reorderLevel: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold shadow-md"
+                >
+                  Save Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  inventoryItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  itemCategory: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  itemSupplier: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  itemRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  quantityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  quantityText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  reorderLevel: {
-    fontSize: 11,
-    color: '#999',
-    fontFamily: 'Poppins-Regular',
-  },
-  itemActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editButton: {
-    padding: 4,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    fontFamily: 'Poppins-Medium',
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
-    right: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 20,
-    textAlign: 'center',
-    fontFamily: 'Poppins-Bold',
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 12,
-    fontFamily: 'Poppins-Regular',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-});
 
 export default InventoryManagement;

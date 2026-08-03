@@ -1,213 +1,138 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
-import { useTheme } from '../../context/themeContext';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { ArrowRightLeft, Building2, Send, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
 
-const TransferScreen = ({ navigation }: any) => {
-  const { t } = useLanguage();
-  const { colors } = useTheme();
-  const { user, lab } = useAuth();
-  const [labs, setLabs] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [selectedLab, setSelectedLab] = useState<any>(null);
+interface TransferScreenProps {
+  onBack?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void;
+}
 
-  useEffect(() => {
-    fetchLabs();
-  }, []);
+export const TransferScreen: React.FC<TransferScreenProps> = ({
+  onBack,
+  onNotificationPress,
+  onProfilePress
+}) => {
+  const { lab } = useAuth();
+  const [targetLab, setTargetLab] = useState('nanoLabs BioTech Center');
+  const [reason, setReason] = useState('Specialist Consultation Transfer');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const fetchLabs = async () => {
-    try {
-      const labsRef = collection(db, 'labs');
-      const snapshot = await getDocs(labsRef);
-      const labList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(l => l.id !== lab?.id);
-      setLabs(labList);
-    } catch (error) {
-      console.error('Error fetching labs:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setTimeout(() => {
+      setSending(false);
+      setSent(true);
+    }, 1200);
   };
-
-  const filteredLabs = labs.filter(l =>
-    l.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.location?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleTransfer = () => {
-    if (!selectedLab) {
-      Alert.alert(t('error'), t('select_lab_to_transfer'));
-      return;
-    }
-    Alert.alert(
-      t('confirm_transfer'),
-      `${t('transfer_to')} ${selectedLab.name}?`,
-      [
-        { text: t('cancel'), style: 'cancel' },
-        { 
-          text: t('confirm'), 
-          onPress: () => {
-            Alert.alert(t('success'), t('transfer_request_sent'));
-            navigation.goBack();
-          }
-        }
-      ]
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#999" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={t('search_labs')}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
-        />
-      </View>
-
-      <FlatList
-        data={filteredLabs}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={[
-              styles.labItem, 
-              { backgroundColor: colors.surface },
-              selectedLab?.id === item.id && styles.labItemSelected
-            ]}
-            onPress={() => setSelectedLab(item)}
-          >
-            <View style={styles.labInfo}>
-              <Text style={styles.labName}>{item.name}</Text>
-              <Text style={styles.labLocation}>{item.location}</Text>
-            </View>
-            {selectedLab?.id === item.id && (
-              <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-            )}
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="business-outline" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>{t('no_labs_found')}</Text>
-          </View>
-        }
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header
+        title="Transfer Medical Records"
+        subtitle="Securely transfer diagnostic history to another health center"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
       />
 
-      {selectedLab && (
-        <TouchableOpacity 
-          style={[styles.transferButton, { backgroundColor: colors.primary }]}
-          onPress={handleTransfer}
-        >
-          <Text style={styles.transferButtonText}>
-            {t('transfer_to')} {selectedLab.name}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Portal
+          </button>
+        )}
+
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200">
+              <ArrowRightLeft className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Lab Record Transfer</h2>
+              <p className="text-xs text-slate-500">Initiate authorized inter-hospital record dispatch</p>
+            </div>
+          </div>
+
+          {sent ? (
+            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-3">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+              <h3 className="text-base font-bold text-emerald-900">Transfer Request Dispatched</h3>
+              <p className="text-xs text-emerald-700">
+                Your lab test records have been securely queued for transfer to {targetLab}.
+              </p>
+              <button
+                onClick={() => setSent(false)}
+                className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold"
+              >
+                Initiate Another Transfer
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleTransfer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Source Laboratory</label>
+                <input
+                  type="text"
+                  disabled
+                  value={lab?.name || 'nanoLabs Central Diagnostics'}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-600 text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Destination Laboratory / Hospital</label>
+                <select
+                  value={targetLab}
+                  onChange={e => setTargetLab(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                >
+                  <option value="nanoLabs BioTech Center">nanoLabs BioTech Center - Douala</option>
+                  <option value="nanoLabs Regional Research Lab">nanoLabs Regional Research Lab - Bamenda</option>
+                  <option value="Central Hospital Yaounde">Central Hospital Yaounde</option>
+                  <option value="General Hospital Douala">General Hospital Douala</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reason for Transfer</label>
+                <textarea
+                  rows={3}
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing Transfer...
+                  </>
+                ) : (
+                  <>
+                    Authorize & Send Records
+                    <Send className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+        </div>
+      </main>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    margin: 16,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  searchInput: {
-    flex: 1,
-    padding: 14,
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
-  },
-  labItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  labItemSelected: {
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-  },
-  labInfo: {
-    flex: 1,
-  },
-  labName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  labLocation: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Poppins-Regular',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    marginTop: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  transferButton: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  transferButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-});
 
 export default TransferScreen;

@@ -1,181 +1,382 @@
-// App.tsx
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { useFonts } from 'expo-font';
-import * as SplashScreen from 'expo-splash-screen';
-import { AuthProvider } from './context/authContext';
-import { LanguageProvider } from './context/languageContext';
+import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './context/authContext';
 import { ThemeProvider } from './context/themeContext';
-import LabRegistrationModal from './screens/superAdmin/LabRegistrationModal';
-// Import ALL screens
-import PatientDetailsScreen from './screens/PatientDetailsScreen';
-import EditStaffModal from './screens/admin/EditStaffModal';
-import AnalyticsDashboard from './screens/admin/AnalyticsDashboard';
-import AddStaffModal from './screens/admin/AddStaffModal';
+import { LanguageProvider } from './context/languageContext';
+import { useNavigation } from '@react-navigation/native';
+
+// Import Screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 import LabSelectionScreen from './screens/auth/LabSelectionScreen';
-import ForgotCodeScreen from './screens/auth/ForgotCodeScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import NotificationsScreen from './screens/NotificationScreen';
-// Import Patient Screens
-import PatientDashboard from './screens/Patient/PatientDashboard';
-import TestHistoryScreen from './screens/Patient/TestHistoryScreen';
-import ResultViewScreen from './screens/Patient/ResultViewScreen';
-import TransferScreen from './screens/Patient/TransferScreen';
-import ShareResultsScreen from './screens/Patient/ShareResultsScreen';
 
-// Import Patient Onboarding Steps
-import Step1_PersonalInfo from './screens/Patient/Onboarding/Step1_personalInfo';
-import Step2_ContactInfo from './screens/Patient/Onboarding/Step2_ContactInfo';
-import Step3_HealthInfo from './screens/Patient/Onboarding/Step3_HealthInfo';
-import Step4_Insurance from './screens/Patient/Onboarding/Step4_Insurance';
-import Step5_SelectTests from './screens/Patient/Onboarding/Step5_SelectTests';
-import Step6_AccessCode from './screens/Patient/Onboarding/Step6_AccessCode';
-
-// Import Staff Screens
-import StaffDashboard from './screens/staff/StaffDashboard';
-import RoleSwitcher from './screens/staff/RoleSwitcher';
-import ReceptionistView from './screens/staff/ReceptionistView';
-import CashierView from './screens/staff/CashierView';
-import AnalyzerView from './screens/staff/AnalyzerView';
-import LabTechView from './screens/staff/LabTechView';
-
-// Import Admin Screens
+import UnifiedDashboard from './screens/UnifiedDashboard';
 import AdminDashboard from './screens/admin/adminDashboard';
+import AnalyticsDashboard from './screens/admin/AnalyticsDashboard';
+import InventoryManagement from './screens/admin/InventoryManagement';
 import PatientManagement from './screens/admin/PatientManagement';
+import ReportsScreen from './screens/admin/ReportsScreen';
 import StaffManagement from './screens/admin/StaffManagement';
 import TestCatalogManagement from './screens/admin/TestCatalogManagement';
-import InventoryManagement from './screens/admin/InventoryManagement';
 
-import ReportsScreen from './screens/admin/ReportsScreen';
+import PatientDashboard from './screens/Patient/PatientDashboard';
+import AppointmentScreen from './screens/Patient/AppointmentScreen';
+import BookAppointmentScreen from './screens/Patient/BookAppointmentScreen';
+import TestHistoryScreen from './screens/Patient/TestHistoryScreen';
+import TransferScreen from './screens/Patient/TransferScreen';
+import ShareResultsScreen from './screens/Patient/ShareResultsScreen';
+import ResultViewScreen from './screens/Patient/ResultViewScreen';
 
-// Import Super Admin Screens
-import SuperAdminDashboard from './screens/superAdmin/SuperAdminDashboard';
-import LabDetailsScreen from './screens/superAdmin/LabDetailsScreen';
-import RegistrationCompleteScreen from './screens/Patient/RegistrationCompleteScreen';
-// Import Cashier, Lab, etc.
-import CashierDashboard from './screens/cashier/CashierDashboard';
-import LabDashboard from './screens/lab/LabDashboard';
+import ReceptionistView from './screens/staff/ReceptionistView';
+import RoleSwitcher from './screens/staff/RoleSwitcher';
+import NotificationsScreen from './screens/NotificationScreen';
+import PatientDetailsScreen from './screens/PatientDetailsScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
-// Keep splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync();
+import { Activity, Shield, User, Users, RefreshCw, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
 
-const Stack = createStackNavigator();
+type ScreenType =
+  | 'login'
+  | 'register'
+  | 'select-lab'
+  | 'dashboard'
+  | 'staff'
+  | 'analytics'
+  | 'inventory'
+  | 'catalog'
+  | 'patient-list'
+  | 'reports'
+  | 'patient-dashboard'
+  | 'book-appointment'
+  | 'appointment'
+  | 'test-history'
+  | 'transfer'
+  | 'share'
+  | 'result-view'
+  | 'notifications'
+  | 'patient-details'
+  | 'profile'
+  | 'role-switcher'
+  | 'receptionist';
 
-export default function App() {
-  const [fontsLoaded] = useFonts({
-    'Poppins-Regular': require('./assets/fonts/Poppins/Poppins-Regular.ttf'),
-    'Poppins-Medium': require('./assets/fonts/Poppins/Poppins-Medium.ttf'),
-    'Poppins-SemiBold': require('./assets/fonts/Poppins/Poppins-SemiBold.ttf'),
-    'Poppins-Bold': require('./assets/fonts/Poppins/Poppins-Bold.ttf'),
-  });
+const MainAppContent: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const { user, setUser, logout } = useAuth();
+  const [screen, setScreen] = useState<ScreenType>(user ? 'dashboard' : 'login');
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [selectedTest, setSelectedTest] = useState<any>(null);
 
-  const [appIsReady, setAppIsReady] = useState(false);
-
-  useEffect(() => {
-    async function prepare() {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        setAppIsReady(true);
-      }
+  const handleNavigateTab = (tab: string) => {
+    switch (tab) {
+      case 'overview': setScreen('dashboard'); break;
+      case 'staff': setScreen('staff'); break;
+      case 'analytics': setScreen('analytics'); break;
+      case 'inventory': setScreen('inventory'); break;
+      case 'catalog': setScreen('catalog'); break;
+      case 'reports': setScreen('reports'); break;
+      case 'patients': setScreen('patient-list'); break;
+      case 'book': setScreen('book-appointment'); break;
+      case 'history': setScreen('test-history'); break;
+      case 'share': setScreen('share'); break;
+      case 'transfer': setScreen('transfer'); break;
+      case 'register': setScreen('register'); break;
+      default: setScreen('dashboard'); break;
     }
-    prepare();
-  }, []);
+  };
 
-  const onLayoutRootView = useCallback(async () => {
-    if (appIsReady && fontsLoaded) {
-      await SplashScreen.hideAsync();
+  // Render Screen Switcher
+  const renderScreen = () => {
+    if (!user && screen !== 'register' && screen !== 'select-lab') {
+      return (
+        <LoginScreen
+          onLoginSuccess={() => setScreen('dashboard')}
+          onNavigateRegister={() => setScreen('register')}
+          onNavigateSelectLab={() => setScreen('select-lab')}
+        />
+      );
     }
-  }, [appIsReady, fontsLoaded]);
 
-  if (!appIsReady || !fontsLoaded) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#013220' }}>
-        <Text style={{ color: 'white', fontSize: 24, fontFamily: 'Poppins-Bold' }}>🧪 nanoLabs</Text>
-        <Text style={{ color: 'white', fontSize: 16, marginTop: 10, fontFamily: 'Poppins-Regular' }}>
-          Loading...
-        </Text>
-      </View>
-    );
-  }
+    switch (screen) {
+      case 'login':
+        return (
+          <LoginScreen
+            onLoginSuccess={() => setScreen('dashboard')}
+            onNavigateRegister={() => setScreen('register')}
+            onNavigateSelectLab={() => setScreen('select-lab')}
+          />
+        );
+
+      case 'register':
+        return (
+          <RegisterScreen
+            onBackToLogin={() => setScreen('login')}
+            onRegisterSuccess={() => setScreen('dashboard')}
+          />
+        );
+
+      case 'select-lab':
+        return (
+          <LabSelectionScreen
+            onBack={() => setScreen('login')}
+            onSelectLab={() => setScreen('login')}
+          />
+        );
+
+      case 'dashboard':
+        return (
+          <UnifiedDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+          />
+        );
+
+      case 'staff':
+        return (
+          <StaffManagement
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'analytics':
+        return (
+          <AnalyticsDashboard
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'inventory':
+        return (
+          <InventoryManagement
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'catalog':
+        return (
+          <TestCatalogManagement
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'patient-list':
+        return (
+          <PatientManagement
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+          />
+        );
+
+      case 'reports':
+        return (
+          <ReportsScreen
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'book-appointment':
+        return (
+          <BookAppointmentScreen
+            onBack={() => setScreen('dashboard')}
+            onSuccess={() => setScreen('appointment')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'appointment':
+        return (
+          <AppointmentScreen
+            onBack={() => setScreen('dashboard')}
+            onNavigateBook={() => setScreen('book-appointment')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'test-history':
+        return (
+          <TestHistoryScreen
+            onBack={() => setScreen('dashboard')}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferScreen
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'share':
+        return (
+          <ShareResultsScreen
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'result-view':
+        return (
+          <ResultViewScreen
+            test={selectedTest}
+            onBack={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'receptionist':
+        return (
+          <ReceptionistView
+            onBack={() => setScreen('dashboard')}
+            onNavigateRegister={() => setScreen('register')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onNavigatePatientDetails={(patientId: string) => 
+              navigation.navigate('PatientDetailsScreen', { patientId }) // 👈 This accepts two arguments perfectly
+            } 
+          />
+        );
+
+      case 'notifications':
+        return (
+          <NotificationsScreen
+            onBack={() => setScreen('dashboard')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'patient-details':
+        return (
+          <PatientDetailsScreen
+            patient={selectedPatient}
+            onBack={() => setScreen('dashboard')}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'profile':
+        return (
+          <ProfileScreen
+            onBack={() => setScreen('dashboard')}
+            onNavigateRoleSwitcher={() => setScreen('role-switcher')}
+            onLogout={() => {
+              setScreen('login');
+            }}
+          />
+        );
+
+      case 'role-switcher':
+        return (
+          <RoleSwitcher
+            onBack={() => setScreen('dashboard')}
+            onRoleSwitched={() => setScreen('dashboard')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      default:
+        return (
+          <UnifiedDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+          />
+        );
+    }
+  };
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <LanguageProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <NavigationContainer>
-              <Stack.Navigator 
-                initialRouteName="LoginScreen"
-                screenOptions={{ 
-                  headerShown: false,
-                }}
-              >
-                {/* ============ AUTH SCREENS ============ */}
-                <Stack.Screen name="LoginScreen" component={LoginScreen} />
-                <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-                <Stack.Screen name="LabSelectionScreen" component={LabSelectionScreen} />
-                <Stack.Screen name="ForgotCodeScreen" component={ForgotCodeScreen} />
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+      {/* Global Quick Demo Switcher Bar at Bottom Right for easy testing */}
+      {user && (
+        <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 backdrop-blur-md text-white px-3 py-2 rounded-2xl shadow-2xl border border-slate-700 text-xs flex flex-wrap items-center gap-1.5 max-w-xl">
+          <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">Role View:</span>
+          {[
+            { id: 'superadmin', label: 'SuperAdmin' },
+            { id: 'admin', label: 'Admin' },
+            { id: 'staff', label: 'Staff Hub' },
+            { id: 'receptionist', label: 'Reception' },
+            { id: 'cashier', label: 'Cashier' },
+            { id: 'analyzer', label: 'Analyzer' },
+            { id: 'lab_tech', label: 'Lab Tech' },
+            { id: 'patient', label: 'Patient' }
+          ].map((r) => (
+            <button
+              key={r.id}
+              onClick={() => {
+                setUser({ ...user, role: r.id as any });
+                setScreen('dashboard');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                user.role === r.id ? 'bg-teal-600 text-white shadow-xs' : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-                {/* ============ PATIENT ONBOARDING ============ */}
-                <Stack.Screen name="Step1_PersonalInfo" component={Step1_PersonalInfo} />
-                <Stack.Screen name="Step2_ContactInfo" component={Step2_ContactInfo} />
-                <Stack.Screen name="Step3_HealthInfo" component={Step3_HealthInfo} />
-                <Stack.Screen name="Step4_Insurance" component={Step4_Insurance} />
-                <Stack.Screen name="Step5_SelectTests" component={Step5_SelectTests} />
-                <Stack.Screen name="Step6_AccessCode" component={Step6_AccessCode} />
+      {renderScreen()}
+    </div>
+  );
+};
 
-                {/* ============ PATIENT DASHBOARD ============ */}
-                <Stack.Screen name="PatientDashboard" component={PatientDashboard} />
-                <Stack.Screen name="TestHistoryScreen" component={TestHistoryScreen} />
-                <Stack.Screen name="ResultViewScreen" component={ResultViewScreen} />
-                <Stack.Screen name="TransferScreen" component={TransferScreen} />
-                <Stack.Screen name="ShareResultsScreen" component={ShareResultsScreen} />
-                <Stack.Screen name="RegistrationCompleteScreen" component={RegistrationCompleteScreen} />
-                <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
-                <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
-                <Stack.Screen name="PatientDetailsScreen" component={PatientDetailsScreen} />
-
-                {/* ============ STAFF DASHBOARD ============ */}
-                <Stack.Screen name="StaffDashboard" component={StaffDashboard} />
-                <Stack.Screen name="RoleSwitcher" component={RoleSwitcher} />
-                <Stack.Screen name="ReceptionistView" component={ReceptionistView} />
-                <Stack.Screen name="CashierView" component={CashierView} />
-                <Stack.Screen name="AnalyzerView" component={AnalyzerView} />
-                <Stack.Screen name="LabTechView" component={LabTechView} />
-
-                {/* ============ ADMIN DASHBOARD ============ */}
-                <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
-                <Stack.Screen name="PatientManagement" component={PatientManagement} />
-                <Stack.Screen name="StaffManagement" component={StaffManagement} />
-                <Stack.Screen name="TestCatalogManagement" component={TestCatalogManagement} />
-                <Stack.Screen name="InventoryManagement" component={InventoryManagement} />
-                <Stack.Screen name="ReportsScreen" component={ReportsScreen} />
-                <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboard} />
-
-                {/* ============ SUPER ADMIN ============ */}
-                <Stack.Screen name="SuperAdminDashboard" component={SuperAdminDashboard} />
-                <Stack.Screen name="LabDetailsScreen" component={LabDetailsScreen} />
-                <Stack.Screen name="LabRegistrationModal" component={LabRegistrationModal} />
-
-                {/* ============ MODALS ============ */}
-                <Stack.Screen name="AddStaffModal" component={AddStaffModal} />
-                <Stack.Screen name="EditStaffModal" component={EditStaffModal} />
-
-                {/* ============ OTHER DASHBOARDS ============ */}
-                <Stack.Screen name="CashierDashboard" component={CashierDashboard} />
-                <Stack.Screen name="LabDashboard" component={LabDashboard} />
-              </Stack.Navigator>
-            </NavigationContainer>
-          </AuthProvider>
-        </ThemeProvider>
-      </LanguageProvider>
-    </View>
+export default function App() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <MainAppContent />
+        </LanguageProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
