@@ -179,9 +179,11 @@ export const RegistrationCompleteScreen: React.FC<RegistrationCompleteScreenProp
             <div className="space-y-2 text-xs">
               {[
                 { num: '1', text: `Proceed to the receptionist counter at ${labName}` },
-                { num: '2', text: `Provide your security code: ${accessCode}` },
+                
                 { num: '3', text: 'Wait for receptionist to confirm & order your lab test' },
-                { num: '4', text: 'Log in anytime using your code to track test status & download results' }
+               
+                { num: '3', text: 'Log in anytime using your code to track test status & download results' },
+                { num: '4', text: `DO NOT SHARE YOUR CODE TO ANYONE : ${accessCode}` },
               ].map((step) => (
                 <div key={step.num} className="flex items-center gap-3 p-2.5 bg-white/5 rounded-xl border border-white/10">
                   <span className="w-6 h-6 rounded-lg bg-teal-500/30 border border-teal-400/40 text-teal-300 font-bold flex items-center justify-center shrink-0 text-xs">

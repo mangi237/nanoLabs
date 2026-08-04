@@ -2,8 +2,22 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
-import { db, getDocs, collection } from '../../services/firebase';
-import { Calendar, FileText, Share2, ArrowRightLeft, Plus, Clock, CheckCircle2, ChevronRight, Activity, TestTube } from 'lucide-react';
+import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
+import { 
+  Calendar, 
+  FileText, 
+  Share2, 
+  ArrowRightLeft, 
+  Plus, 
+  Clock, 
+  CheckCircle2, 
+  ChevronRight, 
+  Activity, 
+  TestTube,
+  DollarSign,
+  Laptop,
+  Building2
+} from 'lucide-react';
 
 interface PatientDashboardProps {
   onNavigateTab?: (tab: string) => void;
@@ -22,20 +36,38 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const { t } = useLanguage();
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPatientTests();
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   const fetchPatientTests = async () => {
     try {
       setLoading(true);
       const snap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
-      const found = snap.docs.find(d => d.data().email === user?.email || d.data().name === user?.name);
+      const found = snap.docs.find(d => 
+        d.id === user?.id ||
+        d.data().email === user?.email || 
+        d.data().accessCode === user?.accessCode ||
+        d.data().name === user?.name
+      );
       if (found && found.data().labTests) {
         setTests(found.data().labTests);
       } else {
-        setTests([]);
+        setTests([
+          {
+            id: 'UNAVAILABLE',
+            testName: 'UNAVAILABLE',
+            category: 'UNAVAILABLE',
+            price: 0,
+            paymentStatus: 'UNAVAILABLE',
+            status: 'UNAVAILABLE',
+            requestedDate: '2026-08-01',
+            result: 'UNAVAILABLE',
+            virtualRequested: false
+          }
+        ]);
       }
     } catch (e) {
       console.error('Error fetching patient tests:', e);
@@ -45,9 +77,49 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
+  const handleRequestVirtual = async (e: React.MouseEvent, testItem: any) => {
+    e.stopPropagation();
+    setRequestingId(testItem.id);
+    try {
+      const targetLabId = lab?.id || 'lab-1';
+      const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
+      const foundDoc = snap.docs.find(d => 
+        d.id === user?.id ||
+        d.data().email === user?.email || 
+        d.data().accessCode === user?.accessCode ||
+        d.data().name === user?.name
+      );
+
+      if (foundDoc) {
+        const patientData = foundDoc.data();
+        const updatedTests = (patientData.labTests || []).map((t: any) => {
+          if (t.id === testItem.id) {
+            return {
+              ...t,
+              virtualRequested: true,
+              virtualRequestedAt: new Date().toISOString()
+            };
+          }
+          return t;
+        });
+
+        await updateDoc(doc(db, 'labs', targetLabId, 'patients', foundDoc.id), {
+          labTests: updatedTests,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      fetchPatientTests();
+    } catch (err) {
+      console.error('Error requesting virtual result:', err);
+    } finally {
+      setRequestingId(null);
+    }
+  };
+
   const actionCards = [
     { id: 'book', label: 'Book Appointment', desc: 'Schedule consultation or test', icon: Calendar, color: 'text-teal-600 bg-teal-50 border-teal-200' },
-    { id: 'history', label: 'Test History', desc: 'View complete lab reports', icon: FileText, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+    { id: 'history', label: 'Test History', desc: 'View complete lab reports & prices', icon: FileText, color: 'text-blue-600 bg-blue-50 border-blue-200' },
     { id: 'share', label: 'Share Results', desc: 'Send records to physician', icon: Share2, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
     { id: 'transfer', label: 'Transfer Records', desc: 'Move files between labs', icon: ArrowRightLeft, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   ];
@@ -80,12 +152,23 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             {onNavigateTab && (
               <button
                 onClick={() => onNavigateTab('book')}
-                className="flex items-center gap-2 px-5 py-3 bg-white text-teal-900 font-bold rounded-2xl text-xs hover:bg-teal-50 shadow-md transition-all shrink-0"
+                className="flex items-center gap-2 px-5 py-3 bg-white text-teal-900 font-bold rounded-2xl text-xs hover:bg-teal-50 shadow-md transition-all shrink-0 cursor-pointer"
               >
                 <Plus className="w-4 h-4 text-teal-700" />
                 Book New Test
               </button>
             )}
+          </div>
+        </div>
+
+        {/* Physical Pickup & Virtual Request Notice */}
+        <div className="p-4 bg-teal-50 border border-teal-200/80 rounded-2xl flex items-start gap-3 text-xs text-teal-900">
+          <Building2 className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <div className="font-bold">Physical Result Collection & Online Virtual Reports</div>
+            <p className="text-slate-700">
+              When lab tests are completed, official printed paper copies can be picked up at the receptionist desk. You can also click <strong>"Request Virtual Result"</strong> below to have your digital PDF uploaded directly to your online dashboard.
+            </p>
           </div>
         </div>
 
@@ -118,12 +201,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-slate-900 text-sm sm:text-base">Recent Test Requests</h3>
-              <p className="text-xs text-slate-500">Track live progress of your medical analysis</p>
+              <p className="text-xs text-slate-500">Track status, price paid & virtual PDF availability</p>
             </div>
             {onNavigateTab && (
               <button
                 onClick={() => onNavigateTab('history')}
-                className="text-xs font-semibold text-teal-600 hover:text-teal-800"
+                className="text-xs font-semibold text-teal-600 hover:text-teal-800 cursor-pointer"
               >
                 View Full History
               </button>
@@ -131,38 +214,63 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
 
           <div className="divide-y divide-slate-100">
-            {tests.map(test => (
-              <div
-                key={test.id}
-                onClick={() => onSelectTest && onSelectTest(test)}
-                className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-teal-50/30 cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
-                    <TestTube className="w-6 h-6" />
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <h4 className="font-bold text-slate-900 text-sm truncate">
-                      {test.testName || test.name}
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Category: {test.category || 'General'} • Date: {test.requestedDate || 'Recent'}
-                    </p>
-                  </div>
-                </div>
+            {tests.map(test => {
+              const price = test.price || test.amount || 5000;
+              const hasPdf = Boolean(test.pdfUrl || test.fileUrl);
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    test.status === 'completed'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {test.status || 'Processing'}
-                  </span>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
+              return (
+                <div
+                  key={test.id}
+                  onClick={() => onSelectTest && onSelectTest(test)}
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-teal-50/30 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 mt-0.5">
+                      <TestTube className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <h4 className="font-bold text-slate-900 text-sm truncate">
+                        {test.testName || test.name}
+                      </h4>
+                      
+                      <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                        <span>Category: {test.category || 'General'}</span>
+                        <span>•</span>
+                        <span className="font-bold text-emerald-700 flex items-center gap-0.5">
+                          <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                          Price Paid: {price.toLocaleString()} FCFA
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    {hasPdf ? (
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        PDF Virtual Result Ready
+                      </span>
+                    ) : test.virtualRequested ? (
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                        Virtual Requested
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => handleRequestVirtual(e, test)}
+                        disabled={requestingId === test.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Laptop className="w-3.5 h-3.5" />
+                        {requestingId === test.id ? 'Requesting...' : 'Request Virtual Result'}
+                      </button>
+                    )}
+
+                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {tests.length === 0 && (
               <div className="p-10 text-center text-slate-400 space-y-2">
