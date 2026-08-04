@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {/* Role Switcher Button */}
-            {user && (
+            {/* {user && (
               <button
                 onClick={() => {
                   if (onRoleSwitcherPress) onRoleSwitcherPress();
@@ -94,17 +94,17 @@ export const Header: React.FC<HeaderProps> = ({
                 <ShieldCheck className="w-4 h-4 text-purple-600" />
                 <span className="hidden sm:inline">Role Switcher</span>
               </button>
-            )}
+            )} */}
 
             {/* Tester Guide Button */}
-            <button
+            {/* <button
               onClick={() => setShowGuideModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100/80 transition-all border border-teal-200 text-xs font-semibold cursor-pointer shadow-2xs"
               title="Testing & User Guide PDF"
             >
               <FileText className="w-4 h-4 text-teal-600" />
               <span className="hidden sm:inline">Tester Guide</span>
-            </button>
+            </button> */}
 
             {/* Notifications Button */}
             <button
