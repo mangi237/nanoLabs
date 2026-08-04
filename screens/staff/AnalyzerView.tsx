@@ -24,12 +24,14 @@ interface AnalyzerViewProps {
   onBack?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  onRoleSwitcherPress?: () => void;
 }
 
 export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   onBack,
   onNotificationPress,
-  onProfilePress
+  onProfilePress,
+  onRoleSwitcherPress
 }) => {
   const { lab, user } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
@@ -169,6 +171,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
         subtitle="Collect biological specimens & accession lab samples"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">

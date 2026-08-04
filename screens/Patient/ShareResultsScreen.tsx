@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../../components/common/Header';
-import { Share2, Mail, Copy, CheckCircle2, ArrowLeft, ShieldCheck, Lock } from 'lucide-react';
+import { Share2, Mail, Copy, CheckCircle2, ArrowLeft, ShieldCheck, Lock, Loader2 } from 'lucide-react';
+import { sendEmail } from '../../services/emailService';
 
 interface ShareResultsScreenProps {
   onBack?: () => void;
@@ -15,7 +16,9 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
 }) => {
   const [recipientEmail, setRecipientEmail] = useState('doctor.smith@clinic.org');
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sendResultMsg, setSendResultMsg] = useState('');
   const shareUrl = 'https://nanolabs.health/share/token-882019-sec';
 
   const handleCopy = () => {
@@ -24,10 +27,26 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSendEmail = (e: React.FormEvent) => {
+  const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
+    setSending(true);
+    setSent(false);
+    setSendResultMsg('');
+
+    const res = await sendEmail(
+      recipientEmail,
+      'Shared Patient Lab Result Access Link - nanoLabs',
+      `Hello Doctor,\n\nYou have been granted temporary secure access to view confidential patient diagnostic reports.\n\nDirect Access Link: ${shareUrl}\n\nThank you,\nnanoLabs Health Care Network`
+    );
+
+    setSending(false);
+    if (res.success) {
+      setSent(true);
+      setSendResultMsg(`Secure access link sent to ${recipientEmail}`);
+      setTimeout(() => setSent(false), 5000);
+    } else {
+      setSendResultMsg('Failed to send email. Please check internet connection.');
+    }
   };
 
   return (
@@ -100,16 +119,26 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
               {sent && (
                 <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-xl font-semibold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Secure access link sent to physician!
+                  {sendResultMsg || 'Secure access link sent to physician!'}
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all"
+                disabled={sending}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
               >
-                Send Encrypted Email
-                <Mail className="w-4 h-4" />
+                {sending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sending Email...
+                  </>
+                ) : (
+                  <>
+                    Send Encrypted Email
+                    <Mail className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           </div>

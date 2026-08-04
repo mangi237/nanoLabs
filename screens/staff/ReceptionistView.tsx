@@ -10,6 +10,7 @@ interface ReceptionistViewProps {
   onNavigateRegister?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  onRoleSwitcherPress?: () => void;
   onNavigatePatientDetails?: (patientId: string) => void;
 }
 
@@ -18,6 +19,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   onNavigateRegister,
   onNotificationPress,
   onProfilePress,
+  onRoleSwitcherPress,
   onNavigatePatientDetails
 }) => {
   const { lab } = useAuth();
@@ -79,6 +81,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         subtitle="Patient check-in, registration & specimen collection"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">

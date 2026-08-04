@@ -25,12 +25,14 @@ interface CashierViewProps {
   onBack?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  onRoleSwitcherPress?: () => void;
 }
 
 export const CashierView: React.FC<CashierViewProps> = ({
   onBack,
   onNotificationPress,
-  onProfilePress
+  onProfilePress,
+  onRoleSwitcherPress
 }) => {
   const { lab, user } = useAuth();
   const [bills, setBills] = useState<any[]>([]);
@@ -174,6 +176,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         subtitle="Manage invoice verification, payments & receipts"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">

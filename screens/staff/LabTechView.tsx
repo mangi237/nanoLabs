@@ -5,6 +5,7 @@ import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
 import { authService } from '../../services/authService';
+import { sendResultNotificationEmail } from '../../services/emailService';
 import { 
   FlaskConical, 
   CheckCircle2, 
@@ -29,12 +30,14 @@ interface LabTechViewProps {
   onBack?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  onRoleSwitcherPress?: () => void;
 }
 
 export const LabTechView: React.FC<LabTechViewProps> = ({
   onBack,
   onNotificationPress,
-  onProfilePress
+  onProfilePress,
+  onRoleSwitcherPress
 }) => {
   const { lab, user } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
@@ -182,6 +185,18 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           labTests: updatedLabTests,
           updatedAt: new Date().toISOString()
         });
+
+        // Trigger email notification to patient if email exists
+        const patientEmail = patientData.email || (patientData.contact && patientData.contact.includes('@') ? patientData.contact : null);
+        if (patientEmail) {
+          console.log('Sending result notification email to patient:', patientEmail);
+          sendResultNotificationEmail(
+            patientEmail,
+            patientData.name || 'Patient',
+            selectedTest.testName || selectedTest.name || 'Laboratory Test',
+            resultText.trim()
+          ).catch(err => console.warn('Non-blocking result notification email error:', err));
+        }
       }
 
       setShowResultModal(false);
@@ -215,6 +230,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
         subtitle="Process samples, upload PDF results & fulfill virtual requests"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">

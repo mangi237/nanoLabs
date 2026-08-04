@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection } from '../../services/firebase';
+import { sendEmail } from '../../services/emailService';
 import { Calendar, Clock, User, MapPin, FileText, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface BookAppointmentScreenProps {
@@ -47,6 +48,15 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         location: lab?.name || 'nanoLabs Central Diagnostics',
         createdAt: new Date().toISOString()
       });
+
+      // Send appointment confirmation email if email available
+      if (user?.email) {
+        sendEmail(
+          user.email,
+          `Appointment Confirmation: ${formData.title} - nanoLabs`,
+          `Dear ${user.name || 'Patient'},\n\nYour appointment has been successfully scheduled!\n\nService: ${formData.title}\nDate: ${formData.date}\nTime: ${formData.time}\nLocation: ${lab?.name || 'nanoLabs Central Diagnostics'}\n\nThank you for choosing nanoLabs!`
+        ).catch(e => console.warn('Appointment email error:', e));
+      }
 
       if (onSuccess) onSuccess();
       else if (onBack) onBack();

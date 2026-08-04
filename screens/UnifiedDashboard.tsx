@@ -48,20 +48,39 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
         onNavigateRegister={() => onNavigateTab('register')}
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
       />
     );
   }
 
   if (currentRole === 'cashier') {
-    return <CashierView />;
+    return (
+      <CashierView
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
+      />
+    );
   }
 
   if (currentRole === 'analyzer') {
-    return <AnalyzerView />;
+    return (
+      <AnalyzerView
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
+      />
+    );
   }
 
   if (currentRole === 'lab_tech') {
-    return <LabTechView />;
+    return (
+      <LabTechView
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
+      />
+    );
   }
 
   if (currentRole === 'staff') {
