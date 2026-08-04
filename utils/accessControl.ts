@@ -411,7 +411,8 @@ export const getRolePermissions = (role: string) => {
     },
   };
 
-  return permissions[role] || permissions.receptionist; // Default to receptionist if role not found
+  return permissions[role as keyof typeof permissions] || permissions.receptionist;
+  // Default to receptionist if role not found
 };
 
 /**
