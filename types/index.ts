@@ -12,6 +12,8 @@ export interface User {
   accessCode?: string;
   labId?: string;
   labName?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
 }
 
 export interface Lab {
@@ -19,7 +21,14 @@ export interface Lab {
   name: string;
   location: string;
   patientCount?: number;
+  confirmedTestsCount?: number;
+  totalTestsCount?: number;
+  royaltyEarnings?: number;
   primaryColor?: string;
+  logoUrl?: string;
+  avatarUrl?: string;
+  feePerTest?: number;
+  feePerPatient?: number;
 }
 
 export interface Hospital {
@@ -36,7 +45,12 @@ export interface LabTest {
   category?: string;
   price?: number;
   description?: string;
-  status?: 'requested' | 'collected' | 'sample-collected' | 'processing' | 'completed' | 'paid';
+  turnaroundTime?: string;
+  expectedTime?: string;
+  status?: 'requested' | 'confirmed' | 'collected' | 'sample-collected' | 'processing' | 'completed' | 'paid';
+  confirmedByReceptionist?: boolean;
+  confirmedAt?: string;
+  confirmedBy?: string;
   patientId?: string;
   patientName?: string;
   requestedDate?: string;
@@ -47,6 +61,9 @@ export interface LabTest {
   sampleCollectedByName?: string;
   sampleCollectedDate?: any;
   samples?: string[];
+  doctorName?: string;
+  labTechId?: string;
+  labTechName?: string;
 }
 
 export interface Patient {
@@ -58,6 +75,8 @@ export interface Patient {
   phone?: string;
   email?: string;
   address?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
   status?: 'active' | 'pending' | 'inactive' | 'lab-pending' | 'lab-sample-collected';
   labTests?: LabTest[];
   updatedAt?: string;
@@ -88,14 +107,20 @@ export interface Bill {
 export interface Appointment {
   id: string;
   title: string;
+  testId?: string;
+  testName?: string;
+  price?: number;
+  turnaroundTime?: string;
   date?: string;
   time?: string;
   duration?: string;
   doctorName?: string;
+  labTechId?: string;
+  labTechName?: string;
   location?: string;
   notes?: string;
   type?: string;
-  status: 'scheduled' | 'completed' | 'cancelled' | 'pending';
+  status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'pending';
   patientId?: string;
   patientName?: string;
   createdAt?: string;

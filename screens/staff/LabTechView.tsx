@@ -6,6 +6,7 @@ import { db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
 import { authService } from '../../services/authService';
 import { sendResultNotificationEmail } from '../../services/emailService';
+import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { 
   FlaskConical, 
   CheckCircle2, 
@@ -83,7 +84,13 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           });
         }
       });
-      setTests(allTests);
+
+      // Decrypt any client-side encrypted test fields in-memory for authorized technologist
+      const decryptedTests = await Promise.all(
+        allTests.map(async test => cryptoSecurity.decryptTestRecord(test))
+      );
+
+      setTests(decryptedTests);
     } catch (err) {
       console.error('Error fetching lab tech tests:', err);
     } finally {
@@ -165,18 +172,27 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       
       if (targetDoc) {
         const patientData = targetDoc.data();
+
+        // Zero-Knowledge Client-Side Field-Level Encryption:
+        // Encrypt clinical findings, notes, and PDF payload before sending to Firestore
+        const encryptedResult = await cryptoSecurity.encryptField(resultText.trim());
+        const encryptedNotes = notes.trim() ? await cryptoSecurity.encryptField(notes.trim()) : '';
+        const encryptedPdfUrl = pdfUrl ? await cryptoSecurity.encryptField(pdfUrl) : (selectedTest.pdfUrl ? await cryptoSecurity.encryptField(selectedTest.pdfUrl) : null);
+
         const updatedLabTests = (patientData.labTests || []).map((t: any) => {
           if (t.id === selectedTest.id) {
             return {
               ...t,
               status: 'completed',
-              result: resultText.trim(),
-              notes: notes.trim(),
-              pdfUrl: pdfUrl || t.pdfUrl || null,
+              result: encryptedResult,
+              notes: encryptedNotes,
+              pdfUrl: encryptedPdfUrl,
               pdfName: pdfName || 'DiagnosticReport.pdf',
               virtualFulfilled: true,
               completedDate: new Date().toISOString().split('T')[0],
-              completedBy: authCheck.staffName || user?.name || 'Lab Technologist'
+              completedBy: authCheck.staffName || user?.name || 'Lab Technologist',
+              isEncrypted: true,
+              cipherAlgorithm: 'AES-GCM-256'
             };
           }
           return t;

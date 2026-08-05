@@ -100,6 +100,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
   // Aggregate metrics
   const totalLabs = labs.length;
   const totalPatients = labs.reduce((acc, l) => acc + (l.patientCount || 0), 0);
+ 
   const totalStaff = labs.reduce((acc, l) => acc + (l.staffCount || 0), 0);
   const totalRevenue = totalPatients * 1000; // 1,000 FCFA per patient
 

@@ -4,8 +4,9 @@ import { db, addDoc, collection } from '../../services/firebase';
 import { 
   Activity, User, Mail, Phone, MapPin, ArrowLeft, Loader2, 
   CheckCircle2, Building2, Key, RefreshCw, Search, Check, 
-  Sparkles, ShieldCheck, ChevronDown
+  Sparkles, ShieldCheck, ChevronDown, FileText, ExternalLink
 } from 'lucide-react';
+import PatientTermsModal from '../../components/legal/PatientTermsModal';
 
 interface RegisterScreenProps {
   onBackToLogin?: () => void;
@@ -16,6 +17,11 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
   const { lab, getAllLabs } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Terms & Conditions state
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [healthConsent, setHealthConsent] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   
   // Labs state & search
   const [labs, setLabs] = useState<any[]>([]);
@@ -98,6 +104,16 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       return;
     }
 
+    if (!termsAccepted) {
+      setErrorMessage('You must read and agree to the Terms and Conditions before creating an account.');
+      return;
+    }
+
+    if (!healthConsent) {
+      setErrorMessage('You must consent to the processing of your health data to proceed.');
+      return;
+    }
+
     setLoading(true);
     try {
       const patientId = 'P-' + Math.floor(1000 + Math.random() * 9000);
@@ -115,6 +131,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         status: 'pending_confirmation',
         labId: targetLabId,
         labName: selectedLab.name || 'Medical Laboratory',
+        termsAccepted: true,
+        termsAcceptedAt: new Date().toISOString(),
+        healthDataConsent: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         labTests: []
@@ -422,11 +441,70 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
               </div>
             </div>
 
+            {/* STEP 4: TERMS & CONDITIONS AND PRIVACY CONSENT */}
+            <div className="space-y-3 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-teal-300 flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-teal-400" />
+                  4. Terms & Privacy Agreement <span className="text-rose-400">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-xs font-semibold text-teal-300 hover:text-white flex items-center gap-1 transition-colors underline cursor-pointer"
+                >
+                  Read Full Terms
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* System Fee Notice */}
+              <div className="p-3 bg-teal-950/60 border border-teal-500/30 rounded-xl text-[11px] text-slate-300 leading-relaxed">
+                <span className="text-teal-300 font-semibold">Service & System Fee Notice:</span> Standard laboratory fees are set by the facility. A platform System Fee of <strong className="text-white">1,000 XAF</strong> applies per completed service transaction to maintain secure digital result delivery and sample accountability.
+              </div>
+
+              {/* Checkbox 1: Terms and Conditions */}
+              <label className="flex items-start gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={e => setTermsAccepted(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-teal-600 focus:ring-teal-500 bg-slate-900 border-white/30 cursor-pointer"
+                />
+                <span className="text-xs text-slate-200">
+                  I have read and agree to the{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowTermsModal(true);
+                    }}
+                    className="text-teal-300 font-bold underline hover:text-white inline-flex items-center gap-0.5"
+                  >
+                    Terms and Conditions
+                  </button>
+                </span>
+              </label>
+
+              {/* Checkbox 2: Health Data Processing Consent */}
+              <label className="flex items-start gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={healthConsent}
+                  onChange={e => setHealthConsent(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-teal-600 focus:ring-teal-500 bg-slate-900 border-white/30 cursor-pointer"
+                />
+                <span className="text-xs text-slate-200">
+                  I consent to the processing of my health data as described in the Terms & Conditions
+                </span>
+              </label>
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3.5 px-4 mt-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-bold rounded-2xl text-sm shadow-xl shadow-teal-500/30 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+              disabled={loading || !termsAccepted || !healthConsent}
+              className="w-full py-3.5 px-4 mt-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-bold rounded-2xl text-sm shadow-xl shadow-teal-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               {loading ? (
                 <>
@@ -435,7 +513,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                 </>
               ) : (
                 <>
-                  Complete Registration
+                  Agree & Complete Registration
                   <CheckCircle2 className="w-5 h-5" />
                 </>
               )}
@@ -444,6 +522,17 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
 
         </div>
       </div>
+
+      {/* Patient Terms Modal */}
+      <PatientTermsModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setTermsAccepted(true);
+          setHealthConsent(true);
+        }}
+        accepted={termsAccepted && healthConsent}
+      />
     </div>
   );
 };

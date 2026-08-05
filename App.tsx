@@ -257,7 +257,7 @@ const MainAppContent: React.FC = () => {
         return (
           <BookAppointmentScreen
             onBack={() => setScreen('dashboard')}
-            onSuccess={() => setScreen('appointment')}
+            onSuccess={() => setScreen('patient-dashboard')}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
           />

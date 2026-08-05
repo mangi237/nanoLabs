@@ -31,6 +31,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
   const [lab, setLab] = useState<any>(null);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [patientCount, setPatientCount] = useState<number>(0);
+  const [confirmedTestsCount, setConfirmedTestsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -68,9 +69,25 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
       const staffDocs = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setStaffList(staffDocs);
 
-      // Fetch lab patients
+      // Fetch lab patients & count confirmed tests
       const patientSnap = await getDocs(collection(db, 'labs', labId, 'patients'));
       setPatientCount(patientSnap.size || foundLabDoc?.data()?.patientCount || 0);
+
+      let confirmedCount = 0;
+      patientSnap.docs.forEach(pDoc => {
+        const pData = pDoc.data();
+        const labTests = pData.labTests || [];
+        labTests.forEach((test: any) => {
+          if (
+            test.confirmedByReceptionist === true || 
+            test.sampleCollected === true ||
+            ['confirmed', 'sample-collected', 'collected', 'processing', 'completed', 'paid'].includes(test.status)
+          ) {
+            confirmedCount++;
+          }
+        });
+      });
+      setConfirmedTestsCount(confirmedCount);
 
     } catch (err) {
       console.error('Error fetching lab details:', err);
@@ -130,8 +147,8 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
 
   if (loading) {
     return (
-      <div  className="py-20 text-center text-slate-500">
-        <div  className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+      <div className="py-20 text-center text-slate-500">
+        <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
         Loading laboratory center details...
       </div>
     );
@@ -148,7 +165,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
     );
   }
 
-  const calculatedRevenue = patientCount * (lab.feePerPatient || 1000);
+  const calculatedRevenue = confirmedTestsCount * (lab.feePerTest || lab.feePerPatient || 1000);
 
   return (
     <div className="space-y-6">
@@ -187,25 +204,39 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
         style={{ backgroundColor: lab.primaryColor || '#0D9488' }}
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
-              <Building2 className="w-3.5 h-3.5" />
-              {lab.status === 'active' ? 'Active Network Center' : 'Inactive'}
-            </span>
-            <h1 className="text-3xl font-bold">{lab.name}</h1>
-            <p className="text-white/80 text-sm">{lab.slogan || 'Diagnostic & Clinical Laboratory'}</p>
+          <div className="flex items-center gap-4">
+            {lab.logoUrl || lab.avatarUrl ? (
+              <img
+                src={lab.logoUrl || lab.avatarUrl}
+                alt={lab.name}
+                referrerPolicy="no-referrer"
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-white/40 shadow-md shrink-0 bg-white/10"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-2xl border-2 border-white/30 shrink-0">
+                {lab.name ? lab.name.charAt(0).toUpperCase() : 'L'}
+              </div>
+            )}
+            <div className="space-y-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
+                <Building2 className="w-3.5 h-3.5" />
+                {lab.status === 'active' ? 'Active Network Center' : 'Inactive'}
+              </span>
+              <h1 className="text-2xl sm:text-3xl font-bold">{lab.name}</h1>
+              <p className="text-white/80 text-sm">{lab.slogan || 'Diagnostic & Clinical Laboratory'}</p>
+            </div>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-right min-w-[200px]">
-            <div className="text-xs text-white/80 uppercase font-bold tracking-wider">Computed Royalty Fee</div>
+            <div className="text-xs text-white/80 uppercase font-bold tracking-wider">Confirmed Test Royalties</div>
             <div className="text-2xl font-bold mt-0.5">{calculatedRevenue.toLocaleString()} FCFA</div>
-            <div className="text-[11px] text-white/70">@ 1,000 FCFA / patient</div>
+            <div className="text-[11px] text-white/70">{confirmedTestsCount} confirmed tests @ 1,000 FCFA</div>
           </div>
         </div>
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
             <Users className="w-6 h-6" />
@@ -213,6 +244,16 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
           <div>
             <div className="text-2xl font-bold text-slate-900">{patientCount}</div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Patients</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{confirmedTestsCount}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Tests</div>
           </div>
         </div>
 
@@ -231,8 +272,8 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">{calculatedRevenue.toLocaleString()} FCFA</div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Network Earnings</div>
+            <div className="text-2xl font-bold text-emerald-700">{calculatedRevenue.toLocaleString()} FCFA</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Royalties</div>
           </div>
         </div>
       </div>

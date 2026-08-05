@@ -58,8 +58,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         setTests([
           {
             id: 'UNAVAILABLE',
-            testName: 'UNAVAILABLE',
-            category: 'UNAVAILABLE',
+            testName: 'NO TEST CARRIED OUT AT THE MOMENT',
+            category: 'VISIT RECEPTIONIST FOR CLARIFICATION',
             price: 0,
             paymentStatus: 'UNAVAILABLE',
             status: 'UNAVAILABLE',
@@ -236,9 +236,28 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                       <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
                         <span>Category: {test.category || 'General'}</span>
                         <span>•</span>
-                        <span className="font-bold text-emerald-700 flex items-center gap-0.5">
-                          <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                          Price Paid: {price.toLocaleString()} FCFA
+                        {test.paid === true || test.paymentStatus === 'paid' ? (
+                          <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                            Paid: {price.toLocaleString()} FCFA
+                          </span>
+                        ) : (
+                          <span className="font-bold text-amber-800 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            Unpaid: {price.toLocaleString()} FCFA
+                          </span>
+                        )}
+                        <span>•</span>
+                        <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] uppercase ${
+                          test.status === 'completed' 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : test.status === 'analyzing'
+                              ? 'bg-blue-100 text-blue-800'
+                              : test.paid
+                                ? 'bg-teal-100 text-teal-800'
+                                : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {test.status === 'completed' ? 'Results Ready' : test.status === 'analyzing' ? 'In Analysis' : test.paid ? 'Awaiting Specimen' : 'Pending Payment'}
                         </span>
                       </div>
                     </div>
