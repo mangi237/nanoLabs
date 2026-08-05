@@ -176,7 +176,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             {onNavigateRegister && (
               <button
                 onClick={onNavigateRegister}
@@ -186,7 +186,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 Register Walk-in Patient
               </button>
             )}
-          </div>
+          </div> */}
         </div>
 
         {/* Tab Selection */}
