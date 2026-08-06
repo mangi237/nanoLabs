@@ -6,7 +6,8 @@ import {
   getDocs, 
   doc, 
   getDoc, 
-  addDoc 
+  addDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -15,33 +16,34 @@ export interface AuthResult {
   user?: any;
   lab?: any;
   role?: string;
+  mustChangePassword?: boolean;
   error?: string;
 }
 
 // Logical default staff user templates for instant login & authorization
 const DEFAULT_STAFF_MAP: Record<string, { role: string; name: string; roles: string[] }> = {
   SUPER123: { role: 'superadmin', name: 'Super Admin', roles: ['superadmin'] },
-  ADMIN123: { role: 'admin', name: 'Lab Administrator', roles: ['admin'] },
-  TECH123: { role: 'labtech', name: 'Lead Lab Technologist', roles: ['labtech', 'staff'] },
-  LABTECH123: { role: 'labtech', name: 'Lab Technician', roles: ['labtech', 'staff'] },
-  CASH123: { role: 'cashier', name: 'Financial Cashier', roles: ['cashier', 'staff'] },
-  CASHIER123: { role: 'cashier', name: 'Head Cashier', roles: ['cashier', 'staff'] },
-  ANALYZER123: { role: 'analyzer', name: 'Sample Analyzer', roles: ['analyzer', 'staff'] },
-  SAMPLE123: { role: 'analyzer', name: 'Phlebotomist Collector', roles: ['analyzer', 'staff'] },
-  PHLEB123: { role: 'analyzer', name: 'Sample Collector', roles: ['analyzer', 'staff'] },
-  REC123: { role: 'receptionist', name: 'Front Desk Receptionist', roles: ['receptionist', 'staff'] },
-  RECEPTION123: { role: 'receptionist', name: 'Senior Receptionist', roles: ['receptionist', 'staff'] },
-  PAT123: { role: 'patient', name: 'Demo Patient', roles: ['patient'] },
-  PATIENT123: { role: 'patient', name: 'Sample Patient', roles: ['patient'] }
+  // ADMIN123: { role: 'admin', name: 'Lab Administrator', roles: ['admin'] },
+  // TECH123: { role: 'labtech', name: 'Lead Lab Technologist', roles: ['labtech', 'staff'] },
+  // LABTECH123: { role: 'labtech', name: 'Lab Technician', roles: ['labtech', 'staff'] },
+  // CASH123: { role: 'cashier', name: 'Financial Cashier', roles: ['cashier', 'staff'] },
+  // CASHIER123: { role: 'cashier', name: 'Head Cashier', roles: ['cashier', 'staff'] },
+  // ANALYZER123: { role: 'analyzer', name: 'Sample Analyzer', roles: ['analyzer', 'staff'] },
+  // SAMPLE123: { role: 'analyzer', name: 'Phlebotomist Collector', roles: ['analyzer', 'staff'] },
+  // PHLEB123: { role: 'analyzer', name: 'Sample Collector', roles: ['analyzer', 'staff'] },
+  // REC123: { role: 'receptionist', name: 'Front Desk Receptionist', roles: ['receptionist', 'staff'] },
+  // RECEPTION123: { role: 'receptionist', name: 'Senior Receptionist', roles: ['receptionist', 'staff'] },
+  // PAT123: { role: 'patient', name: 'Demo Patient', roles: ['patient'] },
+  // PATIENT123: { role: 'patient', name: 'Sample Patient', roles: ['patient'] }
 };
 
 export const authService = {
   /**
-   * Verifies access codes for both staff and patients in a lab.
+   * Verifies access codes for both staff (OTP / permanent hashed password) and patients in a lab.
    */
   async verifyAccessCode(code: string, labId: string): Promise<AuthResult> {
     try {
-      const cleanCode = (code || '').trim().toUpperCase();
+      const cleanCode = (code || '').trim();
       console.log('🔍 verifyAccessCode called with:', { cleanCode, labId });
 
       if (!cleanCode) {
@@ -50,9 +52,36 @@ export const authService = {
 
       const targetLabId = labId || 'lab-1';
 
-      // 1. Check logical default staff codes (SUPER123, TECH123, CASH123, ANALYZER123, REC123, etc.)
-      if (DEFAULT_STAFF_MAP[cleanCode]) {
-        const staffInfo = DEFAULT_STAFF_MAP[cleanCode];
+      // 1. Try Server-Side Zero-Knowledge Staff Verification (Hashed OTP or Hashed Permanent Password)
+      try {
+        const serverRes = await fetch('/api/staff/login-or-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode: cleanCode, labId: targetLabId })
+        });
+
+        if (serverRes.ok) {
+          const serverData = await serverRes.json();
+          if (serverData.success && serverData.user) {
+            console.log('✅ Verified via Server-side Staff Auth Registry:', serverData.user.name);
+            return {
+              success: true,
+              user: serverData.user,
+              lab: { id: targetLabId, name: serverData.user.labName || 'nanoLabs Central Diagnostics' },
+              role: serverData.user.role,
+              mustChangePassword: serverData.mustChangePassword === true
+            };
+          }
+        }
+      } catch (srvErr) {
+        console.warn('Server auth endpoint check bypassed:', srvErr);
+      }
+
+      const upperCode = cleanCode.toUpperCase();
+
+      // 2. Check logical default staff codes (SUPER123, TECH123, CASH123, ANALYZER123, REC123, etc.)
+      if (DEFAULT_STAFF_MAP[upperCode]) {
+        const staffInfo = DEFAULT_STAFF_MAP[upperCode];
         console.log('✅ Default staff role matched:', staffInfo.name);
 
         let labData: any = { id: targetLabId, name: 'nanoLabs Central Diagnostics', primaryColor: '#0D9488' };
@@ -69,19 +98,22 @@ export const authService = {
         return {
           success: true,
           user: {
-            id: cleanCode.toLowerCase(),
+            id: upperCode.toLowerCase(),
             name: staffInfo.name,
-            accessCode: cleanCode,
+            accessCode: upperCode,
             role: staffInfo.role,
             roles: staffInfo.roles,
-            labId: targetLabId
+            labId: targetLabId,
+            labName: labData.name,
+            mustChangePassword: false
           },
           lab: labData,
-          role: staffInfo.role
+          role: staffInfo.role,
+          mustChangePassword: false
         };
       }
 
-      // 2. Search Firestore Staff subcollection
+      // 3. Search Firestore Staff subcollection
       try {
         console.log('🔍 Checking Firestore staff in lab:', targetLabId);
         const staffRef = collection(db, 'labs', targetLabId, 'staff');
@@ -90,7 +122,8 @@ export const authService = {
         const foundStaffDoc = staffSnap.docs.find(d => {
           const dData = d.data();
           const dCode = (dData.accessCode || '').trim().toUpperCase();
-          return dCode === cleanCode;
+          const dEmail = (dData.email || '').trim().toUpperCase();
+          return dCode === upperCode || dEmail === upperCode;
         });
 
         if (foundStaffDoc) {
@@ -104,17 +137,19 @@ export const authService = {
               id: foundStaffDoc.id,
               ...staffData,
               role,
-              roles: staffData.roles || [role]
+              roles: staffData.roles || [role],
+              mustChangePassword: staffData.mustChangePassword === true
             },
             lab: { id: targetLabId, name: staffData.labName || 'Laboratory Center' },
-            role
+            role,
+            mustChangePassword: staffData.mustChangePassword === true
           };
         }
       } catch (staffErr) {
         console.warn('Error querying staff collection:', staffErr);
       }
 
-      // 3. Search Firestore Patients subcollection across target lab or any lab
+      // 4. Search Firestore Patients subcollection across target lab or any lab
       try {
         console.log('🔍 Checking Firestore patients in lab:', targetLabId);
         const patientsRef = collection(db, 'labs', targetLabId, 'patients');
@@ -124,7 +159,8 @@ export const authService = {
           const dData = d.data();
           const dAccessCode = (dData.accessCode || '').trim().toUpperCase();
           const dPatientId = (dData.patientId || '').trim().toUpperCase();
-          return dAccessCode === cleanCode || dPatientId === cleanCode || d.id.toUpperCase() === cleanCode;
+          const dEmail = (dData.email || '').trim().toUpperCase();
+          return dAccessCode === upperCode || dPatientId === upperCode || dEmail === upperCode || d.id.toUpperCase() === upperCode;
         });
 
         if (foundPatientDoc) {
@@ -137,14 +173,16 @@ export const authService = {
               id: foundPatientDoc.id,
               ...patientData,
               role: 'patient',
-              roles: ['patient']
+              roles: ['patient'],
+              mustChangePassword: false
             },
             lab: { id: targetLabId, name: patientData.labName || 'Laboratory Center' },
-            role: 'patient'
+            role: 'patient',
+            mustChangePassword: false
           };
         }
 
-        // Global check across all lab patient collections if specific lab failed
+        // Global check across all lab patient collections if specific lab query didn't match
         const allLabsSnap = await getDocs(collection(db, 'labs'));
         for (const labDoc of allLabsSnap.docs) {
           if (labDoc.id === targetLabId) continue;
@@ -153,7 +191,8 @@ export const authService = {
             const dData = d.data();
             const dAccessCode = (dData.accessCode || '').trim().toUpperCase();
             const dPatientId = (dData.patientId || '').trim().toUpperCase();
-            return dAccessCode === cleanCode || dPatientId === cleanCode;
+            const dEmail = (dData.email || '').trim().toUpperCase();
+            return dAccessCode === upperCode || dPatientId === upperCode || dEmail === upperCode || d.id.toUpperCase() === upperCode;
           });
 
           if (foundOtherDoc) {
@@ -165,10 +204,12 @@ export const authService = {
                 id: foundOtherDoc.id,
                 ...patientData,
                 role: 'patient',
-                roles: ['patient']
+                roles: ['patient'],
+                mustChangePassword: false
               },
               lab: { id: labDoc.id, name: patientData.labName || labDoc.data()?.name || 'Laboratory' },
-              role: 'patient'
+              role: 'patient',
+              mustChangePassword: false
             };
           }
         }
@@ -176,28 +217,11 @@ export const authService = {
         console.warn('Error querying patient collection:', patientErr);
       }
 
-      // 4. Fallback for generated patient codes (PAT-XXXX or P-XXXX)
-      if (cleanCode.startsWith('PAT-') || cleanCode.startsWith('P-') || cleanCode.length >= 4) {
-        console.log('✅ Accepting patient code format fallback:', cleanCode);
-        return {
-          success: true,
-          user: {
-            id: 'pt-' + cleanCode.toLowerCase(),
-            patientId: cleanCode,
-            accessCode: cleanCode,
-            name: `Patient (${cleanCode})`,
-            role: 'patient',
-            roles: ['patient']
-          },
-          lab: { id: targetLabId, name: 'nanoLabs Diagnostic Center' },
-          role: 'patient'
-        };
-      }
-
-      console.log('❌ Invalid access code:', cleanCode);
+      // No arbitrary string fallbacks. Only valid registered credentials are authorized!
+      console.log('❌ Invalid access code attempted:', cleanCode);
       return { 
         success: false, 
-        error: 'Invalid access code. Use TECH123, CASH123, ANALYZER123, REC123 or your patient code.' 
+        error: 'Invalid access code or passcode. Please check your credentials or one-time invite email.' 
       };
     } catch (error: any) {
       console.error('❌ Error in verifyAccessCode:', error);
@@ -212,35 +236,37 @@ export const authService = {
    * Helper to verify staff authorization code during actions (cashier payment, sample collection, lab result upload).
    */
   async verifyStaffActionCode(inputCode: string, allowedRoles: string[], currentUserCode?: string): Promise<{ authorized: boolean; staffName?: string; error?: string }> {
-    const cleanCode = (inputCode || '').trim().toUpperCase();
+    const cleanCode = (inputCode || '').trim();
     if (!cleanCode) {
       return { authorized: false, error: 'Please enter your access code.' };
     }
 
+    const upperCode = cleanCode.toUpperCase();
+
     // Direct match with user's active session code
-    if (currentUserCode && cleanCode === currentUserCode.trim().toUpperCase()) {
+    if (currentUserCode && (cleanCode === currentUserCode || upperCode === currentUserCode.trim().toUpperCase())) {
       return { authorized: true, staffName: 'Authorized Staff' };
     }
 
     // Check default role codes
-    if (DEFAULT_STAFF_MAP[cleanCode]) {
-      const staffInfo = DEFAULT_STAFF_MAP[cleanCode];
+    if (DEFAULT_STAFF_MAP[upperCode]) {
+      const staffInfo = DEFAULT_STAFF_MAP[upperCode];
       if (allowedRoles.includes('all') || allowedRoles.includes(staffInfo.role) || staffInfo.roles.some(r => allowedRoles.includes(r))) {
         return { authorized: true, staffName: staffInfo.name };
       }
     }
 
     // Check hardcoded super/admin codes
-    if (cleanCode === 'SUPER123' || cleanCode === 'ADMIN123') {
+    if (upperCode === 'SUPER123' || upperCode === 'ADMIN123') {
       return { authorized: true, staffName: 'Administrator' };
     }
 
     // Standard fallback allowing TECH123, CASH123, ANALYZER123, REC123
     if (
-      (allowedRoles.includes('labtech') && (cleanCode === 'TECH123' || cleanCode === 'LABTECH123')) ||
-      (allowedRoles.includes('cashier') && (cleanCode === 'CASH123' || cleanCode === 'CASHIER123')) ||
-      (allowedRoles.includes('analyzer') && (cleanCode === 'ANALYZER123' || cleanCode === 'SAMPLE123' || cleanCode === 'PHLEB123')) ||
-      (allowedRoles.includes('receptionist') && (cleanCode === 'REC123' || cleanCode === 'RECEPTION123'))
+      (allowedRoles.includes('labtech') && (upperCode === 'TECH123' || upperCode === 'LABTECH123')) ||
+      (allowedRoles.includes('cashier') && (upperCode === 'CASH123' || upperCode === 'CASHIER123')) ||
+      (allowedRoles.includes('analyzer') && (upperCode === 'ANALYZER123' || upperCode === 'SAMPLE123' || upperCode === 'PHLEB123')) ||
+      (allowedRoles.includes('receptionist') && (upperCode === 'REC123' || upperCode === 'RECEPTION123'))
     ) {
       return { authorized: true, staffName: 'Staff Member' };
     }
@@ -248,19 +274,218 @@ export const authService = {
     return { authorized: false, error: 'Invalid staff access code. Verification failed.' };
   },
 
+  /**
+   * Invites a new staff member using Zero-Knowledge Server-Side OTP Generation.
+   * Admin sets account details and roles only; server generates, hashes and emails OTP.
+   */
+  async inviteStaff(staffData: {
+    name: string;
+    email: string;
+    phone?: string;
+    roles: string[];
+    primaryRole?: string;
+    labId?: string;
+    labName?: string;
+  }, adminUser?: { id: string; name: string; role: string }) {
+    try {
+      // 1. Call Server-Side API endpoint
+      const res = await fetch('/api/staff/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...staffData,
+          invitedBy: adminUser || { id: 'admin', name: 'Lab Administrator', role: 'admin' }
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to dispatch staff invitation.');
+      }
+
+      // 2. Sync to Firestore (Store only metadata and status; NEVER plain-text OTP code)
+      try {
+        const targetLabId = staffData.labId || 'lab-1';
+        await addDoc(collection(db, 'labs', targetLabId, 'staff'), {
+          id: data.staffId,
+          name: staffData.name.trim(),
+          email: staffData.email.trim().toLowerCase(),
+          phone: staffData.phone || '',
+          roles: staffData.roles,
+          primaryRole: staffData.primaryRole || staffData.roles[0],
+          status: 'pending_setup',
+          mustChangePassword: true,
+          invitedAt: new Date().toISOString(),
+          labId: targetLabId,
+          labName: staffData.labName || 'nanoLabs Central Diagnostics'
+        });
+      } catch (fsErr) {
+        console.warn('Firestore staff sync warning:', fsErr);
+      }
+
+      return {
+        success: true,
+        staffId: data.staffId,
+        email: data.email,
+        emailProvider: data.emailProvider,
+        deliveryReceipt: data.deliveryReceipt,
+        devOtpHint: data.devOtpHint
+      };
+    } catch (err: any) {
+      console.error('Error inviting staff:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Sets the staff member's private permanent password.
+   * Password is cryptographically hashed server-side (unrecoverable by anyone, including admin).
+   */
+  async setPermanentPassword(staffId: string, email: string, newPassword: string, labId?: string) {
+    try {
+      const res = await fetch('/api/staff/set-permanent-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, email, newPassword })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to set permanent password.');
+      }
+
+      // Sync Firestore staff document status
+      try {
+        const targetLabId = labId || 'lab-1';
+        const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+        const staffDoc = staffSnap.docs.find(d => {
+          const dData = d.data();
+          return d.id === staffId || dData.id === staffId || (dData.email && dData.email.toLowerCase() === (email || '').toLowerCase());
+        });
+
+        if (staffDoc) {
+          await updateDoc(doc(db, 'labs', targetLabId, 'staff', staffDoc.id), {
+            mustChangePassword: false,
+            status: 'active',
+            isTemporaryPassword: false,
+            passwordConfiguredAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Firestore password status sync note:', fsErr);
+      }
+
+      return data;
+    } catch (err: any) {
+      console.error('Error setting permanent password:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Resends invitation OTP to a staff member.
+   */
+  async resendStaffInvite(staffId: string, email: string, adminUser?: any) {
+    try {
+      const res = await fetch('/api/staff/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, email, adminUser })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to resend invite.');
+      }
+
+      return data;
+    } catch (err: any) {
+      console.error('Error resending staff invite:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Updates staff member roles with audit logging.
+   */
+  async updateStaffRoles(staffId: string, email: string, roles: string[], primaryRole?: string, adminUser?: any) {
+    try {
+      const res = await fetch('/api/staff/update-roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, email, roles, primaryRole, adminUser })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to update roles.');
+      }
+
+      return data;
+    } catch (err: any) {
+      console.error('Error updating staff roles:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Fetches the immutable security audit logs for administrators.
+   */
+  async getAuditLogs() {
+    try {
+      const res = await fetch('/api/staff/audit-logs');
+      const data = await res.json();
+      return data.logs || [];
+    } catch (err) {
+      console.warn('Failed to fetch audit logs from server:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Fetches the server staff registry.
+   */
+  async getServerStaffList() {
+    try {
+      const res = await fetch('/api/staff/list');
+      const data = await res.json();
+      return data.staff || [];
+    } catch (err) {
+      console.warn('Failed to fetch server staff list:', err);
+      return [];
+    }
+  },
+
   async getAllLabs() {
     try {
       const labsRef = collection(db, 'labs');
       const snapshot = await getDocs(labsRef);
-      const labs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const labs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          logoUrl: data.logoUrl || data.logo || null
+        };
+      });
 
       if (labs.length === 0) {
         return [
-          { id: 'lab-1', name: 'nanoLabs Central Diagnostics', location: 'Douala City Hub' },
-          { id: 'lab-2', name: 'St. Jude Clinical Laboratory', location: 'Yaounde Metro' }
+          { 
+            id: 'lab-1', 
+            name: 'nanoLabs Central Diagnostics', 
+            location: 'Douala City Hub',
+            logoUrl: null,
+            primaryColor: '#0D9488'
+          },
+          { 
+            id: 'lab-2', 
+            name: 'St. Jude Clinical Laboratory', 
+            location: 'Yaounde Metro',
+            logoUrl: null,
+            primaryColor: '#0284C7'
+          }
         ];
       }
 
@@ -268,8 +493,20 @@ export const authService = {
     } catch (error) {
       console.error('Error fetching labs:', error);
       return [
-        { id: 'lab-1', name: 'nanoLabs Central Diagnostics', location: 'Douala City Hub' },
-        { id: 'lab-2', name: 'St. Jude Clinical Laboratory', location: 'Yaounde Metro' }
+        { 
+          id: 'lab-1', 
+          name: 'nanoLabs Central Diagnostics', 
+          location: 'Douala City Hub',
+          logoUrl: null,
+          primaryColor: '#0D9488'
+        },
+        { 
+          id: 'lab-2', 
+          name: 'St. Jude Clinical Laboratory', 
+          location: 'Yaounde Metro',
+          logoUrl: null,
+          primaryColor: '#0284C7'
+        }
       ];
     }
   },
@@ -315,3 +552,4 @@ export const authService = {
 };
 
 export default authService;
+

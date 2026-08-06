@@ -201,12 +201,21 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
           {/* Action Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-teal-600/20">
-                <Activity className="w-6 h-6" />
-              </div>
+              {lab?.logoUrl ? (
+                <img
+                  src={lab.logoUrl}
+                  alt={lab.name || 'Lab Logo'}
+                  referrerPolicy="no-referrer"
+                  className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-md bg-white p-0.5 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-teal-600/20 shrink-0">
+                  <Activity className="w-6 h-6" />
+                </div>
+              )}
               <div>
                 <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                  nano<span className="text-teal-600">Labs</span> Diagnostic Lifecycle Report
+                  {lab?.name || 'nanoLabs Diagnostics'} Diagnostic Lifecycle Report
                 </h1>
                 <p className="text-xs text-slate-500 font-mono">
                   Report ID: NL-{currentTest.id || 'TST-001'} • Category: {currentTest.category || 'General Clinical'}

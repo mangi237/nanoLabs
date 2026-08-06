@@ -14,8 +14,13 @@ import {
   Package,
   FlaskConical,
   FileText,
-  UserCog
+  UserCog,
+  Building2,
+  Image as ImageIcon,
+  Camera,
+  Sparkles
 } from 'lucide-react';
+import LabProfileModal from './LabProfileModal';
 
 interface OverviewProps {
   onPatientSelect?: (patient: any) => void;
@@ -25,6 +30,7 @@ interface OverviewProps {
 export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateTab }) => {
   const { lab } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [showLabModal, setShowLabModal] = useState(false);
   const [stats, setStats] = useState({
     patients: 0,
     staff: 0,
@@ -109,18 +115,58 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-800 via-teal-700 to-blue-800 p-6 sm:p-8 text-white shadow-xl shadow-teal-900/10">
+      <div 
+        style={{
+          background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
+        }}
+        className="relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+      >
         <div className="relative z-10 max-w-2xl space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold text-teal-100 border border-white/20">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold text-white/90 border border-white/20">
             <Activity className="w-3.5 h-3.5" />
             Operational Intelligence
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             {lab?.name || 'nanoLabs Health System'}
           </h2>
-          <p className="text-xs sm:text-sm text-teal-100 leading-relaxed">
-            Real time overview of clinical operations, patient admissions, laboratory workload, and performance metrics.
+          <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+            {lab?.slogan || 'Real time overview of clinical operations, patient admissions, laboratory workload, and performance metrics.'}
           </p>
+          <div className="pt-2">
+            <button
+              onClick={() => setShowLabModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-teal-300" />
+              {lab?.logoUrl ? 'Update Facility Logo & Theme' : 'Upload Custom Facility Logo'}
+            </button>
+          </div>
+        </div>
+
+        {/* Big Circled Logo at the right side with Click to Edit */}
+        <div 
+          onClick={() => setShowLabModal(true)}
+          title="Click to change facility logo & branding"
+          className="relative z-10 shrink-0 self-center sm:self-auto group cursor-pointer"
+        >
+          {lab?.logoUrl ? (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/50 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden group-hover:scale-105 group-hover:border-white transition-all">
+              <img
+                src={lab.logoUrl}
+                alt={lab.name || 'Lab Logo'}
+                referrerPolicy="no-referrer"
+                className="w-full h-full rounded-full object-cover bg-white"
+              />
+            </div>
+          ) : (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md shadow-2xl flex flex-col items-center justify-center text-white group-hover:scale-105 group-hover:border-white transition-all">
+              <Activity className="w-8 h-8 stroke-[2.5]" />
+              <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5 text-white/90">nanoLabs</span>
+            </div>
+          )}
+          <div className="absolute -bottom-1 -right-1 bg-teal-500 text-slate-900 p-1.5 rounded-full border-2 border-white shadow-md group-hover:bg-white transition-colors">
+            <Camera className="w-3.5 h-3.5" />
+          </div>
         </div>
         <div className="absolute right-0 bottom-0 top-0 w-1/3 bg-radial from-white/10 to-transparent pointer-events-none" />
       </div>
@@ -301,6 +347,13 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
           </table>
         </div>
       </div>
+
+      {/* Lab Profile & Custom Logo Modal */}
+      <LabProfileModal
+        isOpen={showLabModal}
+        onClose={() => setShowLabModal(false)}
+        onSaved={() => fetchData()}
+      />
     </div>
   );
 };

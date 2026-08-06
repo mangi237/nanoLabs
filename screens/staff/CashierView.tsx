@@ -29,7 +29,8 @@ import {
   Filter,
   Eye,
   Building2,
-  Calendar
+  Calendar,
+  Activity
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -105,6 +106,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   ? (baseAmount + systemFee) 
                   : (test.systemFee !== undefined ? (baseAmount + systemFee) : (baseAmount + 1000)));
 
+            const isReceptionCheckedIn = 
+              test.confirmedByReceptionist === true || 
+              patientData.confirmedByReceptionist === true || 
+              patientData.checkedIn === true || 
+              patientData.receptionCheckedIn === true || 
+              patientData.status === 'active' || 
+              patientData.status === 'confirmed' ||
+              test.sampleCollected === true ||
+              ['confirmed', 'sample-collected', 'collected', 'processing', 'completed', 'paid'].includes(test.status);
+
             allBills.push({
               id: `${docSnap.id}-${test.id}`,
               testId: test.id,
@@ -122,6 +133,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
               amount: totalAmount,
               priceDisplay: `${baseAmount.toLocaleString()} + ${systemFee.toLocaleString()} FCFA System Fee`,
               status: isPaid ? 'paid' : 'unpaid',
+              confirmedByReceptionist: isReceptionCheckedIn,
               paymentMethod: test.paymentMethod || (isPaid ? 'cash' : undefined),
               paymentMethodLabel: test.paymentMethodLabel || (isPaid ? 'Cash' : undefined),
               receiptNumber: test.receiptNumber || (isPaid ? `REC-${Math.floor(100000 + Math.random() * 900000)}` : undefined),
@@ -188,6 +200,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
         setVerifyError('Please enter the name of the Insurance Company.');
         return;
       }
+    }
+
+    if (!selectedBill?.confirmedByReceptionist) {
+      setVerifyError('Validation blocked: Patient has not been received and checked in by the Receptionist.');
+      return;
     }
 
     if (!accessCodeInput.trim()) {
@@ -449,6 +466,45 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
           </button>
         )}
 
+        {/* Branded Lab Gradient Banner */}
+        <div 
+          style={{
+            background: `linear-gradient(135deg, ${lab?.primaryColor || '#047857'}, ${lab?.secondaryColor || '#065f46'})`
+          }}
+          className="rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+        >
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold text-white/90 border border-white/20">
+              <CreditCard className="w-3.5 h-3.5" />
+              Financial Settlement & Billing Portal
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {lab?.name || 'nanoLabs Health Center'} Cashier Register
+            </h2>
+            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+              Collect diagnostic payments, manage insurance co-pays, verify staff transactions, and issue cryptographic receipts.
+            </p>
+          </div>
+
+          {/* Big Circled Logo at right side */}
+          <div className="shrink-0 self-center sm:self-auto">
+            {lab?.logoUrl ? (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
+                <img
+                  src={lab.logoUrl}
+                  alt={lab.name || 'Lab Logo'}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full rounded-full object-cover bg-white"
+                />
+              </div>
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md shadow-2xl flex items-center justify-center text-white">
+                <CreditCard className="w-10 h-10 stroke-[2.5]" />
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Top Control Header */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
           <div className="flex items-center gap-3">
@@ -592,6 +648,18 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
                       {bill.category}
                     </span>
 
+                    {bill.status === 'unpaid' && (
+                      bill.confirmedByReceptionist ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Reception Check-In Verified
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600" /> Awaiting Reception Check-In
+                        </span>
+                      )
+                    )}
+
                     {bill.status === 'paid' && getPaymentMethodBadge(bill)}
                   </div>
 
@@ -641,13 +709,27 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
                   </div>
 
                   {bill.status === 'unpaid' ? (
-                    <button
-                      onClick={() => handleOpenVerifyModal(bill)}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Verify Payment
-                    </button>
+                    bill.confirmedByReceptionist ? (
+                      <button
+                        onClick={() => handleOpenVerifyModal(bill)}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        Verify Payment
+                      </button>
+                    ) : (
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          disabled={true}
+                          title="Patient must be received and checked in at Reception before payment validation."
+                          className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-bold cursor-not-allowed select-none opacity-80"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          Check-In Required
+                        </button>
+                        <span className="text-[10px] text-amber-700 font-medium">Awaiting Front Desk</span>
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
@@ -1238,11 +1320,25 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
 
             {/* Printable Receipt Body */}
             <div className="p-6 space-y-5 text-xs">
-              {/* Lab Header */}
-              <div className="text-center border-b border-dashed border-slate-200 pb-4 space-y-1">
-                <h2 className="text-lg font-black text-slate-900">{lab?.name || 'nanoLabs Medical Diagnostics'}</h2>
-                <p className="text-slate-500">Official Clinical Cashier Payment Receipt</p>
-                <p className="text-[10px] text-slate-400 font-mono">Date: {receiptModalBill.paidAt ? new Date(receiptModalBill.paidAt).toLocaleString() : receiptModalBill.date}</p>
+              {/* Lab Header with Logo */}
+              <div className="text-center border-b border-dashed border-slate-200 pb-4 space-y-2 flex flex-col items-center">
+                {lab?.logoUrl ? (
+                  <img
+                    src={lab.logoUrl}
+                    alt={lab.name || 'Lab Logo'}
+                    referrerPolicy="no-referrer"
+                    className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-sm mx-auto bg-white p-0.5"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-teal-600 text-white flex items-center justify-center mx-auto shadow-sm">
+                    <Activity className="w-6 h-6 stroke-[2.5]" />
+                  </div>
+                )}
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">{lab?.name || 'nanoLabs Medical Diagnostics'}</h2>
+                  <p className="text-slate-500 text-[11px]">{lab?.slogan || 'Official Clinical Cashier Payment Receipt'}</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">Date: {receiptModalBill.paidAt ? new Date(receiptModalBill.paidAt).toLocaleString() : receiptModalBill.date}</p>
+                </div>
               </div>
 
               {/* Patient & Invoice Info Grid */}

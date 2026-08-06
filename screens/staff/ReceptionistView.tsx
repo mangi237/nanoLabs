@@ -21,7 +21,8 @@ import {
   ShieldCheck,
   CreditCard,
   Building2,
-  FlaskConical
+  FlaskConical,
+  Users
 } from 'lucide-react';
 
 interface ReceptionistViewProps {
@@ -162,6 +163,45 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
           </button>
         )}
 
+        {/* Branded Lab Gradient Banner */}
+        <div 
+          style={{
+            background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
+          }}
+          className="rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+        >
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold text-white/90 border border-white/20">
+              <Users className="w-3.5 h-3.5" />
+              Patient Reception & Arrival Intake Desk
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {lab?.name || 'nanoLabs Health Center'}
+            </h2>
+            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+              Confirm patient presence when they arrive at the hospital. Checked-in patients proceed to Cashier for payment validation.
+            </p>
+          </div>
+
+          {/* Big Circled Logo at right side */}
+          <div className="shrink-0 self-center sm:self-auto">
+            {lab?.logoUrl ? (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
+                <img
+                  src={lab.logoUrl}
+                  alt={lab.name || 'Lab Logo'}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full rounded-full object-cover bg-white"
+                />
+              </div>
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md shadow-2xl flex items-center justify-center text-white">
+                <Users className="w-10 h-10 stroke-[2.5]" />
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Top Control Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
           <div>
@@ -172,11 +212,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Confirm patient presence when they arrive at the hospital. Checked-in patients proceed to Cashier for payment validation.
+              Confirm patient presence upon clinic arrival to queue them for cashier billing.
             </p>
           </div>
 
-          {/* <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             {onNavigateRegister && (
               <button
                 onClick={onNavigateRegister}
@@ -186,7 +226,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 Register Walk-in Patient
               </button>
             )}
-          </div> */}
+          </div>
         </div>
 
         {/* Tab Selection */}

@@ -54,10 +54,35 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Title or User Info */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Hospital / Clinic Logo Badge on Right Side */}
+          <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-100/90 hover:bg-slate-200/80 rounded-2xl border border-slate-200/80 transition-all">
+            {lab?.logoUrl ? (
+              <img
+                src={lab.logoUrl}
+                alt={lab.name || 'Hospital Logo'}
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-lg object-cover border border-slate-300 shadow-2xs bg-white"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-teal-700 text-white flex items-center justify-center font-bold text-[10px] shadow-2xs">
+                <Activity className="w-4 h-4" />
+              </div>
+            )}
+            <div className="text-left hidden sm:block">
+              <div className="text-[11px] font-bold text-slate-800 leading-tight truncate max-w-[130px] md:max-w-[170px]">
+                {lab?.name || 'nanoLabs Medical Center'}
+              </div>
+              <div className="text-[9px] text-teal-700 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500 inline-block"></span>
+                <span>Verified Facility</span>
+              </div>
+            </div>
+          </div>
+
           {title && (
-            <div className="hidden md:block text-right">
-              <h1 className="text-sm font-semibold text-slate-800">{title}</h1>
-              {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+            <div className="hidden lg:block text-right border-l border-slate-200/80 pl-3">
+              <h1 className="text-xs font-bold text-slate-800">{title}</h1>
+              {subtitle && <p className="text-[10px] text-slate-500 truncate max-w-[160px]">{subtitle}</p>}
             </div>
           )}
 

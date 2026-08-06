@@ -7,7 +7,7 @@ import InventoryManagement from './InventoryManagement';
 import TestCatalogManagement from './TestCatalogManagement';
 import ReportsScreen from './ReportsScreen';
 import PatientManagement from './PatientManagement';
-// import SecurityAssuranceCenter from './SecurityAssuranceCenter';
+import LabProfileModal from '../../components/admin/LabProfileModal';
 import { 
   LayoutDashboard, 
   Users, 
@@ -17,8 +17,10 @@ import {
   FlaskConical, 
   FileText,
   ShieldCheck,
-  Lock
+  Building2,
+  Camera
 } from 'lucide-react';
+import { useAuth } from '../../context/authContext';
 
 interface AdminDashboardProps {
   onNavigateTab?: (tab: string) => void;
@@ -33,13 +35,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onProfilePress,
   onSelectPatient
 }) => {
+  const { lab } = useAuth();
+  const [showLabProfileModal, setShowLabProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'inventory' | 'catalog' | 'staff' | 'analytics' | 'reports' | 'patients' | 'security'
+    'overview' | 'inventory' | 'catalog' | 'staff' | 'analytics' | 'reports' | 'patients'
   >('overview');
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    // { id: 'security', label: 'Security & Privacy', icon: Lock, badge: 'Zero-Knowledge' },
     { id: 'inventory', label: 'Inventory Manager', icon: Package, badge: 'Reagents' },
     { id: 'catalog', label: 'Test Catalog', icon: FlaskConical },
     { id: 'staff', label: 'Manage Staff', icon: UserCog },
@@ -86,9 +89,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             })}
           </div>
 
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200/70 text-[11px] text-slate-500 font-medium shrink-0">
-            <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
-            <span>Master Admin Clearance</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowLabProfileModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold border border-teal-200/80 transition-all cursor-pointer"
+            >
+              {lab?.logoUrl ? (
+                <img
+                  src={lab.logoUrl}
+                  alt={lab.name || 'Lab Logo'}
+                  referrerPolicy="no-referrer"
+                  className="w-4 h-4 rounded-md object-cover"
+                />
+              ) : (
+                <Building2 className="w-4 h-4 text-teal-600" />
+              )}
+              <span className="hidden sm:inline">Facility Logo & Theme</span>
+            </button>
+
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200/70 text-[11px] text-slate-500 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+              <span>Master Admin Clearance</span>
+            </div>
           </div>
         </div>
 
@@ -96,7 +118,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'overview' && (
           <Overview 
             onNavigateTab={(tab) => {
-              if (tab === 'inventory' || tab === 'catalog' || tab === 'reports' || tab === 'staff' || tab === 'analytics' || tab === 'patients' || tab === 'security') {
+              if (tab === 'inventory' || tab === 'catalog' || tab === 'reports' || tab === 'staff' || tab === 'analytics' || tab === 'patients') {
                 setActiveTab(tab as any);
               } else if (onNavigateTab) {
                 onNavigateTab(tab);
@@ -104,8 +126,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }}
           />
         )}
-
-    
 
         {activeTab === 'inventory' && (
           <InventoryManagement 
@@ -143,6 +163,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           />
         )}
       </main>
+
+      {/* Lab Profile & Custom Logo Modal */}
+      <LabProfileModal
+        isOpen={showLabProfileModal}
+        onClose={() => setShowLabProfileModal(false)}
+      />
     </div>
   );
 };

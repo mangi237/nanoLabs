@@ -117,12 +117,21 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
                 className="group p-5 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 hover:border-teal-400/50 rounded-2xl cursor-pointer transition-all duration-200 flex items-center justify-between gap-4 shadow-sm"
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  <div
-                    style={{ backgroundColor: item.primaryColor || '#0D9488' }}
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0"
-                  >
-                    <Activity className="w-6 h-6 text-white" />
-                  </div>
+                  {item.logoUrl ? (
+                    <img
+                      src={item.logoUrl}
+                      alt={item.name}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0 bg-white"
+                    />
+                  ) : (
+                    <div
+                      style={{ backgroundColor: item.primaryColor || '#0D9488' }}
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0"
+                    >
+                      <Activity className="w-6 h-6 text-white" />
+                    </div>
+                  )}
                   <div className="min-w-0 space-y-1">
                     <h3 className="font-bold text-white text-base group-hover:text-teal-300 transition-colors truncate">
                       {item.name}

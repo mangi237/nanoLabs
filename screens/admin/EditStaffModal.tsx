@@ -1,312 +1,315 @@
-// components/admin/EditStaffModal.tsx - COMPLETE FIX
-
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Modal,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
+import { authService } from '../../services/authService';
+import { db, updateDoc, doc } from '../../services/firebase';
+import { 
+  X, 
+  Send, 
+  User, 
+  DollarSign, 
+  Microscope, 
+  TestTube, 
+  Shield, 
+  Package, 
+  CheckCircle, 
+  Loader2, 
+  Lock, 
+  Mail, 
+  Phone, 
+  KeyRound, 
+  CheckCircle2, 
+  ShieldCheck 
+} from 'lucide-react';
 
-const EditStaffModal = ({ visible, onClose, staff, onStaffUpdated }: any) => {
-  const { lab } = useAuth();
+interface EditStaffModalProps {
+  visible: boolean;
+  onClose: () => void;
+  staff: any;
+  onStaffUpdated: () => void;
+}
+
+export const EditStaffModal: React.FC<EditStaffModalProps> = ({ visible, onClose, staff, onStaffUpdated }) => {
+  const { lab, user: adminUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [resendingOtp, setResendingOtp] = useState(false);
+  const [otpResentMsg, setOtpResentMsg] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState({
-    name: staff?.name || '',
-    email: staff?.email || '',
-    phone: staff?.phone || '',
-    accessCode: staff?.accessCode || '',
-    roles: staff?.roles || ['receptionist']
+    name: '',
+    email: '',
+    phone: '',
+    roles: ['receptionist']
   });
 
-  const roleOptions = [
-    { value: 'receptionist', label: 'Receptionist', icon: '👤' },
-    { value: 'cashier', label: 'Cashier', icon: '💰' },
-    { value: 'analyzer', label: 'Analyzer', icon: '🔬' },
-    { value: 'lab_tech', label: 'Lab Technician', icon: '🧪' },
-    { value: 'admin', label: 'Admin', icon: '👑' },
-    { value: 'inventory_manager', label: 'Inventory Manager', icon: '📦' }
-  ];
-
-  const generateAccessCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+  useEffect(() => {
+    if (staff) {
+      setFormData({
+        name: staff.name || '',
+        email: staff.email || '',
+        phone: staff.phone || '',
+        roles: staff.roles || [staff.role || 'receptionist']
+      });
+      setOtpResentMsg('');
+      setErrorMessage('');
     }
-    return code;
-  };
+  }, [staff]);
+
+  if (!visible || !staff) return null;
+
+  const roleOptions = [
+    { value: 'receptionist', label: 'Receptionist', icon: User },
+    { value: 'cashier', label: 'Cashier', icon: DollarSign },
+    { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope },
+    { value: 'labtech', label: 'Lab Technologist', icon: TestTube },
+    { value: 'admin', label: 'Lab Administrator', icon: Shield },
+    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package }
+  ];
 
   const toggleRole = (role: string) => {
     let updatedRoles = [...formData.roles];
     if (updatedRoles.includes(role)) {
-      updatedRoles = updatedRoles.filter(r => r !== role);
+      if (updatedRoles.length > 1) {
+        updatedRoles = updatedRoles.filter(r => r !== role);
+      }
     } else {
       updatedRoles.push(role);
     }
-    setFormData({ ...formData, roles: updatedRoles });
+    setFormData(prev => ({ ...prev, roles: updatedRoles }));
   };
 
-  const handleSubmit = async () => {
+  const handleResendOtp = async () => {
+    setResendingOtp(true);
+    setOtpResentMsg('');
+    setErrorMessage('');
+    try {
+      await authService.resendStaffInvite(staff.id, formData.email, adminUser);
+      setOtpResentMsg(`A fresh one-time access code has been securely emailed to ${formData.email}. Previous codes are now invalid.`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to resend access code.');
+    } finally {
+      setResendingOtp(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
     if (!formData.name.trim() || !formData.email.trim()) {
-      Alert.alert('Error', 'Name and email are required');
+      setErrorMessage('Full name and email address are required fields.');
       return;
     }
 
     if (formData.roles.length === 0) {
-      Alert.alert('Error', 'Please select at least one role');
+      setErrorMessage('Please select at least one role.');
       return;
     }
 
     setLoading(true);
     try {
-      const staffRef = doc(db, 'labs', lab?.id, 'staff', staff.id);
-      await updateDoc(staffRef, {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        accessCode: formData.accessCode,
-        roles: formData.roles,
-        updatedAt: new Date().toISOString()
-      });
+      // 1. Update roles on server with audit log
+      await authService.updateStaffRoles(
+        staff.id,
+        formData.email,
+        formData.roles,
+        formData.roles[0],
+        adminUser
+      );
 
-      Alert.alert('✅ Success', 'Staff updated successfully');
+      // 2. Update Firestore document
+      try {
+        const staffRef = doc(db, 'labs', lab?.id || 'lab-1', 'staff', staff.id);
+        await updateDoc(staffRef, {
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          roles: formData.roles,
+          primaryRole: formData.roles[0],
+          updatedAt: new Date().toISOString()
+        });
+      } catch (fsErr) {
+        console.warn('Firestore update doc warning:', fsErr);
+      }
+
       onStaffUpdated();
       onClose();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update staff');
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Failed to update staff credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.modalContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <div style={styles.modalContent}>
-          <div style={styles.header}>
-            <Text style={styles.headerTitle}>Edit Staff Member</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#333" />
-            </TouchableOpacity>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-teal-700 to-teal-800 text-white">
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Manage Staff Permissions & Profile</h2>
+            <p className="text-xs text-teal-100">Update functional roles and send password reset OTP</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {errorMessage && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+              {errorMessage}
+            </div>
+          )}
+
+          {otpResentMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>{otpResentMsg}</span>
+            </div>
+          )}
+
+          {/* Basic Info */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all bg-slate-50/50"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Email Address <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all bg-slate-50/50"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all bg-slate-50/50"
+                />
+              </div>
+            </div>
           </div>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name *"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Email *"
-              value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Phone"
-              value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              keyboardType="phone-pad"
-            />
-
-            <div style={styles.codeContainer}>
-              <TextInput
-                style={[styles.input, styles.codeInput]}
-                placeholder="Access Code"
-                value={formData.accessCode}
-                onChangeText={(text) => setFormData({ ...formData, accessCode: text })}
-                maxLength={6}
-                autoCapitalize="characters"
-              />
-              <TouchableOpacity 
-                style={styles.generateButton}
-                onPress={() => setFormData({ ...formData, accessCode: generateAccessCode() })}
-              >
-                <Ionicons name="refresh" size={16} color="white" />
-                <Text style={styles.generateText}>Generate</Text>
-              </TouchableOpacity>
+          {/* Zero-Knowledge Security Info & Passcode Reset Button */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                <Lock className="w-4 h-4 text-teal-600" />
+                Zero-Knowledge Password Security
+              </div>
+              <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-teal-100 text-teal-800 font-bold">
+                Protected Hash
+              </span>
             </div>
-
-            <Text style={styles.sectionTitle}>Roles</Text>
-            <div style={styles.roleGrid}>
-              {roleOptions.map((role) => (
-                <TouchableOpacity
-                  key={role.value}
-                  style={[
-                    styles.roleCard,
-                    formData.roles.includes(role.value) && styles.roleCardSelected
-                  ]}
-                  onPress={() => toggleRole(role.value)}
-                >
-                  <Text style={styles.roleIcon}>{role.icon}</Text>
-                  <Text style={[
-                    styles.roleLabel,
-                    formData.roles.includes(role.value) && styles.roleLabelSelected
-                  ]}>
-                    {role.label}
-                  </Text>
-                  {formData.roles.includes(role.value) && (
-                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </div>
-
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.disabledButton]}
-              onPress={handleSubmit}
-              disabled={loading}
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              For patient safety and compliance, administrators cannot view or directly overwrite staff passwords. You can issue a single-use setup OTP to their email, forcing them to establish a new password.
+            </p>
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              disabled={resendingOtp}
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
             >
-              {loading ? <ActivityIndicator color="white" /> : <Text style={styles.submitButtonText}>Update Staff</Text>}
-            </TouchableOpacity>
-          </ScrollView>
-        </div>
-      </KeyboardAvoidingView>
-    </Modal>
+              {resendingOtp ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Generating & Emailing OTP...
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-3.5 h-3.5 text-teal-600" />
+                  Issue & Email New Setup OTP Passcode
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Roles Selection */}
+          <div className="space-y-2.5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Assigned Roles & Permissions <span className="text-rose-500">*</span>
+              </label>
+              <p className="text-xs text-slate-500">Toggle functional duties assigned to this personnel</p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {roleOptions.map(role => {
+                const IconComponent = role.icon;
+                const isSelected = formData.roles.includes(role.value);
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    onClick={() => toggleRole(role.value)}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-teal-600 bg-teal-50 text-teal-900 shadow-xs font-bold ring-1 ring-teal-500/20'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <IconComponent className={`w-4 h-4 shrink-0 ${isSelected ? 'text-teal-600' : 'text-slate-400'}`} />
+                      <span className="truncate">{role.label}</span>
+                    </div>
+                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-teal-600 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Submit Action */}
+          <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-md shadow-teal-600/20 disabled:opacity-50 transition-all cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving Changes...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A237E',
-    fontFamily: 'Poppins-Bold',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 15,
-    marginBottom: 12,
-    backgroundColor: '#F8F9FA',
-    fontFamily: 'Poppins-Regular',
-  },
-  codeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  codeInput: {
-    flex: 1,
-    textAlign: 'center',
-    letterSpacing: 4,
-    fontSize: 18,
-  },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A237E',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  generateText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  roleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  roleCardSelected: {
-    borderColor: '#1A237E',
-    backgroundColor: '#E8EAF6',
-  },
-  roleIcon: {
-    fontSize: 16,
-  },
-  roleLabel: {
-    fontSize: 13,
-    color: '#555',
-    fontFamily: 'Poppins-Regular',
-  },
-  roleLabelSelected: {
-    color: '#1A237E',
-    fontWeight: '600',
-  },
-  submitButton: {
-    backgroundColor: '#1A237E',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Poppins-Bold',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-});
 
 export default EditStaffModal;

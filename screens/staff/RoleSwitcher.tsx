@@ -19,15 +19,15 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
   const { user, setUser } = useAuth();
 
   const availableRoles = [
-    { value: 'admin', label: 'Admin Administrator', icon: Shield, desc: 'Full hospital control, staff management & analytics' },
+    { value: 'admin', label: 'Lab Administrator', icon: Shield, desc: 'Full laboratory operations, staff management & multi-category analytics' },
     { value: 'receptionist', label: 'Receptionist Intake', icon: User, desc: 'Patient admissions & sample intake processing' },
     { value: 'cashier', label: 'Cashier & Billing', icon: DollarSign, desc: 'Billing invoices & payment collection' },
-    { value: 'analyzer', label: 'Laboratory Analyzer', icon: Microscope, desc: 'Sample verification & diagnostic result entry' },
-    { value: 'lab_tech', label: 'Lab Technician', icon: TestTube, desc: 'Specimen processing & testing workflow' },
-    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, desc: 'Stock level monitoring & reorder orders' },
-    { value: 'patient', label: 'Patient Portal', icon: Activity, desc: 'Personal test history & appointment booking' },
+    { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope, desc: 'Sample verification & diagnostic result entry' },
+    { value: 'labtech', label: 'Lab Technologist', icon: TestTube, desc: 'Specimen processing & testing workflow' },
+    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, desc: 'Stock level monitoring & reorder orders' }
   ];
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || (user?.roles && (user.roles.includes('admin') || user.roles.includes('superadmin')));
   const userRoles = user?.roles || [user?.role || 'admin'];
 
   const handleSelectRole = (roleValue: string) => {

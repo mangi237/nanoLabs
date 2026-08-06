@@ -55,19 +55,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       if (found && found.data().labTests) {
         setTests(found.data().labTests);
       } else {
-        setTests([
-          {
-            id: 'UNAVAILABLE',
-            testName: 'NO TEST CARRIED OUT AT THE MOMENT',
-            category: 'VISIT RECEPTIONIST FOR CLARIFICATION',
-            price: 0,
-            paymentStatus: 'UNAVAILABLE',
-            status: 'UNAVAILABLE',
-            requestedDate: '2026-08-01',
-            result: 'UNAVAILABLE',
-            virtualRequested: false
-          }
-        ]);
+        setTests([]);
       }
     } catch (e) {
       console.error('Error fetching patient tests:', e);
@@ -135,28 +123,50 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Welcome Banner */}
-        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-blue-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-teal-200">
-                Patient Account
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Welcome back, {user?.name || 'Valued Patient'}
-              </h1>
-              <p className="text-xs sm:text-sm text-teal-100">
-                Connected to {lab?.name || 'nanoLabs Central Diagnostics'}
-              </p>
-            </div>
-
+        <div 
+          style={{
+            background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
+          }}
+          className="rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+        >
+          <div className="space-y-1 max-w-xl">
+            <span className="text-xs font-semibold uppercase tracking-wider text-white/80">
+              Patient Account
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Welcome back, {user?.name || 'Valued Patient'}
+            </h1>
+            <p className="text-xs sm:text-sm text-white/90">
+              Connected to {lab?.name || 'nanoLabs Central Diagnostics'}
+            </p>
             {onNavigateTab && (
-              <button
-                onClick={() => onNavigateTab('book')}
-                className="flex items-center gap-2 px-5 py-3 bg-white text-teal-900 font-bold rounded-2xl text-xs hover:bg-teal-50 shadow-md transition-all shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 text-teal-700" />
-                Book New Test
-              </button>
+              <div className="pt-2">
+                <button
+                  onClick={() => onNavigateTab('book')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-slate-900 font-bold rounded-2xl text-xs hover:bg-white/90 shadow-md transition-all shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-teal-700" />
+                  Book New Test
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Big Circled Logo at Right Side */}
+          <div className="shrink-0 self-center sm:self-auto">
+            {lab?.logoUrl ? (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
+                <img
+                  src={lab.logoUrl}
+                  alt={lab.name || 'Lab Logo'}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full rounded-full object-cover bg-white"
+                />
+              </div>
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md shadow-2xl flex items-center justify-center text-white">
+                <Activity className="w-10 h-10 stroke-[2.5]" />
+              </div>
             )}
           </div>
         </div>

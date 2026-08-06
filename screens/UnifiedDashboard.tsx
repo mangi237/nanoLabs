@@ -73,7 +73,7 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
     );
   }
 
-  if (currentRole === 'lab_tech') {
+  if (currentRole === 'lab_tech' || currentRole === 'labtech') {
     return (
       <LabTechView
         onNotificationPress={onNotificationPress}
