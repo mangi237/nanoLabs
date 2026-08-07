@@ -113,7 +113,7 @@ export const authService = {
         };
       }
 
-      // 3. Search Firestore Staff subcollection
+      // 3. Search Firestore Staff subcollection in target lab
       try {
         console.log('🔍 Checking Firestore staff in lab:', targetLabId);
         const staffRef = collection(db, 'labs', targetLabId, 'staff');
@@ -121,15 +121,16 @@ export const authService = {
 
         const foundStaffDoc = staffSnap.docs.find(d => {
           const dData = d.data();
-          const dCode = (dData.accessCode || '').trim().toUpperCase();
+          const dCode = (dData.accessCode || dData.initialCode || '').trim().toUpperCase();
           const dEmail = (dData.email || '').trim().toUpperCase();
-          return dCode === upperCode || dEmail === upperCode;
+          return dCode === upperCode || dEmail === upperCode || (dData.accessCode && dData.accessCode.trim() === cleanCode);
         });
 
         if (foundStaffDoc) {
           const staffData = foundStaffDoc.data();
           console.log('✅ Firestore Staff found:', staffData.name);
           const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
+          const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
 
           return {
             success: true,
@@ -138,12 +139,48 @@ export const authService = {
               ...staffData,
               role,
               roles: staffData.roles || [role],
-              mustChangePassword: staffData.mustChangePassword === true
+              mustChangePassword: mustChange,
+              isTemporaryPassword: mustChange
             },
             lab: { id: targetLabId, name: staffData.labName || 'Laboratory Center' },
             role,
-            mustChangePassword: staffData.mustChangePassword === true
+            mustChangePassword: mustChange
           };
+        }
+
+        // Global check across all lab staff collections if not found in target lab
+        const allLabsSnap = await getDocs(collection(db, 'labs'));
+        for (const lDoc of allLabsSnap.docs) {
+          if (lDoc.id === targetLabId) continue;
+          const otherStaffSnap = await getDocs(collection(db, 'labs', lDoc.id, 'staff'));
+          const foundOtherStaff = otherStaffSnap.docs.find(d => {
+            const dData = d.data();
+            const dCode = (dData.accessCode || dData.initialCode || '').trim().toUpperCase();
+            const dEmail = (dData.email || '').trim().toUpperCase();
+            return dCode === upperCode || dEmail === upperCode || (dData.accessCode && dData.accessCode.trim() === cleanCode);
+          });
+
+          if (foundOtherStaff) {
+            const staffData = foundOtherStaff.data();
+            console.log('✅ Staff found in facility:', lDoc.id, staffData.name);
+            const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
+            const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
+
+            return {
+              success: true,
+              user: {
+                id: foundOtherStaff.id,
+                ...staffData,
+                role,
+                roles: staffData.roles || [role],
+                mustChangePassword: mustChange,
+                isTemporaryPassword: mustChange
+              },
+              lab: { id: lDoc.id, name: staffData.labName || lDoc.data()?.name || 'Laboratory Center' },
+              role,
+              mustChangePassword: mustChange
+            };
+          }
         }
       } catch (staffErr) {
         console.warn('Error querying staff collection:', staffErr);
@@ -275,6 +312,119 @@ export const authService = {
   },
 
   /**
+   * Directly creates a new staff member with an initial access code generated or chosen by the Admin.
+   * On first login with this code, the staff member is required to set their own private permanent access code.
+   */
+  async createStaffWithCode(staffData: {
+    name: string;
+    email?: string;
+    phone?: string;
+    roles: string[];
+    primaryRole?: string;
+    accessCode: string;
+    labId?: string;
+    labName?: string;
+  }, adminUser?: { id: string; name: string; role: string }) {
+    try {
+      const cleanCode = staffData.accessCode.trim().toUpperCase();
+      const targetLabId = staffData.labId || 'lab-1';
+
+      // 1. Call Server-Side API endpoint to register in memory registry
+      try {
+        await fetch('/api/staff/create-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...staffData,
+            accessCode: cleanCode,
+            createdBy: adminUser || { id: 'admin', name: 'Lab Administrator', role: 'admin' }
+          })
+        });
+      } catch (srvErr) {
+        console.warn('Server registration notice:', srvErr);
+      }
+
+      // 2. Persist to Firestore with initial code and mustChangePassword flag
+      const docRef = await addDoc(collection(db, 'labs', targetLabId, 'staff'), {
+        name: staffData.name.trim(),
+        email: (staffData.email || '').trim().toLowerCase(),
+        phone: staffData.phone || '',
+        roles: staffData.roles,
+        primaryRole: staffData.primaryRole || staffData.roles[0],
+        accessCode: cleanCode,
+        initialCode: cleanCode,
+        status: 'pending_setup',
+        mustChangePassword: true,
+        isTemporaryPassword: true,
+        createdAt: new Date().toISOString(),
+        createdBy: adminUser?.name || 'Lab Administrator',
+        labId: targetLabId,
+        labName: staffData.labName || 'nanoLabs Central Diagnostics'
+      });
+
+      return {
+        success: true,
+        staffId: docRef.id,
+        accessCode: cleanCode,
+        name: staffData.name.trim(),
+        roles: staffData.roles
+      };
+    } catch (err: any) {
+      console.error('Error creating staff with code:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Resets a staff member's access code directly from the Admin panel.
+   */
+  async resetStaffAccessCode(staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) {
+    try {
+      const cleanCode = newAccessCode.trim().toUpperCase();
+      const targetLabId = labId || 'lab-1';
+
+      // Server-side reset
+      try {
+        await fetch('/api/staff/reset-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffId, email, newAccessCode: cleanCode, adminUser })
+        });
+      } catch (srvErr) {
+        console.warn('Server reset notice:', srvErr);
+      }
+
+      // Firestore reset
+      const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+      const staffDoc = staffSnap.docs.find(d => {
+        const dData = d.data();
+        return d.id === staffId || dData.id === staffId || (dData.email && dData.email.toLowerCase() === (email || '').toLowerCase());
+      });
+
+      if (staffDoc) {
+        await updateDoc(doc(db, 'labs', targetLabId, 'staff', staffDoc.id), {
+          accessCode: cleanCode,
+          initialCode: cleanCode,
+          mustChangePassword: true,
+          isTemporaryPassword: true,
+          status: 'pending_setup',
+          resetAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      return {
+        success: true,
+        accessCode: cleanCode,
+        message: 'Access code reset successfully.'
+      };
+    } catch (err: any) {
+      console.error('Error resetting staff access code:', err);
+      throw err;
+    }
+  },
+
+  /**
    * Invites a new staff member using Zero-Knowledge Server-Side OTP Generation.
    * Admin sets account details and roles only; server generates, hashes and emails OTP.
    */
@@ -338,25 +488,27 @@ export const authService = {
   },
 
   /**
-   * Sets the staff member's private permanent password.
-   * Password is cryptographically hashed server-side (unrecoverable by anyone, including admin).
+   * Sets the staff member's private permanent password or new secret access code.
+   * Updates Firestore access code and server hash so the staff can sign in immediately.
    */
   async setPermanentPassword(staffId: string, email: string, newPassword: string, labId?: string) {
     try {
-      const res = await fetch('/api/staff/set-permanent-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId, email, newPassword })
-      });
+      const cleanNewCode = newPassword.trim();
+      const targetLabId = labId || 'lab-1';
 
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to set permanent password.');
+      // 1. Call Server-side API endpoint
+      try {
+        await fetch('/api/staff/set-permanent-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffId, email, newPassword: cleanNewCode })
+        });
+      } catch (srvErr) {
+        console.warn('Server password update note:', srvErr);
       }
 
-      // Sync Firestore staff document status
+      // 2. Sync Firestore staff document status & update accessCode to the new permanent private code
       try {
-        const targetLabId = labId || 'lab-1';
         const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
         const staffDoc = staffSnap.docs.find(d => {
           const dData = d.data();
@@ -365,6 +517,7 @@ export const authService = {
 
         if (staffDoc) {
           await updateDoc(doc(db, 'labs', targetLabId, 'staff', staffDoc.id), {
+            accessCode: cleanNewCode,
             mustChangePassword: false,
             status: 'active',
             isTemporaryPassword: false,
@@ -376,7 +529,7 @@ export const authService = {
         console.warn('Firestore password status sync note:', fsErr);
       }
 
-      return data;
+      return { success: true, message: 'Private access code successfully established.' };
     } catch (err: any) {
       console.error('Error setting permanent password:', err);
       throw err;

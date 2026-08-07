@@ -1,3 +1,4 @@
+// components/admin/EditStaffModal.tsx - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
 import { authService } from '../../services/authService';
@@ -104,6 +105,8 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({ visible, onClose
     setCopied(false);
     try {
       const codeToSet = customResetCode.trim() || generateRandomCode(formData.roles[0] || 'receptionist');
+      
+      // ✅ FIX: Call authService.resetStaffAccessCode
       const res = await authService.resetStaffAccessCode(
         staff.id,
         formData.email,
@@ -111,8 +114,13 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({ visible, onClose
         lab?.id || 'lab-1',
         adminUser
       );
-      setNewIssuedCode(res.accessCode);
-      onStaffUpdated();
+
+      if (res && res.success) {
+        setNewIssuedCode(res.accessCode);
+        onStaffUpdated();
+      } else {
+        setErrorMessage(res?.message|| 'Failed to reset access code.');
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to reset access code.');
     } finally {

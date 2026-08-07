@@ -1,3 +1,4 @@
+// components/admin/AddStaffModal.tsx - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
 import { authService } from '../../services/authService';
@@ -142,6 +143,8 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
 
     setLoading(true);
     try {
+      // ✅ FIX: Use authService.createStaffWithCode with the correct call
+      // The function exists in authService but we need to call it properly
       const result = await authService.createStaffWithCode(
         {
           name: formData.name.trim(),
@@ -156,15 +159,20 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
         adminUser
       );
 
-      setCreatedStaffResult({
-        staffId: result.staffId,
-        accessCode: result.accessCode,
-        name: formData.name.trim(),
-        roles: formData.roles
-      });
-
-      onStaffAdded();
+      // ✅ If result is successful, show the code
+      if (result && result.success) {
+        setCreatedStaffResult({
+          staffId: result.staffId,
+          accessCode: result.accessCode || formData.accessCode.trim().toUpperCase(),
+          name: formData.name.trim(),
+          roles: formData.roles
+        });
+        onStaffAdded();
+      } else {
+        console.log('failed to add staff ');//fix this when you get back home 
+      }
     } catch (error: any) {
+      console.error('AddStaffModal error:', error);
       setErrorMessage(error?.message || 'Failed to create staff member. Please try again.');
     } finally {
       setLoading(false);
