@@ -3,6 +3,7 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
+import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import { 
   Calendar, 
   FileText, 
@@ -16,7 +17,10 @@ import {
   TestTube,
   DollarSign,
   Laptop,
-  Building2
+  Building2,
+  ShieldCheck,
+  Eye,
+  Lock
 } from 'lucide-react';
 
 interface PatientDashboardProps {
@@ -37,6 +41,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [patientRecordId, setPatientRecordId] = useState<string>(user?.id || 'pat-1');
+  const [patientFullName, setPatientFullName] = useState<string>(user?.name || 'Patient Record');
+  const [showAuditModal, setShowAuditModal] = useState(false);
 
   useEffect(() => {
     fetchPatientTests();
@@ -52,8 +59,14 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         d.data().accessCode === user?.accessCode ||
         d.data().name === user?.name
       );
-      if (found && found.data().labTests) {
-        setTests(found.data().labTests);
+      if (found) {
+        setPatientRecordId(found.id);
+        setPatientFullName(found.data().name || user?.name || 'Patient Record');
+        if (found.data().labTests) {
+          setTests(found.data().labTests);
+        } else {
+          setTests([]);
+        }
       } else {
         setTests([]);
       }
@@ -180,6 +193,37 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               When lab tests are completed, official printed paper copies can be picked up at the receptionist desk. You can also click <strong>"Request Virtual Result"</strong> below to have your digital PDF uploaded directly to your online dashboard.
             </p>
           </div>
+        </div>
+
+        {/* Security & Access Audit Trail Banner */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 shrink-0">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                  Medical Record Access & Audit Trail
+                </h3>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  <Lock className="w-3 h-3" />
+                  SHA-256 Non-Repudiation Seal Active
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Every time your records, test results, or diagnostic findings are viewed, printed, or updated by a doctor or lab staff, an indelible cryptographic mark is permanently logged.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowAuditModal(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all shrink-0 cursor-pointer"
+          >
+            <Eye className="w-4 h-4 text-emerald-400" />
+            View Who Accessed My Records
+          </button>
         </div>
 
         {/* Quick Actions Grid */}
@@ -311,6 +355,22 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Patient Access Audit Trail Modal */}
+      <PatientActivityAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        patient={{
+          id: patientRecordId,
+          patientId: patientRecordId,
+          name: patientFullName,
+          fullName: patientFullName,
+          email: user?.email,
+          phone: user?.phone
+        }}
+        labId={lab?.id || 'lab-1'}
+        labName={lab?.name || 'nanoLabs Diagnostic Facility'}
+      />
     </div>
   );
 };

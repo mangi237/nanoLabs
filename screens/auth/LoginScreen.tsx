@@ -348,7 +348,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
                     <Cpu className="w-4 h-4" />
-                    Gemini AI Clinical Intelligence
+                    nanoLabs AI Report System
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     Privacy-preserving AI summarization of facility throughput, stock reorder forecasting, and multi-department operational audits with zero patient PII exposure.

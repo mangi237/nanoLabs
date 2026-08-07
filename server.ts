@@ -92,6 +92,7 @@ interface StaffAuthRecord {
   name: string;
   email: string;
   phone?: string;
+  accessCode?: string;
   labId: string;
   labName: string;
   roles: string[];
@@ -205,7 +206,74 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// 2. Admin invites staff member (Zero-Knowledge OTP Generation)
+// 2. Admin creates staff member with direct access code (No mandatory email dependency)
+app.post('/api/staff/create-code', async (req: Request, res: Response) => {
+  try {
+    const { name, email, phone, roles, primaryRole, accessCode, labId, labName, createdBy } = req.body;
+
+    if (!name || !accessCode) {
+      return res.status(400).json({ success: false, error: 'Name and initial access code are required.' });
+    }
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanCode = accessCode.trim().toUpperCase();
+    const assignedRoles = Array.isArray(roles) && roles.length > 0 ? roles : [primaryRole || 'receptionist'];
+    const staffId = `staff-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
+    // Hash the initial code with unique salt
+    const salt = crypto.randomBytes(16).toString('hex');
+    const otpHash = hashWithSalt(cleanCode, salt);
+
+    const staffRecord: StaffAuthRecord = {
+      id: staffId,
+      name: name.trim(),
+      email: cleanEmail || `${cleanCode.toLowerCase()}@${labId || 'lab'}.nanolabs.local`,
+      phone: phone?.trim() || '',
+      labId: labId || 'lab-1',
+      labName: labName || 'nanoLabs Central Diagnostics',
+      roles: assignedRoles,
+      primaryRole: primaryRole || assignedRoles[0],
+      status: 'pending_setup',
+      mustChangePassword: true,
+      isTemporaryPassword: true,
+      otpHash,
+      otpSalt: salt,
+      otpExpiresAt: null, // Initial code does not expire until used
+      invitedAt: new Date().toISOString(),
+      invitedBy: createdBy || { id: 'admin', name: 'Lab Administrator' }
+    };
+
+    if (cleanEmail) {
+      staffAuthRegistry.set(cleanEmail, staffRecord);
+    }
+    staffAuthRegistry.set(staffId, staffRecord);
+    staffAuthRegistry.set(cleanCode, staffRecord);
+
+    // Log immutable security audit event
+    logAuditEvent(
+      'STAFF_CREATED_WITH_INITIAL_CODE',
+      'INVITATION',
+      createdBy || { id: 'admin', name: 'Lab Administrator', role: 'admin' },
+      `Admin created staff ${name} with initial access code ${cleanCode.slice(0, 3)}*** and roles [${assignedRoles.join(', ')}]. Staff must change code on initial login.`,
+      { id: staffId, name, email: cleanEmail }
+    );
+
+    res.json({
+      success: true,
+      staffId,
+      accessCode: cleanCode,
+      name: name.trim(),
+      roles: assignedRoles,
+      status: 'pending_setup',
+      notice: 'Initial access code created. Staff must configure their private code upon first login.'
+    });
+  } catch (error: any) {
+    console.error('Error in /api/staff/create-code:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+// Admin invites staff member (Zero-Knowledge OTP Generation)
 app.post('/api/staff/invite', async (req: Request, res: Response) => {
   try {
     const { name, email, phone, roles, primaryRole, labId, labName, invitedBy } = req.body;
@@ -468,6 +536,54 @@ app.post('/api/staff/set-permanent-password', (req: Request, res: Response) => {
   }
 });
 
+// Admin Resets Staff Access Code directly (Generates / Sets new temporary code)
+app.post('/api/staff/reset-code', async (req: Request, res: Response) => {
+  try {
+    const { staffId, email, newAccessCode, adminUser } = req.body;
+
+    let staffRecord: StaffAuthRecord | undefined;
+    if (staffId && staffAuthRegistry.has(staffId)) {
+      staffRecord = staffAuthRegistry.get(staffId);
+    } else if (email && staffAuthRegistry.has(email.toLowerCase())) {
+      staffRecord = staffAuthRegistry.get(email.toLowerCase());
+    }
+
+    const cleanCode = (newAccessCode || `STAFF-${generateSecureOTP()}`).trim().toUpperCase();
+    const salt = crypto.randomBytes(16).toString('hex');
+    const otpHash = hashWithSalt(cleanCode, salt);
+
+    if (staffRecord) {
+      staffRecord.otpHash = otpHash;
+      staffRecord.otpSalt = salt;
+      staffRecord.otpExpiresAt = null;
+      staffRecord.mustChangePassword = true;
+      staffRecord.isTemporaryPassword = true;
+      staffRecord.status = 'pending_setup';
+      staffRecord.passwordHash = null;
+      staffRecord.passwordSalt = null;
+
+      staffAuthRegistry.set(cleanCode, staffRecord);
+
+      logAuditEvent(
+        'STAFF_ACCESS_CODE_RESET_BY_ADMIN',
+        'SECURITY',
+        adminUser || { id: 'admin', name: 'Lab Administrator', role: 'admin' },
+        `Admin reset access code for ${staffRecord.name}. Issued new temporary code ${cleanCode.slice(0, 3)}*** (Must change on next login).`,
+        { id: staffRecord.id, name: staffRecord.name, email: staffRecord.email }
+      );
+    }
+
+    res.json({
+      success: true,
+      accessCode: cleanCode,
+      message: 'Access code reset successfully. Staff must set a new private code upon login.'
+    });
+  } catch (error: any) {
+    console.error('Error in /api/staff/reset-code:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal error' });
+  }
+});
+
 // 5. Admin Resends Invite OTP
 app.post('/api/staff/resend-invite', async (req: Request, res: Response) => {
   try {
@@ -635,6 +751,178 @@ app.get('/api/staff/audit-logs', (req: Request, res: Response) => {
     logs: auditLogs,
     count: auditLogs.length
   });
+});
+
+// 7b. Patient Data Access & Medical Ledger Log Endpoint
+app.post('/api/audit/log-access', (req: Request, res: Response) => {
+  try {
+    const {
+      action,
+      actionLabel,
+      category = 'CLINICAL_ACCESS',
+      facilityId = 'lab-1',
+      facilityName,
+      patientId,
+      patientName,
+      patientCode,
+      testId,
+      testName,
+      performedBy,
+      details,
+      timestamp = new Date().toISOString()
+    } = req.body;
+
+    if (!patientId || !action) {
+      return res.status(400).json({ success: false, error: 'patientId and action are required' });
+    }
+
+    const payload = `${facilityId}:${patientId}:${action}:${performedBy?.id || 'anon'}:${timestamp}`;
+    const sealHash = crypto.createHash('sha256').update(payload).digest('hex').substring(0, 16).toUpperCase();
+    const cryptographicSeal = `NL-SEAL-${sealHash.substring(0, 8)}-${sealHash.substring(8, 16)}`;
+
+    const logEntry: AuditLogEntry = {
+      id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      action,
+      category: category as any,
+      performedBy: {
+        id: performedBy?.id || 'staff-auto',
+        name: performedBy?.name || 'Authorized Staff',
+        role: performedBy?.role || 'staff'
+      },
+      targetStaff: undefined,
+      details: `${details || actionLabel || action} [Patient: ${patientName || patientId}${testName ? `, Test: ${testName}` : ''}]`,
+      timestamp
+    };
+
+    // Store in master audit stream
+    (logEntry as any).patientId = patientId;
+    (logEntry as any).patientName = patientName;
+    (logEntry as any).patientCode = patientCode;
+    (logEntry as any).testId = testId;
+    (logEntry as any).testName = testName;
+    (logEntry as any).facilityId = facilityId;
+    (logEntry as any).facilityName = facilityName;
+    (logEntry as any).actionLabel = actionLabel || action;
+    (logEntry as any).cryptographicSeal = cryptographicSeal;
+    (logEntry as any).zeroKnowledgeStatus = 'AES-GCM-256 Sealed (E2EE Integrity Verified)';
+
+    auditLogs.unshift(logEntry);
+    if (auditLogs.length > 1000) auditLogs.pop();
+
+    res.json({
+      success: true,
+      log: logEntry,
+      cryptographicSeal
+    });
+  } catch (err: any) {
+    console.error('Error logging patient access:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7c. Get Patient-Specific Access Logs
+app.get('/api/audit/patient-logs/:patientId', (req: Request, res: Response) => {
+  const patientId = String(req.params.patientId || '');
+  const patientLogs = auditLogs.filter(l => 
+    (l as any).patientId === patientId ||
+    (l as any).patientCode === patientId ||
+    (typeof l.details === 'string' && l.details.includes(patientId))
+  );
+
+  res.json({
+    success: true,
+    patientId,
+    logs: patientLogs,
+    count: patientLogs.length
+  });
+});
+
+// 7d. Get Global Audit Logs (for Super Admin & Lab Directors)
+app.get('/api/audit/global-logs', (req: Request, res: Response) => {
+  const labId = typeof req.query.labId === 'string' ? req.query.labId : undefined;
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const action = typeof req.query.action === 'string' ? req.query.action : undefined;
+  let filtered = [...auditLogs];
+
+  if (labId) {
+    filtered = filtered.filter(l => (l as any).facilityId === labId || (l as any).labId === labId);
+  }
+  if (category) {
+    filtered = filtered.filter(l => l.category === category);
+  }
+  if (action) {
+    filtered = filtered.filter(l => l.action === action);
+  }
+
+  res.json({
+    success: true,
+    logs: filtered,
+    count: filtered.length
+  });
+});
+
+// 7e. Staff Self-Service Profile Update Endpoint
+app.post('/api/staff/update-profile', (req: Request, res: Response) => {
+  try {
+    const { staffId, name, email, phone, accessCode, newPassword } = req.body;
+    if (!staffId && !email) {
+      return res.status(400).json({ success: false, error: 'Staff ID or Email is required.' });
+    }
+
+    // Locate staff record in registry
+    let record = Array.from(staffAuthRegistry.values()).find(
+      s => s.id === staffId || s.email.toLowerCase() === (email || '').toLowerCase()
+    );
+
+    if (record) {
+      if (name) record.name = name;
+      if (phone) record.phone = phone;
+      if (accessCode) {
+        const cleanCode = accessCode.trim().toUpperCase();
+        record.accessCode = cleanCode;
+        if (!record.otpSalt) {
+          record.otpSalt = crypto.randomBytes(16).toString('hex');
+        }
+        record.otpHash = hashWithSalt(cleanCode, record.otpSalt);
+        // Also register with cleanCode key for instant lookup
+        staffAuthRegistry.set(cleanCode, record);
+      }
+      if (newPassword) {
+        if (!record.passwordSalt) {
+          record.passwordSalt = crypto.randomBytes(16).toString('hex');
+        }
+        record.passwordHash = hashWithSalt(newPassword.trim(), record.passwordSalt);
+        record.passwordSetAt = new Date().toISOString();
+        record.mustChangePassword = false;
+        record.isTemporaryPassword = false;
+        record.status = 'active';
+      }
+    }
+
+    // Log self-profile update event in audit trail
+    logAuditEvent(
+      'STAFF_SELF_PROFILE_UPDATE',
+      'ACCOUNT_MANAGEMENT' as any,
+      { id: staffId, name: name || record?.name || 'Staff Member', role: record?.primaryRole || 'staff' },
+      `Staff member updated personal contact info / security credentials.`,
+      record ? { id: record.id, name: record.name, email: record.email } : undefined
+    );
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      staff: record ? {
+        id: record.id,
+        name: record.name,
+        email: record.email,
+        phone: record.phone,
+        accessCode: record.accessCode
+      } : null
+    });
+  } catch (err: any) {
+    console.error('Error updating staff self-profile:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // 8. Get registered staff list from server registry

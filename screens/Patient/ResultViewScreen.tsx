@@ -4,6 +4,8 @@ import { useAuth } from '../../context/authContext';
 import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
+import { auditService } from '../../services/auditService';
+import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import { 
   ArrowLeft, 
   Printer, 
@@ -13,20 +15,22 @@ import {
   Activity, 
   Laptop, 
   FileText, 
-  ExternalLink,
-  DollarSign,
-  Building2,
-  Clock,
-  Check,
-  AlertCircle,
-  UserCheck,
-  CreditCard,
-  FlaskConical,
-  RefreshCw,
-  Shield,
-  FileCheck,
-  User,
-  BadgeAlert
+  ExternalLink, 
+  DollarSign, 
+  Building2, 
+  Clock, 
+  Check, 
+  AlertCircle, 
+  UserCheck, 
+  CreditCard, 
+  FlaskConical, 
+  RefreshCw, 
+  Shield, 
+  FileCheck, 
+  User, 
+  BadgeAlert,
+  History,
+  Lock
 } from 'lucide-react';
 
 interface ResultViewScreenProps {
@@ -48,6 +52,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   const [requestingVirtual, setRequestingVirtual] = useState(false);
   const [virtualRequested, setVirtualRequested] = useState(Boolean(test?.virtualRequested));
   const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
 
   // Sync / fetch latest test state from Firestore
   const fetchLatestTestData = async () => {
@@ -97,7 +102,70 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
       setVirtualRequested(Boolean(test.virtualRequested));
     }
     fetchLatestTestData();
+
+    // Log diagnostic report view in immutable audit ledger
+    if (test || currentTest.id) {
+      auditService.logPatientAccess({
+        labId: lab?.id || 'lab-1',
+        labName: lab?.name || 'nanoLabs Central Diagnostics',
+        patientId: test?.patientId || test?.patientCode || user?.id || 'pat-1',
+        patientName: test?.patientName || user?.name || 'Patient Record',
+        patientCode: test?.patientCode || test?.patientId || user?.patientId || 'P-1000',
+        action: 'VIEW_DIAGNOSTIC_REPORT',
+        performedBy: {
+          id: user?.id || 'user-anon',
+          name: user?.name || 'Authorized Member',
+          role: user?.role || 'staff',
+          email: user?.email || ''
+        },
+        testId: test?.id || currentTest?.id,
+        testName: test?.testName || test?.name || currentTest?.testName || 'Diagnostic Procedure',
+        details: `Viewed diagnostic lifecycle report and clinical findings for ${test?.testName || test?.name || currentTest?.testName || 'Laboratory Test'}.`
+      }).catch(e => console.warn('Audit view log error:', e));
+    }
   }, [test?.id]);
+
+  const handlePrintWithAudit = () => {
+    auditService.logPatientAccess({
+      labId: lab?.id || 'lab-1',
+      labName: lab?.name || 'nanoLabs Central Diagnostics',
+      patientId: currentTest.patientId || currentTest.patientCode || user?.id || 'pat-1',
+      patientName: currentTest.patientName || user?.name || 'Patient Record',
+      patientCode: currentTest.patientCode || currentTest.patientId || user?.patientId || 'P-1000',
+      action: 'PRINT_REPORT',
+      performedBy: {
+        id: user?.id || 'user-anon',
+        name: user?.name || 'Authorized Member',
+        role: user?.role || 'staff',
+        email: user?.email || ''
+      },
+      testId: currentTest.id,
+      testName: currentTest.testName || currentTest.name || 'Diagnostic Procedure',
+      details: `Generated physical printed report for ${currentTest.testName || currentTest.name || 'Laboratory Test'}.`
+    }).catch(e => console.warn('Audit print log error:', e));
+
+    window.print();
+  };
+
+  const handleDownloadWithAudit = () => {
+    auditService.logPatientAccess({
+      labId: lab?.id || 'lab-1',
+      labName: lab?.name || 'nanoLabs Central Diagnostics',
+      patientId: currentTest.patientId || currentTest.patientCode || user?.id || 'pat-1',
+      patientName: currentTest.patientName || user?.name || 'Patient Record',
+      patientCode: currentTest.patientCode || currentTest.patientId || user?.patientId || 'P-1000',
+      action: 'DOWNLOAD_PDF_RESULTS',
+      performedBy: {
+        id: user?.id || 'user-anon',
+        name: user?.name || 'Authorized Member',
+        role: user?.role || 'staff',
+        email: user?.email || ''
+      },
+      testId: currentTest.id,
+      testName: currentTest.testName || currentTest.name || 'Diagnostic Procedure',
+      details: `Downloaded AES-256 encrypted PDF result document (${currentTest.pdfName || 'Report.pdf'}).`
+    }).catch(e => console.warn('Audit download log error:', e));
+  };
 
   const handleRequestVirtualResult = async () => {
     setRequestingVirtual(true);
@@ -186,14 +254,24 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
             </button>
           ) : <div />}
 
-          <button
-            onClick={fetchLatestTestData}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${loading ? 'animate-spin' : ''}`} />
-            {refreshSuccess ? 'Updated!' : loading ? 'Syncing...' : 'Refresh Status'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAuditModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-emerald-700" />
+              Access & Audit History
+            </button>
+
+            <button
+              onClick={fetchLatestTestData}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${loading ? 'animate-spin' : ''}`} />
+              {refreshSuccess ? 'Updated!' : loading ? 'Syncing...' : 'Refresh Status'}
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/80 shadow-lg space-y-8">
@@ -225,7 +303,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => window.print()}
+                onClick={handlePrintWithAudit}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
@@ -237,6 +315,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
                   href={pdfLink}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={handleDownloadWithAudit}
                   className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
@@ -258,479 +337,209 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
                 <button
                   onClick={handleRequestVirtualResult}
                   disabled={requestingVirtual}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-all cursor-pointer"
                 >
                   <Laptop className="w-3.5 h-3.5" />
-                  {requestingVirtual ? 'Requesting...' : 'Request Virtual Result'}
+                  {requestingVirtual ? 'Submitting...' : 'Request Virtual Result Online'}
                 </button>
               )}
             </div>
 
             <p className="text-slate-700 leading-relaxed">
-              {hasPdf ? (
-                <span>
-                  🎉 <strong>Your virtual result PDF is ready!</strong> You can view and download your report directly above. You may also visit the laboratory receptionist at any time to pick up your official hardcopy physical result.
-                </span>
-              ) : isCompleted ? (
-                <span>
-                  ✅ <strong>Test analysis completed!</strong> Your paper result is available at the lab receptionist desk. Click <strong>"Request Virtual Result"</strong> if you want the lab technician to upload an online digital PDF for you.
-                </span>
-              ) : (
-                <span>
-                  ⏳ <strong>Test currently processing.</strong> Once all steps on the workflow roadmap below turn green, verified clinical findings will be published here. You can request a virtual result online so the lab technician uploads the PDF directly to your portal.
-                </span>
-              )}
+              Official physical laboratory hardcopies are available at our reception desk with doctor stamps. If you have requested a virtual report, our lab technologists will upload your encrypted PDF document below as soon as biochemistry analysis is verified.
             </p>
+          </div>
 
-            {virtualRequested && !hasPdf && (
-              <div className="inline-flex items-center gap-1.5 text-indigo-700 bg-indigo-100/70 px-3 py-1 rounded-lg font-bold">
-                <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                Virtual Result Requested — Lab Tech notified to upload PDF
+          {/* ZERO-KNOWLEDGE ENCRYPTION & AUDIT BADGE */}
+          <div className="p-3.5 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-teal-500/20 text-teal-300 rounded-lg">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-white block">Zero-Knowledge AES-GCM-256 Medical Confidentiality</span>
+                <span className="text-[11px] text-slate-300">All diagnostic values are client-side encrypted before cloud transmission.</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAuditModal(true)}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-teal-300 font-mono text-[11px] rounded-xl border border-white/20 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5" />
+              View Access Ledger ({currentTest.patientCode || 'PT-REC'})
+            </button>
+          </div>
+
+          {/* WORKFLOW STATUS STEPPER (4 STAGES) */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnostic Workflow Lifecycle</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              {/* Step 1: Reception */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isConfirmedByReception 
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                  : 'bg-slate-50 border-slate-200 text-slate-400'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-[10px] uppercase">1. Admission</span>
+                  {isConfirmedByReception ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Clock className="w-4 h-4 text-slate-400" />}
+                </div>
+                <div className="font-bold text-slate-900">{isConfirmedByReception ? 'Confirmed' : 'Pending Check-in'}</div>
+                <div className="text-[11px] text-slate-500 mt-1">{receptionistStaff || 'Receptionist Desk'}</div>
+              </div>
+
+              {/* Step 2: Cashier */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isPaid 
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                  : 'bg-amber-50/70 border-amber-200 text-amber-950'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-[10px] uppercase">2. Payment</span>
+                  {isPaid ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Clock className="w-4 h-4 text-amber-600" />}
+                </div>
+                <div className="font-bold text-slate-900">{isPaid ? 'Payment Verified' : 'Awaiting Cashier'}</div>
+                <div className="text-[11px] text-slate-500 mt-1">{cashierStaff || 'Financial Cashier'}</div>
+              </div>
+
+              {/* Step 3: Phlebotomy / Collector */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isSampleCollected 
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                  : 'bg-slate-50 border-slate-200 text-slate-400'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-[10px] uppercase">3. Specimen</span>
+                  {isSampleCollected ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Clock className="w-4 h-4 text-slate-400" />}
+                </div>
+                <div className="font-bold text-slate-900">{isSampleCollected ? 'Sample Collected' : 'Awaiting Draw'}</div>
+                <div className="text-[11px] text-slate-500 mt-1">{collectorStaff || 'Phlebotomist / Analyzer'}</div>
+              </div>
+
+              {/* Step 4: Lab Technologist Analysis */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isCompleted 
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                  : isAnalyzing
+                    ? 'bg-blue-50/70 border-blue-200 text-blue-950 animate-pulse'
+                    : 'bg-slate-50 border-slate-200 text-slate-400'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-[10px] uppercase">4. Verification</span>
+                  {isCompleted ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : isAnalyzing ? <FlaskConical className="w-4 h-4 text-blue-600" /> : <Clock className="w-4 h-4 text-slate-400" />}
+                </div>
+                <div className="font-bold text-slate-900">{isCompleted ? 'Report Verified' : isAnalyzing ? 'In Analysis' : 'Pending Testing'}</div>
+                <div className="text-[11px] text-slate-500 mt-1">{labTechStaff || 'Lab Technologist'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* CLINICAL FINDINGS & ATTACHED PDF CARD */}
+          <div className="space-y-4 pt-4 border-t border-slate-200">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Clinical Findings & Results Document</h3>
+
+            {isCompleted ? (
+              <div className="space-y-4">
+                {currentTest.result ? (
+                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
+                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                      <FileCheck className="w-4 h-4 text-teal-600" />
+                      Validated Laboratory Findings
+                    </div>
+                    <p className="text-slate-800 font-medium whitespace-pre-wrap">{currentTest.result}</p>
+                    {currentTest.notes && (
+                      <p className="text-xs text-slate-500 pt-2 border-t border-slate-200">
+                        <strong>Clinical Observations: </strong> {currentTest.notes}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-emerald-50 text-emerald-800 text-xs rounded-2xl border border-emerald-200 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Biochemical analysis verified by Lead Technologist. Official PDF report attached below.</span>
+                  </div>
+                )}
+
+                {hasPdf && (
+                  <div className="p-5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-2xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-teal-600 text-white rounded-xl shadow-md">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">
+                          {currentTest.pdfName || `${currentTest.testName || 'DiagnosticReport'}.pdf`}
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          {currentTest.pdfSize ? `${(currentTest.pdfSize / 1024).toFixed(1)} KB • ` : ''}Digitally signed & encrypted certificate
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={pdfLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={handleDownloadWithAudit}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download PDF Certificate
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <Clock className="w-8 h-8 text-amber-500 mx-auto animate-pulse" />
+                <h4 className="font-bold text-slate-800 text-sm">Diagnostic Testing in Progress</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Our laboratory technologists are executing specimen analysis. Once validated, your encrypted digital PDF will appear directly on this screen.
+                </p>
               </div>
             )}
           </div>
 
-          {/* PATIENT & FINANCIAL SUMMARY GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200/80 text-xs">
-            <div className="space-y-1">
-              <span className="text-slate-400 block font-medium uppercase text-[10px] tracking-wider">Patient Details</span>
-              <span className="font-bold text-slate-900 text-sm block">{currentTest.patientName || user?.name || 'Valued Patient'}</span>
-              <span className="font-mono text-slate-600 block">ID: {currentTest.patientCode || currentTest.patientId || user?.patientId || 'P-0000'}</span>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-slate-400 block font-medium uppercase text-[10px] tracking-wider">Diagnostic Procedure</span>
-              <span className="font-bold text-slate-900 text-sm block">{currentTest.testName || currentTest.name || 'Laboratory Test'}</span>
-              <span className="text-slate-600 block">{currentTest.category || 'Clinical Diagnostic'}</span>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-slate-400 block font-medium uppercase text-[10px] tracking-wider">Price Breakdown</span>
-              <span className="font-black text-emerald-800 text-sm block">{totalPrice.toLocaleString()} FCFA</span>
-              <span className="text-[11px] text-slate-600 block">
-                {basePrice.toLocaleString()} + {systemFee.toLocaleString()} FCFA System Fee
-              </span>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-slate-400 block font-medium uppercase text-[10px] tracking-wider">Payment Status</span>
-              {isPaid ? (
-                <div className="space-y-1">
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                    PAID & VERIFIED
-                  </span>
-                  <p className="text-[11px] text-slate-700 font-medium">
-                    Method: {currentTest.paymentMethodLabel || currentTest.paymentMethod || 'Cash'}
-                  </p>
-                  {cashierStaff && (
-                    <p className="text-[10px] text-slate-500">
-                      Verified by: <strong>{cashierStaff}</strong>
-                    </p>
-                  )}
-                  {currentTest.receiptNumber && (
-                    <p className="text-[10px] font-mono text-slate-500">
-                      Receipt: {currentTest.receiptNumber}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <span className="inline-flex items-center gap-1 font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
-                    <AlertCircle className="w-3 h-3 text-amber-700" />
-                    UNPAID (Pending Cashier)
-                  </span>
-                  <p className="text-[10px] text-amber-800">
-                    Please settle at Cashier Counter.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* INSURANCE SPLIT BREAKDOWN (IF APPLICABLE) */}
-          {insurance && isPaid && (
-            <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-2xl space-y-2.5 text-xs text-purple-950">
-              <div className="flex items-center justify-between font-bold text-purple-900 border-b border-purple-200/70 pb-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Shield className="w-4 h-4 text-purple-700" />
-                  Insurance Coverage & Co-Pay Settlement Details
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 text-[10px] uppercase font-extrabold">
-                  {insurance.coverageType === 'partial' ? `${insurance.insurancePercent}% Ins / ${insurance.patientPercent}% Co-Pay` : '100% Full Cover'}
-                </span>
+          {/* FINANCIAL BILLING BREAKDOWN */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Financial & Fee Breakdown</h3>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Diagnostic Procedure Base Fee</span>
+                <span className="font-semibold text-slate-800">{basePrice.toLocaleString()} FCFA</span>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div>
-                  <span className="text-purple-700 block font-medium text-[11px]">Insurance Provider</span>
-                  <span className="font-bold text-purple-950">{insurance.company}</span>
-                  <span className="block font-mono text-[10px] text-purple-800">Policy: {insurance.policyNumber}</span>
-                </div>
-
-                <div>
-                  <span className="text-purple-700 block font-medium text-[11px]">Covered by Insurance</span>
-                  <span className="font-bold text-purple-950">
-                    {insurance.insurancePercent || insurance.coveragePercent || 100}% ({((insurance.insuranceAmount || totalPrice)).toLocaleString()} FCFA)
-                  </span>
-                  <span className="block text-[10px] text-purple-800">Billed to {insurance.company}</span>
-                </div>
-
-                <div>
-                  <span className="text-purple-700 block font-medium text-[11px]">Patient Co-Pay Settled</span>
-                  <span className="font-bold text-purple-950">
-                    {insurance.patientPercent ? `${insurance.patientPercent}% (${(insurance.patientCoPayAmount || 0).toLocaleString()} FCFA)` : '0 FCFA (Fully Covered)'}
-                  </span>
-                  {insurance.patientCoPayMethodLabel && (
-                    <span className="block text-[10px] text-purple-800">
-                      Paid via {insurance.patientCoPayMethodLabel} {insurance.patientCoPayRef ? `(Ref: ${insurance.patientCoPayRef})` : ''}
-                    </span>
-                  )}
-                </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">nanoLabs System & Software Processing Fee</span>
+                <span className="font-semibold text-slate-800">{systemFee.toLocaleString()} FCFA</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-slate-200 font-bold text-sm text-slate-900">
+                <span>Total Amount</span>
+                <span className="text-teal-700">{totalPrice.toLocaleString()} FCFA</span>
               </div>
             </div>
-          )}
-
-          {/* WORKFLOW ROADMAP (ROAD MAP WITH STEP-BY-STEP PROGRESS & STAFF ATTRIBUTION) */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-teal-600" />
-                  Diagnostic Workflow Roadmap & Staff Verification
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Real-time progression map. Each completed step indicates the authorized staff member.
-                </p>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                {isCompleted ? 'All Steps Completed' : isAnalyzing ? 'Laboratory Processing' : isSampleCollected ? 'Sample Accessioned' : isPaid ? 'Awaiting Specimen' : 'Awaiting Payment'}
-              </span>
-            </div>
-
-            {/* Visual Roadmap Stepper */}
-            <div className="space-y-3">
-              
-              {/* Step 1: Intake & Registration */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                isConfirmedByReception 
-                  ? 'bg-emerald-50/70 border-emerald-200' 
-                  : 'bg-slate-50 border-slate-200 opacity-80'
-              }`}>
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isConfirmedByReception ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-300 text-slate-600'
-                  }`}>
-                    {isConfirmedByReception ? <Check className="w-4 h-4 stroke-[3]" /> : '1'}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-sm text-slate-900">
-                        1. Patient Intake & Test Request
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                        isConfirmedByReception ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {isConfirmedByReception ? 'CONFIRMED' : 'PENDING'}
-                      </span>
-                    </div>
-
-                    <p className="text-slate-600">
-                      {isConfirmedByReception ? (
-                        <span>
-                          Test requested and registered in nanoLabs clinic queue on <strong>{currentTest.requestedDate || 'Recent'}</strong>.
-                        </span>
-                      ) : (
-                        <span>Test request registered. Pending confirmation by receptionist.</span>
-                      )}
-                    </p>
-
-                    {receptionistStaff && (
-                      <div className="flex items-center gap-1.5 text-emerald-800 font-semibold pt-1">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Administered by Receptionist: <strong>{receptionistStaff}</strong></span>
-                        {currentTest.confirmedAt && (
-                          <span className="text-[10px] text-slate-400 font-normal ml-1">
-                            ({new Date(currentTest.confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2: Cashier Payment Verification */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                isPaid 
-                  ? 'bg-emerald-50/70 border-emerald-200' 
-                  : 'bg-amber-50/60 border-amber-200'
-              }`}>
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isPaid ? 'bg-emerald-600 text-white font-bold' : 'bg-amber-500 text-white font-bold'
-                  }`}>
-                    {isPaid ? <Check className="w-4 h-4 stroke-[3]" /> : <Clock className="w-4 h-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-sm text-slate-900">
-                        2. Cashier Invoice & Payment Clearance
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                        isPaid ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
-                      }`}>
-                        {isPaid ? 'PAID & AUTHORIZED' : 'UNPAID / ACTION REQUIRED'}
-                      </span>
-                    </div>
-
-                    <p className="text-slate-600">
-                      {isPaid ? (
-                        <span>
-                          Financial settlement verified for <strong>{totalPrice.toLocaleString()} FCFA</strong> ({basePrice.toLocaleString()} + {systemFee.toLocaleString()} FCFA System Fee) via <strong>{currentTest.paymentMethodLabel || currentTest.paymentMethod || 'Cash'}</strong>.
-                        </span>
-                      ) : (
-                        <span>
-                          Payment of <strong>{totalPrice.toLocaleString()} FCFA</strong> is pending. Please proceed to the Cashier desk for payment clearance.
-                        </span>
-                      )}
-                    </p>
-
-                    {isPaid && cashierStaff && (
-                      <div className="flex items-center gap-1.5 text-emerald-800 font-semibold pt-1">
-                        <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Payment Authorized by Cashier: <strong>{cashierStaff}</strong></span>
-                        {currentTest.paidAt && (
-                          <span className="text-[10px] text-slate-400 font-normal ml-1">
-                            ({new Date(currentTest.paidAt).toLocaleString()})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3: Specimen / Sample Collection */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                isSampleCollected 
-                  ? 'bg-emerald-50/70 border-emerald-200' 
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isSampleCollected ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-300 text-slate-600'
-                  }`}>
-                    {isSampleCollected ? <Check className="w-4 h-4 stroke-[3]" /> : '3'}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-sm text-slate-900">
-                        3. Specimen / Sample Collection & Accessioning
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                        isSampleCollected ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {isSampleCollected ? 'SAMPLE COLLECTED' : 'AWAITING SPECIMEN'}
-                      </span>
-                    </div>
-
-                    <p className="text-slate-600">
-                      {isSampleCollected ? (
-                        <span>
-                          Patient specimen drawn, labeled with barcode, and accessioned into the laboratory workstation.
-                        </span>
-                      ) : (
-                        <span>
-                          Specimen has not yet been drawn. Once payment is settled, visit the sample collection station.
-                        </span>
-                      )}
-                    </p>
-
-                    {isSampleCollected && collectorStaff && (
-                      <div className="flex items-center gap-1.5 text-emerald-800 font-semibold pt-1">
-                        <FlaskConical className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Collected & Accessioned by: <strong>{collectorStaff}</strong></span>
-                        {currentTest.collectedAt && (
-                          <span className="text-[10px] text-slate-400 font-normal ml-1">
-                            ({new Date(currentTest.collectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {currentTest.materialsUsed && currentTest.materialsUsed.length > 0 && (
-                      <div className="text-[11px] text-teal-800 pt-1">
-                        <span className="font-bold">Reagents/Materials Used:</span>{' '}
-                        {currentTest.materialsUsed.map((m: any, i: number) => (
-                          <span key={i} className="inline-block bg-teal-100/70 px-1.5 py-0.5 rounded mr-1 text-[10px]">
-                            {m.name} ({m.quantity} {m.unit || 'unit'})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 4: Laboratory Analysis & Testing */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                isCompleted 
-                  ? 'bg-emerald-50/70 border-emerald-200' 
-                  : isAnalyzing 
-                    ? 'bg-blue-50/70 border-blue-200' 
-                    : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isCompleted ? 'bg-emerald-600 text-white font-bold' : isAnalyzing ? 'bg-blue-600 text-white font-bold' : 'bg-slate-300 text-slate-600'
-                  }`}>
-                    {isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : isAnalyzing ? <Activity className="w-4 h-4 animate-spin" /> : '4'}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-sm text-slate-900">
-                        4. Laboratory Diagnostic Analysis
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                        isCompleted ? 'bg-emerald-200 text-emerald-900' : isAnalyzing ? 'bg-blue-200 text-blue-900 animate-pulse' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {isCompleted ? 'ANALYSIS COMPLETED' : isAnalyzing ? 'IN ANALYSIS' : 'QUEUED'}
-                      </span>
-                    </div>
-
-                    <p className="text-slate-600">
-                      {isCompleted ? (
-                        <span>Diagnostic testing and clinical examination completed and verified.</span>
-                      ) : isAnalyzing ? (
-                        <span>Specimen is actively undergoing diagnostic testing on laboratory analyzers.</span>
-                      ) : (
-                        <span>Awaiting specimen collection before testing can initiate.</span>
-                      )}
-                    </p>
-
-                    {isCompleted && labTechStaff && (
-                      <div className="flex items-center gap-1.5 text-emerald-800 font-semibold pt-1">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Analyzed & Signed by Lab Technologist: <strong>{labTechStaff}</strong></span>
-                        {currentTest.completedDate && (
-                          <span className="text-[10px] text-slate-400 font-normal ml-1">
-                            ({currentTest.completedDate})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 5: Diagnostic Findings Release & Archival */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                isCompleted && Boolean(currentTest.result || currentTest.pdfUrl)
-                  ? 'bg-emerald-50/70 border-emerald-200' 
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isCompleted && Boolean(currentTest.result || currentTest.pdfUrl) ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-300 text-slate-600'
-                  }`}>
-                    {isCompleted && Boolean(currentTest.result || currentTest.pdfUrl) ? <Check className="w-4 h-4 stroke-[3]" /> : '5'}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-sm text-slate-900">
-                        5. Verified Report Release
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                        isCompleted && Boolean(currentTest.result || currentTest.pdfUrl) ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {isCompleted && Boolean(currentTest.result || currentTest.pdfUrl) ? 'RELEASED' : 'PENDING'}
-                      </span>
-                    </div>
-
-                    <p className="text-slate-600">
-                      {isCompleted ? (
-                        <span>Final report authorized by Medical Director. Physical copy available at reception desk and virtual copy accessible below.</span>
-                      ) : (
-                        <span>Report will be released immediately after the lab technologist validates all parameters.</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* DIAGNOSTIC FINDINGS SECTION */}
-          {isCompleted && currentTest.result ? (
-            <div className="p-6 bg-teal-50/60 rounded-2xl border border-teal-200/90 space-y-4">
-              <div className="flex items-center justify-between border-b border-teal-200/70 pb-3">
-                <div className="flex items-center gap-2 text-teal-950 text-xs font-bold uppercase tracking-wider">
-                  <ShieldCheck className="w-5 h-5 text-teal-600" />
-                  Verified Clinical Diagnostic Findings
-                </div>
-                
-                {hasPdf && (
-                  <a
-                    href={pdfLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-teal-800 hover:underline flex items-center gap-1 font-bold bg-white px-3 py-1.5 rounded-xl border border-teal-300 shadow-2xs"
-                  >
-                    <FileText className="w-4 h-4 text-teal-600" />
-                    Open PDF Report Document
-                    <ExternalLink className="w-3 h-3 text-slate-400" />
-                  </a>
-                )}
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-teal-100 space-y-2">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Diagnostic Analysis Results:</span>
-                <p className="text-sm font-semibold text-slate-900 leading-relaxed font-mono whitespace-pre-wrap">
-                  {currentTest.result}
-                </p>
-              </div>
-
-              {currentTest.notes && (
-                <div className="p-3 bg-white/80 rounded-xl border border-teal-100 text-xs text-slate-700">
-                  <strong className="text-teal-900">Technologist Clinical Remarks:</strong> {currentTest.notes}
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-600 pt-2 border-t border-teal-200/60 gap-2">
-                <div className="flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Authorized by: <strong>{labTechStaff || 'Lab Technologist & Medical Director'}</strong></span>
-                </div>
-                <span className="font-mono text-[10px] text-slate-500">Security Signature: NL-SIG-{(currentTest.id || '99201').toUpperCase()}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-center">
-              <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center mx-auto">
-                <Clock className="w-5 h-5" />
-              </div>
-              <h4 className="font-bold text-slate-800 text-sm">Diagnostic Findings Pending</h4>
-              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                {isPaid 
-                  ? 'Your payment is cleared. Once the laboratory technologist completes the test analysis, verified clinical values and technologist remarks will be displayed here immediately.'
-                  : 'Diagnostic analysis has not begun because payment clearance is required. Please visit the Cashier desk to settle the invoice.'}
-              </p>
-            </div>
-          )}
-
-          {/* Footer Signature */}
-          <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-teal-600" />
-              <span>Official Diagnostics from <strong>{lab?.name || 'nanoLabs Medical Diagnostics'}</strong></span>
-            </div>
-            <span className="font-mono text-[11px] text-slate-400">Accredited Clinical Laboratory System</span>
           </div>
 
         </div>
       </main>
+
+      {/* Patient Activity & Access Audit Modal */}
+      <PatientActivityAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        patient={{
+          id: currentTest.patientId || currentTest.patientCode || user?.id || 'pat-1',
+          patientId: currentTest.patientCode || currentTest.patientId || user?.patientId || 'P-1000',
+          patientCode: currentTest.patientCode || currentTest.patientId || 'P-1000',
+          name: currentTest.patientName || user?.name || 'Patient Record',
+          phone: currentTest.patientPhone || user?.phone || ''
+        }}
+        labId={lab?.id || 'lab-1'}
+        labName={lab?.name || 'nanoLabs Central Diagnostics'}
+      />
     </div>
   );
 };

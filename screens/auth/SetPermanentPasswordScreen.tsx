@@ -14,7 +14,11 @@ import {
   ShieldAlert, 
   User, 
   Mail, 
-  Building2 
+  Building2,
+  AlertTriangle,
+  FileCheck2,
+  LockKeyhole,
+  Users
 } from 'lucide-react';
 
 interface SetPermanentPasswordScreenProps {
@@ -30,28 +34,27 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successNotice, setSuccessNotice] = useState(false);
+  const [acknowledgedPolicy, setAcknowledgedPolicy] = useState(false);
 
-  // Password requirement tests
-  const hasMinLength = password.length >= 6;
-  const hasNumber = /\d/.test(password);
-  const hasLetter = /[a-zA-Z]/.test(password);
+  // Requirements: minimum 4 chars, match exactly
+  const hasMinLength = password.length >= 4;
   const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const isFormValid = hasMinLength && hasNumber && hasLetter && passwordsMatch;
+  const isFormValid = hasMinLength && passwordsMatch && acknowledgedPolicy;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
     if (!hasMinLength) {
-      setErrorMessage('Password must be at least 6 characters long.');
-      return;
-    }
-    if (!hasNumber || !hasLetter) {
-      setErrorMessage('Password must contain both letters and numbers.');
+      setErrorMessage('Your new access code must be at least 4 characters long.');
       return;
     }
     if (!passwordsMatch) {
-      setErrorMessage('Passwords do not match. Please re-enter.');
+      setErrorMessage('Access codes do not match. Please re-enter.');
+      return;
+    }
+    if (!acknowledgedPolicy) {
+      setErrorMessage('Please acknowledge the non-sharing confidentiality policy before continuing.');
       return;
     }
 
@@ -60,15 +63,17 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
       const result = await authService.setPermanentPassword(
         user?.id,
         user?.email,
-        password,
+        password.trim(),
         lab?.id || user?.labId
       );
 
-      if (result.success) {
+      if (result && result.success) {
         setSuccessNotice(true);
         const updatedUser = {
           ...user,
+          accessCode: password.trim(),
           mustChangePassword: false,
+          isTemporaryPassword: false,
           status: 'active'
         };
 
@@ -80,10 +85,10 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
           onSuccess(updatedUser);
         }, 1200);
       } else {
-        setErrorMessage(result.error || 'Failed to save password.');
+        setErrorMessage('Failed to save new access code.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'An error occurred while setting your password.');
+      setErrorMessage(err.message || 'An error occurred while saving your private code.');
     } finally {
       setLoading(false);
     }
@@ -91,17 +96,18 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-lg w-full mx-auto space-y-6">
+      <div className="max-w-xl w-full mx-auto space-y-6">
+        
         {/* Brand Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-500/20 border border-teal-500/40 text-teal-300 shadow-xl mb-1">
-            <ShieldCheck className="w-8 h-8" />
+            <LockKeyhole className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight">
-            Establish Permanent Password
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            First-Time Security Setup
           </h1>
-          <p className="text-xs text-teal-200/80">
-            Zero-Knowledge Cryptographic Access Setup
+          <p className="text-sm text-teal-200/90 font-medium">
+            Create Your Private Permanent Access Code
           </p>
         </div>
 
@@ -139,22 +145,32 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
               {lab?.name || user?.labName || 'nanoLabs Facility'}
             </span>
             <span className="text-[11px] text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded font-medium border border-amber-400/20">
-              One-Time OTP Login Verified
+              Temporary Setup Code Active
             </span>
           </div>
         </div>
 
-        {/* Password Form Card */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-5">
-          {/* Security Notice Callout */}
-          <div className="p-3.5 bg-teal-900/40 border border-teal-500/30 rounded-2xl flex items-start gap-3 text-xs text-teal-100">
-            <Lock className="w-4 h-4 text-teal-300 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="font-bold text-white block">Zero-Knowledge Confidentiality Policy</span>
-              <p className="text-[11px] leading-relaxed text-teal-200/90">
-                Your password will be securely salted and hashed with SHA-256 on the server. Neither hospital administrators nor technical staff will ever be able to see or recover your password.
-              </p>
+        {/* Form Container */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+          
+          {/* Detailed Security & Policy Reasons */}
+          <div className="p-4 bg-teal-950/70 border border-teal-500/40 rounded-2xl space-y-3 text-xs text-slate-200">
+            <div className="flex items-center gap-2 text-teal-300 font-bold text-sm">
+              <ShieldAlert className="w-4 h-4 text-teal-400" />
+              Why You Must Change Your Code & Keep It Secret:
             </div>
+            
+            <ul className="space-y-2 text-[11px] text-slate-300 leading-relaxed list-disc list-inside">
+              <li>
+                <strong className="text-white">Admin-Assigned Temporary Code:</strong> The code you just entered was temporarily created by your administrator for your onboarding. You must replace it with your own private code.
+              </li>
+              <li>
+                <strong className="text-white">Clinical Action Accountability:</strong> Every diagnostic test you record, sample you analyze, patient you admit, and payment you collect is legally recorded in your name in the audit ledger.
+              </li>
+              <li>
+                <strong className="text-amber-300">Strict Non-Sharing Policy:</strong> You must <strong>never share this code with anyone</strong>—including colleagues or supervisors. Each staff member must only use their own assigned credentials.
+              </li>
+            </ul>
           </div>
 
           {errorMessage && (
@@ -167,21 +183,21 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
           {successNotice && (
             <div className="p-3.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>Permanent password established! Entering staff portal...</span>
+              <span>Private access code configured successfully! Entering your workspace...</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* New Password Input */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* New Private Code Input */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                New Permanent Password <span className="text-rose-400">*</span>
+                New Private Access Code / Password <span className="text-rose-400">*</span>
               </label>
               <div className="relative">
                 <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter private password"
+                  placeholder="Enter your new secret code (e.g. MARC7749)"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 transition-all font-mono"
@@ -190,23 +206,23 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Confirm Password Input */}
+            {/* Confirm New Code Input */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                Confirm Permanent Password <span className="text-rose-400">*</span>
+                Confirm Private Access Code <span className="text-rose-400">*</span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Re-enter password to confirm"
+                  placeholder="Re-enter your private code to confirm"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 transition-all font-mono"
@@ -215,18 +231,15 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Validation Criteria */}
+            {/* Validation Checklist */}
             <div className="bg-slate-900/60 p-3.5 rounded-xl space-y-1.5 text-xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                Security Requirements:
-              </span>
               <div className="flex items-center gap-2">
                 {hasMinLength ? (
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -234,17 +247,7 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
                   <XCircle className="w-3.5 h-3.5 text-slate-500" />
                 )}
                 <span className={hasMinLength ? 'text-emerald-300' : 'text-slate-400'}>
-                  At least 6 characters in length
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasNumber && hasLetter ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <XCircle className="w-3.5 h-3.5 text-slate-500" />
-                )}
-                <span className={hasNumber && hasLetter ? 'text-emerald-300' : 'text-slate-400'}>
-                  Contains both letters and numbers
+                  At least 4 characters long (letters, numbers, or symbols)
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -254,10 +257,23 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
                   <XCircle className="w-3.5 h-3.5 text-slate-500" />
                 )}
                 <span className={passwordsMatch ? 'text-emerald-300' : 'text-slate-400'}>
-                  Both passwords match exactly
+                  Both codes match exactly
                 </span>
               </div>
             </div>
+
+            {/* Mandatory Non-Sharing Agreement Checkbox */}
+            <label className="flex items-start gap-3 p-3 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-colors">
+              <input
+                type="checkbox"
+                checked={acknowledgedPolicy}
+                onChange={e => setAcknowledgedPolicy(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded text-teal-600 focus:ring-teal-500 bg-white/10 border-white/20 cursor-pointer"
+              />
+              <span className="text-xs text-slate-200 leading-relaxed">
+                I understand that this code belongs solely to me. <strong>I will keep it strictly confidential and will NOT share it with anyone</strong>, ensuring all laboratory and clinical operations under my account remain secure.
+              </span>
+            </label>
 
             {/* Submit Action */}
             <button
@@ -268,11 +284,11 @@ export const SetPermanentPasswordScreen: React.FC<SetPermanentPasswordScreenProp
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Encrypting & Saving Credentials...
+                  Saving Your Private Code...
                 </>
               ) : (
                 <>
-                  Save Permanent Password & Launch Portal
+                  Save Private Code & Open Dashboard
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/authContext';
 import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
 import { authService } from '../../services/authService';
+import { auditService } from '../../services/auditService';
 import { 
   Microscope, 
   CheckCircle2, 
@@ -12,7 +13,7 @@ import {
   RefreshCw, 
   Syringe, 
   User, 
-  Key,
+  Key, 
   X,
   Lock,
   ArrowLeft,
@@ -107,7 +108,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     fetchTestsAndInventory();
   }, [lab?.id]);
 
-  const handleOpenCollectModal = (test: any) => {
+  const handleOpenCollectModal = async (test: any) => {
     if (!test.isPaid) {
       alert('Cannot collect sample: Patient payment has not been verified by Cashier yet.');
       return;
@@ -125,6 +126,29 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     }
     
     setShowCollectModal(true);
+
+    // Cryptographically sealed Audit Log: Log sample collector viewing patient accessioning card
+    try {
+      await auditService.logPatientAccess({
+        labId: lab?.id || 'lab-1',
+        labName: lab?.name || 'nanoLabs Facility',
+        patientId: test.patientId || test.id,
+        patientName: test.patientName || test.name || 'Patient Record',
+        patientCode: test.patientCode || test.patientId,
+        action: 'COLLECT_SAMPLE',
+        performedBy: {
+          id: user?.id || 'staff',
+          name: user?.name || 'Sample Collector',
+          role: user?.role || 'analyzer',
+          email: user?.email
+        },
+        testId: test.id,
+        testName: test.testName || test.name,
+        details: 'Accessed patient sample collection requisition & materials intake'
+      });
+    } catch (err) {
+      console.warn('Audit log error (non-blocking):', err);
+    }
   };
 
   const handleAddMaterialRow = () => {
@@ -251,6 +275,25 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
         await updateDoc(patientRef, { 
           labTests: updatedTests,
           updatedAt: new Date().toISOString()
+        });
+
+        // Cryptographically sealed Audit Log: Specimen collection and inventory deduction
+        await auditService.logPatientAccess({
+          labId: targetLabId,
+          labName: lab?.name || 'nanoLabs Facility',
+          patientId: selectedTest.patientId || selectedTest.id,
+          patientName: selectedTest.patientName || selectedTest.name || 'Patient Record',
+          patientCode: selectedTest.patientCode || selectedTest.patientId,
+          action: 'COLLECT_SAMPLE',
+          performedBy: {
+            id: user?.id || 'staff',
+            name: staffName || user?.name || 'Sample Collector',
+            role: user?.role || 'analyzer',
+            email: user?.email
+          },
+          testId: selectedTest.id,
+          testName: selectedTest.testName || selectedTest.name,
+          details: `Specimen physically collected & accessioned into laboratory${usedMaterialsCheckbox && validatedMaterials.length > 0 ? ` (${validatedMaterials.length} materials/reagents deducted)` : ''}`
         });
       }
 

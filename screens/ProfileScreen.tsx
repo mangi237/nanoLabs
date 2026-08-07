@@ -11,14 +11,19 @@ import {
   LogOut, 
   ArrowLeft, 
   RefreshCw, 
-  CheckCircle2,
-  UploadCloud,
-  Camera,
-  Loader2,
-  Trash2,
-  Sparkles,
-  Activity,
-  Palette
+  CheckCircle2, 
+  UploadCloud, 
+  Camera, 
+  Loader2, 
+  Trash2, 
+  Sparkles, 
+  Activity, 
+  Palette,
+  Edit3,
+  Save,
+  X,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import { uploadService } from '../api/upload';
 import { db, doc, updateDoc } from '../services/firebase';
@@ -39,6 +44,118 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showLabModal, setShowLabModal] = useState(false);
+
+  // Self-Service Profile Editing State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editPhone, setEditPhone] = useState(user?.phone || '');
+  const [editAccessCode, setEditAccessCode] = useState(user?.accessCode || '');
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [profileUpdateMsg, setProfileUpdateMsg] = useState('');
+  const [profileUpdateError, setProfileUpdateError] = useState('');
+
+  // Check if current user is an administrator authorized to manage facility branding & logo
+  const canManageLogo = 
+    user?.role === 'admin' || 
+    user?.role === 'superadmin' || 
+    (Array.isArray(user?.roles) && (user.roles.includes('admin') || user.roles.includes('superadmin')));
+
+  const handleStartEdit = () => {
+    setEditName(user?.name || '');
+    setEditEmail(user?.email || '');
+    setEditPhone(user?.phone || '');
+    setEditAccessCode(user?.accessCode || '');
+    setProfileUpdateMsg('');
+    setProfileUpdateError('');
+    setIsEditing(true);
+  };
+
+  const handleSaveProfileDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      setProfileUpdateError('Full name cannot be empty.');
+      return;
+    }
+
+    setSavingDetails(true);
+    setProfileUpdateError('');
+    setProfileUpdateMsg('');
+
+    try {
+      const targetLabId = lab?.id || user?.labId || 'lab-1';
+      const updatedUser = {
+        ...user,
+        name: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim(),
+        accessCode: editAccessCode.trim() || user?.accessCode
+      };
+
+      // 1. Update Auth Context and LocalStorage
+      setUser(updatedUser);
+      try {
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      } catch {
+        // ignore
+      }
+
+      // 2. Persist to Firestore
+      if (user?.id) {
+        if (user.role === 'patient') {
+          try {
+            await updateDoc(doc(db, 'labs', targetLabId, 'patients', user.id), {
+              name: editName.trim(),
+              email: editEmail.trim(),
+              phone: editPhone.trim(),
+              accessCode: editAccessCode.trim() || user?.accessCode,
+              updatedAt: new Date().toISOString()
+            });
+          } catch (fsErr) {
+            console.warn('Could not update patient doc in firestore:', fsErr);
+          }
+        } else {
+          try {
+            await updateDoc(doc(db, 'labs', targetLabId, 'staff', user.id), {
+              name: editName.trim(),
+              email: editEmail.trim(),
+              phone: editPhone.trim(),
+              accessCode: editAccessCode.trim() || user?.accessCode,
+              updatedAt: new Date().toISOString()
+            });
+          } catch (fsErr) {
+            console.warn('Could not update staff doc in firestore:', fsErr);
+          }
+        }
+      }
+
+      // 3. Sync to Server Auth Registry
+      try {
+        await fetch('/api/staff/update-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staffId: user?.id,
+            name: editName.trim(),
+            email: editEmail.trim(),
+            phone: editPhone.trim(),
+            accessCode: editAccessCode.trim()
+          })
+        });
+      } catch {
+        // ignore
+      }
+
+      setProfileUpdateMsg('Your personal details have been updated successfully!');
+      setIsEditing(false);
+      setTimeout(() => setProfileUpdateMsg(''), 4000);
+    } catch (err: any) {
+      console.error('Error saving profile details:', err);
+      setProfileUpdateError(err.message || 'Failed to update personal details.');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -140,8 +257,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
-        title="Profile Settings"
-        subtitle="Manage personal credentials & active workspace"
+        title="Profile & Identity Settings"
+        subtitle="Manage your personal details, credentials & facility workspace"
       />
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -193,9 +310,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold text-slate-900">{user?.name || 'Authorized Staff'}</h1>
+                  <h1 className="text-xl font-bold text-slate-900">{user?.name || 'Authorized Member'}</h1>
                   <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-[10px] font-bold uppercase border border-teal-200">
-                    {user?.role?.replace('_', ' ') || 'Member'}
+                    {user?.role?.replace('_', ' ') || 'Staff Member'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mt-1">
@@ -204,7 +321,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <div className="flex items-center gap-2 mt-2">
                   <label className="text-[11px] text-teal-700 font-semibold hover:underline cursor-pointer flex items-center gap-1">
                     <UploadCloud className="w-3.5 h-3.5" />
-                    {uploadingAvatar ? 'Uploading via IPFS...' : 'Change Profile Picture'}
+                    {uploadingAvatar ? 'Uploading...' : 'Change Profile Picture'}
                     <input
                       type="file"
                       accept="image/*"
@@ -226,54 +343,177 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </div>
             </div>
 
-            {saveSuccess && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200 animate-fade-in">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Profile Photo Updated!
-              </div>
-            )}
-          </div>
+            <div className="flex flex-col items-end gap-2">
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold border border-teal-200 transition-all cursor-pointer shadow-xs"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit My Details
+                </button>
+              )}
 
-          {/* User Attributes Grid */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Personal & Security Information</h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                <Mail className="w-4 h-4 text-teal-600 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-slate-400 block text-[10px] font-semibold">Email Address</span>
-                  <span className="font-semibold text-slate-800 truncate block">{user?.email || 'user@nanolabs.com'}</span>
+              {saveSuccess && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Photo Updated!
                 </div>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                <Phone className="w-4 h-4 text-teal-600 shrink-0" />
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold">Phone Number</span>
-                  <span className="font-semibold text-slate-800">{user?.phone || '+237 670000000'}</span>
+              )}
+              {profileUpdateMsg && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  {profileUpdateMsg}
                 </div>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                <Key className="w-4 h-4 text-amber-500 shrink-0" />
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold">Security Access Code</span>
-                  <span className="font-mono font-bold text-slate-900">{user?.accessCode || 'SUPER123'}</span>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold">Assigned Lab ID</span>
-                  <span className="font-semibold text-slate-800">{lab?.id || user?.labId || 'lab-1'}</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Facility Branding & Custom Logo Card */}
+          {/* EDIT FORM (If Editing Mode is Active) */}
+          {isEditing ? (
+            <form onSubmit={handleSaveProfileDetails} className="space-y-4 p-5 bg-teal-50/50 rounded-2xl border border-teal-200/80 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                  <Edit3 className="w-4 h-4 text-teal-700" />
+                  Edit Personal Details & Credentials
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 font-semibold"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </button>
+              </div>
+
+              {profileUpdateError && (
+                <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl border border-rose-200 font-semibold">
+                  {profileUpdateError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Legal Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    required
+                    placeholder="e.g. Dr. Arthur Mbi"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                    required
+                    placeholder="staff@nanolabs.com"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={e => setEditPhone(e.target.value)}
+                    placeholder="+237 670000000"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Security Access Code / Password
+                  </label>
+                  <input
+                    type="text"
+                    value={editAccessCode}
+                    onChange={e => setEditAccessCode(e.target.value)}
+                    placeholder="Enter confidential code"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDetails}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {savingDetails ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* User Attributes Grid (Display View) */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Personal & Security Information</h3>
+                <span className="text-[11px] text-teal-700 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Self-Managed Profile
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-teal-600 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[10px] font-semibold">Email Address</span>
+                    <span className="font-semibold text-slate-800 truncate block">{user?.email || 'user@nanolabs.com'}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-teal-600 shrink-0" />
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">Phone Number</span>
+                    <span className="font-semibold text-slate-800">{user?.phone || '+237 670000000'}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                  <Key className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">Security Access Code</span>
+                    <span className="font-mono font-bold text-slate-900">{user?.accessCode || '••••••••'}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                  <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">Assigned Lab ID</span>
+                    <span className="font-semibold text-slate-800">{lab?.id || user?.labId || 'lab-1'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Facility Branding & Custom Logo Card (STRICTLY ADMIN RESTRICTED) */}
           <div className="p-5 bg-gradient-to-r from-teal-50 via-slate-50 to-blue-50 border border-teal-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {lab?.logoUrl ? (
@@ -303,21 +543,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {lab?.logoUrl
-                    ? 'Your custom facility logo is active across all staff portals, patient certificates & billing receipts.'
-                    : 'Your facility currently uses the default nanoLabs logo. Click below to upload your official logo.'}
+                  {canManageLogo
+                    ? (lab?.logoUrl 
+                        ? 'Your custom facility logo is active across all staff portals, patient certificates & billing receipts.' 
+                        : 'Your facility currently uses the default logo. Click below to customize your official laboratory branding.')
+                    : 'Facility logo & branding customizations are managed exclusively by Laboratory Directors & Administrators.'}
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowLabModal(true)}
-              className="w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-            >
-              <Palette className="w-4 h-4" />
-              {lab?.logoUrl ? 'Change Facility Logo' : 'Upload Lab Logo'}
-            </button>
+            {/* ONLY Admins can change or upload the lab logo */}
+            {canManageLogo ? (
+              <button
+                type="button"
+                onClick={() => setShowLabModal(true)}
+                className="w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Palette className="w-4 h-4" />
+                {lab?.logoUrl ? 'Change Facility Logo' : 'Upload Lab Logo'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-200/70 text-slate-600 text-[11px] font-semibold rounded-xl border border-slate-300/80 shrink-0">
+                <Lock className="w-3.5 h-3.5 text-slate-500" />
+                <span>Admin Managed</span>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -343,14 +593,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       </main>
 
-      {/* Lab Profile & Logo Modal */}
-      <LabProfileModal
-        isOpen={showLabModal}
-        onClose={() => setShowLabModal(false)}
-      />
+      {/* Lab Profile & Logo Modal (Restricted to Admin) */}
+      {canManageLogo && (
+        <LabProfileModal
+          isOpen={showLabModal}
+          onClose={() => setShowLabModal(false)}
+        />
+      )}
     </div>
   );
 };
 
 export default ProfileScreen;
+
 

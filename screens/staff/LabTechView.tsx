@@ -5,6 +5,7 @@ import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
 import { authService } from '../../services/authService';
+import { auditService } from '../../services/auditService';
 import { sendResultNotificationEmail } from '../../services/emailService';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { 
@@ -24,7 +25,10 @@ import {
   AlertCircle,
   FileUp,
   ExternalLink,
-  Laptop
+  Laptop,
+  UserCheck,
+  ShieldAlert,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface LabTechViewProps {
@@ -42,10 +46,13 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
 }) => {
   const { lab, user } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'pending' | 'virtual' | 'completed'>('pending');
+  const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
+  const [assigningTestId, setAssigningTestId] = useState<string | null>(null);
 
   // Result Upload Modal state
   const [selectedTest, setSelectedTest] = useState<any>(null);
@@ -64,6 +71,17 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     try {
       setLoading(true);
       const targetLabId = lab?.id || 'lab-1';
+
+      // 1. Fetch Staff Directory to know doctors/technicians
+      try {
+        const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+        const staffListRes = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setStaffList(staffListRes);
+      } catch (err) {
+        console.warn('Non-blocking staff list fetch error:', err);
+      }
+
+      // 2. Fetch Patients & Tests
       const patientsSnapshot = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const allTests: any[] = [];
       
@@ -103,7 +121,76 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     fetchTests();
   }, [lab?.id]);
 
-  const handleOpenResultModal = (test: any) => {
+  const handleClaimOrAssignTest = async (test: any, targetStaff?: any) => {
+    try {
+      const targetLabId = lab?.id || 'lab-1';
+      const assignee = targetStaff || { id: user?.id || 'tech-me', name: user?.name || 'Lab Technologist' };
+      const patientRef = doc(db, 'labs', targetLabId, 'patients', test.patientId);
+      const patientSnap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
+      const targetDoc = patientSnap.docs.find(d => d.id === test.patientId);
+
+      if (targetDoc) {
+        const patientData = targetDoc.data();
+        const updatedLabTests = (patientData.labTests || []).map((t: any) => {
+          if (t.id === test.id) {
+            return {
+              ...t,
+              assignedStaffId: assignee.id,
+              assignedStaffName: assignee.name,
+              assignedAt: new Date().toISOString(),
+              assignedBy: user?.name || 'Authorized Staff'
+            };
+          }
+          return t;
+        });
+
+        await updateDoc(patientRef, {
+          labTests: updatedLabTests,
+          updatedAt: new Date().toISOString()
+        });
+
+        // Audit log assignment
+        await auditService.logPatientAccess({
+          labId: targetLabId,
+          labName: lab?.name || 'nanoLabs Facility',
+          patientId: test.patientId || test.id,
+          patientName: test.patientName || test.name || 'Patient Record',
+          patientCode: test.patientCode || test.patientId,
+          action: 'CLAIM_TEST_ASSIGNMENT',
+          performedBy: {
+            id: user?.id || 'staff',
+            name: user?.name || 'Lab Technologist',
+            role: user?.role || 'labtech',
+            email: user?.email
+          },
+          testId: test.id,
+          testName: test.testName || test.name,
+          details: `Assigned diagnostic specimen examination exclusively to ${assignee.name}`
+        });
+
+        setAssigningTestId(null);
+        await fetchTests();
+      }
+    } catch (err) {
+      console.error('Failed to assign test:', err);
+      alert('Failed to update test assignment.');
+    }
+  };
+
+  const handleOpenResultModal = async (test: any) => {
+    // Check if test is assigned to a different specific doctor/technician
+    const isAssignedToOther = 
+      test.assignedStaffId && 
+      test.assignedStaffId !== user?.id && 
+      test.assignedStaffName !== user?.name &&
+      user?.role !== 'admin' && 
+      user?.role !== 'superadmin';
+
+    if (isAssignedToOther) {
+      alert(`Access Restricted: This specimen is assigned specifically to ${test.assignedStaffName}. Only the assigned doctor/technologist or Lab Director Admin can enter or edit results.`);
+      return;
+    }
+
     setSelectedTest(test);
     setResultText(test.result || '');
     setNotes(test.notes || '');
@@ -113,6 +200,29 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     setAccessCodeInput('');
     setVerifyError('');
     setShowResultModal(true);
+
+    // Cryptographically sealed Audit Log: Log that this staff opened the diagnostic findings
+    try {
+      await auditService.logPatientAccess({
+        labId: lab?.id || 'lab-1',
+        labName: lab?.name || 'nanoLabs Facility',
+        patientId: test.patientId || test.id,
+        patientName: test.patientName || test.name || 'Patient Record',
+        patientCode: test.patientCode || test.patientId,
+        action: 'VIEW_DIAGNOSTIC_REPORT',
+        performedBy: {
+          id: user?.id || 'staff',
+          name: user?.name || 'Lab Technologist',
+          role: user?.role || 'labtech',
+          email: user?.email
+        },
+        testId: test.id,
+        testName: test.testName || test.name,
+        details: 'Opened diagnostic specimen record in technician workstation'
+      });
+    } catch (err) {
+      console.warn('Audit log error (non-blocking):', err);
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,6 +312,25 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           updatedAt: new Date().toISOString()
         });
 
+        // Audit Log: Record that result was verified and uploaded
+        await auditService.logPatientAccess({
+          labId: targetLabId,
+          labName: lab?.name || 'nanoLabs Facility',
+          patientId: selectedTest.patientId || selectedTest.id,
+          patientName: selectedTest.patientName || selectedTest.name || 'Patient Record',
+          patientCode: selectedTest.patientCode || selectedTest.patientId,
+          action: 'UPLOAD_RESULTS',
+          performedBy: {
+            id: user?.id || 'staff',
+            name: authCheck.staffName || user?.name || 'Lab Technologist',
+            role: 'labtech',
+            email: user?.email
+          },
+          testId: selectedTest.id,
+          testName: selectedTest.testName || selectedTest.name,
+          details: 'Encrypted diagnostic findings and signed report uploaded'
+        });
+
         // Trigger email notification to patient if email exists
         const patientEmail = patientData.email || (patientData.contact && patientData.contact.includes('@') ? patientData.contact : null);
         if (patientEmail) {
@@ -229,15 +358,28 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const virtualRequests = tests.filter(t => t.virtualRequested && t.status !== 'completed');
   const completedTests = tests.filter(t => t.status === 'completed');
 
-  const filteredTests = (
+  const baseTests = (
     activeTab === 'pending' ? pendingTests :
     activeTab === 'virtual' ? virtualRequests :
     completedTests
-  ).filter(t => 
-    t.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.testName || t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.patientCode.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredTests = baseTests.filter(t => {
+    const matchesSearch = 
+      t.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.testName || t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.patientCode.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (assignedFilter === 'mine') {
+      return t.assignedStaffId === user?.id || t.assignedStaffName === user?.name;
+    }
+    if (assignedFilter === 'unassigned') {
+      return !t.assignedStaffId && !t.assignedStaffName;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -356,51 +498,91 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs & Search */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 bg-slate-200/60 p-1 rounded-xl">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'pending'
-                  ? 'bg-white text-teal-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Pending Analysis ({pendingTests.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('virtual')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'virtual'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Laptop className="w-3.5 h-3.5" />
-              Virtual Requests ({virtualRequests.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('completed')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'completed'
-                  ? 'bg-white text-teal-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Completed ({completedTests.length})
-            </button>
+        {/* Navigation Tabs & Search & Assignment Filters */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 bg-slate-200/60 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'pending'
+                    ? 'bg-white text-teal-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Pending Analysis ({pendingTests.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('virtual')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'virtual'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Laptop className="w-3.5 h-3.5" />
+                Virtual Requests ({virtualRequests.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('completed')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'completed'
+                    ? 'bg-white text-teal-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Completed ({completedTests.length})
+              </button>
+            </div>
+
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Search patient or lab test..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+              />
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              placeholder="Search patient or lab test..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-            />
+          {/* Doctor / Technologist Role Assignment Filter Sub-Bar */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold flex items-center gap-1">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+              Access Scope:
+            </span>
+            <button
+              onClick={() => setAssignedFilter('all')}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                assignedFilter === 'all'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              All Tests ({baseTests.length})
+            </button>
+            <button
+              onClick={() => setAssignedFilter('mine')}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                assignedFilter === 'mine'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              Assigned to Me / My Desk
+            </button>
+            <button
+              onClick={() => setAssignedFilter('unassigned')}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                assignedFilter === 'unassigned'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              Unassigned Queue
+            </button>
           </div>
         </div>
 
@@ -424,66 +606,135 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
               </p>
             </div>
           ) : (
-            filteredTests.map((test) => (
-              <div key={`${test.patientId}-${test.id}`} className="p-5 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{test.testName || test.name}</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                      {test.category || 'Laboratory'}
-                    </span>
+            filteredTests.map((test) => {
+              const isAssignedToOther = 
+                test.assignedStaffId && 
+                test.assignedStaffId !== user?.id && 
+                test.assignedStaffName !== user?.name &&
+                user?.role !== 'admin' && 
+                user?.role !== 'superadmin';
 
-                    {test.virtualRequested && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
-                        <Laptop className="w-3 h-3" />
-                        Virtual Result Requested
+              const isAssignedToMe = 
+                test.assignedStaffId === user?.id || 
+                test.assignedStaffName === user?.name;
+
+              return (
+                <div key={`${test.patientId}-${test.id}`} className="p-5 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-900 text-sm truncate">{test.testName || test.name}</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                        {test.category || 'Laboratory'}
                       </span>
+
+                      {test.virtualRequested && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                          <Laptop className="w-3 h-3" />
+                          Virtual Result Requested
+                        </span>
+                      )}
+
+                      {/* Doctor / Technologist Assignment Badge */}
+                      {test.assignedStaffName ? (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${
+                          isAssignedToMe 
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                            : 'bg-amber-100 text-amber-800 border-amber-300'
+                        }`}>
+                          <UserCheck className="w-3 h-3" />
+                          Assigned: {test.assignedStaffName} {isAssignedToMe ? '(You)' : ''}
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                      <span className="flex items-center gap-1 font-semibold text-slate-800">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        {test.patientName} ({test.patientCode})
+                      </span>
+                      {test.age && <span>• {test.age} yrs, {test.gender}</span>}
+                      {test.isEncrypted && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                          <Lock className="w-2.5 h-2.5" />
+                          Zero-Knowledge Encrypted
+                        </span>
+                      )}
+                    </div>
+
+                    {test.result && (
+                      <div className="mt-2 p-2.5 bg-slate-50 rounded-xl text-xs border border-slate-200 text-slate-800">
+                        <span className="font-bold text-teal-800">Findings: </span>
+                        {test.result}
+                      </div>
+                    )}
+
+                    {test.pdfUrl && (
+                      <div className="mt-1 flex items-center gap-2 text-xs text-teal-700 font-semibold">
+                        <FileText className="w-3.5 h-3.5 text-teal-600" />
+                        <span>PDF Document Attached: {test.pdfName || 'DiagnosticReport.pdf'}</span>
+                      </div>
                     )}
                   </div>
-                  
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="flex items-center gap-1 font-semibold text-slate-800">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      {test.patientName} ({test.patientCode})
-                    </span>
-                    {test.age && <span>• {test.age} yrs, {test.gender}</span>}
+
+                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                    {/* Assignment Controls */}
+                    {!test.assignedStaffName && (
+                      <button
+                        onClick={() => handleClaimOrAssignTest(test)}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                        title="Claim this test for your examination"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-teal-600" />
+                        Claim Specimen
+                      </button>
+                    )}
+
+                    {test.status === 'completed' ? (
+                      <button
+                        onClick={() => handleOpenResultModal(test)}
+                        disabled={isAssignedToOther}
+                        className={`px-4 py-2 border rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                          isAssignedToOther
+                            ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'border-slate-200 hover:border-teal-500 hover:text-teal-700 text-slate-700'
+                        }`}
+                        title={isAssignedToOther ? `Restricted: Assigned to ${test.assignedStaffName}` : 'Update report'}
+                      >
+                        {isAssignedToOther ? 'Locked to Assigned Doctor' : 'Update Result PDF'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenResultModal(test)}
+                        disabled={isAssignedToOther}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer ${
+                          isAssignedToOther
+                            ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
+                        }`}
+                        title={isAssignedToOther ? `Restricted: Assigned exclusively to ${test.assignedStaffName}` : 'Upload report'}
+                      >
+                        {isAssignedToOther ? (
+                          <>
+                            <Lock className="w-4 h-4 text-slate-400" />
+                            Assigned to {test.assignedStaffName}
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            {test.virtualRequested ? 'Upload Virtual Result PDF' : 'Upload Result PDF'}
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
-
-                  {test.result && (
-                    <div className="mt-2 p-2.5 bg-slate-50 rounded-xl text-xs border border-slate-200 text-slate-800">
-                      <span className="font-bold text-teal-800">Findings: </span>
-                      {test.result}
-                    </div>
-                  )}
-
-                  {test.pdfUrl && (
-                    <div className="mt-1 flex items-center gap-2 text-xs text-teal-700 font-semibold">
-                      <FileText className="w-3.5 h-3.5 text-teal-600" />
-                      <span>PDF Document Attached: {test.pdfName || 'DiagnosticReport.pdf'}</span>
-                    </div>
-                  )}
                 </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {test.status === 'completed' ? (
-                    <button
-                      onClick={() => handleOpenResultModal(test)}
-                      className="px-4 py-2 border border-slate-200 hover:border-teal-500 hover:text-teal-700 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                      Update Result PDF
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleOpenResultModal(test)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {test.virtualRequested ? 'Upload Virtual Result PDF' : 'Upload Result PDF'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </main>
