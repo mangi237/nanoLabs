@@ -40,13 +40,53 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
       for (const labDoc of labsSnap.docs) {
         const labInfo = { id: labDoc.id, ...labDoc.data() };
         
-        // Count patients for this lab
+        // Count patients and confirmed tests for this lab
+        let labPatientCount = 0;
+        let labConfirmedTestsCount = 0;
+        let labTotalTestsCount = 0;
+
         try {
           const patientSnap = await getDocs(collection(db, 'labs', labDoc.id, 'patients'));
-          (labInfo as any).patientCount = patientSnap.size || (labInfo as any).patientCount || 0;
+          labPatientCount = patientSnap.size;
+          
+          patientSnap.docs.forEach(pDoc => {
+            const pData = pDoc.data();
+            const labTests = pData.labTests || [];
+            labTotalTestsCount += labTests.length;
+            labTests.forEach((test: any) => {
+              if (
+                test.confirmedByReceptionist === true || 
+                test.sampleCollected === true ||
+                ['confirmed', 'sample-collected', 'collected', 'processing', 'completed', 'paid'].includes(test.status)
+              ) {
+                labConfirmedTestsCount++;
+              }
+            });
+          });
         } catch {
           // fallback
         }
+
+        (labInfo as any).patientCount = labPatientCount;
+        (labInfo as any).confirmedTestsCount = labConfirmedTestsCount;
+        (labInfo as any).totalTestsCount = labTotalTestsCount;
+
+        // Calculate revenue based on commercial model
+        let labRevenue = 0;
+        if ((labInfo as any).pricingModel === 'flat_subscription') {
+          labRevenue = (labInfo as any).subscriptionPrice || (
+            (labInfo as any).subscriptionTier === 'business' ? 120000 :
+            (labInfo as any).subscriptionTier === 'growth' ? 55000 : 25000
+          );
+        } else if ((labInfo as any).pricingModel === 'lifetime_space') {
+          labRevenue = (labInfo as any).monthlyMaintenanceFee || 15000;
+        } else {
+          // Pay-per-test model (500 FCFA / test)
+          const fee = (labInfo as any).feePerPatient || (labInfo as any).feePerTest || 500;
+          labRevenue = labConfirmedTestsCount * fee;
+        }
+
+        (labInfo as any).royaltyEarnings = labRevenue;
 
         // Count staff for this lab
         try {
@@ -100,9 +140,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
   // Aggregate metrics
   const totalLabs = labs.length;
   const totalPatients = labs.reduce((acc, l) => acc + (l.patientCount || 0), 0);
- 
+  const totalConfirmedTests = labs.reduce((acc, l) => acc + (l.confirmedTestsCount || 0), 0);
   const totalStaff = labs.reduce((acc, l) => acc + (l.staffCount || 0), 0);
-  const totalRevenue = totalPatients * 1000; // 1,000 FCFA per patient
+  const totalRevenue = labs.reduce((acc, l) => acc + (l.royaltyEarnings || 0), 0); // 1,000 FCFA per confirmed test
 
   const filteredLabs = labs.filter(l => 
     (l.name && l.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -123,7 +163,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
               Clinical Network Overseer
             </h1>
             <p className="text-slate-300 text-sm max-w-xl">
-              Monitor diagnostic health centers, provision new laboratory franchises, and track patient volume royalties.
+              Monitor diagnostic health centers, provision new laboratory franchises, and track royalties from confirmed test requests.
             </p>
           </div>
 
@@ -169,12 +209,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
-            <UserCheck className="w-6 h-6" />
+          <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">{totalStaff}</div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Staff</div>
+            <div className="text-2xl font-bold text-slate-900">{totalConfirmedTests}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Tests</div>
           </div>
         </div>
 
@@ -183,8 +223,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
             <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{totalRevenue.toLocaleString()} FCFA</div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Royalty Earnings</div>
+            <div className="text-xl font-bold text-emerald-700">{totalRevenue.toLocaleString()} FCFA</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Royalty</div>
           </div>
         </div>
       </div>
@@ -231,12 +271,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
                 className="p-5 hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
               >
                 <div className="flex items-start gap-4">
-                  <div 
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-xs"
-                    style={{ backgroundColor: labItem.primaryColor || '#0D9488' }}
-                  >
-                    {labItem.name ? labItem.name.charAt(0).toUpperCase() : 'L'}
-                  </div>
+                  {labItem.logoUrl || labItem.avatarUrl ? (
+                    <img
+                      src={labItem.logoUrl || labItem.avatarUrl}
+                      alt={labItem.name}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0 shadow-xs"
+                    />
+                  ) : (
+                    <div 
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-xs"
+                      style={{ backgroundColor: labItem.primaryColor || '#0D9488' }}
+                    >
+                      {labItem.name ? labItem.name.charAt(0).toUpperCase() : 'L'}
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -244,6 +293,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         Active
                       </span>
+                      {labItem.pricingModel === 'flat_subscription' ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100/80 text-teal-800 border border-teal-200">
+                          Subscription ({labItem.subscriptionTier?.toUpperCase() || 'GROWTH'})
+                        </span>
+                      ) : labItem.pricingModel === 'lifetime_space' ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100/80 text-purple-800 border border-purple-200">
+                          Lifetime Dedicated Space
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100/80 text-amber-800 border border-amber-200">
+                          Pay-Per-Test (500 FCFA)
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
@@ -252,8 +314,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = () => {
                         {labItem.location || 'Central Region'}
                       </span>
                       <span>• Patients: <strong className="text-slate-900">{labItem.patientCount || 0}</strong></span>
+                      <span>• Confirmed Tests: <strong className="text-indigo-600 font-bold">{labItem.confirmedTestsCount || 0}</strong></span>
                       <span>• Staff: <strong className="text-slate-900">{labItem.staffCount || 1}</strong></span>
-                      <span>• Earnings: <strong className="text-teal-700">{((labItem.patientCount || 0) * 1000).toLocaleString()} FCFA</strong></span>
+                      <span>• Royalty Revenue: <strong className="text-emerald-700 font-bold">{(labItem.royaltyEarnings || 0).toLocaleString()} FCFA</strong></span>
                     </div>
                   </div>
                 </div>

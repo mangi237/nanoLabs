@@ -14,21 +14,47 @@ export interface User {
   labName?: string;
   avatarUrl?: string;
   profilePicture?: string;
+  mustChangePassword?: boolean;
+  status?: string;
 }
+
+export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
+export type SubscriptionTierType = 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
   id: string;
   name: string;
   location: string;
+  slogan?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
   patientCount?: number;
   confirmedTestsCount?: number;
   totalTestsCount?: number;
   royaltyEarnings?: number;
   primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
   logoUrl?: string;
   avatarUrl?: string;
   feePerTest?: number;
   feePerPatient?: number;
+  pricingModel?: PricingModelType;
+  subscriptionTier?: SubscriptionTierType;
+  subscriptionPrice?: number;
+  billingPeriod?: 'monthly' | 'annual';
+  monthlyMaintenanceFee?: number;
+  staffLimit?: number;
+  sitesCount?: number;
+  collectionCentresCount?: number;
+  verificationStatus?: 'verified' | 'trial_active' | 'pending';
+  verificationToken?: string;
+  verifiedAt?: string;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
+  createdAt?: string;
 }
 
 export interface Hospital {

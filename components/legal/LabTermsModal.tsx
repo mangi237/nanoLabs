@@ -101,7 +101,7 @@ export const LabTermsModal: React.FC<LabTermsModalProps> = ({
               <li>Apply role-based access so staff only see the information relevant to their function.</li>
             </ul>
             <p className="pl-7 font-semibold text-teal-800 bg-teal-50 p-2.5 rounded-xl border border-teal-200">
-              The platform is provided to the Facility free of charge for use of the software itself. NanoLabs does not charge the Facility a licensing, subscription, or setup fee.
+              The platform provides full transparent commercial options: Pay-per-test (500 FCFA baseline per confirmed test), Flat Monthly/Annual Subscriptions with unlimited tests and zero per-test penalties, or Lifetime Dedicated Cloud Space with 15,000 FCFA monthly maintenance.
             </p>
           </section>
 
@@ -109,11 +109,17 @@ export const LabTermsModal: React.FC<LabTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">3</span>
-              System Fee
+              Commercial Models & System Fee Schedule
             </h3>
-            <p className="pl-7">
-              Instead of charging the Facility, NanoLabs applies a <strong>System Fee</strong> of <strong>1000 XAF</strong> per applicable transaction, charged to the patient/customer at the point of payment for services rendered through the platform. The Facility agrees that this fee will be clearly disclosed to patients within the platform and is separate from the Facility&apos;s own service charges. NanoLabs will provide the Facility with transparent records of all System Fees applied.
-            </p>
+            <div className="pl-7 space-y-2">
+              <p>The Facility selects one of three commercial billing models during registration or account management:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Model A (Pay-Per-Test):</strong> Zero upfront software license commitment. A baseline fee of <strong>500 FCFA</strong> per completed diagnostic test is billed for cloud processing.</li>
+                <li><strong>Model B (Flat Monthly Subscription):</strong> Predictable monthly SaaS subscription (Starter at 25,000 FCFA, Professional at 55,000 FCFA, Business at 120,000 FCFA) with <strong>unlimited diagnostic tests</strong> and 100% of patient revenue retained directly by the Facility.</li>
+                <li><strong>Model C (Lifetime Cloud Space + Maintenance):</strong> One-time dedicated cloud tenant allocation with a fixed low monthly maintenance fee of <strong>15,000 FCFA</strong> for security updates, automated backups, and 24/7 SLA.</li>
+              </ul>
+              <p className="text-xs text-slate-500">NanoLabs provides the Facility with transparent records and cashier audit logs of all transactions.</p>
+            </div>
           </section>
 
           {/* Section 4 */}

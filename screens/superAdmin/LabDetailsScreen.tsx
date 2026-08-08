@@ -165,7 +165,22 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
     );
   }
 
-  const calculatedRevenue = confirmedTestsCount * (lab.feePerTest || lab.feePerPatient || 1000);
+  let calculatedRevenue = 0;
+  let revenueSubtitle = '';
+  if (lab.pricingModel === 'flat_subscription') {
+    calculatedRevenue = lab.subscriptionPrice || (
+      lab.subscriptionTier === 'business' ? 120000 :
+      lab.subscriptionTier === 'growth' ? 55000 : 25000
+    );
+    revenueSubtitle = `Flat Subscription (${(lab.subscriptionTier || 'GROWTH').toUpperCase()}) • Unlimited Tests`;
+  } else if (lab.pricingModel === 'lifetime_space') {
+    calculatedRevenue = lab.monthlyMaintenanceFee || 15000;
+    revenueSubtitle = `Lifetime Dedicated Tenant • 15,000 FCFA/mo Maintenance`;
+  } else {
+    const fee = lab.feePerPatient || lab.feePerTest || 500;
+    calculatedRevenue = confirmedTestsCount * fee;
+    revenueSubtitle = `${confirmedTestsCount} confirmed tests @ ${fee.toLocaleString()} FCFA`;
+  }
 
   return (
     <div className="space-y-6">
@@ -228,9 +243,9 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
           </div>
 
           <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-right min-w-[200px]">
-            <div className="text-xs text-white/80 uppercase font-bold tracking-wider">Confirmed Test Royalties</div>
+            <div className="text-xs text-white/80 uppercase font-bold tracking-wider">Facility Monthly Billing / Royalties</div>
             <div className="text-2xl font-bold mt-0.5">{calculatedRevenue.toLocaleString()} FCFA</div>
-            <div className="text-[11px] text-white/70">{confirmedTestsCount} confirmed tests @ 1,000 FCFA</div>
+            <div className="text-[11px] text-white/70">{revenueSubtitle}</div>
           </div>
         </div>
       </div>

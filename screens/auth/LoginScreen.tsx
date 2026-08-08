@@ -18,8 +18,10 @@ import {
   Cpu, 
   HeartHandshake, 
   CheckCircle2, 
-  UserCheck 
+  UserCheck,
+  PlusCircle
 } from 'lucide-react';
+import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 
 interface LoginScreenProps {
   onLoginSuccess?: (user: any) => void;
@@ -42,6 +44,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showRegisterLabModal, setShowRegisterLabModal] = useState(false);
 
   useEffect(() => {
     fetchLabs();
@@ -251,7 +254,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </button>
           </form>
 
-          {/* Register Redirect */}
+          {/* Register Redirects & Center Creation */}
           <div className="pt-4 border-t border-white/10 flex flex-col items-center gap-3">
             <button
               type="button"
@@ -259,6 +262,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               className="text-xs text-teal-300 hover:text-white font-medium transition-colors hover:underline cursor-pointer"
             >
               New patient? Register your profile here
+            </button>
+
+            {/* Self-Service Lab Registration Button */}
+            <button
+              type="button"
+              onClick={() => setShowRegisterLabModal(true)}
+              className="w-full py-2.5 px-3 rounded-2xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/40 text-teal-200 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            >
+              <PlusCircle className="w-4 h-4 text-teal-400" />
+              Register New Laboratory Facility / Clinic
             </button>
 
             {/* About Us Link at the Bottom */}
@@ -273,6 +286,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Self-Service Lab Registration Modal */}
+      {showRegisterLabModal && (
+        <LabRegistrationModal
+          isOpen={showRegisterLabModal}
+          onClose={() => setShowRegisterLabModal(false)}
+          onLabCreated={fetchLabs}
+        />
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* ABOUT US MODAL */}
