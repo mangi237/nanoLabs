@@ -16,7 +16,9 @@ import {
   Info,
   CreditCard,
   Building2,
-  CheckCircle2
+  CheckCircle2,
+  Droplet,
+  Shield
 } from 'lucide-react';
 
 interface PatientListProps {
@@ -166,8 +168,24 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
                         {patient.patientId || patient.id}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      {patient.age || 30} yrs • {patient.gender || 'N/A'} • {patient.address || 'Douala, Cameroon'}
+                    <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                      <span>{patient.age || 30} yrs • {patient.gender || 'N/A'}</span>
+                      {patient.bloodGroup && (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          patient.bloodGroup === 'Unknown'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          <Droplet className="w-2.5 h-2.5" />
+                          {patient.bloodGroup}
+                        </span>
+                      )}
+                      {patient.hasInsurance && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                          <Shield className="w-2.5 h-2.5" />
+                          {patient.insuranceProvider || 'Insured'}
+                        </span>
+                      )}
                     </p>
                     <div className="flex items-center gap-3 text-xs text-slate-500 pt-0.5">
                       <span className="flex items-center gap-1 font-mono">
@@ -276,8 +294,22 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
                   <span className="font-semibold text-slate-900">{selectedAdminPatient.age || 30} yrs • {selectedAdminPatient.gender || 'N/A'}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Account Status</span>
-                  <span className="font-semibold text-emerald-700 capitalize">{selectedAdminPatient.status || 'Active'}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Blood Group</span>
+                  <span className="font-semibold text-rose-700">{selectedAdminPatient.bloodGroup || 'Unknown'}</span>
+                </div>
+              </div>
+
+              {/* National ID & Insurance */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">National ID / Passport</span>
+                  <span className="font-mono font-semibold text-slate-900">{selectedAdminPatient.nationalId || 'Not provided'}</span>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Health Insurance</span>
+                  <span className="font-semibold text-indigo-700 truncate block">
+                    {selectedAdminPatient.hasInsurance ? selectedAdminPatient.insuranceProvider || 'Insured' : 'Out of Pocket'}
+                  </span>
                 </div>
               </div>
 

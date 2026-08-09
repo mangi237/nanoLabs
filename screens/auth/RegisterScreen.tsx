@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection } from '../../services/firebase';
-import { uploadService } from '../../services/uploadService';
+import { uploadService } from '../../api/upload';
 import { 
   Activity, User, Mail, Phone, MapPin, ArrowLeft, ArrowRight, Loader2, 
   CheckCircle2, Building2, Key, RefreshCw, Search, Check, 
