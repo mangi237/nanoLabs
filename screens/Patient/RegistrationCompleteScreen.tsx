@@ -12,6 +12,13 @@ interface RegistrationCompleteScreenProps {
     labName?: string;
     phone?: string;
     email?: string;
+    nationalId?: string;
+    age?: number;
+    bloodGroup?: string;
+    hasInsurance?: boolean;
+    insuranceProvider?: string;
+    insurancePolicyNumber?: string;
+    insuranceCardUrl?: string;
   };
   onGoToLogin: () => void;
   onGoToDashboard?: () => void;
@@ -115,6 +122,40 @@ export const RegistrationCompleteScreen: React.FC<RegistrationCompleteScreenProp
               </span>
               <span className="font-bold text-white">{name}</span>
             </div>
+            
+            <div className="grid grid-cols-2 gap-3 pb-2.5 border-b border-white/10 text-xs">
+              <div>
+                <span className="text-slate-400 block mb-0.5">Age & Gender</span>
+                <span className="font-semibold text-slate-200">
+                  {patientData?.age || 30} yrs
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Blood Group</span>
+                <span className={`font-bold px-2 py-0.5 rounded text-[11px] inline-block ${
+                  patientData?.bloodGroup === 'Unknown' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                }`}>
+                  {patientData?.bloodGroup || 'Unknown'}
+                </span>
+              </div>
+            </div>
+
+            {patientData?.nationalId && (
+              <div className="flex items-center justify-between pb-2.5 border-b border-white/10 text-xs">
+                <span className="text-slate-400">National ID / Passport:</span>
+                <span className="font-mono font-semibold text-slate-200">{patientData.nationalId}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pb-2.5 border-b border-white/10 text-xs">
+              <span className="text-slate-400">Health Insurance:</span>
+              <span className="font-semibold text-slate-200">
+                {patientData?.hasInsurance 
+                  ? `${patientData.insuranceProvider || 'Insured'}${patientData.insurancePolicyNumber ? ` (#${patientData.insurancePolicyNumber})` : ''}` 
+                  : 'Out of Pocket / Self-Pay'}
+              </span>
+            </div>
+
             <div className="flex items-center justify-between pt-0.5">
               <span className="text-slate-400 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-teal-400" />
@@ -179,11 +220,9 @@ export const RegistrationCompleteScreen: React.FC<RegistrationCompleteScreenProp
             <div className="space-y-2 text-xs">
               {[
                 { num: '1', text: `Proceed to the receptionist counter at ${labName}` },
-                
+                { num: '2', text: `Provide your security code: ${accessCode}` },
                 { num: '3', text: 'Wait for receptionist to confirm & order your lab test' },
-               
-                { num: '3', text: 'Log in anytime using your code to track test status & download results' },
-                { num: '4', text: `DO NOT SHARE YOUR CODE TO ANYONE : ${accessCode}` },
+                { num: '4', text: 'Log in anytime using your code to track test status & download results' }
               ].map((step) => (
                 <div key={step.num} className="flex items-center gap-3 p-2.5 bg-white/5 rounded-xl border border-white/10">
                   <span className="w-6 h-6 rounded-lg bg-teal-500/30 border border-teal-400/40 text-teal-300 font-bold flex items-center justify-center shrink-0 text-xs">
