@@ -220,8 +220,8 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   const pdfLink = currentTest.pdfUrl || currentTest.fileUrl;
 
   // Accurate Pricing Breakdown
-  const basePrice = Number(currentTest.basePrice || (currentTest.price && currentTest.price > 1000 ? currentTest.price - (currentTest.systemFee || 1000) : 5000));
-  const systemFee = Number(currentTest.systemFee !== undefined ? currentTest.systemFee : 1000);
+  const basePrice = Number(currentTest.basePrice || (currentTest.price && currentTest.price > 500 ? currentTest.price - (currentTest.systemFee || 500) : 5000));
+  const systemFee = Number(currentTest.systemFee !== undefined ? currentTest.systemFee : 500);
   const totalPrice = Number(currentTest.totalPrice || currentTest.price || (basePrice + systemFee));
 
   // Staff Attribution Names
