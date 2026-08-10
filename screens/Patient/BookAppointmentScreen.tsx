@@ -137,7 +137,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     }
   };
 
-  const SYSTEM_FEE = 1000;
+  const SYSTEM_FEE = 500;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -437,7 +437,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-                          <span>Incl. 1,000 FCFA System Fee</span>
+                          <span>Incl. 500 FCFA System Fee</span>
                           <span className="font-bold text-slate-700">Total: {totalPrice.toLocaleString()} FCFA</span>
                         </div>
                       </div>

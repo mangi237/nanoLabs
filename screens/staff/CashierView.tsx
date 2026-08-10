@@ -30,7 +30,10 @@ import {
   Eye,
   Building2,
   Calendar,
-  Activity
+  Activity,
+  TestTube,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -98,13 +101,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
         if (patientData.labTests && Array.isArray(patientData.labTests)) {
           patientData.labTests.forEach((test: any) => {
             const isPaid = test.paymentStatus === 'paid' || test.paid === true;
-            const systemFee = test.systemFee !== undefined ? Number(test.systemFee) : 1000;
+            const systemFee = test.systemFee !== undefined ? Number(test.systemFee) : 500;
             const baseAmount = test.basePrice !== undefined ? Number(test.basePrice) : (test.price ? Number(test.price) : 5000);
             const totalAmount = test.totalPrice !== undefined 
               ? Number(test.totalPrice) 
               : (test.basePrice !== undefined 
                   ? (baseAmount + systemFee) 
-                  : (test.systemFee !== undefined ? (baseAmount + systemFee) : (baseAmount + 1000)));
+                  : (test.systemFee !== undefined ? (baseAmount + systemFee) : (baseAmount + 500)));
 
             const isReceptionCheckedIn = 
               test.confirmedByReceptionist === true || 
@@ -233,7 +236,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       const targetDoc = patientsSnap.docs.find(d => d.id === selectedBill.patientId);
 
       const basePrice = selectedBill.baseAmount || selectedBill.price || 5000;
-      const sysFee = selectedBill.systemFee || 1000;
+      const sysFee = selectedBill.systemFee !== undefined ? selectedBill.systemFee : 500;
       const totalFee = selectedBill.amount || (basePrice + sysFee);
 
       // Construct payment method label & metadata
@@ -339,6 +342,25 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const totalUnpaidAmount = unpaidBills.reduce((acc, b) => acc + (b.amount || 0), 0);
   const totalPaidAmount = paidBills.reduce((acc, b) => acc + (b.amount || 0), 0);
 
+  // Clear financial separation between Lab Diagnostic Revenue and 500 FCFA Platform System Fee
+  const totalPaidLabShare = paidBills.reduce((acc, b) => {
+    const sysFee = b.systemFee !== undefined ? b.systemFee : 500;
+    const base = b.baseAmount !== undefined ? b.baseAmount : Math.max(0, (b.amount || 0) - sysFee);
+    return acc + base;
+  }, 0);
+  const totalPaidSystemFees = paidBills.reduce((acc, b) => {
+    return acc + (b.systemFee !== undefined ? b.systemFee : 500);
+  }, 0);
+
+  const totalUnpaidLabShare = unpaidBills.reduce((acc, b) => {
+    const sysFee = b.systemFee !== undefined ? b.systemFee : 500;
+    const base = b.baseAmount !== undefined ? b.baseAmount : Math.max(0, (b.amount || 0) - sysFee);
+    return acc + base;
+  }, 0);
+  const totalUnpaidSystemFees = unpaidBills.reduce((acc, b) => {
+    return acc + (b.systemFee !== undefined ? b.systemFee : 500);
+  }, 0);
+
   // Filter bills
   const billsToFilter = activeTab === 'unpaid' ? unpaidBills : paidBills;
   const filteredBills = billsToFilter.filter(b => {
@@ -410,7 +432,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const copyReceiptDetails = () => {
     if (!receiptModalBill) return;
     const baseFee = receiptModalBill.baseAmount || 5000;
-    const sysFee = receiptModalBill.systemFee || 1000;
+    const sysFee = receiptModalBill.systemFee !== undefined ? receiptModalBill.systemFee : 500;
     const totalAmount = receiptModalBill.amount || (baseFee + sysFee);
 
     let insuranceSplitText = '';
@@ -528,27 +550,90 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
           </button>
         </div>
 
-        {/* Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-amber-50/80 border border-amber-200/80 p-5 rounded-2xl flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
-              <Clock className="w-6 h-6" />
+        {/* Metrics Row - 4 Analytical Cards with Distinct Financial Separation */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Card 1: Gross Cashier Collections */}
+          <div className="bg-emerald-50/90 border border-emerald-200/90 p-4 rounded-2xl flex items-center gap-3.5 shadow-2xs">
+            <div className="w-11 h-11 bg-emerald-600/15 rounded-xl flex items-center justify-center text-emerald-700 shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900">{totalUnpaidAmount.toLocaleString()} FCFA</div>
-              <div className="text-xs font-bold text-amber-800">Pending Receivables ({unpaidBills.length} Invoices)</div>
-              <p className="text-[11px] text-amber-700/80 mt-0.5">Awaiting cashier payment verification</p>
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-black text-slate-900 truncate">{totalPaidAmount.toLocaleString()} FCFA</div>
+              <div className="text-xs font-bold text-emerald-900 truncate">Total Gross Collections</div>
+              <p className="text-[10px] text-emerald-800/80 mt-0.5">{paidBills.length} Settled Invoices</p>
             </div>
           </div>
 
-          <div className="bg-emerald-50/80 border border-emerald-200/80 p-5 rounded-2xl flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
-              <CheckCircle2 className="w-6 h-6" />
+          {/* Card 2: Lab Diagnostic Share (Facility Revenue) */}
+          <div className="bg-teal-50/90 border border-teal-200/90 p-4 rounded-2xl flex items-center gap-3.5 shadow-2xs">
+            <div className="w-11 h-11 bg-teal-600/15 rounded-xl flex items-center justify-center text-teal-700 shrink-0">
+              <TestTube className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-black text-teal-950 truncate">{totalPaidLabShare.toLocaleString()} FCFA</div>
+              <div className="text-xs font-bold text-teal-900 truncate">Lab Tests Revenue</div>
+              <p className="text-[10px] text-teal-800/80 mt-0.5">Facility Diagnostic Procedures</p>
+            </div>
+          </div>
+
+          {/* Card 3: 500 FCFA Platform System Fee */}
+          <div className="bg-indigo-50/90 border border-indigo-200/90 p-4 rounded-2xl flex items-center gap-3.5 shadow-2xs">
+            <div className="w-11 h-11 bg-indigo-600/15 rounded-xl flex items-center justify-center text-indigo-700 shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-black text-indigo-950 truncate">{totalPaidSystemFees.toLocaleString()} FCFA</div>
+              <div className="text-xs font-bold text-indigo-900 truncate">500 XAF System Fee</div>
+              <p className="text-[10px] text-indigo-800/80 mt-0.5">{paidBills.length} tests × 500 FCFA</p>
+            </div>
+          </div>
+
+          {/* Card 4: Pending Receivables */}
+          <div className="bg-amber-50/90 border border-amber-200/90 p-4 rounded-2xl flex items-center gap-3.5 shadow-2xs">
+            <div className="w-11 h-11 bg-amber-500/15 rounded-xl flex items-center justify-center text-amber-700 shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-black text-slate-900 truncate">{totalUnpaidAmount.toLocaleString()} FCFA</div>
+              <div className="text-xs font-bold text-amber-900 truncate">Pending Receivables</div>
+              <p className="text-[10px] text-amber-800/80 mt-0.5">{unpaidBills.length} Awaiting Cashier</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Separation Reconciliation Summary Box */}
+        <div className="p-3.5 bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-2xl text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-400/30">
+              <Receipt className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-2xl font-black text-slate-900">{totalPaidAmount.toLocaleString()} FCFA</div>
-              <div className="text-xs font-bold text-emerald-800">Total Collected Today ({paidBills.length} Settled)</div>
-              <p className="text-[11px] text-emerald-700/80 mt-0.5">Verified & settled patient invoices</p>
+              <div className="font-bold text-white flex items-center gap-2">
+                <span>Revenue Separation Ledger</span>
+                <span className="text-[10px] font-mono px-2 py-0.2 bg-teal-500/30 text-teal-200 rounded-full">
+                  500 XAF Fee Rule
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Diagnostic laboratory procedure revenue is strictly isolated from the 500 XAF platform processing fee.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 bg-white/10 px-3.5 py-2 rounded-xl border border-white/10 w-full md:w-auto justify-between md:justify-end text-[11px]">
+            <div>
+              <span className="text-teal-300 block text-[10px] uppercase font-bold">Lab Test Share</span>
+              <span className="font-bold text-white font-mono">{totalPaidLabShare.toLocaleString()} FCFA</span>
+            </div>
+            <span className="text-slate-400 font-bold text-sm">+</span>
+            <div>
+              <span className="text-indigo-300 block text-[10px] uppercase font-bold">System Platform Fee</span>
+              <span className="font-bold text-white font-mono">{totalPaidSystemFees.toLocaleString()} FCFA</span>
+            </div>
+            <span className="text-slate-400 font-bold text-sm">=</span>
+            <div className="text-right pl-1 border-l border-white/20">
+              <span className="text-emerald-300 block text-[10px] uppercase font-bold">Total Cashiered</span>
+              <span className="font-extrabold text-emerald-300 font-mono text-xs">{totalPaidAmount.toLocaleString()} FCFA</span>
             </div>
           </div>
         </div>
@@ -702,9 +787,9 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
 
                 <div className="flex items-center justify-between md:justify-end gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
                   <div className="text-left md:text-right">
-                    <div className="text-base font-black text-slate-900">{(bill.amount || 6000).toLocaleString()} FCFA</div>
+                    <div className="text-base font-black text-slate-900">{(bill.amount || 5500).toLocaleString()} FCFA</div>
                     <div className="text-[11px] font-bold text-emerald-800">
-                      {(bill.baseAmount || 5000).toLocaleString()} + {(bill.systemFee || 1000).toLocaleString()} FCFA System Fee
+                      {(bill.baseAmount || 5000).toLocaleString()} + {(bill.systemFee !== undefined ? bill.systemFee : 500).toLocaleString()} FCFA System Fee
                     </div>
                   </div>
 
@@ -790,10 +875,10 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
                 <div className="text-right bg-white p-3 rounded-xl border border-emerald-200 shadow-2xs space-y-0.5">
                   <span className="text-[10px] text-slate-400 font-semibold uppercase block">Total Due</span>
                   <span className="text-base font-black text-emerald-700 block">
-                    {(selectedBill.amount || 6000).toLocaleString()} FCFA
+                    {(selectedBill.amount || 5500).toLocaleString()} FCFA
                   </span>
                   <span className="text-[10px] font-bold text-emerald-900 bg-emerald-100/90 px-2 py-0.5 rounded block">
-                    {(selectedBill.baseAmount || 5000).toLocaleString()} + {(selectedBill.systemFee || 1000).toLocaleString()} FCFA System Fee
+                    {(selectedBill.baseAmount || 5000).toLocaleString()} + {(selectedBill.systemFee !== undefined ? selectedBill.systemFee : 500).toLocaleString()} FCFA System Fee
                   </span>
                 </div>
               </div>
@@ -892,7 +977,7 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
               {/* CONDITIONAL SECTION: INSURANCE DETAILS */}
               {paymentMethod === 'insurance' && (() => {
                 const basePrice = selectedBill?.baseAmount || selectedBill?.price || 5000;
-                const sysFee = selectedBill?.systemFee !== undefined ? selectedBill.systemFee : 1000;
+                const sysFee = selectedBill?.systemFee !== undefined ? selectedBill.systemFee : 500;
                 const totalBill = selectedBill?.amount || (basePrice + sysFee);
                 const isFull = insuranceCoverageType === 'full';
                 const insPct = isFull ? 100 : Math.max(0, Math.min(100, insuranceCoveragePercent));
@@ -1429,18 +1514,18 @@ Authorized Cashier: ${receiptModalBill.paidBy || 'Authorized Cashier'}
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>2. nanoLabs System & Processing Fee:</span>
-                    <span className="font-bold text-emerald-700">+{(receiptModalBill.systemFee || 1000).toLocaleString()} FCFA</span>
+                    <span className="font-bold text-emerald-700">+{(receiptModalBill.systemFee !== undefined ? receiptModalBill.systemFee : 500).toLocaleString()} FCFA</span>
                   </div>
                   <div className="border-t border-slate-100 pt-1 flex justify-between items-center font-bold text-slate-800">
                     <span>Fee Structure:</span>
-                    <span>{(receiptModalBill.baseAmount || 5000).toLocaleString()} + {(receiptModalBill.systemFee || 1000).toLocaleString()} FCFA</span>
+                    <span>{(receiptModalBill.baseAmount || 5000).toLocaleString()} + {(receiptModalBill.systemFee !== undefined ? receiptModalBill.systemFee : 500).toLocaleString()} FCFA</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between items-center border-t border-emerald-200/60 pt-2 text-sm">
                   <span className="font-bold text-slate-900">Total Amount Settled:</span>
                   <span className="font-black text-emerald-800 text-base">
-                    {(receiptModalBill.amount || 6000).toLocaleString()} FCFA
+                    {(receiptModalBill.amount || 5500).toLocaleString()} FCFA
                   </span>
                 </div>
               </div>

@@ -25,6 +25,7 @@ import {
   Package,
   Layers
 } from 'lucide-react';
+import SearchableSpecimenSelect from '../../components/common/SearchableSpecimenSelect';
 
 interface AnalyzerViewProps {
   onBack?: () => void;
@@ -655,20 +656,13 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                             >
                               <div className="flex items-center gap-2">
                                 <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-slate-500 mb-1">
-                                    Inventory Chemical / Reagent #{idx + 1}
-                                  </label>
-                                  <select
+                                  <SearchableSpecimenSelect
+                                    items={inventoryList}
                                     value={row.inventoryId}
-                                    onChange={(e) => handleMaterialChange(idx, 'inventoryId', e.target.value)}
-                                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                  >
-                                    {inventoryList.map(inv => (
-                                      <option key={inv.id} value={inv.id}>
-                                        {inv.name} — ({inv.quantity} {inv.unit || 'units'} left)
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onChange={(newInvId) => handleMaterialChange(idx, 'inventoryId', newInvId)}
+                                    label={`Specimen, Chemical or Reagent #${idx + 1}`}
+                                    placeholder="Search specimen/tube/chemical..."
+                                  />
                                 </div>
 
                                 <div className="w-32">

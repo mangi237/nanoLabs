@@ -100,8 +100,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       id: t.id || `${p.id}-${Math.random()}`,
       testName: t.testName || t.name || 'Laboratory Test',
       category: t.category || 'General Diagnostics',
-      basePrice: t.basePrice || (t.price ? t.price - 1000 : 4000),
-      systemFee: t.systemFee !== undefined ? t.systemFee : 1000,
+      basePrice: t.basePrice || (t.price ? t.price - 500 : 4500),
+      systemFee: t.systemFee !== undefined ? t.systemFee : 500,
       totalPrice: t.totalPrice || t.price || 5000,
       price: t.price || 5000,
       paymentStatus: t.paymentStatus || (t.paid ? 'paid' : 'unpaid'),
@@ -142,7 +142,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   const totalSystemFees = filteredTests
     .filter(t => t.paymentStatus === 'paid' || t.status === 'completed')
-    .reduce((sum, t) => sum + (t.systemFee || 1000), 0);
+    .reduce((sum, t) => sum + (t.systemFee !== undefined ? t.systemFee : 500), 0);
 
   const directLabRevenue = totalRevenue - totalSystemFees;
 
@@ -257,16 +257,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       csvString += `\nItemized Tests Log\n`;
       csvString += 'Test ID,Test Name,Category,Specimen,Price (FCFA),System Fee (FCFA),Total Price (FCFA),Status,Payment Status,Verified By,Date\n';
       testsToExport.forEach((t, idx) => {
-        csvString += `"${t.id || `TEST-${idx + 101}`}","${t.testName}","${t.category}","${t.specimenType}",${t.basePrice || 4000},${t.systemFee || 1000},${t.totalPrice || 5000},"${t.status}","${t.paymentStatus}","${t.verifiedBy || 'Pending'}","${t.date}"\n`;
+        csvString += `"${t.id || `TEST-${idx + 101}`}","${t.testName}","${t.category}","${t.specimenType}",${t.basePrice || 4500},${t.systemFee !== undefined ? t.systemFee : 500},${t.totalPrice || 5000},"${t.status}","${t.paymentStatus}","${t.verifiedBy || 'Pending'}","${t.date}"\n`;
       });
     } else if (type === 'patients' || type === 'diagnostics') {
       csvString += 'Test ID,Test Name,Category,Specimen,Price (FCFA),System Fee (FCFA),Total Price (FCFA),Status,Payment Status,Administered/Verified By,Date\n';
       if (testsToExport.length === 0) {
-        csvString += '"TEST-101","Complete Blood Count (CBC)","Hematology","Whole Blood",5000,1000,6000,"completed","paid","Dr. Sarah (Lab Tech)","2026-08-06"\n';
-        csvString += '"TEST-102","Malaria Rapid Antigen Test","Rapid Tests","Capillary Blood",3000,1000,4000,"completed","paid","Dr. Sarah (Lab Tech)","2026-08-06"\n';
+        csvString += '"TEST-101","Complete Blood Count (CBC)","Hematology","Whole Blood",4500,500,5000,"completed","paid","Dr. Sarah (Lab Tech)","2026-08-06"\n';
+        csvString += '"TEST-102","Malaria Rapid Antigen Test","Rapid Tests","Capillary Blood",2500,500,3000,"completed","paid","Dr. Sarah (Lab Tech)","2026-08-06"\n';
       } else {
         testsToExport.forEach((t, idx) => {
-          csvString += `"${t.id || `TEST-${idx + 101}`}","${t.testName}","${t.category}","${t.specimenType}",${t.basePrice || 4000},${t.systemFee || 1000},${t.totalPrice || 5000},"${t.status}","${t.paymentStatus}","${t.verifiedBy || 'Pending'}","${t.date}"\n`;
+          csvString += `"${t.id || `TEST-${idx + 101}`}","${t.testName}","${t.category}","${t.specimenType}",${t.basePrice || 4500},${t.systemFee !== undefined ? t.systemFee : 500},${t.totalPrice || 5000},"${t.status}","${t.paymentStatus}","${t.verifiedBy || 'Pending'}","${t.date}"\n`;
         });
       }
     } else if (type === 'inventory') {
@@ -276,14 +276,14 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         csvString += `"${i.id}","${i.name}","${i.category}",${i.quantity || 0},${i.minThreshold || 10},${i.unitCost || 0},${((i.quantity || 0) * (i.unitCost || 0))},"${i.supplier || 'Standard'}","${isLow ? 'Low Stock' : 'Adequate'}"\n`;
       });
     } else if (type === 'financial') {
-      csvString += 'Receipt #,Test Name,Category,Total Amount (FCFA),System Fee (1000 FCFA),Lab Share (FCFA),Payment Method,Cashier Staff,Date\n';
+      csvString += 'Receipt #,Test Name,Category,Total Amount (FCFA),System Fee (500 FCFA),Lab Share (FCFA),Payment Method,Cashier Staff,Date\n';
       const paidTests = testsToExport.filter(t => t.paymentStatus === 'paid' || t.status === 'completed');
       if (paidTests.length === 0) {
-        csvString += '"REC-1001","Complete Blood Count (CBC)","Hematology",6000,1000,5000,"Cash","Cashier Desk","2026-08-06"\n';
-        csvString += '"REC-1002","Malaria Rapid Antigen Test","Rapid Tests",4000,1000,3000,"Orange Money","Cashier Desk","2026-08-06"\n';
+        csvString += '"REC-1001","Complete Blood Count (CBC)","Hematology",5000,500,4500,"Cash","Cashier Desk","2026-08-06"\n';
+        csvString += '"REC-1002","Malaria Rapid Antigen Test","Rapid Tests",3000,500,2500,"Orange Money","Cashier Desk","2026-08-06"\n';
       } else {
         paidTests.forEach((t, idx) => {
-          csvString += `"${t.receiptNumber !== 'N/A' && t.receiptNumber ? t.receiptNumber : `REC-${idx + 1001}`}","${t.testName}","${t.category}",${t.totalPrice || 5000},${t.systemFee || 1000},${t.basePrice || 4000},"${t.paymentMethod || 'Cash'}","${t.cashierName || 'Cashier Desk'}","${t.date}"\n`;
+          csvString += `"${t.receiptNumber !== 'N/A' && t.receiptNumber ? t.receiptNumber : `REC-${idx + 1001}`}","${t.testName}","${t.category}",${t.totalPrice || 5000},${t.systemFee !== undefined ? t.systemFee : 500},${t.basePrice || 4500},"${t.paymentMethod || 'Cash'}","${t.cashierName || 'Cashier Desk'}","${t.date}"\n`;
         });
       }
     } else if (type === 'staff') {
@@ -780,7 +780,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                       </td>
                       <td className="px-6 py-4 font-mono">
                         <span className="font-bold text-slate-900">{t.basePrice.toLocaleString()} XAF</span>
-                        <span className="text-[10px] text-teal-700 block">+ 1,000 XAF Fee</span>
+                        <span className="text-[10px] text-teal-700 block">+ 500 XAF Fee</span>
                       </td>
                       <td className="px-6 py-4 text-slate-800 font-semibold">
                         {t.verifiedBy}
@@ -925,7 +925,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-1">
               <span className="text-xs font-semibold text-slate-500 uppercase">nanoLabs Platform Fees</span>
               <div className="text-2xl font-black text-indigo-700">{totalSystemFees.toLocaleString()} FCFA</div>
-              <p className="text-[11px] text-slate-500">1,000 FCFA per patient test</p>
+              <p className="text-[11px] text-slate-500">500 FCFA per patient test</p>
             </div>
           </div>
 
