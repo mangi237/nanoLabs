@@ -78,7 +78,7 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-bold text-white">Register a New Medical Facility</h4>
-              <p className="text-[11px] text-teal-200">Zero software fees • 1,000 XAF System Fee</p>
+              <p className="text-[11px] text-teal-200">Zero software fees • 500 XAF System Fee</p>
             </div>
           </div>
           <button

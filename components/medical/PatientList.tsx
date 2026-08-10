@@ -307,9 +307,26 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Health Insurance</span>
-                  <span className="font-semibold text-indigo-700 truncate block">
-                    {selectedAdminPatient.hasInsurance ? selectedAdminPatient.insuranceProvider || 'Insured' : 'Out of Pocket'}
-                  </span>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-semibold text-indigo-700 truncate block">
+                      {selectedAdminPatient.hasInsurance ? selectedAdminPatient.insuranceProvider || 'Insured' : 'Out of Pocket'}
+                    </span>
+                    {selectedAdminPatient.insuranceCardUrl && (
+                      <a
+                        href={selectedAdminPatient.insuranceCardUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-teal-600 hover:underline font-bold shrink-0"
+                      >
+                        View Card
+                      </a>
+                    )}
+                  </div>
+                  {selectedAdminPatient.insurancePolicyNumber && (
+                    <span className="text-[10px] font-mono text-slate-500 block truncate">
+                      Policy: {selectedAdminPatient.insurancePolicyNumber}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -348,7 +365,7 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Platform System Fee: 1,000 XAF applied per validated lab transaction.
+                  Platform System Fee: 500 XAF applied per validated lab transaction.
                 </div>
               </div>
 

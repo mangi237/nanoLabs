@@ -948,7 +948,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
 
                 {/* System Fee Notice */}
                 <div className="p-3.5 bg-teal-950/70 border border-teal-500/30 rounded-xl text-[11px] text-slate-300 leading-relaxed">
-                  <span className="text-teal-300 font-semibold">Service & System Fee Notice:</span> Standard laboratory fees are set by the facility. A platform System Fee of <strong className="text-white">1,000 XAF</strong> applies per completed service transaction to maintain secure digital result delivery and sample accountability.
+                  <span className="text-teal-300 font-semibold">Service & System Fee Notice:</span> Standard laboratory fees are set by the facility. A platform System Fee of <strong className="text-white">500 XAF</strong> applies per completed service transaction to maintain secure digital result delivery and sample accountability.
                 </div>
 
                 {/* Consent Checkboxes */}

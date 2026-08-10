@@ -143,7 +143,7 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
     setSaving(true);
     try {
       const basePrice = selectedTest.price || 5000;
-      const systemFee = 1000;
+      const systemFee = 500;
       const totalPrice = basePrice + systemFee;
 
       const newTest = {
@@ -390,7 +390,7 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                         <span>Category: {test.category || 'General'}</span>
                         <span>•</span>
                         <span className="font-bold text-emerald-800">
-                          {test.priceDisplay || `${(test.basePrice || test.price || 5000).toLocaleString()} + ${(test.systemFee || 1000).toLocaleString()} FCFA System Fee`}
+                          {test.priceDisplay || `${(test.basePrice || test.price || 5000).toLocaleString()} + ${(test.systemFee !== undefined ? test.systemFee : 500).toLocaleString()} FCFA System Fee`}
                         </span>
                         {test.turnaroundTime && (
                           <>
@@ -494,14 +494,14 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                         <div className="flex flex-col gap-0.5 text-[11px] pt-1 border-t border-slate-100">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-emerald-800">
-                              {(testItem.price || 5000).toLocaleString()} + 1,000 FCFA
+                              {(testItem.price || 5000).toLocaleString()} + 500 FCFA
                             </span>
                             <span className="flex items-center gap-0.5 text-slate-500 font-medium">
                               <Clock className="w-3 h-3 text-teal-600" />
                               {testItem.turnaroundTime || testItem.expectedTime || '24 Hours'}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-semibold">Total: {((testItem.price || 5000) + 1000).toLocaleString()} FCFA</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">Total: {((testItem.price || 5000) + 500).toLocaleString()} FCFA</span>
                         </div>
                       </div>
                     );
@@ -515,12 +515,12 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                       <span className="text-[10px] text-teal-200 uppercase font-semibold">Selected Procedure</span>
                       <h4 className="font-bold text-white text-sm">{selectedTest.name || selectedTest.testName}</h4>
                       <p className="text-[10px] text-teal-200 mt-0.5">
-                        Test: {(selectedTest.price || 5000).toLocaleString()} FCFA + 1,000 FCFA System Fee
+                        Test: {(selectedTest.price || 5000).toLocaleString()} FCFA + 500 FCFA System Fee
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="text-teal-200 text-[10px] block">Turnaround: {selectedTest.turnaroundTime || '24h'}</span>
-                      <span className="font-extrabold text-white text-sm">{((selectedTest.price || 5000) + 1000).toLocaleString()} FCFA</span>
+                      <span className="font-extrabold text-white text-sm">{((selectedTest.price || 5000) + 500).toLocaleString()} FCFA</span>
                     </div>
                   </div>
                 )}
