@@ -37,7 +37,10 @@ const COMMON_INSURANCES = [
   'NHIS / Universal Health',
   'GMC Henner',
   'Sanlam Health',
-  'Other Corporate / Private HMO'
+  'Other Corporate / Private HMO',
+  'zenithe insurance company',
+  'Asure Insurance Company Sarl '
+  
 ];
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, onRegisterSuccess }) => {
