@@ -78,26 +78,43 @@ export interface LabTest {
   testName?: string;
   category?: string;
   price?: number;
+  basePrice?: number;
+  systemFee?: number;
+  priceDisplay?: string;
+  method?: string;
+  conditions?: string;
+  sampleType?: string;
   description?: string;
   turnaroundTime?: string;
   expectedTime?: string;
   status?: 'requested' | 'confirmed' | 'collected' | 'sample-collected' | 'processing' | 'completed' | 'paid';
+  paymentStatus?: 'paid' | 'pending';
+  paid?: boolean;
   confirmedByReceptionist?: boolean;
   confirmedAt?: string;
   confirmedBy?: string;
   patientId?: string;
   patientName?: string;
   requestedDate?: string;
+  appointmentTime?: string;
   completedDate?: string;
   result?: string;
+  pdfUrl?: string;
+  fileUrl?: string;
+  virtualRequested?: boolean;
+  virtualRequestedAt?: string;
   sampleCollected?: boolean;
   sampleCollectedBy?: string;
   sampleCollectedByName?: string;
   sampleCollectedDate?: any;
   samples?: string[];
   doctorName?: string;
+  doctorRole?: string;
   labTechId?: string;
   labTechName?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Patient {

@@ -4,6 +4,11 @@ import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { sendEmail } from '../../services/emailService';
 import { 
+  OFFICIAL_MASTER_TEST_CATALOG, 
+  OFFICIAL_CATEGORIES, 
+  OfficialCategory 
+} from '../../data/officialTestCatalog';
+import { 
   Calendar, 
   Clock, 
   User, 
@@ -17,7 +22,10 @@ import {
   DollarSign, 
   UserCheck, 
   Sparkles,
-  Stethoscope
+  Stethoscope,
+  AlertCircle,
+  FlaskConical,
+  Info
 } from 'lucide-react';
 
 interface BookAppointmentScreenProps {
@@ -44,6 +52,9 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const [catalog, setCatalog] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [patientList, setPatientList] = useState<any[]>([]);
+
+  // Category filter for tests
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   // Search queries for card selectors
   const [testSearch, setTestSearch] = useState('');
@@ -72,20 +83,12 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     try {
       setFetchingData(true);
 
-      // 1. Fetch Tests for this lab
+      // 1. Fetch Tests for this lab, or fallback to full official clinical catalog
       const testsSnap = await getDocs(collection(db, 'labs', targetLabId, 'testCatalog'));
       let tests: any[] = testsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (tests.length === 0) {
-        // Fallback default tests for this lab
-        tests = [
-          { id: 't-1', name: 'Complete Blood Count (CBC)', category: 'Hematology', price: 4500, turnaroundTime: '2-4 Hours', description: 'Comprehensive cellular evaluation.' },
-          { id: 't-2', name: 'Fasting Blood Glucose (FBG)', category: 'Biochemistry', price: 3000, turnaroundTime: '1 Hour', description: 'Metabolic & diabetes assessment.' },
-          { id: 't-3', name: 'Lipid Profile Panel', category: 'Biochemistry', price: 7000, turnaroundTime: '6 Hours', description: 'Total cholesterol, HDL, LDL, triglycerides.' },
-          { id: 't-4', name: 'Thyroid Panel (TSH, FT3, FT4)', category: 'Endocrinology', price: 12500, turnaroundTime: '24 Hours', description: 'Endocrine & metabolic function check.' },
-          { id: 't-5', name: 'Comprehensive Renal Function', category: 'Nephrology', price: 8500, turnaroundTime: '4 Hours', description: 'Creatinine, BUN, electrolytes & eGFR.' },
-          { id: 't-6', name: 'Urinalysis & Microscopic Exam', category: 'Urinalysis', price: 3500, turnaroundTime: '1-2 Hours', description: 'Complete chemical and sediment urine analysis.' }
-        ];
+        tests = OFFICIAL_MASTER_TEST_CATALOG;
       }
       setCatalog(tests);
       if (tests.length > 0) {
@@ -109,7 +112,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         setSelectedStaff(staff[0]);
       }
 
-      // 3. Fetch Patients (if staff is booking, or auto-assign current patient)
+      // 3. Fetch Patients
       const patientSnap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const patients: any[] = patientSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setPatientList(patients);
@@ -132,6 +135,10 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       }
     } catch (err) {
       console.error('Error fetching lab booking data:', err);
+      setCatalog(OFFICIAL_MASTER_TEST_CATALOG);
+      if (OFFICIAL_MASTER_TEST_CATALOG.length > 0) {
+        setSelectedTest(OFFICIAL_MASTER_TEST_CATALOG[0]);
+      }
     } finally {
       setFetchingData(false);
     }
@@ -156,13 +163,16 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     try {
       const baseTestPrice = selectedTest.price || 5000;
       const totalTestPrice = baseTestPrice + SYSTEM_FEE;
-      const testTurnaround = selectedTest.turnaroundTime || selectedTest.expectedTime || '24 Hours';
+      const testTurnaround = selectedTest.turnaroundTime || selectedTest.expectedTime || '2 hours after sampling';
       const testItemName = selectedTest.name || selectedTest.testName || 'Diagnostic Test';
 
       const newTestRecord = {
         id: 'tst-' + Math.floor(1000 + Math.random() * 9000),
         testName: testItemName,
         category: selectedTest.category || 'General Diagnostic',
+        method: selectedTest.method || '',
+        conditions: selectedTest.conditions || '',
+        sampleType: selectedTest.sampleType || 'Venous Blood',
         basePrice: baseTestPrice,
         systemFee: SYSTEM_FEE,
         price: totalTestPrice,
@@ -189,6 +199,9 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         testId: selectedTest.id,
         testName: testItemName,
         category: selectedTest.category || 'General',
+        method: selectedTest.method || '',
+        conditions: selectedTest.conditions || '',
+        sampleType: selectedTest.sampleType || 'Venous Blood',
         basePrice: baseTestPrice,
         systemFee: SYSTEM_FEE,
         price: totalTestPrice,
@@ -222,13 +235,13 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         }
       }
 
-      // 3. Send confirmation email with explicit fee breakdown
+      // 3. Send confirmation email with explicit fee breakdown & patient preparation instructions
       const targetEmail = selectedPatient.email || user?.email;
       if (targetEmail) {
         sendEmail(
           targetEmail,
-          `Appointment & Test Request: ${testItemName} - nanoLabs`,
-          `Dear ${selectedPatient.name || 'Patient'},\n\nYour appointment and laboratory test request has been successfully booked!\n\nTest: ${testItemName}\nCategory: ${selectedTest.category || 'General'}\nDiagnostic Procedure Fee: ${baseTestPrice.toLocaleString()} FCFA\nSystem & Processing Fee: ${SYSTEM_FEE.toLocaleString()} FCFA\nTotal Payable Fee: ${totalTestPrice.toLocaleString()} FCFA (${baseTestPrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA System Fee)\nExpected Results Turnaround: ${testTurnaround}\nDate: ${appointmentDate}\nTime: ${appointmentTime}\nAttending Specialist: ${selectedStaff?.name || 'Lab Technologist'}\nLocation: ${lab?.name || 'nanoLabs Diagnostics'}\n\nOur cashier will verify your payment method upon arrival.`
+          `Appointment & Test Request: ${testItemName} - ${lab?.name || 'nanoLabs'}`,
+          `Dear ${selectedPatient.name || 'Patient'},\n\nYour appointment and laboratory test request has been successfully booked!\n\nTest: ${testItemName}\nCategory: ${selectedTest.category || 'General'}\nDiagnostic Procedure Fee: ${baseTestPrice.toLocaleString()} FCFA\nSystem & Processing Fee: ${SYSTEM_FEE.toLocaleString()} FCFA\nTotal Payable Fee: ${totalTestPrice.toLocaleString()} FCFA (${baseTestPrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA System Fee)\nExpected Results Turnaround: ${testTurnaround}\n${selectedTest.conditions ? `Preparation & Withdrawal Conditions: ${selectedTest.conditions}\n` : ''}Date: ${appointmentDate}\nTime: ${appointmentTime}\nAttending Specialist: ${selectedStaff?.name || 'Lab Technologist'}\nLocation: ${lab?.name || 'nanoLabs Diagnostics'}\n\nOur cashier will verify your payment upon arrival at the laboratory.`
         ).catch(e => console.warn('Appointment email error:', e));
       }
 
@@ -242,10 +255,17 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     }
   };
 
-  const filteredTests = catalog.filter(t => 
-    (t.name || t.testName || '')?.toLowerCase().includes(testSearch.toLowerCase()) ||
-    (t.category || '')?.toLowerCase().includes(testSearch.toLowerCase())
-  );
+  const filteredTests = catalog.filter(t => {
+    const matchesSearch = 
+      (t.name || t.testName || '')?.toLowerCase().includes(testSearch.toLowerCase()) ||
+      (t.category || '')?.toLowerCase().includes(testSearch.toLowerCase()) ||
+      (t.method || '')?.toLowerCase().includes(testSearch.toLowerCase()) ||
+      (t.conditions || '')?.toLowerCase().includes(testSearch.toLowerCase());
+
+    const matchesCategory = selectedCategory === 'All' || t.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
 
   const filteredStaff = staffList.filter(s =>
     (s.name || '')?.toLowerCase().includes(staffSearch.toLowerCase()) ||
@@ -266,6 +286,23 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     return name.slice(0, 2).toUpperCase();
   };
 
+  const getCategoryBadgeColor = (category: string) => {
+    switch (category) {
+      case 'Microbiology':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'Hematology':
+        return 'bg-rose-50 text-rose-800 border-rose-200';
+      case 'Serology / Immunology':
+        return 'bg-purple-50 text-purple-800 border-purple-200';
+      case 'Biochemistry':
+        return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'Hormones & Tumor Markers':
+        return 'bg-teal-50 text-teal-800 border-teal-200';
+      default:
+        return 'bg-slate-50 text-slate-800 border-slate-200';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
@@ -275,7 +312,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         onProfilePress={onProfilePress}
       />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {onBack && (
           <button
             onClick={onBack}
@@ -290,7 +327,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           <div className="border-b border-slate-100 pb-4">
             <h1 className="text-xl font-bold text-slate-900">Laboratory Appointment & Test Booking</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Available tests and active medical staff at <strong>{lab?.name || 'nanoLabs Central Diagnostics'}</strong>
+              Select diagnostic procedures and view preparation guidelines for <strong>{lab?.name || 'nanoLabs Central Diagnostics'}</strong>
             </p>
           </div>
 
@@ -373,7 +410,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               )}
             </div>
 
-            {/* SECTION 2: Searchable Laboratory Tests (Card Layout) */}
+            {/* SECTION 2: Searchable Laboratory Tests with Category Filter Tabs */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -384,12 +421,48 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 </span>
               </div>
 
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('All')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    selectedCategory === 'All'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All ({catalog.length})
+                </button>
+                {OFFICIAL_CATEGORIES.map(cat => {
+                  const count = catalog.filter(c => c.category === cat).length;
+                  const isActive = selectedCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Search Bar for Tests */}
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type="text"
-                  placeholder="Search available lab tests by name or specialty category..."
+                  placeholder="Search 80+ lab tests by name, method, or preparation condition..."
                   value={testSearch}
                   onChange={e => setTestSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
@@ -397,12 +470,12 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               </div>
 
               {/* Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-1">
                 {filteredTests.map(testItem => {
                   const isSelected = selectedTest?.id === testItem.id;
                   const basePrice = testItem.price || 5000;
                   const totalPrice = basePrice + SYSTEM_FEE;
-                  const turnaround = testItem.turnaroundTime || testItem.expectedTime || '24 Hours';
+                  const turnaround = testItem.turnaroundTime || testItem.expectedTime || '2 hours after sampling';
 
                   return (
                     <div
@@ -416,14 +489,19 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-start justify-between gap-1.5">
-                          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded uppercase border border-teal-200">
-                            {testItem.category || 'General'}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase border ${getCategoryBadgeColor(testItem.category)}`}>
+                            {testItem.category || 'Hematology'}
                           </span>
                           {isSelected && <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />}
                         </div>
-                        <h4 className="font-bold text-slate-900 text-xs leading-snug">
+                        <h4 className="font-bold text-slate-900 text-xs leading-snug line-clamp-2">
                           {testItem.name || testItem.testName}
                         </h4>
+                        {testItem.conditions && (
+                          <p className="text-[10px] text-amber-900 line-clamp-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                            Prep: {testItem.conditions}
+                          </p>
+                        )}
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 space-y-1 text-xs">
@@ -437,7 +515,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-                          <span>Incl. 500 FCFA System Fee</span>
+                          <span>System Fee Incl.</span>
                           <span className="font-bold text-slate-700">Total: {totalPrice.toLocaleString()} FCFA</span>
                         </div>
                       </div>
@@ -446,40 +524,67 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 })}
               </div>
 
-              {/* Dynamic Selected Test Summary Banner */}
+              {/* Dynamic Selected Test Summary Banner with Preparation Guidelines */}
               {selectedTest && (
-                <div className="p-4 bg-gradient-to-r from-teal-800 to-blue-900 rounded-2xl text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-white/10 text-white border border-white/20">
-                      <TestTube className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-medium text-teal-200 uppercase tracking-wide">
-                        Selected Diagnostic Procedure
+                <div className="p-4 bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 rounded-2xl text-white shadow-md space-y-3 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-white/10 text-white border border-white/20">
+                        <FlaskConical className="w-5 h-5 text-teal-300" />
                       </div>
-                      <h4 className="font-bold text-sm text-white">{selectedTest.name || selectedTest.testName}</h4>
-                      <p className="text-[11px] text-teal-200/90 mt-0.5">
-                        Test Fee: {(selectedTest.price || 5000).toLocaleString()} FCFA + {SYSTEM_FEE.toLocaleString()} FCFA System Fee
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold text-teal-300 uppercase tracking-wider bg-white/10 px-2 py-0.5 rounded">
+                            {selectedTest.category || 'General'}
+                          </span>
+                          <span className="text-[11px] text-slate-300">
+                            Specimen: {selectedTest.sampleType || 'Venous Blood'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-sm text-white mt-0.5">{selectedTest.name || selectedTest.testName}</h4>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/10 pt-2 sm:pt-0">
+                      <div className="text-right">
+                        <span className="text-[10px] text-teal-200 block font-medium">Turnaround</span>
+                        <span className="text-xs font-bold text-white flex items-center gap-1 justify-end">
+                          <Clock className="w-3.5 h-3.5 text-teal-300" />
+                          {selectedTest.turnaroundTime || selectedTest.expectedTime || '2 hours after sampling'}
+                        </span>
+                      </div>
+
+                      <div className="text-right bg-white/10 px-3 py-1.5 rounded-xl border border-white/20">
+                        <span className="text-[10px] text-teal-200 block font-medium">Total Payable Due</span>
+                        <span className="text-sm font-extrabold text-white">
+                          {((selectedTest.price || 5000) + SYSTEM_FEE).toLocaleString()} FCFA
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/10 pt-2 sm:pt-0">
-                    <div className="text-right">
-                      <span className="text-[10px] text-teal-200 block font-medium">Turnaround</span>
-                      <span className="text-xs font-bold text-white flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-teal-300" />
-                        {selectedTest.turnaroundTime || selectedTest.expectedTime || '24 Hours'}
-                      </span>
+                  {/* Preparation / Withdrawal Advisory Box */}
+                  {selectedTest.conditions && (
+                    <div className="p-3 bg-amber-500/20 border border-amber-400/40 rounded-xl text-xs text-amber-100 flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-200 block text-[11px] uppercase tracking-wide">
+                          Important Preparation & Withdrawal Conditions:
+                        </span>
+                        <p className="text-amber-100 text-xs mt-0.5 font-medium leading-relaxed">
+                          {selectedTest.conditions}
+                        </p>
+                      </div>
                     </div>
+                  )}
 
-                    <div className="text-right bg-white/10 px-3 py-1.5 rounded-xl border border-white/20">
-                      <span className="text-[10px] text-teal-200 block font-medium">Total Payable Due</span>
-                      <span className="text-sm font-extrabold text-white">
-                        {((selectedTest.price || 5000) + SYSTEM_FEE).toLocaleString()} FCFA
-                      </span>
+                  {/* Method Info */}
+                  {selectedTest.method && (
+                    <div className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+                      <span><strong>Analytical Method:</strong> {selectedTest.method}</span>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -570,12 +675,13 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                     onChange={e => setAppointmentTime(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
-                    <option value="08:00 AM">08:00 AM (Early Intake)</option>
+                    <option value="08:00 AM">08:00 AM (Early Fasting Intake)</option>
+                    <option value="08:30 AM">08:30 AM</option>
                     <option value="09:00 AM">09:00 AM</option>
                     <option value="09:30 AM">09:30 AM</option>
                     <option value="10:30 AM">10:30 AM</option>
                     <option value="11:30 AM">11:30 AM</option>
-                    <option value="02:00 PM">02:00 PM (Afternoon)</option>
+                    <option value="02:00 PM">02:00 PM (Afternoon Intake)</option>
                     <option value="03:30 PM">03:30 PM</option>
                     <option value="04:30 PM">04:30 PM</option>
                   </select>
@@ -586,7 +692,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Clinical Indications / Special Notes (Optional)</label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Fasting required, symptoms reported, doctor referral notes..."
+                  placeholder="e.g. Fasting started at 10 PM, doctor referral notes, symptoms reported..."
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"

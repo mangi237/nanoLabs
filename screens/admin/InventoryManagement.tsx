@@ -22,8 +22,11 @@ import {
   Sparkles,
   Layers,
   ThermometerSnowflake,
-  Filter
+  Filter,
+  FileSpreadsheet,
+  Upload
 } from 'lucide-react';
+import BulkInventoryUploadModal from '../../components/inventory/BulkInventoryUploadModal';
 
 interface InventoryManagementProps {
   embedded?: boolean;
@@ -163,6 +166,7 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
   
   // Modal & Edit state
   const [showModal, setShowModal] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [verifyError, setVerifyError] = useState('');
@@ -477,13 +481,23 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Add Chemical / Reagent
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowBulkUploadModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md shadow-slate-900/10 transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-teal-400" />
+            <span>CSV / Excel Bulk Upload</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Add Chemical / Reagent
+          </button>
+        </div>
       </div>
 
         {/* Overview Stat Counters */}
@@ -949,6 +963,15 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
           </div>
         </div>
       )}
+
+      {/* Bulk CSV / Excel Upload Modal */}
+      <BulkInventoryUploadModal
+        isOpen={showBulkUploadModal}
+        onClose={() => setShowBulkUploadModal(false)}
+        onSuccess={(_count) => {
+          fetchInventory();
+        }}
+      />
     </div>
   );
 

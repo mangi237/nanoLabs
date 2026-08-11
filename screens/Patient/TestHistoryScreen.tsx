@@ -3,6 +3,7 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
+import { OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { 
   TestTube, 
   Search, 
@@ -14,7 +15,9 @@ import {
   DollarSign,
   Laptop,
   Clock,
-  ExternalLink
+  ExternalLink,
+  FlaskConical,
+  AlertCircle
 } from 'lucide-react';
 
 interface TestHistoryScreenProps {
@@ -33,6 +36,7 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
   const { user, lab } = useAuth();
   const [tests, setTests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const [requestingId, setRequestingId] = useState<string | null>(null);
 
@@ -59,32 +63,11 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
         );
         setTests(decryptedTests);
       } else {
-        setTests([
-          {
-            id: 'Unavailable',
-            testName: 'Unavailable',
-            category: 'Unavailable',
-            price: 0,
-            paymentStatus: 'UNAVAILABLE',
-            status: 'UNAVAILABLE',
-            requestedDate: 'NULL',
-            result: 'UNAVAILABLE',
-            virtualRequested: false
-          },
-          {
-            id: 'UNAVAILABLE',
-            testName: 'UNAVAILABLE',
-            category: 'UNAVAILABLE',
-            price: 7500,
-            paymentStatus: 'UNAVAILABLE',
-            status: 'UNAVAILABLE',
-            requestedDate: 'NULL',
-            virtualRequested: false
-          }
-        ]);
+        setTests([]);
       }
     } catch (e) {
       console.error('Error fetching test history:', e);
+      setTests([]);
     } finally {
       setLoading(false);
     }
@@ -130,10 +113,34 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
     }
   };
 
-  const filteredTests = tests.filter(t =>
-    (t.testName || t.name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTests = tests.filter(t => {
+    const matchesSearch = 
+      (t.testName || t.name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.method?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.result?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesCategory = selectedCategory === 'All' || t.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  const getCategoryBadgeColor = (category: string) => {
+    switch (category) {
+      case 'Microbiology':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'Hematology':
+        return 'bg-rose-50 text-rose-800 border-rose-200';
+      case 'Serology / Immunology':
+        return 'bg-purple-50 text-purple-800 border-purple-200';
+      case 'Biochemistry':
+        return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'Hormones & Tumor Markers':
+        return 'bg-teal-50 text-teal-800 border-teal-200';
+      default:
+        return 'bg-slate-50 text-slate-800 border-slate-200';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -148,7 +155,7 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
         {onBack && (
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
@@ -159,18 +166,52 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
           <div>
             <h2 className="text-lg font-bold text-slate-900">My Diagnostic Test Records</h2>
-            <p className="text-xs text-slate-500">Track lab findings, prices paid and digital PDF reports</p>
+            <p className="text-xs text-slate-500">Track official lab findings, prices paid and digital PDF reports</p>
           </div>
           <span className="text-xs font-bold text-teal-800 bg-teal-50 px-3 py-1.5 rounded-full border border-teal-200 self-start sm:self-auto">
             {filteredTests.length} Tests Recorded
           </span>
         </div>
 
+        {/* Category Filters */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            onClick={() => setSelectedCategory('All')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              selectedCategory === 'All'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            All Tests ({tests.length})
+          </button>
+          {OFFICIAL_CATEGORIES.map(cat => {
+            const count = tests.filter(c => c.category === cat).length;
+            const isActive = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>{cat}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
           <input
             type="text"
-            placeholder="Search test reports by name or category..."
+            placeholder="Search test reports by name, specialty, or diagnostic findings..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
@@ -186,8 +227,9 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
             </div>
           ) : filteredTests.length === 0 ? (
             <div className="py-12 text-center text-slate-400 space-y-2">
-              <TestTube className="w-8 h-8 mx-auto text-slate-300" />
+              <FlaskConical className="w-8 h-8 mx-auto text-slate-300" />
               <p className="text-sm font-semibold text-slate-600">No laboratory test records found</p>
+              <p className="text-xs text-slate-400">Book an appointment or check back after your sample is analyzed</p>
             </div>
           ) : (
             filteredTests.map(test => {
@@ -205,18 +247,24 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
                     <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 mt-0.5">
                       <TestTube className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-bold text-slate-900 text-sm truncate">
                           {test.testName || test.name}
                         </h3>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase ${getCategoryBadgeColor(test.category)}`}>
                           {test.category || 'General'}
                         </span>
+                        {test.turnaroundTime && (
+                          <span className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-teal-600" />
+                            {test.turnaroundTime}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                        <span>Requested: {test.requestedDate || 'Recent'}</span>
+                        <span>Date: {test.requestedDate || 'Recent'}</span>
                         <span>•</span>
                         {isPaid ? (
                           <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -243,9 +291,15 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
                         </span>
                       </div>
 
+                      {test.conditions && (
+                        <p className="text-[11px] text-amber-900 bg-amber-50/80 px-2.5 py-1 rounded-lg border border-amber-200/80 max-w-xl">
+                          <span className="font-bold">Preparation:</span> {test.conditions}
+                        </p>
+                      )}
+
                       {test.result && (
-                        <p className="text-xs text-slate-700 font-medium truncate max-w-lg bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 mt-1">
-                          Findings: {test.result}
+                        <p className="text-xs text-slate-700 font-medium truncate max-w-lg bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                          <strong>Diagnostic Findings:</strong> {test.result}
                         </p>
                       )}
                     </div>
