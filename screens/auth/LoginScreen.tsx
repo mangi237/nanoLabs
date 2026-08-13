@@ -19,9 +19,12 @@ import {
   HeartHandshake, 
   CheckCircle2, 
   UserCheck,
-  PlusCircle
+  PlusCircle,
+  MapPin,
+  Navigation
 } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
+import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
 
 interface LoginScreenProps {
   onLoginSuccess?: (user: any) => void;
@@ -45,6 +48,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showRegisterLabModal, setShowRegisterLabModal] = useState(false);
+  const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
 
   useEffect(() => {
     fetchLabs();
@@ -88,14 +92,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const filteredLabs = labs.filter((lab: any) =>
     lab.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lab.location?.toLowerCase().includes(searchQuery.toLowerCase())
+    lab.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (lab.city && lab.city.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const selectedLab = labs.find((l: any) => l.id === labId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
-      <div className="max-w-md w-full mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
+      <div className="max-w-md w-full mx-auto space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-3">
           {selectedLab?.logoUrl ? (
@@ -104,24 +109,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 src={selectedLab.logoUrl}
                 alt={selectedLab.name || 'Hospital Logo'}
                 referrerPolicy="no-referrer"
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-teal-400/40 shadow-xl shadow-teal-500/25 bg-white"
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-700 shadow-xl bg-white"
               />
             </div>
           ) : (
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-blue-600 text-white shadow-xl shadow-teal-500/25 mb-2">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-teal-700 text-white shadow-xl mb-2">
               <Activity className="w-8 h-8 stroke-[2.5]" />
             </div>
           )}
-          <h1 className="text-3xl font-extrabold tracking-tight">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">
             {selectedLab?.name ? selectedLab.name : <>nano<span className="text-teal-400">Labs</span> Health Care</>}
           </h1>
-          <p className="text-sm text-slate-300">
-            {selectedLab?.location ? `Clinical Portal • ${selectedLab.location}` : 'Secure Portal Access & Laboratory Management'}
-          </p>
+          
+          {/* City & Address under lab name */}
+          <div className="text-xs text-teal-300 font-semibold flex items-center justify-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span>
+              {selectedLab?.city ? `${selectedLab.city} • ` : ''}
+              {selectedLab?.address || selectedLab?.location || 'Clinical Diagnostic Network'}
+            </span>
+          </div>
+        </div>
+
+        {/* LOOKING FOR A LAB AROUND YOU BUTTON */}
+        <div className="p-3.5 bg-slate-900 border border-teal-500/50 rounded-2xl flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-teal-800 text-teal-200 flex items-center justify-center shrink-0">
+              <Navigation className="w-4 h-4 text-teal-300" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-white truncate">Looking for a lab around you?</h4>
+              <p className="text-[10px] text-teal-200 truncate">Find nearby accredited labs in your city</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLocationSearchModal(true)}
+            className="px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            Search
+          </button>
         </div>
 
         {/* Card Container */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
           {errorMessage && (
             <div className="p-3.5 bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs rounded-xl flex items-center gap-2">
               <Shield className="w-4 h-4 text-rose-400 shrink-0" />
@@ -138,7 +170,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setShowLabSelector(!showLabSelector)}
-                className="w-full flex items-center justify-between p-3.5 bg-white/10 border border-white/20 rounded-2xl text-left text-sm text-white hover:bg-white/15 transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between p-3.5 bg-slate-800 border border-slate-700 rounded-2xl text-left text-sm text-white hover:bg-slate-750 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5 truncate">
                   {selectedLab?.logoUrl ? (
@@ -146,7 +178,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       src={selectedLab.logoUrl}
                       alt={selectedLab.name}
                       referrerPolicy="no-referrer"
-                      className="w-6 h-6 rounded-lg object-cover border border-white/20 shrink-0 bg-white"
+                      className="w-6 h-6 rounded-lg object-cover border border-slate-600 shrink-0 bg-white"
                     />
                   ) : (
                     <Building2 className="w-4 h-4 text-teal-400 shrink-0" />
@@ -182,7 +214,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           setSearchQuery('');
                         }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs text-left transition-colors cursor-pointer ${
-                          labId === l.id ? 'bg-teal-600/30 text-teal-300 font-semibold' : 'text-slate-300 hover:bg-slate-800'
+                          labId === l.id ? 'bg-teal-700/40 text-teal-200 font-semibold' : 'text-slate-300 hover:bg-slate-800'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 truncate">
@@ -199,8 +231,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                             </div>
                           )}
                           <div className="truncate">
-                            <div className="truncate font-semibold">{l.name}</div>
-                            <div className="text-[10px] text-slate-400 truncate">{l.location}</div>
+                            <div className="truncate font-semibold text-white">{l.name}</div>
+                            <div className="text-[10px] text-teal-300 truncate">
+                              {l.city ? `${l.city} • ` : ''}
+                              {l.address || l.location || 'Diagnostic Facility'}
+                            </div>
                           </div>
                         </div>
                         {labId === l.id && <CheckCircle className="w-4 h-4 text-teal-400 shrink-0" />}
@@ -217,7 +252,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   Access Code / Passcode / OTP
                 </label>
-                <span className="text-[10px] text-teal-300/80">Staff & Patients</span>
+                <span className="text-[10px] text-teal-300/90 font-medium">Staff & Patients</span>
               </div>
               <div className="relative">
                 <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -226,7 +261,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   placeholder="Enter access code or email OTP"
                   value={accessCode}
                   onChange={e => setAccessCode(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-slate-400 text-sm tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white placeholder-slate-400 text-sm tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                 />
               </div>
               <p className="text-[11px] text-slate-400 mt-1.5">
@@ -238,7 +273,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 px-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+              className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
             >
               {isLoading ? (
                 <>
@@ -255,7 +290,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </form>
 
           {/* Register Redirects & Center Creation */}
-          <div className="pt-4 border-t border-white/10 flex flex-col items-center gap-3">
+          <div className="pt-4 border-t border-slate-800 flex flex-col items-center gap-3">
             <button
               type="button"
               onClick={onNavigateRegister}
@@ -268,7 +303,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <button
               type="button"
               onClick={() => setShowRegisterLabModal(true)}
-              className="w-full py-2.5 px-3 rounded-2xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/40 text-teal-200 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="w-full py-2.5 px-3 rounded-2xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-teal-300 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <PlusCircle className="w-4 h-4 text-teal-400" />
               Register New Laboratory Facility / Clinic
@@ -278,7 +313,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <button
               type="button"
               onClick={() => setShowAboutModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-teal-300 font-semibold transition-colors cursor-pointer py-1 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-teal-300 font-semibold transition-colors cursor-pointer py-1 px-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60"
             >
               <Sparkles className="w-3.5 h-3.5 text-teal-400" />
               About nanoLabs & Founder Story
@@ -286,6 +321,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Location Search Modal */}
+      <LabLocationSearchModal
+        isOpen={showLocationSearchModal}
+        onClose={() => setShowLocationSearchModal(false)}
+        onSelectLab={(selLab) => {
+          setLabId(selLab.id);
+          setLabName(selLab.name);
+        }}
+      />
 
       {/* Self-Service Lab Registration Modal */}
       {showRegisterLabModal && (
@@ -301,7 +346,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       {/* ------------------------------------------------------------- */}
       {showAboutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700/80 text-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 my-8">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 my-8">
             <button
               onClick={() => setShowAboutModal(false)}
               className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
@@ -311,7 +356,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
             {/* Header */}
             <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-teal-500/20">
+              <div className="w-12 h-12 rounded-2xl bg-teal-700 flex items-center justify-center text-white shadow-md">
                 <Activity className="w-7 h-7 stroke-[2.5]" />
               </div>
               <div>
@@ -321,7 +366,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </div>
 
             {/* Founder Spotlight */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-950/80 via-slate-800/90 to-indigo-950/80 border border-teal-500/30 space-y-3">
+            <div className="p-5 rounded-2xl bg-slate-800 border border-slate-700 space-y-3">
               <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
                 <Award className="w-4 h-4" />
                 Visionary Founder & Lead Architect
@@ -329,7 +374,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="text-lg font-black text-white">Mangi Lerine Laslie Jr</h4>
-                  <p className="text-xs text-teal-200/90 font-medium">16-Year-Old Technologist & Healthcare Innovator</p>
+                  <p className="text-xs text-teal-200 font-medium">16-Year-Old Technologist & Healthcare Innovator</p>
                 </div>
                 <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-400/30 rounded-full text-[11px] font-bold self-start sm:self-auto">
                   Founder at Age 16
@@ -358,7 +403,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
-                  <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
+                  <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Shield className="w-4 h-4" />
                     Role-Isolated Portal Isolation
                   </div>
@@ -368,7 +413,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
-                  <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                  <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Cpu className="w-4 h-4" />
                     nanoLabs AI Report System
                   </div>

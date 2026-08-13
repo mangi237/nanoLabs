@@ -3,8 +3,9 @@ import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
 import { useTheme } from '../../context/themeContext';
 import { Lab } from '../../types';
-import { Search, MapPin, Users, ChevronRight, Activity, ArrowLeft, Loader2, Plus, Building2, ShieldCheck } from 'lucide-react';
+import { Search, MapPin, Users, ChevronRight, Activity, ArrowLeft, Loader2, Plus, Building2, Navigation } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
+import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
 
 interface LabSelectionScreenProps {
   onSelectLab?: (lab: Lab) => void;
@@ -18,6 +19,7 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
 
   useEffect(() => {
     fetchLabs();
@@ -37,29 +39,31 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
 
   const filteredLabs = labs.filter(lab =>
     lab.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lab.location?.toLowerCase().includes(searchQuery.toLowerCase())
+    lab.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (lab.city && lab.city.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (lab.address && lab.address.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-xl w-full mx-auto space-y-6">
         {/* Back button */}
         {onBack && (
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-teal-300 hover:text-white transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-teal-400 hover:text-white transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to previous page
           </button>
         )}
 
-        {/* Brand Header */}
+        {/* Brand Header - Clean Solid Design */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-blue-600 text-white shadow-lg shadow-teal-500/30 mb-2">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-teal-700 text-white shadow-md mb-2">
             <Activity className="w-8 h-8 stroke-[2.5]" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">
             nano<span className="text-teal-400">Labs</span> Health Network
           </h1>
           <p className="text-sm text-slate-300 max-w-sm mx-auto">
@@ -70,20 +74,40 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
           </p>
         </div>
 
-        {/* Register Facility CTA Card */}
-        <div className="p-4 bg-teal-500/10 border border-teal-400/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+        {/* LOOKING FOR A LAB AROUND YOU? LOCATION SEARCH BANNER */}
+        <div className="p-4 bg-slate-900 border-2 border-teal-500/60 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-teal-800 text-teal-200 flex items-center justify-center shrink-0">
+              <Navigation className="w-5 h-5 text-teal-300" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-white">Looking for a lab around you?</h4>
+              <p className="text-[11px] text-teal-200">Search diagnostic centers by city, town or GPS coordinates</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowLocationSearchModal(true)}
+            className="w-full sm:w-auto px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <MapPin className="w-4 h-4" />
+            Search By Location
+          </button>
+        </div>
+
+        {/* Register Facility CTA Card */}
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-800 text-teal-300 flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-bold text-white">Register a New Medical Facility</h4>
-              <p className="text-[11px] text-teal-200">Zero software fees • 500 XAF System Fee</p>
+              <p className="text-[11px] text-slate-400">Zero software fees • 500 XAF System Fee</p>
             </div>
           </div>
           <button
             onClick={() => setShowRegisterModal(true)}
-            className="w-full sm:w-auto px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             Register Facility
@@ -98,13 +122,13 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
             placeholder={t('search_lab')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-sm transition-all"
+            className="w-full pl-12 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm transition-all"
           />
         </div>
 
         {/* Labs List Container */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 text-teal-300 space-y-3">
+          <div className="flex flex-col items-center justify-center py-12 text-teal-400 space-y-3">
             <Loader2 className="w-8 h-8 animate-spin" />
             <span className="text-xs font-semibold">Loading Laboratory Centers...</span>
           </div>
@@ -114,7 +138,7 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
               <div
                 key={item.id}
                 onClick={() => onSelectLab && onSelectLab(item)}
-                className="group p-5 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 hover:border-teal-400/50 rounded-2xl cursor-pointer transition-all duration-200 flex items-center justify-between gap-4 shadow-sm"
+                className="group p-5 bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-teal-500/50 rounded-2xl cursor-pointer transition-all duration-200 flex items-center justify-between gap-4 shadow-sm"
               >
                 <div className="flex items-center gap-4 min-w-0">
                   {item.logoUrl ? (
@@ -122,12 +146,12 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
                       src={item.logoUrl}
                       alt={item.name}
                       referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0 bg-white"
+                      className="w-12 h-12 rounded-xl object-cover border border-slate-700 shadow-sm shrink-0 bg-white"
                     />
                   ) : (
                     <div
                       style={{ backgroundColor: item.primaryColor || '#0D9488' }}
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0"
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0"
                     >
                       <Activity className="w-6 h-6 text-white" />
                     </div>
@@ -136,10 +160,16 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
                     <h3 className="font-bold text-white text-base group-hover:text-teal-300 transition-colors truncate">
                       {item.name}
                     </h3>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-300 truncate">
+
+                    {/* City & Physical Address */}
+                    <div className="flex items-center gap-1.5 text-xs text-teal-300 font-medium truncate">
                       <MapPin className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                      <span className="truncate">{item.location}</span>
+                      <span className="truncate">
+                        {item.city ? `${item.city} • ` : ''}
+                        {item.address || item.location || 'Diagnostic Center'}
+                      </span>
                     </div>
+
                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                       <Users className="w-3 h-3 text-slate-400 shrink-0" />
                       <span>{item.patientCount || 0} active patient profiles</span>
@@ -152,7 +182,7 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
             ))}
 
             {filteredLabs.length === 0 && (
-              <div className="p-10 text-center bg-white/5 rounded-2xl border border-white/10 space-y-2">
+              <div className="p-10 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-2">
                 <p className="text-sm font-semibold text-slate-300">{t('no_labs_found')}</p>
                 <p className="text-xs text-slate-400">{t('try_different_search')}</p>
               </div>
@@ -160,6 +190,15 @@ export const LabSelectionScreen: React.FC<LabSelectionScreenProps> = ({ onSelect
           </div>
         )}
       </div>
+
+      {/* Location Search Modal */}
+      <LabLocationSearchModal
+        isOpen={showLocationSearchModal}
+        onClose={() => setShowLocationSearchModal(false)}
+        onSelectLab={(selectedLab) => {
+          if (onSelectLab) onSelectLab(selectedLab);
+        }}
+      />
 
       {/* Facility Registration Modal */}
       <LabRegistrationModal

@@ -33,6 +33,7 @@ export interface Lab {
   id: string;
   name: string;
   location: string;
+  city?: string;
   slogan?: string;
   address?: string;
   phone?: string;
