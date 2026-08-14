@@ -1,28 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { useLanguage } from '../../context/languageContext';
 import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
+import { limsService, PatientBooking } from '../../services/limsService';
+import { MASTER_TESTS_CATALOG, MasterTestItem } from '../../data/masterTestsData';
+import { CreateMasterTestModal } from '../../components/common/CreateMasterTestModal';
 import { 
   Search, 
   UserPlus, 
   TestTube, 
   CheckCircle2, 
   Clock, 
-  Phone, 
-  Mail, 
-  ArrowLeft, 
   Plus, 
   AlertCircle,
-  Filter,
-  Check,
+  FileText,
   DollarSign,
   UserCheck,
   ShieldCheck,
-  CreditCard,
   Building2,
   FlaskConical,
-  Users
+  Users,
+  Check,
+  ChevronRight,
+  Filter,
+  Calendar,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
 interface ReceptionistViewProps {
@@ -35,21 +38,29 @@ interface ReceptionistViewProps {
 }
 
 export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
-  onBack,
-  onNavigateRegister,
   onNotificationPress,
-  onProfilePress,
-  onRoleSwitcherPress,
   onNavigatePatientDetails
 }) => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
 
   const [patients, setPatients] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<PatientBooking[]>([]);
+  const [masterCatalog, setMasterCatalog] = useState<MasterTestItem[]>(MASTER_TESTS_CATALOG);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'all'>('pending');
-  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // New Booking Modal State
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedMasterTestIds, setSelectedMasterTestIds] = useState<string[]>([]);
+  const [doctorName, setDoctorName] = useState('Dr. Hiren Shah');
+  const [sampleLocation, setSampleLocation] = useState('Central Diagnostics Hub');
+  const [testSearch, setTestSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -58,377 +69,381 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Fetch patients
       const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const allPatients: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setPatients(allPatients);
 
-      // A patient must ONLY appear on the receptionist's dashboard if they have actively requested a test
-      const patientsWithTests = allPatients.filter(p => Array.isArray(p.labTests) && p.labTests.length > 0);
-      setPatients(patientsWithTests);
+      // Fetch bookings
+      const allBookings = await limsService.fetchAllBookings(targetLabId);
+      setBookings(allBookings);
+
+      // Fetch master test catalog
+      const cat = await limsService.getMasterTestCatalog(targetLabId);
+      setMasterCatalog(cat);
     } catch (e) {
       console.error('Error fetching receptionist data:', e);
-    } finally {
+    } fontally: {
       setLoading(false);
     }
   };
 
-  // Receptionist strictly confirms the patient came to the hospital / check-in complete
-  const handleConfirmPatientArrival = async (patientId: string, testId: string) => {
-    setProcessingId(testId);
+  const categories = ['All', 'Hematology', 'Biochemistry', 'Microbiology', 'Serology / Immunology', 'Hormones & Tumor Markers', 'Urinalysis & Parasitology'];
+
+  const filteredMasterTests = masterCatalog.filter(t => {
+    const matchesCat = selectedCategory === 'All' || t.category === selectedCategory;
+    const matchesSearch = t.name.toLowerCase().includes(testSearch.toLowerCase()) || (t.code && t.code.toLowerCase().includes(testSearch.toLowerCase()));
+    return matchesCat && matchesSearch;
+  });
+
+  const toggleTestSelection = (testId: string) => {
+    if (selectedMasterTestIds.includes(testId)) {
+      setSelectedMasterTestIds(selectedMasterTestIds.filter(id => id !== testId));
+    } else {
+      setSelectedMasterTestIds([...selectedMasterTestIds, testId]);
+    }
+  };
+
+  const handleCreateNewBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatientId) {
+      alert('Please select a patient for this daily booking booklet.');
+      return;
+    }
+    if (selectedMasterTestIds.length === 0) {
+      alert('Please select at least one lab test to append to the patient booklet.');
+      return;
+    }
+
+    const patient = patients.find(p => p.id === selectedPatientId);
+    if (!patient) return;
+
+    setIsCreatingBooking(true);
     try {
-      const patient = patients.find(p => p.id === patientId);
-      if (patient && patient.labTests) {
-        const updatedTests = patient.labTests.map((t: any) => {
-          if (t.id === testId) {
-            return {
-              ...t,
-              confirmedByReceptionist: true,
-              status: t.status === 'requested' ? 'confirmed' : t.status,
-              confirmedAt: new Date().toISOString(),
-              confirmedBy: user?.name || 'Receptionist Desk'
-            };
-          }
-          return t;
-        });
+      await limsService.createBooking({
+        labId: targetLabId,
+        patientId: patient.id,
+        patientName: patient.name,
+        patientAge: patient.age || 30,
+        patientGender: patient.gender as any || 'Male',
+        patientPhone: patient.phone,
+        patientEmail: patient.email,
+        patientPid: patient.patientId || patient.id,
+        doctorName,
+        sampleCollectedAt: sampleLocation,
+        selectedMasterTestIds,
+        creatorName: user?.name || 'Receptionist Desk'
+      });
 
-        await updateDoc(doc(db, 'labs', targetLabId, 'patients', patientId), {
-          labTests: updatedTests,
-          status: 'active',
-          updatedAt: new Date().toISOString()
-        });
-
-        await fetchData();
-      }
+      setShowBookingModal(false);
+      setSelectedMasterTestIds([]);
+      await fetchData();
     } catch (e) {
-      console.error('Error confirming patient arrival:', e);
+      console.error('Error creating booking:', e);
     } finally {
-      setProcessingId(null);
+      setIsCreatingBooking(false);
     }
   };
 
-  // Flatten all test items with parent patient info
-  const allTestItems = patients.flatMap(p => 
-    (p.labTests || []).map((t: any) => ({
-      ...t,
-      patientId: p.id,
-      patientName: p.name,
-      patientCode: p.patientId || p.id,
-      patientPhone: p.phone,
-      patientAvatar: p.avatarUrl
-    }))
+  const filteredBookings = bookings.filter(b => 
+    b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const pendingConfirmationTests = allTestItems.filter(t => !t.confirmedByReceptionist && t.status !== 'completed');
-  const confirmedTests = allTestItems.filter(t => t.confirmedByReceptionist);
-
-  const getActiveList = () => {
-    if (activeTab === 'pending') return pendingConfirmationTests;
-    if (activeTab === 'confirmed') return confirmedTests;
-    return allTestItems;
-  };
-
-  const filteredTests = getActiveList().filter(t =>
-    (t.testName || t.name || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.patientName || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.patientCode || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.patientPhone || '')?.includes(searchQuery)
-  );
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'PT';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="space-y-6">
       <Header
         title="Reception & Patient Intake Desk"
-        subtitle="Verify patient hospital arrival, confirm check-in & route to Cashier"
+        subtitle="Step 1: Patient registration, multi-test daily booklet creation & unpaid invoice generation"
         onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-        )}
-
-        {/* Branded Lab Gradient Banner */}
-        <div 
-          style={{
-            background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
-          }}
-          className="rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6"
-        >
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold text-white/90 border border-white/20">
-              <Users className="w-3.5 h-3.5" />
-              Patient Reception & Arrival Intake Desk
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              {lab?.name || 'nanoLabs Health Center'}
-            </h2>
-            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-              Confirm patient presence when they arrive at the hospital. Checked-in patients proceed to Cashier for payment validation.
-            </p>
-          </div>
-
-          {/* Big Circled Logo at right side */}
-          <div className="shrink-0 self-center sm:self-auto">
-            {lab?.logoUrl ? (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
-                <img
-                  src={lab.logoUrl}
-                  alt={lab.name || 'Lab Logo'}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full rounded-full object-cover bg-white"
-                />
-              </div>
-            ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md shadow-2xl flex items-center justify-center text-white">
-                <Users className="w-10 h-10 stroke-[2.5]" />
-              </div>
-            )}
-          </div>
+      {/* Top Banner Actions */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+            <Users className="w-5 h-5 text-teal-600" />
+            Patient Daily Booklet / Booking Management
+          </h2>
+          <p className="text-xs text-slate-500">
+            Append multiple requested tests under a unique Booking ID and forward invoice to Cashier.
+          </p>
         </div>
 
-        {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-slate-900">Reception Check-in Control Desk</h2>
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-                {lab?.name || 'Active Lab'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Confirm patient presence upon clinic arrival to queue them for cashier billing.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {onNavigateRegister && (
-              <button
-                onClick={onNavigateRegister}
-                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
-              >
-                <UserPlus className="w-4 h-4" />
-                Register Walk-in Patient
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Tab Selection */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setActiveTab('pending')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'pending'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
+            onClick={() => setShowCreateTestModal(true)}
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-slate-300"
           >
-            <AlertCircle className="w-3.5 h-3.5" />
-            Pending Arrival Check-In ({pendingConfirmationTests.length})
+            <FlaskConical className="w-4 h-4 text-teal-600" />
+            + New Master Test Definition
           </button>
 
           <button
-            onClick={() => setActiveTab('confirmed')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'confirmed'
-                ? 'bg-teal-600 text-white shadow-md'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
+            onClick={() => setShowBookingModal(true)}
+            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-2 shadow-md transition-all cursor-pointer"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Checked-In Patients ({confirmedTests.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-slate-800 text-white shadow-md'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            All Active Test Orders ({allTestItems.length})
+            <Plus className="w-4 h-4" />
+            + Create New Patient Booking Order
           </button>
         </div>
+      </div>
 
-        {/* Search Filter */}
+      {/* Search & Filter Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Search test orders by patient name, patient code, test title or phone..."
+            placeholder="Search patient name, Booking ID (BK-...), or Invoice code..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
+      </div>
 
-        {/* Test Orders List */}
-        <div className="space-y-3">
-          {filteredTests.map((testItem: any) => {
-            const isConfirmed = testItem.confirmedByReceptionist === true;
-            const isPaid = testItem.paid === true || testItem.paymentStatus === 'paid';
-            const isCollected = testItem.sampleCollected === true;
-            const isCompleted = testItem.status === 'completed';
-            const price = testItem.price || 5000;
-            const turnaround = testItem.turnaroundTime || testItem.expectedTime || '24 Hours';
+      {/* Bookings Queue Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-teal-600" />
+            Daily Bookings Queue ({filteredBookings.length})
+          </h3>
+          <span className="text-xs text-slate-500">Status: Reception Intake</span>
+        </div>
 
-            return (
-              <div
-                key={`${testItem.patientId}-${testItem.id}`}
-                className={`bg-white rounded-2xl p-5 border transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                  !isConfirmed ? 'border-amber-200 bg-amber-50/20' : 'border-slate-200/80'
-                }`}
-              >
-                {/* Patient & Test Info */}
-                <div className="flex items-start gap-4 min-w-0">
-                  {testItem.patientAvatar ? (
-                    <img
-                      src={testItem.patientAvatar}
-                      alt={testItem.patientName}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-2xl object-cover border border-teal-200 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-extrabold text-sm shrink-0 shadow-xs">
-                      {getInitials(testItem.patientName)}
-                    </div>
-                  )}
+        {loading ? (
+          <div className="p-8 text-center text-xs text-slate-500">Loading daily bookings...</div>
+        ) : filteredBookings.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-500 space-y-2">
+            <p className="font-semibold text-slate-700">No active bookings found for today.</p>
+            <p>Click <span className="font-bold text-teal-600">"+ Create New Patient Booking Order"</span> above to register patient tests.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filteredBookings.map((booking) => (
+              <div key={booking.id} className="p-4 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm text-slate-900 truncate">
+                      {booking.patientName}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                      {booking.bookingCode}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      booking.paymentStatus === 'paid' 
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}>
+                      {booking.paymentStatus === 'paid' ? 'PAID' : 'Pending Payment'}
+                    </span>
+                  </div>
 
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-900 text-base leading-tight">
-                        {testItem.testName || testItem.name}
-                      </h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-700 uppercase border border-teal-200">
-                        {testItem.category || 'Diagnostic'}
+                  <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
+                    <span>Invoice: <strong className="font-mono text-slate-700">{booking.invoiceNumber}</strong></span>
+                    <span>Ref Doctor: <strong>{booking.doctorName || 'Dr. Hiren Shah'}</strong></span>
+                    <span>Tests Requested: <strong className="text-teal-700 font-bold">{booking.tests.length} tests</strong></span>
+                    <span>Total Amount: <strong className="text-emerald-700 font-bold">{booking.totalAmount.toLocaleString()} XAF</strong></span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {booking.tests.map(t => (
+                      <span key={t.id} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-medium border border-slate-200">
+                        {t.testName}
                       </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
-                      <span className="font-semibold text-slate-800">
-                        Patient: {testItem.patientName} ({testItem.patientCode})
-                      </span>
-                      <span>•</span>
-                      <span>Phone: {testItem.patientPhone || 'N/A'}</span>
-                      <span>•</span>
-                      <span className="font-bold text-emerald-700">
-                        Fee: {price.toLocaleString()} FCFA
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 text-slate-500">
-                        <Clock className="w-3 h-3 text-teal-600" />
-                        Turnaround: {turnaround}
-                      </span>
-                    </div>
-
-                    {/* Next step guidance */}
-                    <div className="text-[11px] pt-1">
-                      {!isConfirmed ? (
-                        <span className="text-amber-800 font-semibold flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                          Patient requested test online. Awaiting patient arrival confirmation.
-                        </span>
-                      ) : !isPaid ? (
-                        <span className="text-blue-800 font-semibold flex items-center gap-1">
-                          <CreditCard className="w-3.5 h-3.5 text-blue-600" />
-                          Checked In: Patient is at Cashier counter to validate payment.
-                        </span>
-                      ) : !isCollected ? (
-                        <span className="text-teal-800 font-semibold flex items-center gap-1">
-                          <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
-                          Payment Settled: Patient is at Analyzer station for specimen collection.
-                        </span>
-                      ) : !isCompleted ? (
-                        <span className="text-indigo-800 font-semibold flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                          Specimen in Laboratory: Testing currently underway by Lab Technologist.
-                        </span>
-                      ) : (
-                        <span className="text-emerald-800 font-semibold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Diagnostic Results Completed: Verified and published.
-                        </span>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Actions & Status */}
-                <div className="flex items-center gap-2.5 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 flex-wrap justify-end">
-                  {!isConfirmed ? (
-                    <button
-                      onClick={() => handleConfirmPatientArrival(testItem.patientId, testItem.id)}
-                      disabled={processingId === testItem.id}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-600/20 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      {processingId === testItem.id ? 'Checking In...' : 'Confirm Patient Arrival (Check In)'}
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        Check-in Confirmed
-                      </span>
-
-                      {isPaid ? (
-                        <span className="flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-800 text-[11px] font-bold rounded-lg border border-teal-200">
-                          <Check className="w-3 h-3 text-teal-600" />
-                          Paid at Cashier
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200">
-                          <Clock className="w-3 h-3 text-amber-600" />
-                          Sent to Cashier
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {onNavigatePatientDetails && (
-                    <button
-                      onClick={() => onNavigatePatientDetails(testItem.patientId)}
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                    >
-                      View Patient File
-                    </button>
-                  )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => onNavigatePatientDetails?.(booking.patientId)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    View Patient
+                  </button>
+                  <span className="text-[11px] text-amber-700 font-bold bg-amber-50 px-3 py-2 rounded-xl border border-amber-200">
+                    Forwarded to Cashier
+                  </span>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </div>
 
-          {filteredTests.length === 0 && !loading && (
-            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 space-y-2">
-              <TestTube className="w-10 h-10 mx-auto text-slate-300" />
-              <p className="text-sm font-semibold text-slate-700">
-                {activeTab === 'pending' ? 'No pending test requests awaiting arrival check-in' : 'No test records matching current view'}
-              </p>
-              <p className="text-xs text-slate-400">
-                Patients will automatically appear here once they request or book laboratory tests.
-              </p>
+      {/* CREATE NEW BOOKING MODAL */}
+      {showBookingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-3xl w-full p-6 space-y-5 shadow-2xl relative my-auto max-h-[90vh] flex flex-col">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-700 text-white flex items-center justify-center shadow-md">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Create Patient Daily Booking Booklet</h3>
+                  <p className="text-xs text-teal-300">Select patient & append requested tests for daily invoice</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBookingModal(false)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-          )}
+
+            <form onSubmit={handleCreateNewBooking} className="overflow-y-auto space-y-4 text-xs pr-1 flex-1">
+              
+              {/* Step 1: Select Patient */}
+              <div className="space-y-1.5">
+                <label className="block text-slate-300 font-bold">1. Select Patient *</label>
+                <select
+                  value={selectedPatientId}
+                  onChange={e => setSelectedPatientId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">-- Choose Registered Patient --</option>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.gender || 'M'}, {p.age || 28} Yrs) • PID: {p.patientId || p.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2: Doctor & Sample Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Referring Physician / Doctor</label>
+                  <input
+                    type="text"
+                    value={doctorName}
+                    onChange={e => setDoctorName(e.target.value)}
+                    className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Sample Collection Location</label>
+                  <input
+                    type="text"
+                    value={sampleLocation}
+                    onChange={e => setSampleLocation(e.target.value)}
+                    className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Step 3: Append Tests from Master Catalog (~80 Tests) */}
+              <div className="p-3 bg-slate-800/80 border border-slate-700 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h4 className="font-extrabold text-teal-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <FlaskConical className="w-4 h-4 text-teal-400" />
+                    2. Append Laboratory Tests (~80 Master Catalog)
+                  </h4>
+                  <span className="text-xs font-bold text-white bg-teal-800 px-2.5 py-1 rounded-lg">
+                    Selected: {selectedMasterTestIds.length} tests
+                  </span>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search test name or code..."
+                    value={testSearch}
+                    onChange={e => setTestSearch(e.target.value)}
+                    className="p-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                  <select
+                    value={selectedCategory}
+                    onChange={e => setSelectedCategory(e.target.value)}
+                    className="p-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  >
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                {/* Tests Checklist */}
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-700/60 rounded-xl border border-slate-700 bg-slate-900 p-2 space-y-1">
+                  {filteredMasterTests.map((t) => {
+                    const isChecked = selectedMasterTestIds.includes(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => toggleTestSelection(t.id)}
+                        className={`p-2.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                          isChecked ? 'bg-teal-900/60 border border-teal-500/50 text-white font-bold' : 'hover:bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                            isChecked ? 'bg-teal-500 border-teal-400 text-slate-950' : 'border-slate-600'
+                          }`}>
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold">{t.name} <span className="text-[10px] text-teal-300 font-mono">({t.code})</span></div>
+                            <div className="text-[10px] text-slate-400 truncate">{t.sampleType} • {t.category}</div>
+                          </div>
+                        </div>
+
+                        <span className="font-mono font-bold text-teal-300 shrink-0 ml-2">
+                          {t.basePrice.toLocaleString()} XAF
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Total Summary */}
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-400">Total Unpaid Invoice Amount:</span>
+                <span className="text-base text-emerald-400 font-mono font-black">
+                  {selectedMasterTestIds.reduce((sum, id) => {
+                    const found = masterCatalog.find(m => m.id === id);
+                    return sum + (found?.basePrice || 0);
+                  }, 0).toLocaleString()} XAF
+                </span>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBookingModal(false)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingBooking}
+                  className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  {isCreatingBooking ? 'Creating Booking...' : 'Generate Unpaid Order & Send to Cashier'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
         </div>
-      </main>
+      )}
+
+      {/* CREATE MASTER TEST DEFINITION MODAL */}
+      <CreateMasterTestModal
+        isOpen={showCreateTestModal}
+        onClose={() => setShowCreateTestModal(false)}
+        labId={targetLabId}
+        onSuccess={fetchData}
+      />
+
     </div>
   );
 };
