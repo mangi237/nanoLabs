@@ -715,7 +715,7 @@ export const limsService = {
       });
       return true;
     } catch (e) {
-      console.error('Error saving master test definition:', e);
+      console.error('Error saving master test definitions :', e);
     }
     return false;
   },
