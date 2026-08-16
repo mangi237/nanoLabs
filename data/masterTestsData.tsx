@@ -35,10 +35,12 @@ export interface TestSubParameter {
       reagentName: string;
       quantityRequired: number; // e.g. 1 mL or 1 test unit
     }>;
-    conditions: string; // Patient preparation & reasons for withdrawal / test rules
+    conditions?: string; // Patient preparation & reasons for withdrawal / test rules
     basePrice: number; // Price in XAF / FCFA
     turnaroundTime: string;
     description: string;
+    tubeColor?: string;
+    requiredReagents?: any[];
     subParameters?: TestSubParameter[];
   }
   

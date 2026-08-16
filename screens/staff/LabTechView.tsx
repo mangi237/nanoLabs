@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
+import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
-import { limsService, PatientBooking, BookingTestItem } from '../../services/limsService';
+import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '../../services/limsService';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
   TestTube, 
@@ -25,7 +26,12 @@ import {
   Sparkles,
   ChevronRight,
   ArrowRight,
-  BookOpen
+  BookOpen,
+  PlusCircle,
+  X,
+  Database,
+  Tag,
+  Clock
 } from 'lucide-react';
 
 interface LabTechViewProps {
@@ -34,7 +40,11 @@ interface LabTechViewProps {
   onRoleSwitcherPress?: () => void;
 }
 
-export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress }) => {
+export const LabTechView: React.FC<LabTechViewProps> = ({
+  onNotificationPress,
+  onProfilePress,
+  onRoleSwitcherPress
+}) => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
 
@@ -71,6 +81,43 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
   const [isTriggeringPickup, setIsTriggeringPickup] = useState(false);
   const [pickupSuccessMsg, setPickupSuccessMsg] = useState('');
 
+  // CREATE NEW DIAGNOSTIC TEST DEFINITION STATE
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false);
+  const [isSavingNewTest, setIsSavingNewTest] = useState(false);
+  const [newTestForm, setNewTestForm] = useState<{
+    name: string;
+    code: string;
+    category: string;
+    sampleType: string;
+    tubeType: string;
+    basePrice: number;
+    turnaroundTime: string;
+    units: string;
+    refRangeMale: string;
+    refRangeFemale: string;
+    refRangeChild: string;
+    reagentName: string;
+    reagentQty: string;
+    description: string;
+    subParams: Array<{ name: string; unit: string; refRange: string }>;
+  }>({
+    name: '',
+    code: '',
+    category: 'Biochemistry',
+    sampleType: 'Venous Blood (Serum)',
+    tubeType: 'Gold Top (SST Tube)',
+    basePrice: 7500,
+    turnaroundTime: '2 Hours',
+    units: 'mg/dL',
+    refRangeMale: '',
+    refRangeFemale: '',
+    refRangeChild: '',
+    reagentName: '',
+    reagentQty: '1 Test Reagent Unit',
+    description: '',
+    subParams: []
+  });
+
   useEffect(() => {
     fetchData();
   }, [targetLabId]);
@@ -92,6 +139,73 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
       console.error('Error fetching lab tech queue:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateNewTestDefinition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTestForm.name.trim() || !newTestForm.code.trim()) {
+      alert('Please provide at least a Test Name and Test Code.');
+      return;
+    }
+
+    setIsSavingNewTest(true);
+    try {
+      const newMasterTest: MasterTestItem = {
+        id: `master-${Date.now()}-${newTestForm.code.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        code: newTestForm.code.trim().toUpperCase(),
+        name: newTestForm.name.trim(),
+        category: newTestForm.category as any,
+        sampleType: newTestForm.sampleType,
+        units: newTestForm.units || 'U/L',
+        refRangeMale: newTestForm.refRangeMale || 'Normal',
+        refRangeFemale: newTestForm.refRangeFemale || 'Normal',
+        refRangeChild: newTestForm.refRangeChild || 'Normal',
+        basePrice: Number(newTestForm.basePrice) || 5000,
+        turnaroundTime: newTestForm.turnaroundTime || '2 Hours',
+        tubeColor: newTestForm.tubeType,
+        description: newTestForm.description || `${newTestForm.name} diagnostic test profile.`,
+        requiredReagents: newTestForm.reagentName.trim() ? [{
+          reagentId: `rgt-${Date.now()}`,
+          reagentName: newTestForm.reagentName.trim(),
+          quantityPerTest: 1,
+          unit: newTestForm.reagentQty || 'mL'
+        }] : undefined,
+        subParameters: newTestForm.subParams.length > 0 ? newTestForm.subParams.map((sp, idx) => ({
+          id: `sp-${idx}-${Date.now()}`,
+          name: sp.name,
+          unit: sp.unit,
+          refRangeMale: sp.refRange,
+          refRangeFemale: sp.refRange,
+          refRangeChild: sp.refRange
+        })) : undefined
+      };
+
+      await limsService.saveMasterTestDefinition(targetLabId, newMasterTest);
+      alert(`✅ Diagnostic Test "${newTestForm.name}" successfully created and added to the LIMS Master Catalog!`);
+      setShowCreateTestModal(false);
+      setNewTestForm({
+        name: '',
+        code: '',
+        category: 'Biochemistry',
+        sampleType: 'Venous Blood (Serum)',
+        tubeType: 'Gold Top (SST Tube)',
+        basePrice: 7500,
+        turnaroundTime: '2 Hours',
+        units: 'mg/dL',
+        refRangeMale: '',
+        refRangeFemale: '',
+        refRangeChild: '',
+        reagentName: '',
+        reagentQty: '1 Test Reagent Unit',
+        description: '',
+        subParams: []
+      });
+    } catch (err) {
+      console.error('Error creating new test:', err);
+      alert('Failed to save new test definition. Please try again.');
+    } finally {
+      setIsSavingNewTest(false);
     }
   };
 
@@ -273,26 +387,63 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
   return (
     <div className="space-y-6">
       <Header
-        title="Laboratory Technician Portal (The 3-Option Module)"
+        title="Laboratory Technician Workstation"
         subtitle="Step 4: Assigned security locking, digital form filling with reference ranges, PDF upload & physical pickup SMS alerts"
+        onNotificationPress={onNotificationPress}
+        onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      {/* Top Banner Notice */}
-      <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center justify-center shrink-0 font-bold">
-            <TestTube className="w-6 h-6" />
+      {/* Staff Hero Banner */}
+      <StaffHeroBanner
+        workstationNumber="Workstation 04"
+        workstationTitle="Clinical Laboratory Technologist Desk"
+        description="Process incoming specimens, input diagnostic parameters, calculate reference range flags, upload external PDF certificates, and trigger instant SMS pickup alerts."
+        gradientFrom="from-blue-950"
+        gradientVia="from-slate-900"
+        gradientTo="to-indigo-950"
+        borderColor="border-blue-800"
+        badgeBg="bg-blue-400 text-slate-950"
+        rightBadge={
+          <div className="text-right bg-blue-950/80 p-4 rounded-2xl border border-blue-700/60 shadow-md">
+            <div className="text-[10px] uppercase font-bold text-blue-300 tracking-wider">Pending Analytical Processing</div>
+            <div className="text-2xl font-black text-blue-300 font-mono mt-0.5">{inLabTestingQueue.length} Booklets</div>
           </div>
+        }
+      />
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-sm text-white">LIMS 3-Option Processing Engine</h3>
-            <p className="text-xs text-slate-300">
-              Option 1: Native Form Filling (Auto-Deducts Inventory) • Option 2: External PDF Upload • Option 3: Physical Pickup SMS Alert
-            </p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Testing Queue</p>
+            <h3 className="text-2xl font-black text-blue-700 mt-1">{inLabTestingQueue.length}</h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
+            <TestTube className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="text-right text-xs shrink-0 font-mono font-bold text-blue-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-          Samples Ready for Testing: {inLabTestingQueue.length}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed Reports Published</p>
+            <h3 className="text-2xl font-black text-emerald-700 mt-1">
+              {bookings.filter(b => b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup').length}
+            </h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">LIMS Processing Engine</p>
+            <h3 className="text-xs font-black text-slate-900 mt-1 uppercase">3-Option Dual Engine Active</h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+            <FlaskConical className="w-6 h-6" />
+          </div>
         </div>
       </div>
 
@@ -300,9 +451,9 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
       {!activeBooking ? (
         <div className="space-y-4">
           
-          {/* Search Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative">
+          {/* Search Bar & Create Test Action */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 type="text"
@@ -312,6 +463,14 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            
+            <button
+              onClick={() => setShowCreateTestModal(true)}
+              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>+ Create Diagnostic Test Definition</span>
+            </button>
           </div>
 
           {/* Queue Table */}
@@ -921,6 +1080,258 @@ export const LabTechView: React.FC<LabTechViewProps> = ({ onNotificationPress })
         booking={activeBooking}
         labInfo={lab}
       />
+
+      {/* CREATE NEW DIAGNOSTIC TEST DEFINITION MODAL */}
+      {showCreateTestModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in duration-150">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-600 rounded-xl text-white">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Create New Diagnostic Test Definition</h3>
+                  <p className="text-xs text-slate-400">Add a diagnostic profile to LIMS Master Catalog with reference ranges and specimen rules</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateTestModal(false)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewTestDefinition} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Basic Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Test Name * <span className="text-slate-400 font-normal">(e.g. Creatinine Serum)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Full Clinical Test Name"
+                    value={newTestForm.name}
+                    onChange={e => setNewTestForm({ ...newTestForm, name: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Test Code * <span className="text-slate-400 font-normal">(e.g. CREAT-01)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Unique Code"
+                    value={newTestForm.code}
+                    onChange={e => setNewTestForm({ ...newTestForm, code: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Category and Sample Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Clinical Department / Category *</label>
+                  <select
+                    value={newTestForm.category}
+                    onChange={e => setNewTestForm({ ...newTestForm, category: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  >
+                    <option value="Biochemistry">Biochemistry / Clinical Chemistry</option>
+                    <option value="Haematology">Haematology & Coagulation</option>
+                    <option value="Immunology">Immunology & Serology</option>
+                    <option value="Microbiology">Microbiology & Bacteriology</option>
+                    <option value="Parasitology">Parasitology & Stool Analysis</option>
+                    <option value="Endocrinology">Endocrinology & Hormones</option>
+                    <option value="Molecular Diagnostics">Molecular Diagnostics / PCR</option>
+                    <option value="Toxicology">Toxicology & Drug Screening</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Sample / Specimen Required *</label>
+                  <select
+                    value={newTestForm.sampleType}
+                    onChange={e => setNewTestForm({ ...newTestForm, sampleType: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  >
+                    <option value="Venous Blood (Serum)">Venous Blood (Serum)</option>
+                    <option value="Venous Blood (EDTA Whole Blood)">Venous Blood (EDTA Whole Blood)</option>
+                    <option value="Citrated Plasma">Citrated Plasma</option>
+                    <option value="Midstream Urine">Midstream Urine</option>
+                    <option value="Stool Specimen">Stool Specimen</option>
+                    <option value="Nasopharyngeal Swab">Nasopharyngeal Swab</option>
+                    <option value="Cerebrospinal Fluid (CSF)">Cerebrospinal Fluid (CSF)</option>
+                    <option value="Sputum Specimen">Sputum Specimen</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tube Type, Price & Turnaround */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Specimen Tube Container</label>
+                  <select
+                    value={newTestForm.tubeType}
+                    onChange={e => setNewTestForm({ ...newTestForm, tubeType: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  >
+                    <option value="Gold Top (SST Tube)">Gold Top (SST Tube)</option>
+                    <option value="Purple Top (EDTA Tube)">Purple Top (EDTA Tube)</option>
+                    <option value="Light Blue (Sodium Citrate)">Light Blue (Sodium Citrate)</option>
+                    <option value="Red Top (Plain Tube)">Red Top (Plain Tube)</option>
+                    <option value="Grey Top (Fluoride Oxalate)">Grey Top (Fluoride Oxalate)</option>
+                    <option value="Sterile Specimen Container">Sterile Specimen Container</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Base Price (FCFA / XAF) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    required
+                    value={newTestForm.basePrice}
+                    onChange={e => setNewTestForm({ ...newTestForm, basePrice: Number(e.target.value) })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Turnaround Time</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2 Hours, 24 Hours"
+                    value={newTestForm.turnaroundTime}
+                    onChange={e => setNewTestForm({ ...newTestForm, turnaroundTime: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Reference Ranges and Units */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-blue-600" />
+                    Standard Reference Ranges & Units
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 font-bold">Unit:</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. mg/dL, %"
+                      value={newTestForm.units}
+                      onChange={e => setNewTestForm({ ...newTestForm, units: e.target.value })}
+                      className="w-24 p-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-center"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Male Normal Range</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0.7 - 1.3"
+                      value={newTestForm.refRangeMale}
+                      onChange={e => setNewTestForm({ ...newTestForm, refRangeMale: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Female Normal Range</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0.5 - 1.1"
+                      value={newTestForm.refRangeFemale}
+                      onChange={e => setNewTestForm({ ...newTestForm, refRangeFemale: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Child Normal Range</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0.3 - 0.7"
+                      value={newTestForm.refRangeChild}
+                      onChange={e => setNewTestForm({ ...newTestForm, refRangeChild: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Reagents & Inventory Link */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Required Reagent Name <span className="text-slate-400 font-normal">(Auto-deducted on test)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Creatinine Kinetic Reagent"
+                    value={newTestForm.reagentName}
+                    onChange={e => setNewTestForm({ ...newTestForm, reagentName: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Reagent Quantity Per Run</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1.0 mL / Test"
+                    value={newTestForm.reagentQty}
+                    onChange={e => setNewTestForm({ ...newTestForm, reagentQty: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Clinical Description */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Clinical Indications & Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Diagnostic purpose, patient preparation notes, fasting requirements..."
+                  value={newTestForm.description}
+                  onChange={e => setNewTestForm({ ...newTestForm, description: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTestModal(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingNewTest}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>{isSavingNewTest ? 'Saving to Master Catalog...' : 'Save & Publish Test Definition'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

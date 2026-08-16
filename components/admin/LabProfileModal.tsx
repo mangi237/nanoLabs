@@ -32,10 +32,15 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
   onClose,
   onSaved
 }) => {
-  const { lab, setLab } = useAuth();
+  const { lab, setLab, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Check if current user is admin
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [user?.role || 'admin'];
+  const isAdmin = userRoles.includes('admin') || userRoles.includes('superadmin') || user?.role === 'admin';
 
   const [formData, setFormData] = useState({
     name: lab?.name || '',
@@ -53,9 +58,59 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
 
   if (!isOpen) return null;
 
+  const optimizeImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDimension = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const optimizedDataUrl = canvas.toDataURL('image/png', 0.9);
+          resolve(optimizedDataUrl);
+        } else {
+          resolve(img.src);
+        }
+      };
+
+      img.onerror = () => reject(new Error('Failed to load image file'));
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!isAdmin) {
+      alert('Access Denied: Only Laboratory Administrators can upload or modify the facility logo.');
+      return;
+    }
 
     if (!file.type.startsWith('image/')) {
       alert('Please select a valid image file (PNG, JPG, SVG, WebP).');
@@ -63,27 +118,45 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
     }
 
     setUploadingLogo(true);
+    setErrorMessage('');
+
     try {
-      const res = await uploadService.uploadFile(file);
-      if (res.success && res.fileUrl) {
-        setFormData(prev => ({ ...prev, logoUrl: res.fileUrl! }));
-      } else {
-        alert('Could not upload logo. Please try another image.');
-      }
+      // First try optimized direct representation to ensure 100% instant reliability
+      const optimizedUrl = await optimizeImage(file);
+      setFormData(prev => ({ ...prev, logoUrl: optimizedUrl }));
     } catch (err) {
       console.error('Logo upload error:', err);
-      alert('Error uploading logo file.');
+      // Fallback to upload service
+      try {
+        const res = await uploadService.uploadFile(file);
+        if (res.success && res.fileUrl) {
+          setFormData(prev => ({ ...prev, logoUrl: res.fileUrl! }));
+        } else {
+          alert('Could not process logo. Please try another image file.');
+        }
+      } catch (uploadErr) {
+        alert('Error uploading logo file.');
+      }
     } finally {
       setUploadingLogo(false);
     }
   };
 
   const handleRemoveLogo = () => {
+    if (!isAdmin) {
+      alert('Access Denied: Only Laboratory Administrators can remove the facility logo.');
+      return;
+    }
     setFormData(prev => ({ ...prev, logoUrl: '' }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      alert('Access Denied: Only Laboratory Administrators can update facility settings.');
+      return;
+    }
+
     if (!formData.name.trim()) {
       alert('Please enter your Laboratory/Facility Name.');
       return;
@@ -91,6 +164,7 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
 
     setLoading(true);
     setSaveSuccess(false);
+    setErrorMessage('');
 
     try {
       const targetLabId = lab?.id || 'lab-1';
@@ -144,10 +218,10 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
       setTimeout(() => {
         setSaveSuccess(false);
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       console.error('Error saving lab profile:', err);
-      alert('Failed to save laboratory profile: ' + (err.message || 'Unknown error'));
+      setErrorMessage(err.message || 'Failed to save laboratory profile');
     } finally {
       setLoading(false);
     }
@@ -166,24 +240,19 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div 
-          style={{
-            background: `linear-gradient(135deg, ${formData.primaryColor || '#0D9488'}, ${formData.secondaryColor || '#0F766E'})`
-          }}
-          className="p-6 text-white flex items-center justify-between"
-        >
+        <div className="p-6 text-white flex items-center justify-between bg-slate-900 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white border border-white/20 shadow-md">
+            <div className="p-2.5 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 shadow-xs">
               <Building2 className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-extrabold tracking-tight">Facility Profile & Custom Logo</h2>
-              <p className="text-xs text-white/80">Manage your facility's official logo, brand colors & contact details</p>
+              <h2 className="text-xl font-extrabold tracking-tight text-white">Facility Profile & Custom Logo</h2>
+              <p className="text-xs text-slate-400">Manage your facility's official logo, brand colors & contact details</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -227,9 +296,9 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
                     />
                   </div>
                 ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex flex-col items-center justify-center shadow-xl border-4 border-white">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-900 text-teal-400 flex flex-col items-center justify-center shadow-md border-4 border-white">
                     <Activity className="w-10 h-10 stroke-[2.5]" />
-                    <span className="text-[9px] font-bold uppercase mt-1 tracking-wider">nanoLabs</span>
+                    <span className="text-[9px] font-bold uppercase mt-1 tracking-wider text-slate-300">nanoLabs</span>
                   </div>
                 )}
 

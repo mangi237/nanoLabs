@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
+import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 import { 
   Activity, User, Mail, Phone, MapPin, ArrowLeft, ArrowRight, Loader2, 
   CheckCircle2, Building2, Key, RefreshCw, Search, Check, 
@@ -182,8 +183,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         setErrorMessage('Please provide your full legal name.');
         return false;
       }
-      if (!formData.phone.trim()) {
-        setErrorMessage('Please provide a valid primary phone number.');
+      const phoneValidation = validatePhoneNumber(formData.phone);
+      if (!phoneValidation.isValid) {
+        setErrorMessage(phoneValidation.errorMessage || 'Please provide a valid 9-digit phone number.');
         return false;
       }
       return true;
@@ -229,6 +231,12 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       return;
     }
 
+    const phoneValidation = validatePhoneNumber(formData.phone);
+    if (!phoneValidation.isValid) {
+      setErrorMessage(phoneValidation.errorMessage || 'Phone number must have exactly 9 digits.');
+      return;
+    }
+
     if (!termsAccepted) {
       setErrorMessage('You must read and agree to the Terms and Conditions to complete your patient registration.');
       return;
@@ -244,23 +252,23 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       const patientId = 'P-' + Math.floor(1000 + Math.random() * 9000);
       const targetLabId = selectedLab.id;
 
-      const newPatient = {
+      const rawPatientPayload = {
         patientId,
         accessCode: formData.accessCode.trim(),
         name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        email: formData.email.trim().toLowerCase() || `${patientId.toLowerCase()}@nanolabs.cm`,
+        phone: phoneValidation.formatted || formData.phone.trim(),
         gender: formData.gender,
-        address: formData.address.trim(),
+        address: formData.address.trim() || 'N/A',
         
-        // Medical & Insurance Details
-        nationalId: formData.nationalId.trim() || undefined,
+        // Medical & Insurance Details - safe fallbacks to prevent undefined values
+        nationalId: formData.nationalId.trim() || 'N/A',
         age: parseInt(formData.age) || 30,
         bloodGroup: formData.bloodGroup || 'Unknown',
-        hasInsurance: formData.hasInsurance,
-        insuranceProvider: formData.hasInsurance ? formData.insuranceProvider.trim() : undefined,
-        insurancePolicyNumber: formData.hasInsurance ? formData.insurancePolicyNumber.trim() : undefined,
-        insuranceCardUrl: formData.hasInsurance && insuranceCardUrl ? insuranceCardUrl : undefined,
+        hasInsurance: !!formData.hasInsurance,
+        insuranceProvider: formData.hasInsurance ? (formData.insuranceProvider.trim() || 'Private Insurance') : 'Out-of-Pocket / Self',
+        insurancePolicyNumber: formData.hasInsurance ? (formData.insurancePolicyNumber.trim() || 'N/A') : 'N/A',
+        insuranceCardUrl: (formData.hasInsurance && insuranceCardUrl) ? insuranceCardUrl : '',
         
         // Lab & Consent Status
         status: 'pending_confirmation',
@@ -274,15 +282,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         labTests: []
       };
 
+      // Recursively strip any undefined properties
+      const cleanedPatient = cleanFirestoreData(rawPatientPayload);
+
       // Save to Firestore under the selected lab's patients subcollection
-      const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), newPatient);
+      const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
 
       if (onRegisterSuccess) {
-        onRegisterSuccess({ id: docRef.id, ...newPatient });
+        onRegisterSuccess({ id: docRef.id, ...cleanedPatient });
       }
     } catch (error: any) {
       console.error('Error registering patient:', error);
-      setErrorMessage(error?.message || 'Patient registration failed. Please try again.');
+      setErrorMessage(error?.message || 'Patient registration could not be completed. Please check all fields and try again.');
     } finally {
       setLoading(false);
     }

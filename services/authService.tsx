@@ -10,6 +10,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { cleanFirestoreData } from '../utils/sanitizeData';
 
 export interface AuthResult {
   success: boolean;
@@ -121,9 +122,9 @@ export const authService = {
 
         const foundStaffDoc = staffSnap.docs.find(d => {
           const dData = d.data();
-          const dCode = (dData.accessCode || dData.initialCode || '').trim().toUpperCase();
-          const dEmail = (dData.email || '').trim().toUpperCase();
-          return dCode === upperCode || dEmail === upperCode || (dData.accessCode && dData.accessCode.trim() === cleanCode);
+          const dCode = (dData.accessCode || dData.initialCode || '').trim();
+          const dEmail = (dData.email || '').trim().toLowerCase();
+          return dCode === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase());
         });
 
         if (foundStaffDoc) {
@@ -155,9 +156,9 @@ export const authService = {
           const otherStaffSnap = await getDocs(collection(db, 'labs', lDoc.id, 'staff'));
           const foundOtherStaff = otherStaffSnap.docs.find(d => {
             const dData = d.data();
-            const dCode = (dData.accessCode || dData.initialCode || '').trim().toUpperCase();
-            const dEmail = (dData.email || '').trim().toUpperCase();
-            return dCode === upperCode || dEmail === upperCode || (dData.accessCode && dData.accessCode.trim() === cleanCode);
+            const dCode = (dData.accessCode || dData.initialCode || '').trim();
+            const dEmail = (dData.email || '').trim().toLowerCase();
+            return dCode === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase());
           });
 
           if (foundOtherStaff) {
@@ -194,10 +195,10 @@ export const authService = {
 
         const foundPatientDoc = patientsSnap.docs.find(d => {
           const dData = d.data();
-          const dAccessCode = (dData.accessCode || '').trim().toUpperCase();
-          const dPatientId = (dData.patientId || '').trim().toUpperCase();
-          const dEmail = (dData.email || '').trim().toUpperCase();
-          return dAccessCode === upperCode || dPatientId === upperCode || dEmail === upperCode || d.id.toUpperCase() === upperCode;
+          const dAccessCode = (dData.accessCode || '').trim();
+          const dPatientId = (dData.patientId || '').trim();
+          const dEmail = (dData.email || '').trim().toLowerCase();
+          return dAccessCode === cleanCode || dPatientId === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase()) || d.id === cleanCode;
         });
 
         if (foundPatientDoc) {
@@ -270,45 +271,83 @@ export const authService = {
   },
 
   /**
-   * Helper to verify staff authorization code during actions (cashier payment, sample collection, lab result upload).
+   * Helper to verify staff authorization code during actions (cashier payment, sample collection, lab result upload, receptionist check-in).
    */
-  async verifyStaffActionCode(inputCode: string, allowedRoles: string[], currentUserCode?: string): Promise<{ authorized: boolean; staffName?: string; error?: string }> {
+  async verifyStaffActionCode(
+    inputCode: string, 
+    allowedRoles: string[], 
+    currentUserCode?: string,
+    labId?: string
+  ): Promise<{ authorized: boolean; staffName?: string; error?: string }> {
     const cleanCode = (inputCode || '').trim();
     if (!cleanCode) {
-      return { authorized: false, error: 'Please enter your access code.' };
+      return { authorized: false, error: 'Please enter your staff access code / PIN.' };
     }
 
     const upperCode = cleanCode.toUpperCase();
 
-    // Direct match with user's active session code
-    if (currentUserCode && (cleanCode === currentUserCode || upperCode === currentUserCode.trim().toUpperCase())) {
+    // 1. Direct match with user's active session code
+    if (currentUserCode && (cleanCode === currentUserCode.trim() || upperCode === currentUserCode.trim().toUpperCase())) {
       return { authorized: true, staffName: 'Authorized Staff' };
     }
 
-    // Check default role codes
+    // 2. Check default staff map (e.g. REC123, CASH123, TECH123, ADMIN123)
     if (DEFAULT_STAFF_MAP[upperCode]) {
       const staffInfo = DEFAULT_STAFF_MAP[upperCode];
-      if (allowedRoles.includes('all') || allowedRoles.includes(staffInfo.role) || staffInfo.roles.some(r => allowedRoles.includes(r))) {
+      const roleMatches = allowedRoles.includes('all') || 
+                          allowedRoles.includes(staffInfo.role) || 
+                          (staffInfo.roles && staffInfo.roles.some((r: string) => allowedRoles.includes(r)));
+      if (roleMatches) {
         return { authorized: true, staffName: staffInfo.name };
       }
     }
 
-    // Check hardcoded super/admin codes
-    if (upperCode === 'SUPER123' || upperCode === 'ADMIN123') {
+    // 3. Check hardcoded standard admin passcodes
+    if (upperCode === 'SUPER123' || upperCode === 'ADMIN123' || upperCode === 'SUPERADMIN123') {
       return { authorized: true, staffName: 'Administrator' };
     }
 
-    // Standard fallback allowing TECH123, CASH123, ANALYZER123, REC123
+    // 4. Role-specific standard passcodes
     if (
-      (allowedRoles.includes('labtech') && (upperCode === 'TECH123' || upperCode === 'LABTECH123')) ||
-      (allowedRoles.includes('cashier') && (upperCode === 'CASH123' || upperCode === 'CASHIER123')) ||
-      (allowedRoles.includes('analyzer') && (upperCode === 'ANALYZER123' || upperCode === 'SAMPLE123' || upperCode === 'PHLEB123')) ||
-      (allowedRoles.includes('receptionist') && (upperCode === 'REC123' || upperCode === 'RECEPTION123'))
+      (allowedRoles.includes('receptionist') && (upperCode === 'REC123' || upperCode === 'RECEPTION123' || upperCode === 'STAFF123' || upperCode === '1234')) ||
+      (allowedRoles.includes('cashier') && (upperCode === 'CASH123' || upperCode === 'CASHIER123' || upperCode === 'STAFF123' || upperCode === '1234')) ||
+      (allowedRoles.includes('analyzer') && (upperCode === 'SAMPLE123' || upperCode === 'PHLEB123' || upperCode === 'ANALYZER123' || upperCode === '1234')) ||
+      (allowedRoles.includes('labtech') && (upperCode === 'TECH123' || upperCode === 'LABTECH123' || upperCode === '1234'))
     ) {
-      return { authorized: true, staffName: 'Staff Member' };
+      return { authorized: true, staffName: 'Authorized Staff' };
     }
 
-    return { authorized: false, error: 'Invalid staff access code. Verification failed.' };
+    // 5. Query Firestore staff collection in target lab for registered staff accounts
+    try {
+      const targetLabId = labId || 'lab-1';
+      const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+      const found = staffSnap.docs.find(d => {
+        const data = d.data();
+        const sc = (data.accessCode || data.initialCode || '').trim();
+        return sc === cleanCode || sc.toUpperCase() === upperCode;
+      });
+
+      if (found) {
+        const staffData = found.data();
+        const role = staffData.role || staffData.primaryRole || 'staff';
+        const roles = staffData.roles || [role];
+        const roleMatches = allowedRoles.includes('all') || 
+                            allowedRoles.includes(role) || 
+                            roles.some((r: string) => allowedRoles.includes(r));
+        if (roleMatches) {
+          return { authorized: true, staffName: staffData.name || 'Authorized Staff' };
+        } else {
+          return { authorized: false, error: `Access Denied: Your staff account role (${role}) is not authorized for this action.` };
+        }
+      }
+    } catch (fsErr) {
+      console.warn('Staff verification Firestore lookup error:', fsErr);
+    }
+
+    return { 
+      authorized: false, 
+      error: 'Access Denied: Invalid Access Code / PIN. Please enter your valid staff passcode (e.g. REC123, 1234, or your assigned staff code).' 
+    };
   },
 
   /**
@@ -610,11 +649,11 @@ export const authService = {
     }
   },
 
-  async getAllLabs() {
+  async getAllLabs(options?: { includePending?: boolean }) {
     try {
       const labsRef = collection(db, 'labs');
       const snapshot = await getDocs(labsRef);
-      const labs = snapshot.docs.map(doc => {
+      let labs = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -623,21 +662,29 @@ export const authService = {
         };
       });
 
-      if (labs.length === 0) {
+      if (!options?.includePending) {
+        labs = labs.filter(l => (l as any).status !== 'pending_approval' && (l as any).status !== 'suspended' && (l as any).status !== 'rejected');
+      }
+
+      if (labs.length === 0 && !options?.includePending) {
         return [
           { 
             id: 'lab-1', 
             name: 'nanoLabs Central Diagnostics', 
             location: 'Douala City Hub',
             logoUrl: null,
-            primaryColor: '#0D9488'
+            primaryColor: '#0D9488',
+            status: 'active',
+            confirmed: true
           },
           { 
             id: 'lab-2', 
             name: 'St. Jude Clinical Laboratory', 
             location: 'Yaounde Metro',
             logoUrl: null,
-            primaryColor: '#0284C7'
+            primaryColor: '#0284C7',
+            status: 'active',
+            confirmed: true
           }
         ];
       }
@@ -651,14 +698,18 @@ export const authService = {
           name: 'nanoLabs Central Diagnostics', 
           location: 'Douala City Hub',
           logoUrl: null,
-          primaryColor: '#0D9488'
+          primaryColor: '#0D9488',
+          status: 'active',
+          confirmed: true
         },
         { 
           id: 'lab-2', 
           name: 'St. Jude Clinical Laboratory', 
           location: 'Yaounde Metro',
           logoUrl: null,
-          primaryColor: '#0284C7'
+          primaryColor: '#0284C7',
+          status: 'active',
+          confirmed: true
         }
       ];
     }
@@ -684,12 +735,12 @@ export const authService = {
       const targetLabId = labId || 'lab-1';
       const patientsRef = collection(db, 'labs', targetLabId, 'patients');
       
-      const newPatient = {
+      const newPatient = cleanFirestoreData({
         ...patientData,
-        status: 'registered',
+        status: patientData.status || 'registered',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      };
+      });
 
       const docRef = await addDoc(patientsRef, newPatient);
       return {

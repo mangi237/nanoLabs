@@ -17,19 +17,30 @@ export const AppointmentScreen: React.FC<AppointmentScreenProps> = ({
   onNotificationPress,
   onProfilePress
 }) => {
-  const { lab } = useAuth();
+  const { user, lab } = useAuth();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAppointments();
-  }, [lab?.id]);
+  }, [lab?.id, user?.id, user?.email]);
 
   const fetchAppointments = async () => {
     try {
       setLoading(true);
       const snap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'appointments'));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(app => {
+          if (user?.role === 'patient') {
+            const matchesId = app.patientId === user?.id || app.patientId === (user as any)?.patientId;
+            const matchesEmail = app.patientEmail && user?.email && app.patientEmail.toLowerCase() === user.email.toLowerCase();
+            const matchesPhone = app.patientPhone && user?.phone && app.patientPhone === user.phone;
+            const matchesName = app.patientName && user?.name && app.patientName.toLowerCase() === user.name.toLowerCase();
+            return matchesId || matchesEmail || matchesPhone || matchesName;
+          }
+          return true;
+        });
       setAppointments(list);
     } catch (e) {
       setAppointments([]);
@@ -87,8 +98,8 @@ export const AppointmentScreen: React.FC<AppointmentScreenProps> = ({
                     <Calendar className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base">{app.title}</h3>
-                    <p className="text-xs text-teal-600 font-medium">{app.doctorName || 'Dr. Alexis Vance'}</p>
+                    <h3 className="font-bold text-slate-900 text-base">{app.title || app.testName || 'Laboratory Screening'}</h3>
+                    <p className="text-xs text-teal-600 font-medium">Lab Specimen Intake & Diagnostics</p>
                   </div>
                 </div>
 

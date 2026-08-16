@@ -3,6 +3,8 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { sendEmail } from '../../services/emailService';
+import { limsService } from '../../services/limsService';
+import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { 
   OFFICIAL_MASTER_TEST_CATALOG, 
   OFFICIAL_CATEGORIES, 
@@ -63,7 +65,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
   // Selections
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
-  const [selectedTest, setSelectedTest] = useState<any>(null);
+  const [selectedTests, setSelectedTests] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
 
   // Form Fields
@@ -79,6 +81,20 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     loadLabData();
   }, [targetLabId]);
 
+  const toggleTestSelection = (testItem: any) => {
+    const exists = selectedTests.some(t => t.id === testItem.id);
+    if (exists) {
+      if (selectedTests.length === 1) {
+        // keep at least 1 or allow unselecting
+        setSelectedTests([]);
+      } else {
+        setSelectedTests(selectedTests.filter(t => t.id !== testItem.id));
+      }
+    } else {
+      setSelectedTests([...selectedTests, testItem]);
+    }
+  };
+
   const loadLabData = async () => {
     try {
       setFetchingData(true);
@@ -92,7 +108,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       }
       setCatalog(tests);
       if (tests.length > 0) {
-        setSelectedTest(tests[0]);
+        setSelectedTests([tests[0]]);
       }
 
       // 2. Fetch Lab Techs & Doctors
@@ -137,7 +153,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       console.error('Error fetching lab booking data:', err);
       setCatalog(OFFICIAL_MASTER_TEST_CATALOG);
       if (OFFICIAL_MASTER_TEST_CATALOG.length > 0) {
-        setSelectedTest(OFFICIAL_MASTER_TEST_CATALOG[0]);
+        setSelectedTests([OFFICIAL_MASTER_TEST_CATALOG[0]]);
       }
     } finally {
       setFetchingData(false);
@@ -150,8 +166,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     e.preventDefault();
     setErrorMessage('');
 
-    if (!selectedTest) {
-      setErrorMessage('Please select a laboratory diagnostic test.');
+    if (selectedTests.length === 0) {
+      setErrorMessage('Please select at least one laboratory diagnostic test.');
       return;
     }
     if (!selectedPatient) {
@@ -161,87 +177,86 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     setLoading(true);
     try {
-      const baseTestPrice = selectedTest.price || 5000;
-      const totalTestPrice = baseTestPrice + SYSTEM_FEE;
-      const testTurnaround = selectedTest.turnaroundTime || selectedTest.expectedTime || '2 hours after sampling';
-      const testItemName = selectedTest.name || selectedTest.testName || 'Diagnostic Test';
+      const selectedMasterTestIds = selectedTests.map(t => t.id);
 
-      const newTestRecord = {
-        id: 'tst-' + Math.floor(1000 + Math.random() * 9000),
-        testName: testItemName,
-        category: selectedTest.category || 'General Diagnostic',
-        method: selectedTest.method || '',
-        conditions: selectedTest.conditions || '',
-        sampleType: selectedTest.sampleType || 'Venous Blood',
-        basePrice: baseTestPrice,
-        systemFee: SYSTEM_FEE,
-        price: totalTestPrice,
-        totalPrice: totalTestPrice,
-        priceDisplay: `${baseTestPrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA System Fee`,
-        turnaroundTime: testTurnaround,
-        doctorName: selectedStaff?.name || 'Assigned Lab Technologist',
-        doctorRole: selectedStaff?.role || 'Lab Tech',
-        status: 'requested',
-        paymentStatus: 'pending',
-        confirmedByReceptionist: false,
-        sampleCollected: false,
-        requestedDate: appointmentDate,
-        appointmentTime: appointmentTime,
-        notes: notes || '',
-        createdAt: new Date().toISOString()
-      };
+      // 1. Create central LIMS booking (so Cashier, Receptionist & Medical Booklet get real-time updates)
+      const booking = await limsService.createBooking({
+        labId: targetLabId,
+        patientId: selectedPatient.id || selectedPatient.patientId || user?.id || 'pat-1',
+        patientName: selectedPatient.name || user?.name || 'Valued Patient',
+        patientAge: selectedPatient.age || 30,
+        patientGender: selectedPatient.gender || 'Male',
+        patientPhone: selectedPatient.phone || user?.phone || '',
+        patientEmail: selectedPatient.email || user?.email || '',
+        patientPid: selectedPatient.patientId || selectedPatient.id || user?.id || 'PT-101',
+        doctorName: selectedStaff?.name || 'Dr. Attending Specialist',
+        selectedMasterTestIds,
+        selectedTests: selectedTests.map((t, idx) => ({
+          id: t.id || `test-${idx}-${Date.now()}`,
+          testId: t.id || `t-${idx}`,
+          name: t.name || t.testName || 'Diagnostic Test',
+          testName: t.name || t.testName || 'Diagnostic Test',
+          code: t.code || 'TST',
+          category: t.category || 'General',
+          price: t.price || 5000,
+          sampleType: t.sampleType || t.sampleTypeRequired || 'Venous Blood',
+          sampleTypeRequired: t.sampleType || t.sampleTypeRequired || 'Venous Blood',
+          units: t.units || 'U/L',
+          refRangeMale: t.refRangeMale || 'Normal',
+          refRangeFemale: t.refRangeFemale || 'Normal',
+          refRangeChild: t.refRangeChild || 'Normal'
+        })),
+        creatorName: user?.name || 'Patient Online Order'
+      });
 
-      // 1. Create appointment document
-      await addDoc(collection(db, 'labs', targetLabId, 'appointments'), {
-        title: testItemName,
+      // 2. Create a single consolidated appointment for the patient's schedule
+      const totalCombinedPrice = selectedTests.reduce((sum, t) => sum + (t.price || 5000), 0) + (SYSTEM_FEE * selectedTests.length);
+      const testNamesSummary = selectedTests.map(t => t.name || t.testName).join(', ');
+
+      const apptPayload = cleanFirestoreData({
+        title: selectedTests.length === 1 ? (selectedTests[0].name || selectedTests[0].testName) : `${selectedTests.length} Diagnostic Tests (${selectedTests[0].name || 'Test'} + ${selectedTests.length - 1} more)`,
+        testSummary: testNamesSummary,
         date: appointmentDate,
         time: appointmentTime,
-        testId: selectedTest.id,
-        testName: testItemName,
-        category: selectedTest.category || 'General',
-        method: selectedTest.method || '',
-        conditions: selectedTest.conditions || '',
-        sampleType: selectedTest.sampleType || 'Venous Blood',
-        basePrice: baseTestPrice,
-        systemFee: SYSTEM_FEE,
-        price: totalTestPrice,
-        totalPrice: totalTestPrice,
-        priceDisplay: `${baseTestPrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA System Fee`,
-        turnaroundTime: testTurnaround,
+        testsCount: selectedTests.length,
+        tests: selectedTests.map((t, idx) => ({
+          id: t.id || `bt-${Date.now()}-${idx}`,
+          testId: t.id || `t-${idx}`,
+          testName: t.name || t.testName || 'Diagnostic Test',
+          category: t.category || 'General',
+          price: t.price || 5000,
+          sampleTypeRequired: t.sampleType || t.sampleTypeRequired || 'Venous Blood',
+          units: t.units || 'U/L',
+          status: 'Pending_Validation',
+          receptionistValidated: false
+        })),
+        bookingCode: booking.bookingCode,
+        bookingId: booking.id,
+        price: totalCombinedPrice,
+        totalAmount: totalCombinedPrice,
         doctorName: selectedStaff?.name || 'Lab Technologist',
         patientName: selectedPatient.name || user?.name || 'Valued Patient',
         patientId: selectedPatient.patientId || selectedPatient.id || user?.id || 'pat-1',
         patientEmail: selectedPatient.email || user?.email || '',
         patientPhone: selectedPatient.phone || user?.phone || '',
         status: 'scheduled',
-        confirmedByReceptionist: false,
+        paymentStatus: 'unpaid',
+        receptionistValidated: false,
         location: lab?.name || 'nanoLabs Central Diagnostics',
         notes: notes || '',
         createdAt: new Date().toISOString()
       });
 
-      // 2. Add test to patient's record in Firestore
-      if (selectedPatient.id) {
-        try {
-          const patientRef = doc(db, 'labs', targetLabId, 'patients', selectedPatient.id);
-          const existingTests = selectedPatient.labTests || [];
-          await updateDoc(patientRef, {
-            labTests: [...existingTests, newTestRecord],
-            status: 'active',
-            updatedAt: new Date().toISOString()
-          });
-        } catch (patientUpdateErr) {
-          console.warn('Could not update patient document directly, proceeding:', patientUpdateErr);
-        }
-      }
+      await addDoc(collection(db, 'labs', targetLabId, 'appointments'), apptPayload);
 
-      // 3. Send confirmation email with explicit fee breakdown & patient preparation instructions
+      // 3. Send confirmation email
       const targetEmail = selectedPatient.email || user?.email;
       if (targetEmail) {
+        const testListStr = selectedTests.map(t => `- ${t.name || t.testName} (${(t.price || 5000).toLocaleString()} FCFA)`).join('\n');
         sendEmail(
           targetEmail,
-          `Appointment & Test Request: ${testItemName} - ${lab?.name || 'nanoLabs'}`,
-          `Dear ${selectedPatient.name || 'Patient'},\n\nYour appointment and laboratory test request has been successfully booked!\n\nTest: ${testItemName}\nCategory: ${selectedTest.category || 'General'}\nDiagnostic Procedure Fee: ${baseTestPrice.toLocaleString()} FCFA\nSystem & Processing Fee: ${SYSTEM_FEE.toLocaleString()} FCFA\nTotal Payable Fee: ${totalTestPrice.toLocaleString()} FCFA (${baseTestPrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA System Fee)\nExpected Results Turnaround: ${testTurnaround}\n${selectedTest.conditions ? `Preparation & Withdrawal Conditions: ${selectedTest.conditions}\n` : ''}Date: ${appointmentDate}\nTime: ${appointmentTime}\nAttending Specialist: ${selectedStaff?.name || 'Lab Technologist'}\nLocation: ${lab?.name || 'nanoLabs Diagnostics'}\n\nOur cashier will verify your payment upon arrival at the laboratory.`
+          `Appointment & Multi-Test Request (${selectedTests.length} Tests) - ${lab?.name || 'nanoLabs'}`,
+          `Dear ${selectedPatient.name || 'Patient'},\n\nYour appointment and ${selectedTests.length} test request(s) have been successfully booked!\n\nRequested Tests:\n${testListStr}\n\nDate: ${appointmentDate}\nTime: ${appointmentTime}\nAttending Specialist: ${selectedStaff?.name || 'Lab Technologist'}\nLocation: ${lab?.name || 'nanoLabs Diagnostics'}\n\nOur Cashier & Receptionist will verify your payment upon arrival at the laboratory.`
         ).catch(e => console.warn('Appointment email error:', e));
       }
 
@@ -472,7 +487,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               {/* Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-1">
                 {filteredTests.map(testItem => {
-                  const isSelected = selectedTest?.id === testItem.id;
+                  const isSelected = selectedTests.some(t => t.id === testItem.id);
                   const basePrice = testItem.price || 5000;
                   const totalPrice = basePrice + SYSTEM_FEE;
                   const turnaround = testItem.turnaroundTime || testItem.expectedTime || '2 hours after sampling';
@@ -480,10 +495,10 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                   return (
                     <div
                       key={testItem.id}
-                      onClick={() => setSelectedTest(testItem)}
+                      onClick={() => toggleTestSelection(testItem)}
                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
                         isSelected
-                          ? 'bg-teal-50/80 border-teal-600 ring-2 ring-teal-500/20 shadow-xs'
+                          ? 'bg-teal-50/90 border-teal-600 ring-2 ring-teal-500/30 shadow-sm'
                           : 'bg-white border-slate-200/80 hover:border-teal-300 hover:shadow-xs'
                       }`}
                     >
@@ -492,7 +507,11 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase border ${getCategoryBadgeColor(testItem.category)}`}>
                             {testItem.category || 'Hematology'}
                           </span>
-                          {isSelected && <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />}
+                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 bg-white'
+                          }`}>
+                            {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                          </div>
                         </div>
                         <h4 className="font-bold text-slate-900 text-xs leading-snug line-clamp-2">
                           {testItem.name || testItem.testName}
@@ -524,8 +543,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 })}
               </div>
 
-              {/* Dynamic Selected Test Summary Banner with Preparation Guidelines */}
-              {selectedTest && (
+              {/* Dynamic Selected Multi-Test Summary Banner */}
+              {selectedTests.length > 0 && (
                 <div className="p-4 bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 rounded-2xl text-white shadow-md space-y-3 animate-fade-in">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
@@ -535,119 +554,34 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-extrabold text-teal-300 uppercase tracking-wider bg-white/10 px-2 py-0.5 rounded">
-                            {selectedTest.category || 'General'}
-                          </span>
-                          <span className="text-[11px] text-slate-300">
-                            Specimen: {selectedTest.sampleType || 'Venous Blood'}
+                            {selectedTests.length} {selectedTests.length === 1 ? 'Test Selected' : 'Tests Selected'}
                           </span>
                         </div>
-                        <h4 className="font-bold text-sm text-white mt-0.5">{selectedTest.name || selectedTest.testName}</h4>
+                        <h4 className="font-bold text-sm text-white mt-0.5">
+                          {selectedTests.map(t => t.name || t.testName).join(', ')}
+                        </h4>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/10 pt-2 sm:pt-0">
-                      <div className="text-right">
-                        <span className="text-[10px] text-teal-200 block font-medium">Turnaround</span>
-                        <span className="text-xs font-bold text-white flex items-center gap-1 justify-end">
-                          <Clock className="w-3.5 h-3.5 text-teal-300" />
-                          {selectedTest.turnaroundTime || selectedTest.expectedTime || '2 hours after sampling'}
-                        </span>
-                      </div>
-
                       <div className="text-right bg-white/10 px-3 py-1.5 rounded-xl border border-white/20">
-                        <span className="text-[10px] text-teal-200 block font-medium">Total Payable Due</span>
+                        <span className="text-[10px] text-teal-200 block font-medium">Total Payable ({selectedTests.length} tests)</span>
                         <span className="text-sm font-extrabold text-white">
-                          {((selectedTest.price || 5000) + SYSTEM_FEE).toLocaleString()} FCFA
+                          {(selectedTests.reduce((acc, t) => acc + (t.price || 5000) + SYSTEM_FEE, 0)).toLocaleString()} FCFA
                         </span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Preparation / Withdrawal Advisory Box */}
-                  {selectedTest.conditions && (
-                    <div className="p-3 bg-amber-500/20 border border-amber-400/40 rounded-xl text-xs text-amber-100 flex items-start gap-2.5">
-                      <AlertCircle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold text-amber-200 block text-[11px] uppercase tracking-wide">
-                          Important Preparation & Withdrawal Conditions:
-                        </span>
-                        <p className="text-amber-100 text-xs mt-0.5 font-medium leading-relaxed">
-                          {selectedTest.conditions}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Method Info */}
-                  {selectedTest.method && (
-                    <div className="text-[11px] text-slate-300 flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-teal-300 shrink-0" />
-                      <span><strong>Analytical Method:</strong> {selectedTest.method}</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* SECTION 3: Searchable Attending Lab Tech / Doctor (Card Layout) */}
-            <div className="space-y-3">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                3. Attending Lab Technologist / Medical Specialist <span className="text-red-500">*</span>
-              </label>
-
-              {/* Search Bar for Staff */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                <input
-                  type="text"
-                  placeholder="Search active lab techs or doctors by name..."
-                  value={staffSearch}
-                  onChange={e => setStaffSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
-                />
-              </div>
-
-              {/* Cards Grid for Staff */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
-                {filteredStaff.map(staffMember => {
-                  const isSelected = selectedStaff?.id === staffMember.id;
-                  return (
-                    <div
-                      key={staffMember.id}
-                      onClick={() => setSelectedStaff(staffMember)}
-                      className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                        isSelected
-                          ? 'bg-teal-50 border-teal-600 ring-2 ring-teal-500/20 shadow-xs'
-                          : 'bg-white border-slate-200/80 hover:border-teal-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {staffMember.avatarUrl ? (
-                          <img
-                            src={staffMember.avatarUrl}
-                            alt={staffMember.name}
-                            referrerPolicy="no-referrer"
-                            className="w-9 h-9 rounded-xl object-cover border border-teal-200 shrink-0"
-                          />
-                        ) : (
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            isSelected ? 'bg-teal-600 text-white' : 'bg-teal-100 text-teal-800'
-                          }`}>
-                            {getInitials(staffMember.name)}
-                          </div>
-                        )}
-
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-slate-900 text-xs truncate">{staffMember.name}</h4>
-                          <p className="text-[10px] text-teal-700 font-medium truncate">{staffMember.role || 'Clinical Lab Technologist'}</p>
-                        </div>
-                      </div>
-
-                      {isSelected && <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />}
-                    </div>
-                  );
-                })}
-              </div>
+            {/* SECTION 3: Workflow Info Notice */}
+            <div className="p-4 bg-teal-50/80 rounded-2xl border border-teal-200/80 flex items-center gap-3">
+              <Stethoscope className="w-5 h-5 text-teal-700 shrink-0" />
+              <p className="text-xs text-teal-900 font-medium leading-relaxed">
+                <strong>Technologist Assignment:</strong> You do not need to select a lab technician. Upon arrival, your sample collector will verify your sample and refer your order directly to the attending laboratory technologist.
+              </p>
             </div>
 
             {/* SECTION 4: Schedule Timing & Notes */}

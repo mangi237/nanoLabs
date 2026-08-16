@@ -7,6 +7,7 @@ import { LanguageProvider } from './context/languageContext';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 import LabSelectionScreen from './screens/auth/LabSelectionScreen';
+import SetPermanentPasswordScreen from './screens/auth/SetPermanentPasswordScreen';
 
 import UnifiedDashboard from './screens/UnifiedDashboard';
 import AdminDashboard from './screens/admin/adminDashboard';
@@ -31,6 +32,7 @@ import RoleSwitcher from './screens/staff/RoleSwitcher';
 import NotificationsScreen from './screens/NotificationScreen';
 import PatientDetailsScreen from './screens/PatientDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+// import { CommercialBrochureScreen } from './screens/admin/com';
 
 import { Activity, Shield, User, Users, RefreshCw, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
 
@@ -41,6 +43,7 @@ type ScreenType =
   | 'select-lab'
   | 'dashboard'
   | 'admin-dashboard'
+  | 'commercial-brochure'
   | 'staff'
   | 'analytics'
   | 'inventory'
@@ -84,12 +87,26 @@ const MainAppContent: React.FC = () => {
       case 'share': setScreen('share'); break;
       case 'transfer': setScreen('transfer'); break;
       case 'register': setScreen('register'); break;
+      case 'brochure':
+      case 'commercial-brochure': setScreen('commercial-brochure'); break;
       default: setScreen('dashboard'); break;
     }
   };
 
   // Render Screen Switcher
   const renderScreen = () => {
+    // If user is authenticated via one-time OTP and must set their permanent password
+    if (user && user.mustChangePassword) {
+      return (
+        <SetPermanentPasswordScreen
+          onSuccess={(updatedUser) => {
+            setUser(updatedUser);
+            setScreen('dashboard');
+          }}
+        />
+      );
+    }
+
     if (!user && screen !== 'register' && screen !== 'registration-complete' && screen !== 'select-lab') {
       return (
         <LoginScreen
@@ -240,6 +257,8 @@ const MainAppContent: React.FC = () => {
           />
         );
 
+    
+
       case 'patient-dashboard':
         return (
           <PatientDashboard
@@ -256,8 +275,8 @@ const MainAppContent: React.FC = () => {
       case 'book-appointment':
         return (
           <BookAppointmentScreen
-            onBack={() => setScreen('dashboard')}
-            onSuccess={() => setScreen('patient-dashboard')}
+            onBack={() => setScreen(user?.role === 'patient' ? 'patient-dashboard' : 'dashboard')}
+            onSuccess={() => setScreen(user?.role === 'patient' ? 'patient-dashboard' : 'dashboard')}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
           />
@@ -393,7 +412,34 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
       {/* Global Quick Demo Switcher Bar at Bottom Right for easy testing */}
-      
+      {user && (
+        <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 backdrop-blur-md text-white px-3 py-2 rounded-2xl shadow-2xl border border-slate-700 text-xs flex flex-wrap items-center gap-1.5 max-w-xl">
+          <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">Role View:</span>
+          {[
+            { id: 'superadmin', label: 'SuperAdmin' },
+            { id: 'admin', label: 'Admin' },
+            { id: 'staff', label: 'Staff Hub' },
+            { id: 'receptionist', label: 'Reception' },
+            { id: 'cashier', label: 'Cashier' },
+            { id: 'analyzer', label: 'Analyzer' },
+            { id: 'lab_tech', label: 'Lab Tech' },
+            { id: 'patient', label: 'Patient' }
+          ].map((r) => (
+            <button
+              key={r.id}
+              onClick={() => {
+                setUser({ ...user, role: r.id as any });
+                setScreen('dashboard');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                user.role === r.id ? 'bg-teal-600 text-white shadow-xs' : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {renderScreen()}
     </div>
