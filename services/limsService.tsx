@@ -7,6 +7,18 @@ export type { MasterTestItem };
 
 export type TestStatus = 'Pending_Validation' | 'Pending_Payment' | 'Pending_Collection' | 'In_Lab_Testing' | 'Completed' | 'Ready_For_Pickup';
 
+export interface InsuranceDetails {
+  company: string;
+  policyNumber: string;
+  coverageType: 'full' | 'partial';
+  insurancePercent: number;
+  patientPercent: number;
+  insuranceAmount: number;
+  patientCoPayAmount: number;
+  patientCoPayMethodLabel?: string;
+  patientCoPayRef?: string;
+}
+
 export interface BookingTestItem {
   id: string;
   testId: string;
@@ -66,12 +78,18 @@ export interface PatientBooking {
   paymentDate?: string;
   paidAt?: string;
   paymentProcessedBy?: string;
-  
+  paymentAmountCollected?: number;
+  insuranceDetails?: InsuranceDetails;
+
   // Receptionist Validation & Walk-In Flags
   receptionistValidated?: boolean;
   validatedBy?: string;
   validatedAt?: string;
   registrationType?: 'online' | 'walk_in';
+
+  // Whether this booking object is backed by a real Firestore doc in /bookings
+  // (internal flag used by the cashier flow — not persisted)
+  _isVirtual?: boolean;
 
   // Sample collection details
   collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine']
@@ -95,7 +113,7 @@ export interface PatientBooking {
   pdfReportUrl?: string; // Digital generated report
   externalPdfUrl?: string; // Option 2 fallback PDF
   physicalPickupAlertSent?: boolean;
-  
+
   createdAt: string;
   updatedAt: string;
 }
@@ -202,8 +220,8 @@ export const limsService = {
     } else {
       const catalog = await this.getMasterTestCatalog(labId);
       testItems = (selectedMasterTestIds || []).map((masterId, idx) => {
-        const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
-                      MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
+        const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) ||
+                      MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) ||
                       {
                         id: masterId || `test-${idx}`,
                         code: 'TST',
@@ -321,101 +339,179 @@ export const limsService = {
   },
 
   /**
-   * Cashier processes payment for a Booking
+   * Cashier processes payment for one booking (real or "virtual" patient-derived booking).
+   *
+   * IMPORTANT FIX: previously this only synced the patient's labTests record when a
+   * matching document existed in the /bookings collection. Bookings synthesized on the
+   * fly from a patient's labTests array (see fetchAllBookings) have unstable, temporary
+   * IDs that never match a real /bookings document — so payment for those silently did
+   * nothing while the UI still reported success. This version:
+   *   1) Requires the FULL booking object (not just an id) so it always has enough
+   *      information to locate and update the underlying patient record.
+   *   2) Always syncs the patient's labTests array, regardless of whether a /bookings
+   *      document was found.
+   *   3) Creates a real /bookings document if one didn't already exist, so future
+   *      fetches are stable.
+   *   4) Returns a real success/failure result instead of an implicit undefined.
+   *   5) Records the verified staff member, insurance breakdown (if any), and the
+   *      exact amount actually collected — all written into the audit log.
    */
   async processPayment(params: {
     labId: string;
-    bookingId: string;
+    booking: PatientBooking;
     paymentMethod: 'cash' | 'mobile_money' | 'card' | 'insurance';
     processedByName: string;
-  }): Promise<boolean> {
-    const { labId, bookingId, paymentMethod, processedByName } = params;
+    processedByRole?: string;
+    amountCollected: number;
+    insuranceDetails?: InsuranceDetails;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { labId, booking, paymentMethod, processedByName, amountCollected, insuranceDetails } = params;
     const timestamp = new Date().toISOString();
 
+    if (!booking || !booking.patientId) {
+      return { success: false, error: 'Missing booking or patient reference — cannot process payment.' };
+    }
+
+    let realBookingDocId: string | null = null;
+    let matchedInBookingsCollection = false;
+
+    // 1. Try to find & update a real document in /bookings first
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const snap = await getDocs(bookingsCol);
-      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+      const bookingDoc = snap.docs.find(d => d.data().id === booking.id || d.id === booking.id || d.data().bookingCode === booking.bookingCode);
 
       if (bookingDoc) {
+        matchedInBookingsCollection = true;
+        realBookingDocId = bookingDoc.id;
         const data = bookingDoc.data() as PatientBooking;
-        const updatedTests = data.tests.map(t => ({
+        const updatedTests = (data.tests || []).map(t => ({
           ...t,
           status: 'Pending_Collection' as TestStatus
         }));
 
-        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
           paymentStatus: 'paid',
           paymentMethod,
           paymentDate: timestamp,
+          paidAt: timestamp,
           paymentProcessedBy: processedByName,
+          paymentAmountCollected: amountCollected,
+          insuranceDetails: insuranceDetails || null,
           overallStatus: 'Pending_Collection',
           tests: updatedTests,
           updatedAt: timestamp
-        });
-
-        // Sync to patient's document labTests array
-        try {
-          if (data.patientId) {
-            const patRef = doc(db, 'labs', labId, 'patients', data.patientId);
-            const patSnap = await getDoc(patRef);
-            if (patSnap.exists()) {
-              const currentTests: any[] = patSnap.data().labTests || [];
-              const updatedPatTests = currentTests.map(pt => {
-                const isPart = data.tests.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === pt.testName);
-                if (isPart || pt.bookingCode === data.bookingCode) {
-                  return {
-                    ...pt,
-                    paid: true,
-                    paymentStatus: 'paid',
-                    paymentMethod,
-                    paidAt: timestamp,
-                    status: 'Pending_Collection'
-                  };
-                }
-                return pt;
-              });
-              await updateDoc(patRef, cleanFirestoreData({
-                labTests: updatedPatTests,
-                updatedAt: timestamp
-              }));
-            }
-          }
-        } catch (patErr) {
-          console.warn('Patient payment sync error:', patErr);
-        }
-
-        // Sync to appointments collection if exists
-        try {
-          const apptRef = doc(db, 'labs', labId, 'appointments', bookingId);
-          const apptSnap = await getDoc(apptRef);
-          if (apptSnap.exists()) {
-            await updateDoc(apptRef, cleanFirestoreData({
-              paymentStatus: 'paid',
-              paid: true,
-              updatedAt: timestamp
-            }));
-          }
-        } catch (apptErr) {
-          console.warn('Appointment payment sync error:', apptErr);
-        }
-
-        // Log financial audit
-        await auditService.logPatientAccess({
-          labId,
-          patientId: data.patientId,
-          patientName: data.patientName,
-          action: 'PROCESS_PAYMENT',
-          performedBy: { id: 'cashier-1', name: processedByName, role: 'cashier' },
-          details: `Processed ${paymentMethod.toUpperCase()} payment for Booking ${data.bookingCode} (Amount: ${data.totalAmount} XAF). Status shifted to PAID ➔ Pending_Collection.`
-        });
-
-        return true;
+        }));
       }
     } catch (e) {
-      console.error('Error processing payment in limsService:', e);
+      console.warn('processPayment: bookings collection lookup/update issue:', e);
     }
-    return false;
+
+    // 2. ALWAYS sync the patient's labTests array — this is the fix for virtual bookings
+    let patientSyncSuccess = false;
+    try {
+      const patRef = doc(db, 'labs', labId, 'patients', booking.patientId);
+      const patSnap = await getDoc(patRef);
+      if (patSnap.exists()) {
+        const currentTests: any[] = patSnap.data().labTests || [];
+        const bookingTestIds = new Set((booking.tests || []).map(t => t.id));
+        const bookingTestNames = new Set((booking.tests || []).map(t => (t.testName || '').toLowerCase()));
+
+        const updatedPatTests = currentTests.map(pt => {
+          const isPart =
+            bookingTestIds.has(pt.id) ||
+            bookingTestIds.has(pt.testId) ||
+            bookingTestNames.has((pt.testName || pt.name || '').toLowerCase()) ||
+            pt.bookingCode === booking.bookingCode;
+
+          if (isPart && pt.paid !== true) {
+            patientSyncSuccess = true;
+            return {
+              ...pt,
+              paid: true,
+              paymentStatus: 'paid',
+              paymentMethod,
+              paidAt: timestamp,
+              paymentAmountCollected: amountCollected,
+              insuranceDetails: insuranceDetails || null,
+              status: 'Pending_Collection'
+            };
+          }
+          return pt;
+        });
+
+        await updateDoc(patRef, cleanFirestoreData({
+          labTests: updatedPatTests,
+          updatedAt: timestamp
+        }));
+      }
+    } catch (patErr) {
+      console.warn('processPayment: patient doc sync error:', patErr);
+    }
+
+    // 3. If no real /bookings doc existed, create one now so future fetches are stable
+    if (!matchedInBookingsCollection) {
+      try {
+        const bookingsCol = collection(db, 'labs', labId, 'bookings');
+        const stableBooking: PatientBooking = {
+          ...booking,
+          id: `booking-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          paymentStatus: 'paid',
+          paymentMethod,
+          paymentDate: timestamp,
+          paidAt: timestamp,
+          paymentProcessedBy: processedByName,
+          paymentAmountCollected: amountCollected,
+          insuranceDetails: insuranceDetails || undefined,
+          overallStatus: 'Pending_Collection',
+          tests: (booking.tests || []).map(t => ({ ...t, status: 'Pending_Collection' as TestStatus })),
+          updatedAt: timestamp
+        };
+        delete (stableBooking as any)._isVirtual;
+        const newDoc = await addDoc(bookingsCol, cleanFirestoreData(stableBooking));
+        realBookingDocId = newDoc.id;
+      } catch (createErr) {
+        console.warn('processPayment: failed to create stable booking doc:', createErr);
+      }
+    }
+
+    // 4. Sync appointments collection entry if one exists for this booking
+    try {
+      const apptRef = doc(db, 'labs', labId, 'appointments', booking.id);
+      const apptSnap = await getDoc(apptRef);
+      if (apptSnap.exists()) {
+        await updateDoc(apptRef, cleanFirestoreData({
+          paymentStatus: 'paid',
+          paid: true,
+          paymentAmountCollected: amountCollected,
+          insuranceDetails: insuranceDetails || null,
+          updatedAt: timestamp
+        }));
+      }
+    } catch (apptErr) {
+      console.warn('processPayment: appointment sync error:', apptErr);
+    }
+
+    // If we neither matched a real booking doc, created one, nor synced the patient doc, this was a genuine failure
+    if (!matchedInBookingsCollection && !realBookingDocId && !patientSyncSuccess) {
+      return { success: false, error: `Could not locate a matching record for booking ${booking.bookingCode} — payment was not recorded.` };
+    }
+
+    // 5. Audit log — includes access-code-verified staff identity and insurance breakdown
+    const insuranceNote = insuranceDetails
+      ? ` Insurance: ${insuranceDetails.company} (${insuranceDetails.coverageType === 'full' ? '100% covered' : `${insuranceDetails.insurancePercent}% insurance / ${insuranceDetails.patientPercent}% co-pay`}), amount billed to insurer: ${insuranceDetails.insuranceAmount.toLocaleString()} XAF, patient co-pay collected: ${insuranceDetails.patientCoPayAmount.toLocaleString()} XAF.`
+      : '';
+
+    await auditService.logPatientAccess({
+      labId,
+      patientId: booking.patientId,
+      patientName: booking.patientName,
+      action: 'PROCESS_PAYMENT',
+      performedBy: { id: 'cashier-1', name: processedByName, role: params.processedByRole || 'cashier' },
+      details: `Processed ${paymentMethod.toUpperCase()} payment for Booking ${booking.bookingCode} (Invoice total: ${booking.totalAmount.toLocaleString()} XAF, amount collected now: ${amountCollected.toLocaleString()} XAF). Access code verified. Status shifted to PAID -> Pending_Collection, routed to Analyzer/Phlebotomy queue.${insuranceNote}`
+    });
+
+    return { success: true };
   },
 
   /**
@@ -488,7 +584,7 @@ export const limsService = {
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
-        
+
         // If not assigned yet, claim assignment!
         if (!data.assignedTechId) {
           await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
@@ -607,7 +703,7 @@ export const limsService = {
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
-        
+
         // 1. Process test items & evaluate High/Low flags
         const updatedTests = data.tests.map(test => {
           const resObj = testResultsMap[test.id];
@@ -787,7 +883,7 @@ export const limsService = {
         if (master && master.reagentsRequired) {
           for (const req of master.reagentsRequired) {
             // Find inventory match by name
-            const itemDoc = inventoryDocs.find(d => 
+            const itemDoc = inventoryDocs.find(d =>
               d.data().name?.toLowerCase().includes(req.reagentName.toLowerCase()) ||
               req.reagentName.toLowerCase().includes(d.data().name?.toLowerCase() || '')
             );
@@ -866,16 +962,16 @@ export const limsService = {
         apptsSnap.docs.forEach(docSnap => {
           const apptData = docSnap.data();
           const apptId = docSnap.id;
-          
+
           // Check if already represented in bookings
           const existing = bookings.find(b => b.id === apptId || b.bookingCode === (apptData.bookingCode || apptData.id));
           if (!existing) {
             const isPaid = apptData.paymentStatus === 'paid' || apptData.paid === true || apptData.status === 'confirmed';
             const isValidated = apptData.receptionistValidated === true || isPaid;
-            const status: TestStatus = apptData.sampleCollected 
-              ? 'In_Lab_Testing' 
-              : isPaid 
-                ? 'Pending_Collection' 
+            const status: TestStatus = apptData.sampleCollected
+              ? 'In_Lab_Testing'
+              : isPaid
+                ? 'Pending_Collection'
                 : (isValidated ? 'Pending_Payment' : 'Pending_Validation');
 
             // Parse all individual tests from appointment
@@ -893,8 +989,8 @@ export const limsService = {
                 refRangeFemale: at.refRangeFemale || 'Normal',
                 refRangeChild: at.refRangeChild || 'Normal',
                 price: at.price || 5000,
-                status: (isValidated || at.receptionistValidated) 
-                  ? (isPaid ? 'Pending_Collection' : 'Pending_Payment') 
+                status: (isValidated || at.receptionistValidated)
+                  ? (isPaid ? 'Pending_Collection' : 'Pending_Payment')
                   : 'Pending_Validation',
                 receptionistValidated: isValidated || at.receptionistValidated === true
               }));
@@ -941,7 +1037,8 @@ export const limsService = {
               tests: apptTests,
               overallStatus: status,
               createdAt: apptData.createdAt || new Date().toISOString(),
-              updatedAt: apptData.updatedAt || apptData.createdAt || new Date().toISOString()
+              updatedAt: apptData.updatedAt || apptData.createdAt || new Date().toISOString(),
+              _isVirtual: true
             });
           }
         });
@@ -953,24 +1050,27 @@ export const limsService = {
       try {
         const patientsCol = collection(db, 'labs', labId, 'patients');
         const patientsSnap = await getDocs(patientsCol);
-        
+
         patientsSnap.docs.forEach(pDoc => {
           const pData = pDoc.data();
           const pId = pDoc.id;
           const labTests: any[] = pData.labTests || [];
-          
+
           // Group unpaid validated tests that aren't already represented in bookings
-          const validatedUnpaidTests = labTests.filter(t => 
-            (t.receptionistValidated === true || t.validatedBy || t.status === 'Pending_Payment') && 
-            !t.paid && 
+          const validatedUnpaidTests = labTests.filter(t =>
+            (t.receptionistValidated === true || t.validatedBy || t.status === 'Pending_Payment') &&
+            !t.paid &&
             t.paymentStatus !== 'paid' &&
             !bookings.some(b => b.tests?.some(bt => bt.id === t.id || (bt.testName?.toLowerCase() === (t.testName || t.name)?.toLowerCase() && b.patientId === pId)))
           );
 
           if (validatedUnpaidTests.length > 0) {
             const totalAmount = validatedUnpaidTests.reduce((sum, t) => sum + (t.price || 5000), 0);
+            // NOTE: this id is intentionally STABLE (no Date.now()) so repeated fetches
+            // reference the same virtual booking — processPayment() will create a real
+            // /bookings document for it on first successful payment.
             bookings.push({
-              id: `pat-booking-${pId}-${Date.now().toString().slice(-4)}`,
+              id: `pat-booking-${pId}`,
               bookingCode: `BK-${(pData.patientId || pId).slice(0, 6).toUpperCase()}`,
               labId,
               patientId: pId,
@@ -1002,7 +1102,8 @@ export const limsService = {
               })),
               overallStatus: 'Pending_Payment',
               createdAt: pData.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+              updatedAt: new Date().toISOString(),
+              _isVirtual: true
             });
           }
         });
@@ -1062,8 +1163,8 @@ export const limsService = {
       const snap = await getDocs(bookingsCol);
       for (const bDoc of snap.docs) {
         const bData = bDoc.data() as PatientBooking;
-        const isDocMatch = bookingIds.includes(bDoc.id) || 
-                           bookingIds.includes(bData.id) || 
+        const isDocMatch = bookingIds.includes(bDoc.id) ||
+                           bookingIds.includes(bData.id) ||
                            bookingIds.includes(bData.bookingCode) ||
                            (resolvedPatientId && (bData.patientId === resolvedPatientId || bData.patientPid === resolvedPatientId || (patientData?.patientId && bData.patientPid === patientData.patientId))) ||
                            (bData.tests && bData.tests.some(t => bookingIds.includes(t.id) || bookingIds.includes(t.testId) || bookingIds.includes(t.testName)));
@@ -1071,8 +1172,8 @@ export const limsService = {
         if (isDocMatch) {
           matchedAnyBooking = true;
           const updatedTests = (bData.tests || []).map(t => {
-            const isThisTestSelected = bookingIds.includes(t.id) || 
-                                       bookingIds.includes(t.testId) || 
+            const isThisTestSelected = bookingIds.includes(t.id) ||
+                                       bookingIds.includes(t.testId) ||
                                        bookingIds.includes(t.testName) ||
                                        bookingIds.some(bid => bid.includes(t.testName) || (t.id && bid.includes(t.id))) ||
                                        (bData.tests.length === 1);
@@ -1113,15 +1214,15 @@ export const limsService = {
         if (patientSnap.exists()) {
           const currentPatient = patientSnap.data();
           const currentTests: any[] = currentPatient.labTests || [];
-          
+
           const newlyValidatedTests: any[] = [];
           const updatedTests = currentTests.map(t => {
-            const isSelected = bookingIds.includes(t.id) || 
-                               bookingIds.includes(t.bookingId) || 
+            const isSelected = bookingIds.includes(t.id) ||
+                               bookingIds.includes(t.bookingId) ||
                                bookingIds.includes(t.testId) ||
                                bookingIds.includes(t.testName) ||
                                bookingIds.some(bid => bid.includes(t.testName) || (t.id && bid.includes(t.id)));
-            
+
             if (isSelected || currentTests.length === 1) {
               const valTest = {
                 ...t,
@@ -1286,8 +1387,7 @@ export const limsService = {
       labId,
       patientId: resolvedPatientId || 'PT-100',
       patientName: patientData?.name || 'Patient',
-    //   action: 'CHECKIN_VERIFICATION',
-    action: 'CHECKIN_VERIFICATION',
+      action: 'CHECKIN_VERIFICATION',
       performedBy: { id: 'rec-1', name: validatorName, role: 'receptionist' },
       details: `Receptionist ${validatorName} verified and activated ${bookingIds.length} test order(s) for patient. Routing to Cashier for payment collection.`
     });
