@@ -14,7 +14,8 @@ export type AuditActionType =
   | 'PROCESS_PAYMENT'
   | 'EDIT_PATIENT_RECORD'
   | 'STAFF_SELF_PROFILE_UPDATE'
-  | 'SYSTEM_SECURITY_CHECK';
+  | 'SYSTEM_SECURITY_CHECK'
+  | 'CHECKIN_VERIFICATION';
 
 export interface AuditLogItem {
   id: string;
@@ -74,6 +75,7 @@ const ACTION_METADATA: Record<AuditActionType, { label: string; category: AuditL
     label: 'Uploaded & Encrypted Diagnostic Findings',
     category: 'DIAGNOSTIC_MODIFICATION'
   },
+ 
   VALIDATE_FINDINGS: {
     label: 'Validated & Signed Off Biochemical Values',
     category: 'DIAGNOSTIC_MODIFICATION'
@@ -92,6 +94,10 @@ const ACTION_METADATA: Record<AuditActionType, { label: string; category: AuditL
   },
   SYSTEM_SECURITY_CHECK: {
     label: 'Automated Zero-Knowledge Security Audit',
+    category: 'CLINICAL_ACCESS'
+  },
+  CHECKIN_VERIFICATION: {
+    label: 'Receptionist Check-In Verification & Order Activation',
     category: 'CLINICAL_ACCESS'
   }
 };

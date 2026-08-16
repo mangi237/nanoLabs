@@ -1286,7 +1286,8 @@ export const limsService = {
       labId,
       patientId: resolvedPatientId || 'PT-100',
       patientName: patientData?.name || 'Patient',
-      action: 'CHECKIN_VERIFICATION',
+    //   action: 'CHECKIN_VERIFICATION',
+    action: 'CHECKIN_VERIFICATION',
       performedBy: { id: 'rec-1', name: validatorName, role: 'receptionist' },
       details: `Receptionist ${validatorName} verified and activated ${bookingIds.length} test order(s) for patient. Routing to Cashier for payment collection.`
     });
