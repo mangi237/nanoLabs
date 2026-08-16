@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Title, Lab Badge or User Info */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Hospital / Location Switcher Badge */}
-            <button
+            {/* <button
               onClick={() => setShowLocationModal(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/90 rounded-2xl border border-slate-200 transition-all cursor-pointer"
               title="Click to search labs around you"
@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="truncate">{lab?.city ? `${lab.city} Center` : 'Change Location'}</span>
                 </div>
               </div>
-            </button>
+            </button> */}
 
             {title && (
               <div className="hidden lg:block text-right border-l border-slate-200 pl-3">
