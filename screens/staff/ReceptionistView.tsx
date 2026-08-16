@@ -137,7 +137,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach(dt => {
+    directLabTests.forEach((dt: any) => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -165,7 +165,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     const pId = patient.id || patient.patientId;
     const pTests = getPatientTests(patient);
     const unvalidatedKeys = pTests
-      .filter(t => !t.receptionistValidated && t.status !== 'Paid' && t.status !== 'Completed')
+      .filter(t => !t.receptionistValidated  && t.status !== 'Completed')
       .map(t => t.id || t.testName || t.bookingId);
     
     setSelectedTestsMap(prev => ({
@@ -549,7 +549,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   const pTests = getPatientTests(patient);
                   const isExpanded = expandedPatientId === patient.id;
                   const isWalkIn = patient.registrationType === 'walk_in' || patient.isWalkIn === true || (patient.registeredBy && !patient.registeredBy.toLowerCase().includes('online'));
-                  const unvalidatedCount = pTests.filter(t => !t.receptionistValidated && t.status !== 'Paid' && t.status !== 'Completed').length;
+                  const unvalidatedCount = pTests.filter(t => !t.receptionistValidated && t.status !== 'Completed').length;
 
                   return (
                     <React.Fragment key={patient.id}>
