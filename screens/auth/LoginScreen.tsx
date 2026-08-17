@@ -46,6 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [labs, setLabs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showRegisterLabModal, setShowRegisterLabModal] = useState(false);
   const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
@@ -76,6 +77,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const result = await login(accessCode, labId);
       if (result.success && result.user) {
@@ -87,6 +90,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       }
     } catch (error: any) {
       setErrorMessage(error?.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -272,13 +277,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isSubmitting}
               className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
             >
-              {isLoading ? (
+              {isLoading || isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Authenticating...
+                  Authenticating Code...
                 </>
               ) : (
                 <>
