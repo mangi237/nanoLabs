@@ -1382,7 +1382,7 @@ export const limsService = {
       console.warn('Appointments batch update note:', apptErr);
     }
 
-    // 4. Audit log 
+    // 4. Audit log
     await auditService.logPatientAccess({
       labId,
       patientId: resolvedPatientId || 'PT-100',
