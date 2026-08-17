@@ -368,7 +368,7 @@ app.post('/api/staff/login-or-verify', (req: Request, res: Response) => {
     for (const record of staffAuthRegistry.values()) {
       // 1. Check if OTP matches
       if (record.otpHash && record.otpSalt) {
-        const computedOtpHash = hashWithSalt(cleanInput.toUpperCase(), record.otpSalt);
+        const computedOtpHash = hashWithSalt(cleanInput, record.otpSalt);
         if (computedOtpHash === record.otpHash) {
           // Check expiration
           if (record.otpExpiresAt && new Date(record.otpExpiresAt).getTime() < Date.now()) {

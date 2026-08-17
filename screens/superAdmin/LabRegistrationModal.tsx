@@ -20,7 +20,8 @@ import {
   Zap,
   Layers,
   HardDrive,
-  CheckCircle2
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
@@ -145,21 +146,20 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     }
   };
 
+  const [showPendingApprovalModal, setShowPendingApprovalModal] = useState(false);
+
   const handleSelectTier = (tier: SubscriptionTierType) => {
     let staff = 5;
     let sites = 1;
     if (tier === 'starter') {
       staff = 5;
       sites = 1;
-    } else if (tier === 'growth') {
-      staff = 12;
+    } else if ( tier === 'growth') {
+      staff = 15;
       sites = 2;
-    } else if (tier === 'business') {
-      staff = 25;
-      sites = 3;
-    } else if (tier === 'enterprise') {
+    } else if (tier === 'business' || tier === 'enterprise') {
       staff = 999;
-      sites = 10;
+      sites = 5;
     }
     setFormData(prev => ({
       ...prev,
@@ -190,16 +190,16 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     if (formData.pricingModel === 'pay_per_test') return 0;
     if (formData.pricingModel === 'lifetime_space') return formData.monthlyMaintenanceFee;
     
-    if (formData.subscriptionTier === 'starter') {
-      return formData.billingPeriod === 'annual' ? 250000 : 25000;
+    if ( formData.subscriptionTier === 'starter') {
+      return 25000;
     }
     if (formData.subscriptionTier === 'growth') {
-      return formData.billingPeriod === 'annual' ? 550000 : 55000;
+      return 45000;
     }
-    if (formData.subscriptionTier === 'business') {
-      return formData.billingPeriod === 'annual' ? 1200000 : 120000;
+    if (formData.subscriptionTier === 'business' || formData.subscriptionTier === 'enterprise') {
+      return 60000;
     }
-    return 0;
+    return 25000;
   };
 
   const handleSubmit = async () => {
@@ -222,7 +222,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     try {
       const subPrice = getSubscriptionPrice();
 
-      // 1. Create Lab Document
+      // 1. Create Lab Document in Pending Approval state
       const labRef = await addDoc(collection(db, 'labs'), {
         name: formData.name.trim(),
         slogan: formData.slogan.trim(),
@@ -241,12 +241,17 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         totalTestsCount: 0,
         royaltyEarnings: 0,
         staffCount: 1,
-        status: 'active',
+        
+        // Pending approval workflow
+        status: 'pending_approval',
+        confirmed: false,
         
         // Commercial Model Setup
         pricingModel: formData.pricingModel,
+        subscriptionPlan: formData.pricingModel,
         subscriptionTier: formData.subscriptionTier,
         subscriptionPrice: subPrice,
+        subscriptionStartDate: new Date().toISOString(),
         billingPeriod: formData.billingPeriod,
         monthlyMaintenanceFee: formData.pricingModel === 'lifetime_space' ? formData.monthlyMaintenanceFee : 0,
         feePerPatient: formData.pricingModel === 'pay_per_test' ? formData.feePerTest : 0,
@@ -254,7 +259,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         staffLimit: formData.staffLimit,
         sitesCount: formData.sitesCount,
         collectionCentresCount: formData.sitesCount,
-        verificationStatus: 'verified',
+        verificationStatus: 'pending',
 
         termsAccepted: true,
         termsAcceptedAt: new Date().toISOString(),
@@ -277,7 +282,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         createdAt: new Date().toISOString()
       });
 
-      // 3. Seed Standard Test Catalog with turnaround times
+      // 3. Seed Standard Test Catalog
       const defaultTests = [
         { name: 'Complete Blood Count (CBC)', category: 'Hematology', price: 4500, turnaroundTime: '2-4 Hours', description: 'Full cellular analysis including WBC, RBC, Platelets' },
         { name: 'Malaria Microscopy & RDT', category: 'Parasitology', price: 2500, turnaroundTime: '1 Hour', description: 'Detection of Plasmodium species' },
@@ -291,8 +296,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         await addDoc(collection(db, 'labs', labId, 'testCatalog'), test);
       }
 
-      if (onLabCreated) onLabCreated();
-      onClose();
+      setShowPendingApprovalModal(true);
     } catch (err) {
       console.error('Error creating lab center:', err);
       alert('Failed to provision lab center. Please try again.');
@@ -303,14 +307,14 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl sm:max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-150 my-auto">
+      <div className="bg-white text-slate-900 rounded-3xl max-w-2xl sm:max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-150 my-auto">
         
         {/* Modal Header */}
         <div className="p-5 sm:p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-teal-400" />
-              <h2 className="text-lg sm:text-xl font-bold">Register Diagnostic Laboratory Center</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-white">Register Diagnostic Laboratory Center</h2>
             </div>
             <p className="text-slate-400 text-xs mt-0.5">Step {step} of 4 • Self-Service Facility Provisioning</p>
           </div>
@@ -324,35 +328,35 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
         {/* Progress Tracker */}
         <div className="grid grid-cols-4 border-b border-slate-100 bg-slate-50 text-[11px] sm:text-xs font-semibold shrink-0">
-          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 1 ? 'text-teal-700 bg-teal-50/60' : 'text-slate-400'}`}>
-            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 1 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
-            <span className="hidden sm:inline">General Info</span>
-            <span className="sm:hidden">Info</span>
+          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 1 ? 'text-teal-700 bg-teal-50/60 font-bold' : 'text-slate-500'}`}>
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 1 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>1</span>
+            <span className="hidden sm:inline text-slate-900">General Info</span>
+            <span className="sm:hidden text-slate-900">Info</span>
           </div>
-          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 2 ? 'text-teal-700 bg-teal-50/60' : 'text-slate-400'}`}>
-            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 2 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
-            <span className="hidden sm:inline">Pricing & Plan</span>
-            <span className="sm:hidden">Pricing</span>
+          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 2 ? 'text-teal-700 bg-teal-50/60 font-bold' : 'text-slate-500'}`}>
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 2 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>2</span>
+            <span className="hidden sm:inline text-slate-900">Pricing & Plan</span>
+            <span className="sm:hidden text-slate-900">Pricing</span>
           </div>
-          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 3 ? 'text-teal-700 bg-teal-50/60' : 'text-slate-400'}`}>
-            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 3 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3</span>
-            <span className="hidden sm:inline">Theme</span>
-            <span className="sm:hidden">Theme</span>
+          <div className={`p-2.5 sm:p-3 text-center border-r border-slate-200/60 flex items-center justify-center gap-1.5 ${step >= 3 ? 'text-teal-700 bg-teal-50/60 font-bold' : 'text-slate-500'}`}>
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step >= 3 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>3</span>
+            <span className="hidden sm:inline text-slate-900">Theme</span>
+            <span className="sm:hidden text-slate-900">Theme</span>
           </div>
-          <div className={`p-2.5 sm:p-3 text-center flex items-center justify-center gap-1.5 ${step === 4 ? 'text-teal-700 bg-teal-50/60' : 'text-slate-400'}`}>
-            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step === 4 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-500'}`}>4</span>
-            <span className="hidden sm:inline">Admin & Legal</span>
-            <span className="sm:hidden">Admin</span>
+          <div className={`p-2.5 sm:p-3 text-center flex items-center justify-center gap-1.5 ${step === 4 ? 'text-teal-700 bg-teal-50/60 font-bold' : 'text-slate-500'}`}>
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] ${step === 4 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>4</span>
+            <span className="hidden sm:inline text-slate-900">Admin & Legal</span>
+            <span className="sm:hidden text-slate-900">Admin</span>
           </div>
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+        <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 text-slate-900">
           {step === 1 && (
             <div className="space-y-4">
               {/* Logo / Profile Picture Upload */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5">
                   Laboratory Logo / Profile Picture
                 </label>
                 <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -362,7 +366,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         src={formData.logoUrl}
                         alt="Lab Logo"
                         referrerPolicy="no-referrer"
-                        className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-2xs"
+                        className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-2xs bg-white"
                       />
                       <button
                         type="button"
@@ -380,16 +384,16 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-teal-400 transition-all cursor-pointer shadow-2xs">
+                    <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:border-teal-400 transition-all cursor-pointer shadow-2xs">
                       {uploadingLogo ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-                          <span>Uploading...</span>
+                          <span className="text-slate-800">Uploading...</span>
                         </>
                       ) : (
                         <>
                           <UploadCloud className="w-3.5 h-3.5 text-teal-600" />
-                          <span>{formData.logoUrl ? 'Change Logo Picture' : 'Upload Lab Profile Picture'}</span>
+                          <span className="text-slate-800">{formData.logoUrl ? 'Change Logo Picture' : 'Upload Lab Profile Picture'}</span>
                         </>
                       )}
                       <input
@@ -400,7 +404,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         className="hidden"
                       />
                     </label>
-                    <p className="text-[11px] text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-500 mt-1 font-normal">
                       PNG, JPG, SVG or WebP. Displayed on headers, invoices & reports.
                     </p>
                   </div>
@@ -408,7 +412,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                   Laboratory Facility Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -416,12 +420,12 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                   placeholder="e.g. Hope Diagnostic & Pathology Center"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-medium"
+                  className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                   Slogan / Sub-Header
                 </label>
                 <input
@@ -429,13 +433,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                   placeholder="e.g. Precision Medical Diagnostics & Blood Analysis"
                   value={formData.slogan}
                   onChange={(e) => setFormData({ ...formData, slogan: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Primary City / Region <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -443,11 +447,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="e.g. Lagos, Ikeja / Douala, Littoral"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Physical Street Address
                   </label>
                   <input
@@ -455,14 +459,14 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="e.g. 14 Allen Avenue / Boulevard de la Liberte"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Official Telephone
                   </label>
                   <input
@@ -470,11 +474,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="+234 800 000 0000 / +237 600 000 000"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Official Contact Email
                   </label>
                   <input
@@ -482,7 +486,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="lab@facility.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
               </div>
@@ -495,8 +499,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <DollarSign className="w-5 h-5 text-teal-600 shrink-0" />
                   <div>
-                    <h4 className="text-xs font-bold">Transparent Commercial Models</h4>
-                    <p className="text-[11px] text-teal-800">100% of patient diagnostic test revenue is retained directly by your laboratory.</p>
+                    <h4 className="text-xs font-bold text-teal-950">Transparent Commercial Models</h4>
+                    <p className="text-[11px] text-teal-900 font-medium">100% of patient diagnostic test revenue is retained directly by your laboratory.</p>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 bg-teal-600 text-white rounded-full text-[10px] font-bold tracking-wide">
@@ -506,7 +510,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
               {/* 3 Main Commercial Models Tabs */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
                   Select Your Preferred Commercial Billing Structure
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -526,10 +530,10 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         {formData.pricingModel === 'pay_per_test' && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
                       </div>
                       <h4 className="text-xs font-bold text-slate-900">Pay-Per-Test</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">500 FCFA / test processed</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">500 FCFA / test processed</p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-100">
-                      <span className="text-[10px] font-semibold text-teal-700 bg-teal-100/70 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
                         Zero Upfront Cost
                       </span>
                     </div>
@@ -553,10 +557,10 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         {formData.pricingModel === 'flat_subscription' && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
                       </div>
                       <h4 className="text-xs font-bold text-slate-900">Flat Subscription</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Unlimited tests • Flat monthly fee</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">Unlimited tests • Flat monthly fee</p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-100">
-                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md">
                         Priced by Staff & Sites
                       </span>
                     </div>
@@ -577,10 +581,10 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         {formData.pricingModel === 'lifetime_space' && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
                       </div>
                       <h4 className="text-xs font-bold text-slate-900">Lifetime Space</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">15k FCFA / mo maintenance</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">15k FCFA / mo maintenance</p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-100">
-                      <span className="text-[10px] font-semibold text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-md">
                         Permanent Asset
                       </span>
                     </div>
@@ -593,15 +597,15 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               {formData.pricingModel === 'flat_subscription' && (
                 <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800">
                       Choose Your Monthly Capacity Tier
                     </label>
                     <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-xs">
                       <button
                         type="button"
                         onClick={() => setFormData(p => ({ ...p, billingPeriod: 'monthly' }))}
-                        className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer ${
-                          formData.billingPeriod === 'monthly' ? 'bg-teal-600 text-white' : 'text-slate-600'
+                        className={`px-2 py-1 rounded-md text-[11px] font-bold cursor-pointer ${
+                          formData.billingPeriod === 'monthly' ? 'bg-teal-600 text-white' : 'text-slate-700'
                         }`}
                       >
                         Monthly
@@ -609,8 +613,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setFormData(p => ({ ...p, billingPeriod: 'annual' }))}
-                        className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer ${
-                          formData.billingPeriod === 'annual' ? 'bg-teal-600 text-white' : 'text-slate-600'
+                        className={`px-2 py-1 rounded-md text-[11px] font-bold cursor-pointer ${
+                          formData.billingPeriod === 'annual' ? 'bg-teal-600 text-white' : 'text-slate-700'
                         }`}
                       >
                         Annual (2 Mo Free)
@@ -635,8 +639,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <div className="mt-2 text-sm font-black text-teal-700">
                         {formData.billingPeriod === 'annual' ? '250,000 FCFA / yr' : '25,000 FCFA / mo'}
                       </div>
-                      <p className="text-[10px] text-slate-400">~₦75,000 / $48 / mo</p>
-                      <ul className="mt-2 text-[10px] text-slate-600 space-y-0.5">
+                      <p className="text-[10px] text-slate-500 font-medium">~₦75,000 / $48 / mo</p>
+                      <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
                         <li>• Unlimited Diagnostic Tests</li>
                         <li>• Up to 5 Staff Seats</li>
                         <li>• 1 Primary Laboratory</li>
@@ -662,8 +666,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <div className="mt-2 text-sm font-black text-teal-700">
                         {formData.billingPeriod === 'annual' ? '550,000 FCFA / yr' : '55,000 FCFA / mo'}
                       </div>
-                      <p className="text-[10px] text-slate-400">~₦120,000 / $76 / mo</p>
-                      <ul className="mt-2 text-[10px] text-slate-600 space-y-0.5">
+                      <p className="text-[10px] text-slate-500 font-medium">~₦120,000 / $76 / mo</p>
+                      <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
                         <li>• Unlimited Diagnostic Tests</li>
                         <li>• Up to 12 Staff Seats</li>
                         <li>• 1 Lab + 2 Collection Centres</li>
@@ -686,8 +690,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <div className="mt-2 text-sm font-black text-teal-700">
                         {formData.billingPeriod === 'annual' ? '1,200,000 FCFA / yr' : '120,000 FCFA / mo'}
                       </div>
-                      <p className="text-[10px] text-slate-400">~₦200,000 / $127 / mo</p>
-                      <ul className="mt-2 text-[10px] text-slate-600 space-y-0.5">
+                      <p className="text-[10px] text-slate-500 font-medium">~₦200,000 / $127 / mo</p>
+                      <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
                         <li>• Unlimited Diagnostic Tests</li>
                         <li>• Up to 25 Staff Seats</li>
                         <li>• 3 Labs + 5 Collection Centres</li>
@@ -700,12 +704,12 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
               {/* Pay-Per-Test summary notice */}
               {formData.pricingModel === 'pay_per_test' && (
-                <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
-                  <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5 text-amber-900">
                     <Zap className="w-4 h-4 text-amber-600" />
                     Pay-Per-Test Operating Structure
                   </p>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
                     Zero monthly baseline software fees. You are billed strictly <strong>500 FCFA (~₦500 / $0.80)</strong> per completed and released test report. Unlimited staff logins and 24/7 patient portal are included with zero upfront commitment.
                   </p>
                 </div>
@@ -713,12 +717,12 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
               {/* Lifetime Space summary notice */}
               {formData.pricingModel === 'lifetime_space' && (
-                <div className="p-4 bg-purple-50/80 rounded-2xl border border-purple-200 text-xs text-purple-900 space-y-1.5">
-                  <p className="font-bold flex items-center gap-1.5 text-purple-800">
+                <div className="p-4 bg-purple-50/80 rounded-2xl border border-purple-200 text-xs text-purple-950 space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5 text-purple-900">
                     <HardDrive className="w-4 h-4 text-purple-600" />
                     Lifetime Dedicated Cloud Tenant
                   </p>
-                  <p className="text-[11px] text-purple-800 leading-relaxed">
+                  <p className="text-[11px] text-purple-900 leading-relaxed font-medium">
                     Perpetual cloud allocation with an ongoing <strong>15,000 FCFA (~₦25,000 / $25) / month</strong> maintenance fee covering cryptographic key derivation, automated encrypted backups, continuous zero-knowledge security patches, and 24/7 support SLA.
                   </p>
                 </div>
@@ -727,11 +731,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               {/* Capacity Limit Quick Adjusters */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Staff User Limit</span>
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Staff User Limit</span>
                   <span className="text-sm font-bold text-slate-900">{formData.staffLimit === 999 ? 'Unlimited' : `${formData.staffLimit} Staff Logins`}</span>
                 </div>
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Included Sites / Centres</span>
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Included Sites / Centres</span>
                   <span className="text-sm font-bold text-slate-900">{formData.sitesCount} Physical Location(s)</span>
                 </div>
               </div>
@@ -741,13 +745,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
           {step === 3 && (
             <div className="space-y-4">
-              <div className="p-4 bg-teal-50 rounded-2xl border border-teal-200 flex items-center gap-3 text-teal-800 text-sm">
+              <div className="p-4 bg-teal-50 rounded-2xl border border-teal-200 flex items-center gap-3 text-teal-900 text-sm font-medium">
                 <Palette className="w-5 h-5 text-teal-600 shrink-0" />
                 Customize the visual identity and accent theme for this laboratory instance.
               </div>
 
               <div className="space-y-3">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800">
                   Primary Theme Color
                 </label>
                 <div className="flex items-center gap-3">
@@ -761,13 +765,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     type="text"
                     value={formData.primaryColor}
                     onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                    className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase font-mono"
+                    className="flex-1 p-3 bg-white border border-slate-300 rounded-xl text-sm uppercase font-mono font-bold text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500/20"
                   />
                 </div>
               </div>
 
               <div className="pt-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
                   Preview Color Accent Card
                 </label>
                 <div 
@@ -783,16 +787,16 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         className="w-12 h-12 rounded-xl object-cover border border-white/40 shadow-xs bg-white/10"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg border border-white/30">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg border border-white/30 text-white">
                         {formData.name ? formData.name.charAt(0).toUpperCase() : 'L'}
                       </div>
                     )}
                     <div>
-                      <h4 className="font-bold text-lg">{formData.name || 'Sample Lab Name'}</h4>
-                      <p className="text-xs opacity-90">{formData.location || 'Location Preview'}</p>
+                      <h4 className="font-bold text-lg text-white">{formData.name || 'Sample Lab Name'}</h4>
+                      <p className="text-xs text-white/90 font-medium">{formData.location || 'Location Preview'}</p>
                     </div>
                   </div>
-                  <Sparkles className="w-6 h-6 opacity-80" />
+                  <Sparkles className="w-6 h-6 text-white/80" />
                 </div>
               </div>
             </div>
@@ -800,13 +804,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
           {step === 4 && (
             <div className="space-y-4">
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-3 text-amber-900 text-sm">
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-3 text-amber-950 text-sm font-medium">
                 <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
                 Configure the primary Laboratory Administrator credentials who will manage this location.
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                   Administrator Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -814,13 +818,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                   placeholder="e.g. Dr. Sarah Johnson / Lab Director"
                   value={formData.adminName}
                   onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-medium"
+                  className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Admin Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -828,11 +832,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="admin@lab.com"
                     value={formData.adminEmail}
                     onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
                     Admin Phone Number
                   </label>
                   <input
@@ -840,48 +844,48 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     placeholder="+237 670000000 / +234 800 000 0000"
                     value={formData.adminPhone}
                     onChange={(e) => setFormData({ ...formData, adminPhone: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800">
                     Administrator Access Code
                   </label>
                   <button
                     type="button"
                     onClick={generateAccessCode}
-                    className="text-xs text-teal-600 hover:text-teal-700 font-semibold cursor-pointer"
+                    className="text-xs text-teal-600 hover:text-teal-700 font-bold cursor-pointer"
                   >
                     Regenerate Code
                   </button>
                 </div>
                 <div className="relative">
-                  <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                  <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
                   <input
                     type="text"
                     placeholder="e.g. LABADM88"
                     value={formData.accessCode}
                     onChange={(e) => setFormData({ ...formData, accessCode: e.target.value.toUpperCase() })}
-                    className="w-full p-3 pl-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-wider font-bold text-slate-800 uppercase focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full p-3 pl-10 bg-white border border-slate-300 rounded-xl text-sm font-mono tracking-wider font-bold text-slate-900 uppercase placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-1">This code is used by the administrator to authenticate and unlock roles.</p>
+                <p className="text-xs text-slate-500 mt-1 font-normal">This code is used by the administrator to authenticate and unlock roles.</p>
               </div>
 
               {/* Facility Terms & Conditions Agreement Section */}
               <div className="pt-4 border-t border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                     <FileText className="w-4 h-4 text-teal-600" />
                     Facility Agreement & Legal Consent <span className="text-rose-500">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowTermsModal(true)}
-                    className="text-xs font-semibold text-teal-600 hover:text-teal-800 flex items-center gap-1 underline cursor-pointer"
+                    className="text-xs font-bold text-teal-600 hover:text-teal-800 flex items-center gap-1 underline cursor-pointer"
                   >
                     Read Full Terms
                     <ExternalLink className="w-3 h-3" />
@@ -890,7 +894,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
                 {/* Selected Plan Commercial Summary */}
                 <div className="p-3 bg-teal-50/80 border border-teal-200/80 rounded-xl text-xs text-teal-950 space-y-1">
-                  <p className="font-bold flex items-center gap-1.5 text-teal-800">
+                  <p className="font-bold flex items-center gap-1.5 text-teal-900">
                     <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
                     Selected Commercial Model: {
                       formData.pricingModel === 'pay_per_test' ? 'Pay-Per-Test (500 FCFA baseline / test)' :
@@ -898,7 +902,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       'Lifetime Dedicated Cloud Space (15,000 FCFA/mo maintenance)'
                     }
                   </p>
-                  <p className="text-[11px] text-teal-800 leading-relaxed">
+                  <p className="text-[11px] text-teal-900 leading-relaxed font-medium">
                     100% of patient diagnostic fees are retained directly by your laboratory. You maintain complete pricing autonomy with zero predatory ticket surcharges.
                   </p>
                 </div>
@@ -911,7 +915,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     onChange={e => setTermsAccepted(e.target.checked)}
                     className="w-4 h-4 mt-0.5 rounded text-teal-600 focus:ring-teal-500 border-slate-300 cursor-pointer"
                   />
-                  <span className="text-xs text-slate-700">
+                  <span className="text-xs text-slate-800 font-medium">
                     I have read and agree to the{' '}
                     <button
                       type="button"
@@ -919,7 +923,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         e.stopPropagation();
                         setShowTermsModal(true);
                       }}
-                      className="text-teal-600 font-bold underline hover:text-teal-800"
+                      className="text-teal-700 font-bold underline hover:text-teal-900"
                     >
                       Terms and Conditions for Laboratory Registration
                     </button>
@@ -934,7 +938,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     onChange={e => setAuthorizedRepConfirmed(e.target.checked)}
                     className="w-4 h-4 mt-0.5 rounded text-teal-600 focus:ring-teal-500 border-slate-300 cursor-pointer"
                   />
-                  <span className="text-xs text-slate-700 font-medium">
+                  <span className="text-xs text-slate-800 font-semibold">
                     I confirm I am authorized to register this Facility and bind it to these terms
                   </span>
                 </label>
@@ -948,7 +952,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
           {step > 1 ? (
             <button
               onClick={() => setStep((s) => (s - 1) as any)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs sm:text-sm cursor-pointer transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs sm:text-sm cursor-pointer transition-colors shadow-2xs"
             >
               <ChevronLeft className="w-4 h-4" />
               Previous
@@ -960,7 +964,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
           {step < 4 ? (
             <button
               onClick={handleNextStep}
-              className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow-md shadow-teal-600/20 cursor-pointer transition-colors"
+              className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-teal-600/20 cursor-pointer transition-colors"
             >
               Next Step
               <ChevronRight className="w-4 h-4" />
@@ -969,7 +973,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
             <button
               onClick={handleSubmit}
               disabled={loading || !termsAccepted || !authorizedRepConfirmed}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               {loading ? (
                 <>
@@ -998,6 +1002,57 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         }}
         accepted={termsAccepted && authorizedRepConfirmed}
       />
+
+      {/* Pending Approval Confirmation Modal */}
+      {showPendingApprovalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+          <div className="bg-slate-900 border border-teal-500/50 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center space-y-5 shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto animate-pulse">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full font-mono font-bold text-xs uppercase tracking-wider">
+                Awaiting nanoLabs Approval (Max 24Hrs)
+              </span>
+              <h3 className="text-xl font-extrabold text-white">
+                Laboratory Registered & Pending Permission
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                <strong className="text-teal-300">{formData.name}</strong> has been successfully registered. To maintain security, medical compliance, and license integrity, your lab is currently <strong className="text-amber-300">awaiting SuperAdmin verification</strong>.
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 text-left text-xs font-mono space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Admin Access Code:</span>
+                <span className="text-teal-300 font-bold">{formData.accessCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status:</span>
+                <span className="text-amber-400 font-bold flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> Pending Verification
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Estimated Activation:</span>
+                <span className="text-white font-bold">Within 24 Hours</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowPendingApprovalModal(false);
+                if (onLabCreated) onLabCreated();
+                onClose();
+              }}
+              className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-teal-500/20 transition-all cursor-pointer"
+            >
+              Understood & Return
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
