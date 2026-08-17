@@ -3,24 +3,27 @@ import Header from '../../components/common/Header';
 import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
-import { limsService, PatientBooking } from '../../services/limsService';
-import { 
-  DollarSign, 
-  Search, 
-  CheckCircle2, 
-  CreditCard, 
-  Smartphone, 
-  ShieldCheck, 
-  Building2, 
-  Clock, 
-  Receipt, 
+import { limsService, PatientBooking, InsuranceDetails } from '../../services/limsService';
+import { authService } from '../../services/authService';
+import {
+  DollarSign,
+  Search,
+  CheckCircle2,
+  CreditCard,
+  Smartphone,
+  ShieldCheck,
+  Building2,
+  Clock,
+  Receipt,
   AlertCircle,
   FileText,
   UserCheck,
   ArrowRight,
   ChevronDown,
   ChevronUp,
-  FlaskConical
+  FlaskConical,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -44,11 +47,23 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [selectedGroupBookings, setSelectedGroupBookings] = useState<PatientBooking[] | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mobile_money' | 'card' | 'insurance'>('cash');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
+  const [showReceipt, setShowReceipt] = useState<{ booking: PatientBooking; totalPaid: number; method: string } | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
 
   const [revenuePeriod, setRevenuePeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [activeTab, setActiveTab] = useState<'unpaid' | 'history'>('unpaid');
+
+  // --- Insurance state ---
+  const [insuranceCompany, setInsuranceCompany] = useState('');
+  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
+  const [insuranceCoverageType, setInsuranceCoverageType] = useState<'full' | 'partial'>('partial');
+  const [insurancePercent, setInsurancePercent] = useState(70);
+  const [coPayMethod, setCoPayMethod] = useState<'cash' | 'mobile_money' | 'card'>('cash');
+
+  // --- Access code confirmation state ---
+  const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [accessCodeError, setAccessCodeError] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -66,47 +81,137 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
+  // The set of bookings currently being paid — either the group ("Collect All") or a single order.
+  // This is the single source of truth the whole modal reads from, fixing the bug where the
+  // modal only ever showed selectedBooking (the first order) even during a group payment.
+  const activeBookings: PatientBooking[] = selectedGroupBookings
+    ? selectedGroupBookings
+    : (selectedBooking ? [selectedBooking] : []);
+
+  const activeTotal = activeBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+
+  const insuranceAmount = insuranceCoverageType === 'full'
+    ? activeTotal
+    : Math.round(activeTotal * (insurancePercent / 100));
+  const patientCoPayAmount = activeTotal - insuranceAmount;
+
+  // What actually needs to be collected right now, depending on payment method
+  const amountToCollectNow = paymentMethod === 'insurance' ? patientCoPayAmount : activeTotal;
+
+  const resetModalState = () => {
+    setSelectedBooking(null);
+    setSelectedGroupBookings(null);
+    setAccessCodeInput('');
+    setAccessCodeError('');
+    setPaymentMethod('cash');
+    setInsuranceCompany('');
+    setInsurancePolicyNumber('');
+    setInsuranceCoverageType('partial');
+    setInsurancePercent(70);
+    setCoPayMethod('cash');
+  };
+
   const handleCollectPayment = async () => {
-    if (!selectedBooking && (!selectedGroupBookings || selectedGroupBookings.length === 0)) return;
+    if (activeBookings.length === 0) return;
+
+    setAccessCodeError('');
+
+    // 1. Verify the staff access code BEFORE touching any payment data
+    setVerifyingCode(true);
+    const verification = await authService.verifyStaffActionCode(
+      accessCodeInput,
+      ['cashier', 'admin'],
+      user?.accessCode,
+      targetLabId
+    );
+    setVerifyingCode(false);
+
+    if (!verification.authorized) {
+      setAccessCodeError(verification.error || 'Invalid access code. Payment was not processed.');
+      return;
+    }
+
+    // 2. Build insurance details if applicable
+    const insuranceDetails: InsuranceDetails | undefined = paymentMethod === 'insurance'
+      ? {
+          company: insuranceCompany || 'Unspecified Insurer',
+          policyNumber: insurancePolicyNumber || 'N/A',
+          coverageType: insuranceCoverageType,
+          insurancePercent: insuranceCoverageType === 'full' ? 100 : insurancePercent,
+          patientPercent: insuranceCoverageType === 'full' ? 0 : (100 - insurancePercent),
+          insuranceAmount,
+          patientCoPayAmount,
+          patientCoPayMethodLabel: patientCoPayAmount > 0 ? coPayMethod : undefined
+        }
+      : undefined;
+
+    if (paymentMethod === 'insurance' && (!insuranceCompany || !insurancePolicyNumber)) {
+      setAccessCodeError('Please enter the insurance company name and policy number.');
+      return;
+    }
 
     setIsProcessing(true);
     try {
-      if (selectedGroupBookings && selectedGroupBookings.length > 0) {
-        for (const b of selectedGroupBookings) {
-          await limsService.processPayment({
-            labId: targetLabId,
-            bookingId: b.id,
-            paymentMethod,
-            processedByName: user?.name || 'Head Cashier'
-          });
-        }
-        setShowReceipt(selectedGroupBookings[0]);
-        setSelectedGroupBookings(null);
-        setSelectedBooking(null);
-      } else if (selectedBooking) {
-        const ok = await limsService.processPayment({
+      const staffName = verification.staffName || user?.name || 'Cashier';
+      const results: { booking: PatientBooking; success: boolean; error?: string }[] = [];
+
+      // 3. Process payment for every booking in the active set, splitting the co-pay
+      //    proportionally across bookings when insurance covers part of the total.
+      for (const b of activeBookings) {
+        const bookingShareOfTotal = activeTotal > 0 ? (b.totalAmount || 0) / activeTotal : 0;
+        const bookingAmountCollected = paymentMethod === 'insurance'
+          ? Math.round(patientCoPayAmount * bookingShareOfTotal)
+          : (b.totalAmount || 0);
+
+        const bookingInsuranceDetails: InsuranceDetails | undefined = insuranceDetails
+          ? {
+              ...insuranceDetails,
+              insuranceAmount: Math.round(insuranceAmount * bookingShareOfTotal),
+              patientCoPayAmount: bookingAmountCollected
+            }
+          : undefined;
+
+        const result = await limsService.processPayment({
           labId: targetLabId,
-          bookingId: selectedBooking.id,
+          booking: b,
           paymentMethod,
-          processedByName: user?.name || 'Head Cashier'
+          processedByName: staffName,
+          processedByRole: verification.staffName ? 'cashier' : (user?.role || 'cashier'),
+          amountCollected: bookingAmountCollected,
+          insuranceDetails: bookingInsuranceDetails
         });
 
-        if (ok) {
-          setShowReceipt(selectedBooking);
-          setSelectedBooking(null);
-        }
+        results.push({ booking: b, success: result.success, error: result.error });
       }
+
+      const failed = results.filter(r => !r.success);
+
+      if (failed.length > 0) {
+        // Do NOT show a success receipt if anything failed — this is exactly the bug being fixed
+        setAccessCodeError(
+          `${failed.length} of ${results.length} order(s) could not be processed: ${failed.map(f => f.error || f.booking.bookingCode).join('; ')}`
+        );
+      } else {
+        setShowReceipt({
+          booking: activeBookings[0],
+          totalPaid: amountToCollectNow,
+          method: paymentMethod
+        });
+        resetModalState();
+      }
+
       await fetchData();
     } catch (e) {
       console.error('Payment collection error:', e);
+      setAccessCodeError('An unexpected error occurred while processing payment. Please try again.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   // ONLY show bookings that have been validated/checked-in by Receptionist
-  const unpaidBookings = bookings.filter(b => 
-    b.paymentStatus === 'unpaid' && 
+  const unpaidBookings = bookings.filter(b =>
+    b.paymentStatus === 'unpaid' &&
     (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in')
   );
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
@@ -131,11 +236,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
   });
 
   const periodRevenue = filteredPaidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-  const totalCollectedToday = paidBookings
-    .filter(b => (b.paidAt || b.createdAt || '').startsWith(todayStr))
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
-  const filteredUnpaid = unpaidBookings.filter(b => 
+  const filteredUnpaid = unpaidBookings.filter(b =>
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
@@ -143,7 +245,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
   const patientGroups = React.useMemo(() => {
     const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number } } = {};
-    
+
     filteredUnpaid.forEach(b => {
       const key = b.patientPid || b.patientId || b.patientName;
       if (!groups[key]) {
@@ -184,7 +286,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         badgeBg="bg-emerald-400 text-slate-950"
         rightBadge={
           <div className="text-right bg-emerald-950/80 p-4 rounded-2xl border border-emerald-700/60 shadow-md space-y-2">
-            <div className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider">
+            <div className="text-[10px] uppercase font-bold text-emerald-300 trackinfg-wider">
               Collected Revenue ({revenuePeriod.toUpperCase()})
             </div>
             <div className="text-2xl font-black text-emerald-400 font-mono">
@@ -202,8 +304,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   key={p.id}
                   onClick={() => setRevenuePeriod(p.id as any)}
                   className={`px-2 py-0.5 rounded-lg text-[9px] font-bold cursor-pointer transition-all ${
-                    revenuePeriod === p.id 
-                      ? 'bg-emerald-400 text-slate-950 shadow-xs' 
+                    revenuePeriod === p.id
+                      ? 'bg-emerald-400 text-slate-950 shadow-xs'
                       : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800'
                   }`}
                 >
@@ -360,7 +462,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           <button
                             onClick={() => {
                               setSelectedGroupBookings(group.bookings);
-                              setSelectedBooking(group.bookings[0]);
+                              setSelectedBooking(null);
                             }}
                             className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                           >
@@ -430,7 +532,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                 </div>
 
                                 <button
-                                  onClick={() => setSelectedBooking(booking)}
+                                  onClick={() => {
+                                    setSelectedGroupBookings(null);
+                                    setSelectedBooking(booking);
+                                  }}
                                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
                                 >
                                   <DollarSign className="w-3.5 h-3.5" />
@@ -510,6 +615,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-extrabold uppercase">
                           {b.paymentMethod || 'Cash'}
                         </span>
+                        {b.insuranceDetails && (
+                          <div className="text-[9px] text-slate-500 mt-1">
+                            {b.insuranceDetails.company} • {b.insuranceDetails.coverageType === 'full' ? '100%' : `${b.insuranceDetails.insurancePercent}%`} covered
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
@@ -528,30 +638,50 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* COLLECT PAYMENT MODAL */}
-      {selectedBooking && (
+      {/* COLLECT PAYMENT MODAL — now reads from activeBookings so group totals are always correct */}
+      {activeBookings.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            
+
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
                   <DollarSign className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-white">Process Patient Order Payment</h3>
-                  <p className="text-xs text-emerald-300">Invoice {selectedBooking.invoiceNumber} • {selectedBooking.bookingCode}</p>
+                  <h3 className="font-extrabold text-base text-white">
+                    {activeBookings.length > 1 ? `Process Payment — ${activeBookings.length} Orders` : 'Process Patient Order Payment'}
+                  </h3>
+                  <p className="text-xs text-emerald-300">
+                    {activeBookings.length > 1
+                      ? activeBookings.map(b => b.bookingCode).join(', ')
+                      : `Invoice ${activeBookings[0].invoiceNumber} • ${activeBookings[0].bookingCode}`}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedBooking(null)} className="p-2 text-slate-400 hover:text-white cursor-pointer">✕</button>
+              <button onClick={resetModalState} className="p-2 text-slate-400 hover:text-white cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">
               <div className="p-3 bg-slate-800 rounded-2xl space-y-1">
                 <div className="text-slate-400">Patient Name</div>
-                <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests</div>
+                <div className="text-base font-black text-white">{activeBookings[0].patientName}</div>
+                <div className="text-slate-300">
+                  Total Items: {activeBookings.reduce((sum, b) => sum + (b.tests?.length || 0), 0)} test(s) across {activeBookings.length} order{activeBookings.length > 1 ? 's' : ''}
+                </div>
               </div>
+
+              {/* Itemized breakdown so the total is always verifiably correct */}
+              {activeBookings.length > 1 && (
+                <div className="p-3 bg-slate-800/60 rounded-xl space-y-1.5 max-h-32 overflow-y-auto">
+                  {activeBookings.map(b => (
+                    <div key={b.id} className="flex justify-between text-[11px] text-slate-300">
+                      <span>{b.bookingCode} ({b.tests?.length || 0} test{b.tests?.length !== 1 ? 's' : ''})</span>
+                      <span className="font-mono font-bold text-emerald-400">{(b.totalAmount || 0).toLocaleString()} FCFA</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-300 font-bold mb-2">Select Payment Method</label>
@@ -581,33 +711,151 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
+              {/* INSURANCE DETAILS PANEL — only shown when insurance is selected */}
+              {paymentMethod === 'insurance' && (
+                <div className="p-4 bg-purple-950/40 border border-purple-500/30 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2 text-purple-200 font-bold">
+                    <ShieldCheck className="w-4 h-4" />
+                    Insurance Coverage Details
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Insurance company"
+                      value={insuranceCompany}
+                      onChange={e => setInsuranceCompany(e.target.value)}
+                      className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Policy number"
+                      value={insurancePolicyNumber}
+                      onChange={e => setInsurancePolicyNumber(e.target.value)}
+                      className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInsuranceCoverageType('full')}
+                      className={`flex-1 py-2 rounded-lg font-bold ${insuranceCoverageType === 'full' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                    >
+                      100% Full Cover
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInsuranceCoverageType('partial')}
+                      className={`flex-1 py-2 rounded-lg font-bold ${insuranceCoverageType === 'partial' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                    >
+                      Partial / Co-Pay
+                    </button>
+                  </div>
+
+                  {insuranceCoverageType === 'partial' && (
+                    <div className="space-y-1.5">
+                      <label className="text-purple-200 text-[11px] font-semibold">Insurance covers: {insurancePercent}%</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={insurancePercent}
+                        onChange={e => setInsurancePercent(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="p-2.5 bg-slate-800 rounded-lg">
+                      <div className="text-[10px] text-slate-400">Billed to insurer</div>
+                      <div className="font-mono font-bold text-purple-300">{insuranceAmount.toLocaleString()} FCFA</div>
+                    </div>
+                    <div className="p-2.5 bg-slate-800 rounded-lg">
+                      <div className="text-[10px] text-slate-400">Patient co-pay (collect now)</div>
+                      <div className="font-mono font-bold text-emerald-300">{patientCoPayAmount.toLocaleString()} FCFA</div>
+                    </div>
+                  </div>
+
+                  {patientCoPayAmount > 0 && (
+                    <div>
+                      <label className="text-purple-200 text-[11px] font-semibold block mb-1">Co-pay collected via</label>
+                      <div className="flex gap-2">
+                        {(['cash', 'mobile_money', 'card'] as const).map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setCoPayMethod(m)}
+                            className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold ${coPayMethod === m ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                          >
+                            {m === 'mobile_money' ? 'Mobile Money' : m.charAt(0).toUpperCase() + m.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400 font-bold">Total Settlement Amount:</span>
-                <span className="text-xl font-black text-emerald-400 font-mono">
-                  {selectedBooking.totalAmount?.toLocaleString()} XAF
+                <span className="text-slate-400 font-bold">
+                  {paymentMethod === 'insurance' ? 'Amount To Collect Now (Co-Pay):' : 'Total Settlement Amount:'}
                 </span>
+                <span className="text-xl font-black text-emerald-400 font-mono">
+                  {amountToCollectNow.toLocaleString()} XAF
+                </span>
+              </div>
+              {paymentMethod === 'insurance' && (
+                <div className="text-[10px] text-slate-500 -mt-2">
+                  Invoice total: {activeTotal.toLocaleString()} FCFA — {insuranceAmount.toLocaleString()} FCFA billed to insurer, {patientCoPayAmount.toLocaleString()} FCFA collected from patient now.
+                </div>
+              )}
+
+              {/* ACCESS CODE CONFIRMATION — required before any payment is processed */}
+              <div className="p-4 bg-amber-950/30 border border-amber-500/30 rounded-2xl space-y-2">
+                <label className="flex items-center gap-2 text-amber-200 font-bold text-xs">
+                  <KeyRound className="w-4 h-4" />
+                  Enter your staff access code to confirm this transaction
+                </label>
+                <input
+                  type="password"
+                  value={accessCodeInput}
+                  onChange={e => { setAccessCodeInput(e.target.value); setAccessCodeError(''); }}
+                  placeholder="Your personal access code"
+                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-amber-500/40 rounded-xl text-white placeholder-slate-500 tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  autoComplete="off"
+                />
+                {accessCodeError && (
+                  <div className="flex items-center gap-1.5 text-rose-400 text-[11px] font-semibold">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {accessCodeError}
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-200 flex items-center gap-2">
                 <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                Clicking confirm will immediately mark order as PAID and push patient to Phlebotomy Queue.
+                Confirming will mark {activeBookings.length > 1 ? 'these orders' : 'this order'} as PAID, log this action (with your verified identity) to the patient's audit trail, and push the patient to the Phlebotomy queue.
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedBooking(null)}
+                  onClick={resetModalState}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  disabled={isProcessing}
+                  disabled={isProcessing || verifyingCode || !accessCodeInput.trim()}
                   onClick={handleCollectPayment}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {isProcessing ? 'Processing Payment...' : 'Confirm Payment & Push to Phlebotomy'}
+                  <Lock className="w-4 h-4" />
+                  {verifyingCode ? 'Verifying Code...' : isProcessing ? 'Processing Payment...' : 'Confirm Payment & Push to Phlebotomy'}
                 </button>
               </div>
             </div>
@@ -625,13 +873,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
             </div>
             <h3 className="text-xl font-black text-slate-900">Payment Settled Successfully!</h3>
             <p className="text-xs text-slate-600">
-              Receipt issued for <strong>{showReceipt.patientName}</strong> ({showReceipt.bookingCode}).
+              Receipt issued for <strong>{showReceipt.booking.patientName}</strong>.
             </p>
 
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1 text-left font-mono">
-              <div className="flex justify-between"><span>Invoice:</span> <strong>{showReceipt.invoiceNumber}</strong></div>
-              <div className="flex justify-between"><span>Method:</span> <strong className="uppercase">{paymentMethod}</strong></div>
-              <div className="flex justify-between"><span>Amount Paid:</span> <strong className="text-emerald-700">{showReceipt.totalAmount?.toLocaleString()} XAF</strong></div>
+              <div className="flex justify-between"><span>Method:</span> <strong className="uppercase">{showReceipt.method}</strong></div>
+              <div className="flex justify-between"><span>Amount Collected:</span> <strong className="text-emerald-700">{showReceipt.totalPaid.toLocaleString()} XAF</strong></div>
               <div className="flex justify-between"><span>Phlebotomy Queue:</span> <strong className="text-emerald-600">UNLOCKED</strong></div>
             </div>
 
