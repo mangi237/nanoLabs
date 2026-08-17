@@ -3,21 +3,26 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
-import { 
-  Microscope, 
-  Search, 
-  CheckCircle2, 
-  TestTube, 
-  Check, 
-  ShieldCheck, 
-  Clock, 
+import { authService } from '../../services/authService';
+import {
+  Microscope,
+  Search,
+  CheckCircle2,
+  TestTube,
+  Check,
+  ShieldCheck,
+  Clock,
   AlertCircle,
   FileText,
   Users,
   FlaskConical,
   Droplets,
   Syringe,
-  CheckSquare
+  CheckSquare,
+  KeyRound,
+  Lock,
+  Printer,
+  Tag
 } from 'lucide-react';
 
 const COMMON_SAMPLE_MATRICES = [
@@ -32,13 +37,24 @@ const COMMON_SAMPLE_MATRICES = [
   'CSF / Sterile Body Fluid Tube'
 ];
 
+interface SpecimenLabel {
+  code: string;
+  matrix: string;
+  patientName: string;
+  patientPid: string;
+  bookingCode: string;
+  testsCovered: string[];
+  collectedBy: string;
+  collectedAt: string;
+}
+
 interface AnalyzerViewProps {
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
   onRoleSwitcherPress?: () => void;
 }
 
-export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress , onProfilePress, onRoleSwitcherPress}) => {
+export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress, onProfilePress, onRoleSwitcherPress }) => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
 
@@ -50,6 +66,14 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
   const [selectedBooking, setSelectedBooking] = useState<PatientBooking | null>(null);
   const [checkedMatrices, setCheckedMatrices] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Access code confirmation state
+  const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [accessCodeError, setAccessCodeError] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
+
+  // Generated printable labels shown after a successful collection
+  const [generatedLabels, setGeneratedLabels] = useState<SpecimenLabel[] | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -70,6 +94,8 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
 
   const handleOpenBooking = (b: PatientBooking) => {
     setSelectedBooking(b);
+    setAccessCodeInput('');
+    setAccessCodeError('');
     // Pre-check sample matrices based on test requirements
     const required = new Set<string>();
     b.tests.forEach(t => {
@@ -86,33 +112,92 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
     }
   };
 
+  /**
+   * Builds one readable label per sample matrix collected, listing exactly which
+   * tests that specimen covers, so the lab tech can match tube -> test at a glance.
+   */
+  const buildSpecimenLabels = (booking: PatientBooking, matrices: string[], collectedByName: string): SpecimenLabel[] => {
+    const timestamp = new Date();
+    const dateLabel = timestamp.toLocaleString('en-GB', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    return matrices.map((matrix, idx) => {
+      const testsForThisMatrix = booking.tests
+        .filter(t => t.sampleTypeRequired === matrix)
+        .map(t => t.testName);
+
+      return {
+        code: `SPC-${booking.bookingCode.replace(/^BK-/, '')}-${idx + 1}`,
+        matrix,
+        patientName: booking.patientName,
+        patientPid: booking.patientPid || booking.patientId,
+        bookingCode: booking.bookingCode,
+        testsCovered: testsForThisMatrix.length > 0 ? testsForThisMatrix : ['General'],
+        collectedBy: collectedByName,
+        collectedAt: dateLabel
+      };
+    });
+  };
+
   const handleConfirmCollection = async () => {
     if (!selectedBooking) return;
     if (checkedMatrices.length === 0) {
-      alert('Please check off at least one sample matrix physically drawn/collected.');
+      setAccessCodeError('Please check off at least one sample matrix physically drawn/collected.');
       return;
     }
 
+    setAccessCodeError('');
+
+    // 1. Verify staff access code before anything is recorded
+    setVerifyingCode(true);
+    const verification = await authService.verifyStaffActionCode(
+      accessCodeInput,
+      ['analyzer', 'labtech', 'admin'],
+      user?.accessCode,
+      targetLabId
+    );
+    setVerifyingCode(false);
+
+    if (!verification.authorized) {
+      setAccessCodeError(verification.error || 'Invalid access code. Sample collection was not recorded.');
+      return;
+    }
+
+    const collectorName = verification.staffName || user?.name || 'Phlebotomist Collector';
+
     setIsSubmitting(true);
     try {
-      await limsService.completeSampleCollection({
+      const ok = await limsService.completeSampleCollection({
         labId: targetLabId,
         bookingId: selectedBooking.id,
         collectedSamples: checkedMatrices,
-        collectorName: user?.name || 'Phlebotomist Collector'
+        collectorName
       });
 
+      if (!ok) {
+        setAccessCodeError('Could not save sample collection — please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Generate the readable specimen labels for printing/attaching to tubes
+      const labels = buildSpecimenLabels(selectedBooking, checkedMatrices, collectorName);
+      setGeneratedLabels(labels);
+
       setSelectedBooking(null);
+      setAccessCodeInput('');
       await fetchData();
     } catch (e) {
       console.error('Error completing sample collection:', e);
+      setAccessCodeError('An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const pendingCollection = bookings.filter(b => b.overallStatus === 'Pending_Collection');
-  const filteredQueue = pendingCollection.filter(b => 
+  const filteredQueue = pendingCollection.filter(b =>
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -122,10 +207,10 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
       <Header
         title="Phlebotomist & Sample Collection Workstation"
         subtitle="Step 3: Draw physical specimens, select sample matrices & label tubes. (No reagent interaction)"
+        onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
         onRoleSwitcherPress={onRoleSwitcherPress}
-        onNotificationPress={onNotificationPress}
-      />
+    />
 
       {/* Mandatory LIMS Rule Banner */}
       <div className="bg-purple-900/90 text-white p-4 rounded-2xl border border-purple-700 shadow-md flex items-center justify-between gap-4">
@@ -136,7 +221,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
           <div>
             <h3 className="font-extrabold text-sm text-white">Phlebotomy Mandatory Specimen Selection</h3>
             <p className="text-xs text-purple-100/80">
-              Phlebotomists check off exact physical sample matrices drawn & label tubes with marker pens. No chemical reagents are logged at this stage.
+              Phlebotomists check off exact physical sample matrices drawn, confirm with their access code, and print a readable label for each tube.
             </p>
           </div>
         </div>
@@ -228,7 +313,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            
+
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold">
@@ -243,7 +328,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
             </div>
 
             <div className="space-y-4 text-xs">
-              
+
               <div className="p-3 bg-slate-800/80 border border-slate-700 rounded-2xl space-y-1">
                 <div className="text-slate-400">Ordered Tests for Booklet:</div>
                 <div className="flex flex-wrap gap-1">
@@ -268,8 +353,8 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
                         key={matrix}
                         onClick={() => toggleMatrix(matrix)}
                         className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
-                          isChecked 
-                            ? 'bg-purple-950/80 border-purple-500 text-white font-bold' 
+                          isChecked
+                            ? 'bg-purple-950/80 border-purple-500 text-white font-bold'
                             : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
                         }`}
                       >
@@ -288,7 +373,29 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
               </div>
 
               <div className="p-3 bg-amber-950/60 border border-amber-500/30 rounded-xl text-[11px] text-amber-200">
-                ⚠️ <strong>Crucial LIMS Rule:</strong> Hand-label all drawn physical tubes with a marker pen before passing to the Lab Technician portal.
+                ⚠️ <strong>Crucial LIMS Rule:</strong> After confirming, a readable label will be generated for each tube — attach it before passing to the Lab Technician.
+              </div>
+
+              {/* ACCESS CODE CONFIRMATION */}
+              <div className="p-4 bg-amber-950/30 border border-amber-500/30 rounded-2xl space-y-2">
+                <label className="flex items-center gap-2 text-amber-200 font-bold text-xs">
+                  <KeyRound className="w-4 h-4" />
+                  Enter your staff access code to confirm this collection
+                </label>
+                <input
+                  type="password"
+                  value={accessCodeInput}
+                  onChange={e => { setAccessCodeInput(e.target.value); setAccessCodeError(''); }}
+                  placeholder="Your personal access code"
+                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-amber-500/40 rounded-xl text-white placeholder-slate-500 tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  autoComplete="off"
+                />
+                {accessCodeError && (
+                  <div className="flex items-center gap-1.5 text-rose-400 text-[11px] font-semibold">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {accessCodeError}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
@@ -301,11 +408,12 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
                 </button>
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || verifyingCode || !accessCodeInput.trim()}
                   onClick={handleConfirmCollection}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {isSubmitting ? 'Saving Collection...' : 'Complete Collection ➔ Send to Lab Tech'}
+                  <Lock className="w-4 h-4" />
+                  {verifyingCode ? 'Verifying Code...' : isSubmitting ? 'Saving Collection...' : 'Complete Collection ➔ Generate Labels'}
                 </button>
               </div>
 
@@ -315,6 +423,67 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
         </div>
       )}
 
+      {/* GENERATED SPECIMEN LABELS MODAL — printable */}
+      {generatedLabels && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                  <Tag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Specimen Labels Ready</h3>
+                  <p className="text-xs text-slate-500">Attach each label to its matching tube/container before sending to the Lab Technician.</p>
+                </div>
+              </div>
+              <button onClick={() => setGeneratedLabels(null)} className="p-2 text-slate-400 hover:text-slate-700 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              {generatedLabels.map((label) => (
+                <div
+                  key={label.code}
+                  className="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 font-mono text-xs space-y-1.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-sm text-emerald-700">NANOLABS — SPECIMEN LABEL</span>
+                    <span className="px-2 py-0.5 bg-slate-900 text-white rounded font-bold text-[11px]">{label.code}</span>
+                  </div>
+                  <div className="text-slate-800"><strong>Patient:</strong> {label.patientName} (PID: {label.patientPid})</div>
+                  <div className="text-slate-800"><strong>Booking:</strong> {label.bookingCode}</div>
+                  <div className="text-slate-800"><strong>Sample:</strong> {label.matrix}</div>
+                  <div className="text-slate-800"><strong>Tests:</strong> {label.testsCovered.join(', ')}</div>
+                  <div className="text-slate-600 text-[11px]"><strong>Collected:</strong> {label.collectedAt} — <strong>By:</strong> {label.collectedBy}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => setGeneratedLabels(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                Print Labels
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+
+export default AnalyzerView;
