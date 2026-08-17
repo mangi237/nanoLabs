@@ -38,7 +38,7 @@ interface AnalyzerViewProps {
   onRoleSwitcherPress?: () => void;
 }
 
-export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress }) => {
+export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress , onProfilePress, onRoleSwitcherPress}) => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
 
@@ -122,6 +122,9 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress 
       <Header
         title="Phlebotomist & Sample Collection Workstation"
         subtitle="Step 3: Draw physical specimens, select sample matrices & label tubes. (No reagent interaction)"
+        onProfilePress={onProfilePress}
+        onRoleSwitcherPress={onRoleSwitcherPress}
+        onNotificationPress={onNotificationPress}
       />
 
       {/* Mandatory LIMS Rule Banner */}
