@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/common/Header';
 import { useAuth } from '../context/authContext';
+import { useLanguage } from '../context/languageContext';
 import { 
   User, 
   Mail, 
@@ -23,11 +24,15 @@ import {
   Save,
   X,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  FileText,
+  Globe,
+  Check
 } from 'lucide-react';
 import { uploadService } from '../api/upload';
 import { db, doc, updateDoc } from '../services/firebase';
 import LabProfileModal from '../components/admin/LabProfileModal';
+import MedicalBookletModal from '../components/medical/MedicalBookletModal';
 
 interface ProfileScreenProps {
   onBack?: () => void;
@@ -41,9 +46,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout
 }) => {
   const { user, lab, logout, setUser } = useAuth();
+  const { language, setLanguage, toggleLanguage, t } = useLanguage();
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showLabModal, setShowLabModal] = useState(false);
+  const [showBookletModal, setShowBookletModal] = useState(false);
 
   // Self-Service Profile Editing State
   const [isEditing, setIsEditing] = useState(false);
@@ -257,8 +264,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
-        title="Profile & Identity Settings"
-        subtitle="Manage your personal details, credentials & facility workspace"
+        title={t('profile_title')}
+        subtitle={t('profile_subtitle')}
       />
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -513,6 +520,92 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
           )}
 
+          {/* LANGUAGE PREFERENCE & TOGGLE CARD (ENGLISH <-> FRENCH) */}
+          <div className="p-5 bg-gradient-to-r from-teal-50/70 via-slate-50 to-emerald-50/70 border border-teal-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-xs">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-teal-600/20 shrink-0">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-bold text-slate-900 text-sm">
+                    {t('language_preference')}
+                  </h4>
+                  <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-[9px] font-extrabold uppercase border border-teal-300/50 font-mono">
+                    {language === 'fr' ? '🇫🇷 Français (Actif)' : '🇬🇧 English (Active)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 max-w-md">
+                  {t('language_desc')}
+                </p>
+              </div>
+            </div>
+
+            {/* Language Selection Segmented Control */}
+            <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-center justify-end">
+              <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>🇬🇧</span>
+                  <span>English</span>
+                  {language === 'en' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLanguage('fr')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    language === 'fr'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>🇫🇷</span>
+                  <span>Français</span>
+                  {language === 'fr' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Medical Diagnostic Booklet Banner Card (PATIENTS ONLY - NOT FOR STAFF) */}
+          {user?.role === 'patient' && (
+            <div className="p-5 bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border border-teal-800 rounded-2xl text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-bold shrink-0">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-white text-sm flex items-center gap-2">
+                    Official Medical & Diagnostic Booklet
+                    <span className="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[9px] font-mono border border-teal-500/30">
+                      LIMS CERTIFIED
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    View lifetime consolidated test findings, specimen collection logs, technologist signatures & print full medical booklet.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBookletModal(true)}
+                className="w-full sm:w-auto px-5 py-2.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                View Medical Booklet
+              </button>
+            </div>
+          )}
+
           {/* Facility Branding & Custom Logo Card (STRICTLY ADMIN RESTRICTED) */}
           <div className="p-5 bg-gradient-to-r from-teal-50 via-slate-50 to-blue-50 border border-teal-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -592,6 +685,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Medical Booklet Modal */}
+      <MedicalBookletModal
+        isOpen={showBookletModal}
+        onClose={() => setShowBookletModal(false)}
+        patient={user}
+        lab={lab}
+      />
 
       {/* Lab Profile & Logo Modal (Restricted to Admin) */}
       {canManageLogo && (
