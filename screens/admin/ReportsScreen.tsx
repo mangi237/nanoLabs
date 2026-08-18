@@ -95,25 +95,33 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   };
 
   // Flattened tests with anonymization (NO patient personal names included)
+  const isPayPerTest = lab?.pricingModel === 'pay_per_test';
+  const defaultFee = isPayPerTest ? (lab?.feePerTest || 500) : 0;
+
   const allTests = patients.flatMap(p => {
-    return (p.labTests || []).map((t: any) => ({
-      id: t.id || `${p.id}-${Math.random()}`,
-      testName: t.testName || t.name || 'Laboratory Test',
-      category: t.category || 'General Diagnostics',
-      basePrice: t.basePrice || (t.price ? t.price - 500 : 4500),
-      systemFee: t.systemFee !== undefined ? t.systemFee : 500,
-      totalPrice: t.totalPrice || t.price || 5000,
-      price: t.price || 5000,
-      paymentStatus: t.paymentStatus || (t.paid ? 'paid' : 'unpaid'),
-      paymentMethod: t.paymentMethod || 'Cash',
-      receiptNumber: t.receiptNumber || 'N/A',
-      status: t.status || 'requested',
-      date: t.requestedDate || t.createdAt?.split('T')[0] || p.createdAt?.split('T')[0] || '2026-08-01',
-      specimenType: t.sampleType || t.specimen || 'Whole Blood',
-      verifiedBy: t.verifiedBy || (t.status === 'completed' ? 'Dr. Sarah (Lab Tech)' : 'Pending'),
-      collectedBy: t.collectedBy || (t.sampleCollected ? 'Jean (Phlebotomist)' : 'Pending Intake'),
-      cashierName: t.paidBy || 'Cashier Desk'
-    }));
+    return (p.labTests || []).map((t: any) => {
+      const sFee = t.systemFee !== undefined ? t.systemFee : defaultFee;
+      const bPrice = t.basePrice || (t.price && sFee > 0 && t.price > sFee ? t.price - sFee : (t.price || 5000));
+      const totPrice = t.totalPrice || t.price || (bPrice + sFee);
+      return {
+        id: t.id || `${p.id}-${Math.random()}`,
+        testName: t.testName || t.name || 'Laboratory Test',
+        category: t.category || 'General Diagnostics',
+        basePrice: bPrice,
+        systemFee: sFee,
+        totalPrice: totPrice,
+        price: totPrice,
+        paymentStatus: t.paymentStatus || (t.paid ? 'paid' : 'unpaid'),
+        paymentMethod: t.paymentMethod || 'Cash',
+        receiptNumber: t.receiptNumber || 'N/A',
+        status: t.status || 'requested',
+        date: t.requestedDate || t.createdAt?.split('T')[0] || p.createdAt?.split('T')[0] || '2026-08-01',
+        specimenType: t.sampleType || t.specimen || 'Whole Blood',
+        verifiedBy: t.verifiedBy || (t.status === 'completed' ? 'Dr. Sarah (Lab Tech)' : 'Pending'),
+        collectedBy: t.collectedBy || (t.sampleCollected ? 'Jean (Phlebotomist)' : 'Pending Intake'),
+        cashierName: t.paidBy || 'Cashier Desk'
+      };
+    });
   });
 
   // Filter tests by date
@@ -142,7 +150,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   const totalSystemFees = filteredTests
     .filter(t => t.paymentStatus === 'paid' || t.status === 'completed')
-    .reduce((sum, t) => sum + (t.systemFee !== undefined ? t.systemFee : 500), 0);
+    .reduce((sum, t) => sum + (t.systemFee !== undefined ? t.systemFee : defaultFee), 0);
 
   const directLabRevenue = totalRevenue - totalSystemFees;
 

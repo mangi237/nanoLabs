@@ -160,7 +160,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     }
   };
 
-  const SYSTEM_FEE = 500;
+  const isPayPerTest = lab?.pricingModel === 'pay_per_test';
+  const SYSTEM_FEE = isPayPerTest ? (lab?.feePerTest || 500) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -526,17 +527,24 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                       <div className="pt-2 border-t border-slate-100 space-y-1 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="font-extrabold text-emerald-800 text-xs">
-                            {basePrice.toLocaleString()} + {SYSTEM_FEE.toLocaleString()} FCFA
+                            {SYSTEM_FEE > 0 ? `${basePrice.toLocaleString()} + ${SYSTEM_FEE.toLocaleString()} FCFA` : `${basePrice.toLocaleString()} FCFA`}
                           </span>
                           <span className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-md">
                             <Clock className="w-3 h-3 text-teal-600" />
                             {turnaround}
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-                          <span>System Fee Incl.</span>
-                          <span className="font-bold text-slate-700">Total: {totalPrice.toLocaleString()} FCFA</span>
-                        </div>
+                        {SYSTEM_FEE > 0 ? (
+                          <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+                            <span>System Fee Incl.</span>
+                            <span className="font-bold text-slate-700">Total: {totalPrice.toLocaleString()} FCFA</span>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-teal-600 font-semibold flex items-center justify-between">
+                            <span>Facility Standard Rate</span>
+                            <span className="font-bold text-slate-700">Total: {basePrice.toLocaleString()} FCFA</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
