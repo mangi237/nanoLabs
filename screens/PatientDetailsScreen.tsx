@@ -136,6 +136,9 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
     }
   };
 
+  const isPayPerTest = lab?.pricingModel === 'pay_per_test';
+  const defaultFee = isPayPerTest ? (lab?.feePerTest || 500) : 0;
+
   const handleAddTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTest) return;
@@ -143,7 +146,7 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
     setSaving(true);
     try {
       const basePrice = selectedTest.price || 5000;
-      const systemFee = 500;
+      const systemFee = defaultFee;
       const totalPrice = basePrice + systemFee;
 
       const newTest = {
@@ -154,7 +157,7 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
         systemFee: systemFee,
         price: totalPrice,
         totalPrice: totalPrice,
-        priceDisplay: `${basePrice.toLocaleString()} + ${systemFee.toLocaleString()} FCFA System Fee`,
+        priceDisplay: systemFee > 0 ? `${basePrice.toLocaleString()} + ${systemFee.toLocaleString()} FCFA System Fee` : `${basePrice.toLocaleString()} FCFA`,
         turnaroundTime: selectedTest.turnaroundTime || selectedTest.expectedTime || '24 Hours',
         doctorName: selectedStaff?.name || 'Lab Technologist',
         doctorRole: selectedStaff?.role || 'Lab Tech',
@@ -390,7 +393,9 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                         <span>Category: {test.category || 'General'}</span>
                         <span>•</span>
                         <span className="font-bold text-emerald-800">
-                          {test.priceDisplay || `${(test.basePrice || test.price || 5000).toLocaleString()} + ${(test.systemFee !== undefined ? test.systemFee : 500).toLocaleString()} FCFA System Fee`}
+                          {test.priceDisplay || ((test.systemFee !== undefined ? test.systemFee : defaultFee) > 0 
+                            ? `${(test.basePrice || test.price || 5000).toLocaleString()} + ${(test.systemFee !== undefined ? test.systemFee : defaultFee).toLocaleString()} FCFA System Fee`
+                            : `${(test.basePrice || test.price || 5000).toLocaleString()} FCFA`)}
                         </span>
                         {test.turnaroundTime && (
                           <>
@@ -494,14 +499,14 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                         <div className="flex flex-col gap-0.5 text-[11px] pt-1 border-t border-slate-100">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-emerald-800">
-                              {(testItem.price || 5000).toLocaleString()} + 500 FCFA
+                              {defaultFee > 0 ? `${(testItem.price || 5000).toLocaleString()} + ${defaultFee.toLocaleString()} FCFA` : `${(testItem.price || 5000).toLocaleString()} FCFA`}
                             </span>
                             <span className="flex items-center gap-0.5 text-slate-500 font-medium">
                               <Clock className="w-3 h-3 text-teal-600" />
                               {testItem.turnaroundTime || testItem.expectedTime || '24 Hours'}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-semibold">Total: {((testItem.price || 5000) + 500).toLocaleString()} FCFA</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">Total: {((testItem.price || 5000) + defaultFee).toLocaleString()} FCFA</span>
                         </div>
                       </div>
                     );
@@ -515,12 +520,12 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
                       <span className="text-[10px] text-teal-200 uppercase font-semibold">Selected Procedure</span>
                       <h4 className="font-bold text-white text-sm">{selectedTest.name || selectedTest.testName}</h4>
                       <p className="text-[10px] text-teal-200 mt-0.5">
-                        Test: {(selectedTest.price || 5000).toLocaleString()} FCFA + 500 FCFA System Fee
+                        {defaultFee > 0 ? `Test: ${(selectedTest.price || 5000).toLocaleString()} FCFA + ${defaultFee.toLocaleString()} FCFA System Fee` : `Test Fee: ${(selectedTest.price || 5000).toLocaleString()} FCFA`}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="text-teal-200 text-[10px] block">Turnaround: {selectedTest.turnaroundTime || '24h'}</span>
-                      <span className="font-extrabold text-white text-sm">{((selectedTest.price || 5000) + 500).toLocaleString()} FCFA</span>
+                      <span className="font-extrabold text-white text-sm">{((selectedTest.price || 5000) + defaultFee).toLocaleString()} FCFA</span>
                     </div>
                   </div>
                 )}
