@@ -136,7 +136,7 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
             </h3>
             <div className="pl-7 space-y-2">
               <p>• You will be charged for the laboratory services rendered by the Facility, at the price set by the Facility.</p>
-              <p>• In addition, a <strong>System Fee of 500 XAF</strong> applies per transaction processed through NanoLabs. This fee supports the platform that manages your test request, sample tracking, and secure result delivery. It will always be shown to you clearly before you confirm payment.</p>
+              <p>• In addition, for facilities operating on standard per-test processing, a <strong>System Fee of 500 XAF</strong> applies per diagnostic test processed through NanoLabs to support secure infrastructure, sample tracking, and encrypted digital result delivery. For facilities operating on flat subscription or dedicated cloud plans, zero system fees are billed to patients. Any applicable fee will always be displayed clearly before you confirm payment.</p>
               <p>• NanoLabs will validate your payment and payment method and provide you with a record of the transaction within your account.</p>
             </div>
           </section>

@@ -220,8 +220,10 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   const pdfLink = currentTest.pdfUrl || currentTest.fileUrl;
 
   // Accurate Pricing Breakdown
-  const basePrice = Number(currentTest.basePrice || (currentTest.price && currentTest.price > 500 ? currentTest.price - (currentTest.systemFee || 500) : 5000));
-  const systemFee = Number(currentTest.systemFee !== undefined ? currentTest.systemFee : 500);
+  const isPayPerTest = lab?.pricingModel === 'pay_per_test';
+  const defaultFee = isPayPerTest ? (lab?.feePerTest || 500) : 0;
+  const systemFee = Number(currentTest.systemFee !== undefined ? currentTest.systemFee : defaultFee);
+  const basePrice = Number(currentTest.basePrice || (currentTest.price && systemFee > 0 && currentTest.price > systemFee ? currentTest.price - systemFee : (currentTest.price || 5000)));
   const totalPrice = Number(currentTest.totalPrice || currentTest.price || (basePrice + systemFee));
 
   // Staff Attribution Names
@@ -512,10 +514,12 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
                 <span className="text-slate-500">Diagnostic Procedure Base Fee</span>
                 <span className="font-semibold text-slate-800">{basePrice.toLocaleString()} FCFA</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">nanoLabs System & Software Processing Fee</span>
-                <span className="font-semibold text-slate-800">{systemFee.toLocaleString()} FCFA</span>
-              </div>
+              {systemFee > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">nanoLabs System & Software Processing Fee</span>
+                  <span className="font-semibold text-slate-800">{systemFee.toLocaleString()} FCFA</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-slate-200 font-bold text-sm text-slate-900">
                 <span>Total Amount</span>
                 <span className="text-teal-700">{totalPrice.toLocaleString()} FCFA</span>
