@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
-import { db, getDocs, collection } from '../../services/firebase';
+import { db, getDocs, getDoc, doc, collection } from '../../services/firebase';
 import { limsService } from '../../services/limsService';
 import { 
   Users, 
@@ -34,8 +34,23 @@ interface OverviewProps {
   onNavigateTab?: (tab: string) => void;
 }
 
+// Safely parse Firestore timestamp or string date
+const parseLabDate = (rawDate: any): Date => {
+  if (!rawDate) return new Date();
+  if (rawDate instanceof Date) return rawDate;
+  if (typeof rawDate === 'object' && typeof rawDate.seconds === 'number') {
+    return new Date(rawDate.seconds * 1000);
+  }
+  if (typeof rawDate === 'object' && typeof rawDate.toDate === 'function') {
+    return rawDate.toDate();
+  }
+  const parsed = new Date(rawDate);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateTab }) => {
-  const { lab } = useAuth();
+  const { lab, setLab } = useAuth();
+  const [liveLab, setLiveLab] = useState<any>(lab);
   const [loading, setLoading] = useState(true);
   const [showLabModal, setShowLabModal] = useState(false);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
@@ -55,6 +70,22 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
     try {
       setLoading(true);
       const targetLabId = lab?.id || 'lab-1';
+
+      // 1. Fetch live lab doc from Firestore to ensure real-time subscription timestamps & pricing model
+      try {
+        const labDocRef = doc(db, 'labs', targetLabId);
+        const labDocSnap = await getDoc(labDocRef);
+        if (labDocSnap.exists()) {
+          const freshLabData = { id: labDocSnap.id, ...labDocSnap.data() };
+          setLiveLab(freshLabData);
+          if (setLab) {
+            setLab(freshLabData);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not refresh live lab doc in Overview:', err);
+      }
+
       const patientsRef = collection(db, 'labs', targetLabId, 'patients');
       const patientsSnap = await getDocs(patientsRef);
       const patientList = patientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -173,19 +204,19 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
       </div>
 
       {/* Model A vs Model B Banner Section */}
-      {lab?.pricingModel === 'pay_per_test' ? (
+      {(liveLab?.pricingModel || lab?.pricingModel) === 'pay_per_test' ? (
         /* Model A: Real-Time Escrow Ledger Card */
         <div className="bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-xs font-mono font-bold text-amber-400 border border-amber-500/20">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              Commercial Model: 500 FCFA Pay-Per-Test Commission
+              Commission Model: {(liveLab?.feePerTest || lab?.feePerTest || 500).toLocaleString()} FCFA / Diagnostic Test
             </div>
             <h3 className="text-xl font-bold text-white">
-              Platform Royalty Owed: <span className="text-amber-400 font-mono">{(stats.tests * 500).toLocaleString()} FCFA</span>
+              Platform Royalty Balance: <span className="text-amber-400 font-mono">{(stats.tests * (liveLab?.feePerTest || lab?.feePerTest || 500)).toLocaleString()} FCFA</span>
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
-              Accumulating <strong>500 FCFA</strong> platform commission per laboratory test. Total lab diagnostic revenue: <strong className="text-emerald-400 font-mono">{stats.revenue.toLocaleString()} FCFA</strong>. Settle your royalty balance via Mobile Money proof upload.
+              Accumulating <strong>{(liveLab?.feePerTest || lab?.feePerTest || 500).toLocaleString()} FCFA</strong> platform fee per lab test recorded. Total collected lab revenue: <strong className="text-emerald-400 font-mono">{stats.revenue.toLocaleString()} FCFA</strong>. Net Laboratory Profit: <strong className="text-teal-300 font-mono">{Math.max(0, stats.revenue - (stats.tests * (liveLab?.feePerTest || lab?.feePerTest || 500))).toLocaleString()} FCFA</strong>.
             </p>
           </div>
 
@@ -208,27 +239,35 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-mono font-extrabold uppercase bg-teal-700 text-white px-2.5 py-0.5 rounded">
-                    {`${(lab?.subscriptionTier || 'small').toUpperCase()} TIER`}
+                    {`${(liveLab?.subscriptionTier || lab?.subscriptionTier || 'small').toUpperCase()} TIER`}
                   </span>
 
                   {(() => {
-                    const startDate = lab?.subscriptionStartDate 
-                      ? new Date(lab.subscriptionStartDate) 
-                      : (lab?.createdAt ? new Date(lab.createdAt) : new Date());
-                    const daysPassed = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-                    const daysRemaining = Math.max(0, 30 - (daysPassed % 30));
+                    const currentTargetLab = liveLab || lab;
+                    const startDate = parseLabDate(currentTargetLab?.subscriptionStartDate || currentTargetLab?.createdAt);
+                    const now = new Date();
+                    const diffTime = Math.max(0, now.getTime() - startDate.getTime());
+                    const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const totalDaysInCycle = 30;
+                    const daysRemaining = Math.max(0, totalDaysInCycle - daysPassed);
+                    const isExpired = daysRemaining === 0;
+
                     return (
                       <span className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded border ${
-                        daysRemaining <= 5 
+                        isExpired
+                          ? 'bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
+                          : daysRemaining <= 5 
                           ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
                           : 'bg-teal-500/10 text-teal-300 border-teal-500/20'
                       }`}>
-                        {daysRemaining} Days Remaining in 30-Day Billing Cycle
+                        {isExpired 
+                          ? `Subscription Expired (${daysPassed} days elapsed) • Recharge Required`
+                          : `${daysRemaining} Days Remaining (Day ${daysPassed + 1} of 30)`}
                       </span>
                     );
                   })()}
 
-                  {lab?.planMutationStatus === 'PENDING_PLAN_MUTATION' && (
+                  {(liveLab?.planMutationStatus || lab?.planMutationStatus) === 'PENDING_PLAN_MUTATION' && (
                     <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 animate-pulse">
                       Plan Mutation Pending Superadmin Approval
                     </span>
@@ -238,9 +277,9 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
                   Monthly SaaS Subscription License
                 </h4>
                 <p className="text-xs text-slate-400">
-                  {lab?.subscriptionTier === 'small' 
+                  {(liveLab?.subscriptionTier || lab?.subscriptionTier) === 'small' 
                     ? 'Small Hospital Tier: Max 5 Staff Users • Max 250 Patients / Month' 
-                    : lab?.subscriptionTier === 'medium'
+                    : (liveLab?.subscriptionTier || lab?.subscriptionTier) === 'medium'
                     ? 'Medium Enterprise Tier: Max 15 Staff Users • Max 1,000 Patients / Month'
                     : 'Large Enterprise Tier: Unlimited Staff Users • Unlimited Patients'}
                 </p>

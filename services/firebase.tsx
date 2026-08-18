@@ -1,6 +1,13 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
-  getFirestore, 
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  CACHE_SIZE_UNLIMITED,
+  enableNetwork,
+  disableNetwork,
+  waitForPendingWrites,
   collection, 
   doc, 
   getDocs, 
@@ -13,12 +20,13 @@ import {
   where, 
   orderBy, 
   onSnapshot, 
-  Timestamp 
+  Timestamp,
+  Firestore
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
-// Your web app's Firebase configuration
+// Web app Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyB1tZ67LCGf2bHQxsMw7XRkQEIoSEYFlec",
   authDomain: "nanolabs-9baf3.firebaseapp.com",
@@ -29,19 +37,33 @@ const firebaseConfig = {
   measurementId: "G-SVEXC3TSNQ"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase App
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore
-const db = getFirestore(app);
+// Initialize Firestore with Offline Persistence (multi-tab IndexedDB cache)
+// Specifically optimized for unstable/slow connectivity (e.g. Cameroon 2G/3G/power drops)
+let db: Firestore;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+      cacheSizeBytes: CACHE_SIZE_UNLIMITED
+    })
+  });
+  console.log('[nanoLabs LIMS] Offline Firestore persistence initialized (IndexedDB multi-tab cache active).');
+} catch (err: any) {
+  // If Firestore was already initialized or persistence fallback is triggered
+  console.warn('[nanoLabs LIMS] Persistent local cache initialization fallback:', err?.message || err);
+  db = getFirestore(app);
+}
 
-export const storage = getStorage(app);
-// Initialize Firebase Authentication
+const storage = getStorage(app);
 const auth = getAuth(app);
 
 export { 
   db, 
   auth, 
+  storage,
   app,
   collection,
   doc,
@@ -55,6 +77,9 @@ export {
   where,
   orderBy,
   onSnapshot,
-  Timestamp
+  Timestamp,
+  enableNetwork,
+  disableNetwork,
+  waitForPendingWrites
 };
 

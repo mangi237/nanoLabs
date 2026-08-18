@@ -448,12 +448,28 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                       {/* 30-day countdown indicator */}
                       {(() => {
-                        const start = new Date(labItem.subscriptionStartDate || labItem.createdAt || Date.now()).getTime();
-                        const elapsedDays = Math.floor((Date.now() - start) / (1000 * 60 * 60 * 24));
-                        const daysLeft = Math.max(0, 30 - (elapsedDays % 30));
+                        const rawDate = labItem.subscriptionStartDate || labItem.createdAt;
+                        let start = Date.now();
+                        if (rawDate) {
+                          if (typeof rawDate === 'object' && typeof (rawDate as any).seconds === 'number') {
+                            start = (rawDate as any).seconds * 1000;
+                          } else {
+                            const parsed = new Date(rawDate).getTime();
+                            if (!isNaN(parsed)) start = parsed;
+                          }
+                        }
+                        const elapsedDays = Math.floor(Math.max(0, Date.now() - start) / (1000 * 60 * 60 * 24));
+                        const daysLeft = Math.max(0, 30 - elapsedDays);
+                        const isExpired = daysLeft === 0;
                         return (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                            {daysLeft}d left in cycle
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                            isExpired
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : daysLeft <= 5
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-teal-50 text-teal-800 border-teal-200'
+                          }`}>
+                            {isExpired ? `Expired (${elapsedDays}d)` : `${daysLeft}d left (Day ${elapsedDays + 1}/30)`}
                           </span>
                         );
                       })()}
