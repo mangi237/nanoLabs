@@ -238,6 +238,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         subtitle="Global laboratory franchise & multi-tenant operations"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
+        
       />
 
       {/* Top Banner */}
