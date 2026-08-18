@@ -201,18 +201,36 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     try {
-      // Set the standard Google Translate cookie
+      // Set the standard Google Translate cookie for domain and path
       const targetVal = `/en/${lang}`;
       document.cookie = `googtrans=${targetVal}; path=/;`;
       if (window.location.hostname) {
         document.cookie = `googtrans=${targetVal}; domain=${window.location.hostname}; path=/;`;
+        document.cookie = `googtrans=${targetVal}; domain=.${window.location.hostname}; path=/;`;
       }
 
-      // If Google Translate select box is mounted in the DOM, trigger it
-      const select = document.querySelector<HTMLSelectElement>('.goog-te-combo');
-      if (select) {
-        select.value = lang;
-        select.dispatchEvent(new Event('change'));
+      // Try immediate select trigger
+      const triggerSelect = () => {
+        const select = document.querySelector<HTMLSelectElement>('.goog-te-combo');
+        if (select) {
+          if (select.value !== lang) {
+            select.value = lang;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          return true;
+        }
+        return false;
+      };
+
+      if (!triggerSelect()) {
+        // Poll for Google Translate widget initialization
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (triggerSelect() || attempts > 20) {
+            clearInterval(interval);
+          }
+        }, 250);
       }
     } catch (e) {
       console.warn('Google Translate sync warning:', e);

@@ -3,8 +3,8 @@
 export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     // Navigation & Core Roles
     "Super Admin Network Overseer": "Super Administrateur du Réseau",
-    "Global laboratory franchise & multi-tenant operations": "Franchise globale de laboratoires et opérations multi-sites",
     "Super Administrator Network Oversight": "Supervision du Réseau Super Administrateur",
+    "Global laboratory franchise & multi-tenant operations": "Franchise globale de laboratoires et opérations multi-sites",
     "Clinical Network Management": "Gestion du Réseau Clinique",
     "Monitor diagnostic health centers, configure multi-tenant commercial models, and manage network facility provisioning.": "Supervisez les centres de diagnostic, configurez les modèles commerciaux et gérez le déploiement des laboratoires.",
     "Register New Lab Center": "Enregistrer un Nouveau Laboratoire",
@@ -22,9 +22,13 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     "Delete / Reject Facility": "Supprimer / Rejeter l'Établissement",
     "Confirm Facility Activation": "Confirmer l'Activation du Laboratoire",
     "Approve Plan Model Switch": "Approuver le Changement de Modèle",
+    "Create & Provision New Laboratory": "Créer et Déployer un Nouveau Laboratoire",
+    "Provision Lab Workspace": "Déployer l'Espace Laboratoire",
+    "Super Admin Control Center": "Centre de Contrôle Super Administrateur",
   
     // Admin & Financial
     "Admin Control Center": "Centre de Contrôle Administratif",
+    "Admin Dashboard": "Tableau de Bord Administrateur",
     "Overview": "Vue d'Ensemble",
     "Test Catalog": "Catalogue des Examens",
     "Staff Management": "Gestion du Personnel",
@@ -44,21 +48,63 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     "Pay-Per-Test": "Paiement Par Analyse",
     "Flat Subscription": "Abonnement Forfaitaire",
     "Commission Model": "Modèle à Commission",
+    "Diagnostic Procedure Base Fee": "Frais de Base de l'Examen",
+    "nanoLabs System & Software Processing Fee": "Frais de Traitement et Système nanoLabs",
+    "Net Laboratory Profit": "Bénéfice Net du Laboratoire",
+    "Total Collected Lab Revenue": "Revenu Total Encaissé",
+    "Total Revenue": "Revenu Total",
+    "Pending Revenue": "Revenu En Attente",
+    "Revenue Summary": "Résumé des Revenus",
+    "Quick Actions": "Actions Rapides",
+    "Recent Activity": "Activité Récente",
+    "No recent activity recorded": "Aucune activité récente enregistrée",
   
     // Workflow Stages & Stepper
     "1. Admission": "1. Admission",
     "2. Payment": "2. Paiement",
     "3. Specimen": "3. Prélèvement",
     "4. Verification": "4. Validation",
-    "Confirmed": "Confirmé",
+    "Step 1: Patient Registration, Doctor Referrals & Test Selection": "Étape 1 : Inscription Patient, Prescription Médicale & Sélection des Tests",
+    "Step 2: Dual Pricing Calculation, Invoice Breakdown & Direct Cash Receipt Verification": "Étape 2 : Double Tarification, Détail Facture & Encaissement Caisse",
+    "Step 3: Barcode Label Generation, Biological Matrix Checklist & Specimen Phlebotomy": "Étape 3 : Génération de Code-Barres, Liste des Matrices & Prélèvement Biologique",
+    "Step 4: Assigned security locking, digital form filling with reference ranges, PDF upload & physical pickup SMS alerts": "Étape 4 : Verrouillage de Sécurité, Saisie Numérique avec Valeurs de Référence, Téléversement PDF & Alertes SMS",
+    "Samples Collected - Testing Queue": "Échantillons Prélevés - File d'Analyse",
+    "Diagnostic Testing Queue": "File d'Attente des Analyses",
+    "Virtual Test Requests Queue": "File des Demandes Virtuelles",
+    "Virtual Delivery Priority": "Priorité de Livraison Virtuelle",
+    "All In-Lab Queue": "Toute la File de Laboratoire",
+    "🌐 Virtual Test Requests": "🌐 Demandes d'Analyses Virtuelles",
+    "Assigned to Me": "Assignés à Moi",
+    "Completed Reports": "Rapports Validés",
+    "Completed / Published": "Validés / Publiés",
+    "Samples Collected": "Échantillons Prélevés",
     "Pending Check-in": "En Attente d'Enregistrement",
     "Payment Verified": "Paiement Vérifié",
     "Awaiting Cashier": "En Attente de Caisse",
-    "Sample Collected": "Échantillon Prélevé",
     "Awaiting Draw": "En Attente de Prélèvement",
     "Report Verified": "Rapport Validé",
     "In Analysis": "En Cours d'Analyse",
     "Pending Testing": "En Attente d'Analyse",
+    "In_Lab_Testing": "En Cours d'Analyse",
+    "Ready_For_Pickup": "Prêt pour Retrait",
+    "Specimen Drawn": "Prélèvement Effectué",
+    "LIMS In-Lab Stage": "Étape Laboratoire LIMS",
+    "Open Patient Booklet": "Ouvrir Dossier Patient",
+    "Open Patient Booklet & Enter Results": "Ouvrir Dossier & Saisir Résultats",
+  
+    // Cashier & Security
+    "Authorized Cashier Desk": "Poste Caissier Autorisé",
+    "Cashier Workstation": "Poste de Travail Caisse",
+    "Security Verification Access Code": "Code d'Accès de Sécurité Obligatoire",
+    "Enter confidential cashier PIN": "Saisir code PIN confidentiel",
+    "Confirm & Process Cash Payment": "Confirmer et Encaisser le Paiement",
+    "Verify Payment": "Vérifier le Paiement",
+    "Collect Payment": "Encaisser Paiement",
+    "Virtual Delivery Requested": "Livraison Virtuelle Demandée",
+    "Virtual Result Requested": "Résultat Virtuel Demandé",
+    "Patient Booklet Synchronized": "Dossier Patient Synchronisé",
+    "Assigned Technologist": "Technicien Assigné",
+    "Privacy Lock": "Verrou de Confidentialité",
   
     // Staff Hub & Roles
     "Reception Desk": "Bureau d'Accueil",
@@ -86,6 +132,7 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     "Access & Audit History": "Historique d'Accès & Audit",
     "Refresh Status": "Actualiser le Statut",
     "Back to Dashboard": "Retour au Tableau de Bord",
+    "Back to Testing Queue": "Retour à la File d'Attente",
     "Sign Out": "Se Déconnecter",
     "Sign Out of Portal": "Se Déconnecter du Portail",
     "Switch Active Role": "Changer de Rôle Actif",
@@ -100,62 +147,78 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     "Add Diagnostic Test": "Ajouter un Examen",
     "Add Item": "Ajouter un Article",
     "Add Staff Member": "Ajouter un Membre du Personnel",
+    "Add New Test": "Ajouter un Nouvel Examen",
+    "Edit Test Details": "Modifier l'Examen",
+    "Create Diagnostic Test Definition": "Créer Définition d'Examen",
+    "Save Diagnostic Test": "Enregistrer l'Examen",
+    "Share Access": "Partager l'Accès",
+    "Search patient, PID, booking ID or diagnostic test...": "Rechercher patient, PID, code ou analyse...",
+    "Search patient marked as Samples Collected (Name or Booking ID...)": "Rechercher patient prélevé (Nom ou Code...)",
   
-    // Pricing & Medical Terms
-    "nanoLabs System & Software Processing Fee": "Frais de Traitement et Système nanoLabs",
-    "Diagnostic Procedure Base Fee": "Frais de Base de l'Examen",
-    "Total Amount": "Montant Total",
-    "Net Laboratory Profit": "Bénéfice Net du Laboratoire",
-    "Total Collected Lab Revenue": "Revenu Total Encaissé",
-    "Laboratory Diagnostic Report": "Rapport de Diagnostic de Laboratoire",
-    "Clinical Findings & Results Document": "Résultats Cliniques & Document d'Analyse",
-    "Validated Laboratory Findings": "Résultats d'Analyse Validés",
-    "Zero-Knowledge AES-GCM-256 Medical Confidentiality": "Confidentialité Médicale Chiffrement AES-GCM-256 Zéro-Connaissance",
-    "All diagnostic values are client-side encrypted before cloud transmission.": "Toutes les données diagnostiques sont chiffrées côté client avant transmission au cloud.",
-    "Physical & Virtual Result Pickup Info": "Informations sur le Retrait Physique & Virtuel des Résultats",
-    "Official physical laboratory hardcopies are available at our reception desk with doctor stamps. If you have requested a virtual report, our lab technologists will upload your encrypted PDF document below as soon as biochemistry analysis is verified.": "Les exemplaires physiques officiels munis du cachet médical sont disponibles à l'accueil. Si vous avez demandé un rapport virtuel, le document PDF chiffré sera disponible dès validation biologique.",
-    "Diagnostic Testing in Progress": "Analyses Diagnostiques en Cours",
-    "Our laboratory technologists are executing specimen analysis. Once validated, your encrypted digital PDF will appear directly on this screen.": "Nos techniciens procèdent à l'analyse de vos échantillons. Dès validation, votre compte-rendu numérique chiffré apparaîtra ici.",
+    // Option Tabs for Lab Technologist
+    "Option 1: Native Digital Form Filling (Default)": "Option 1 : Saisie Numérique Directe (Défaut)",
+    "Option 2: External PDF Upload": "Option 2 : Téléversement de PDF Externe",
+    "Option 3: Physical Pickup Notification": "Option 3 : Notification de Retrait Physique",
+    "Auto-Deducts Reagent Inventory & Renders Official PDF Report": "Déduit le Stock Réactifs & Génère le Rapport PDF Officiel",
+    "Fallback for Closed Analyzers or Scanned Sheets": "Pour Automates Fermés ou Feuilles Scannées",
+    "SMS Alert for Hard-Copy Collection": "Alerte SMS pour Retrait du Format Papier",
   
-    // Offline Banner
-    "Offline Cache Active": "Mode Hors-Ligne Actif",
-    "Connection Restored": "Connexion Rétablie",
-    "Cloud Synced": "Synchronisé avec le Cloud",
-    "All patient intakes, test results & payments are safely saved locally. Auto-sync will run when connected.": "Toutes les admissions, résultats et reçus sont enregistrés localement. La synchronisation s'exécutera automatiquement dès le retour d'internet.",
-    "All local changes successfully uploaded to nanoLabs Cloud.": "Toutes les modifications locales ont été synchronisées avec succès sur le Cloud nanoLabs.",
-    "Why this works": "Pourquoi cela fonctionne",
-    "Hide Info": "Masquer les Infos",
-  
-    // Profile & Settings
+    // Medical & Patient Details
+    "Full Legal Name": "Nom Légal Complet",
+    "Email Address": "Adresse Email",
+    "Phone Number": "Numéro de Téléphone",
+    "Security Access Code": "Code d'Accès de Sécurité",
+    "Security Access Code / Password": "Code d'Accès de Sécurité / Mot de Passe",
+    "Assigned Lab ID": "ID Laboratoire Assigné",
+    "Personal & Security Information": "Informations Personnelles & Sécurité",
     "Profile & Identity Settings": "Paramètres du Profil et Identité",
     "Manage your personal details, credentials & facility workspace": "Gérez vos informations personnelles, identifiants et espace de travail",
     "Language Preference / Langue": "Préférence de Langue / Language",
     "Choose between English and French for the entire application interface.": "Basculez entre le Français et l'Anglais pour l'ensemble de l'interface logicielle.",
-    "Personal & Security Information": "Informations Personnelles & Sécurité",
-    "Email Address": "Adresse Email",
-    "Phone Number": "Numéro de Téléphone",
-    "Security Access Code": "Code d'Accès de Sécurité",
-    "Assigned Lab ID": "ID Laboratoire Assigné",
-    "Full Name": "Nom Complet",
-    "Role": "Rôle",
-    "Password": "Mot de Passe",
-    "Permanent Password": "Mot de Passe Définitif",
-    "Patients": "Patients",
-    "Staff Members": "Membres du Personnel",
-    "Tests": "Analyses",
-    "Revenue": "Chiffre d'Affaires",
-    "Quick Actions": "Actions Rapides",
+    "Official Medical & Diagnostic Booklet": "Livret Médical & Diagnostique Officiel",
+    "View Medical Booklet": "Consulter le Livret Médical",
+    "Laboratory Diagnostic Report": "Rapport de Diagnostic de Laboratoire",
+    "Clinical Findings & Results Document": "Résultats Cliniques & Document d'Analyse",
+    "Validated Laboratory Findings": "Résultats d'Analyse Validés",
+    "Zero-Knowledge AES-GCM-256 Medical Confidentiality": "Confidentialité Médicale Chiffrement AES-GCM-256 Zéro-Connaissance",
+    "All diagnostic values are client-side encrypted before cloud transmission.": "Toutes les valeurs diagnostiques sont chiffrées côté client avant transmission au cloud.",
+    "Physical & Virtual Result Pickup Info": "Informations sur le Retrait Physique & Virtuel des Résultats",
+    "Diagnostic Testing in Progress": "Analyses Diagnostiques en Cours",
     "Total Patients": "Total des Patients",
     "Total Tests": "Total des Analyses",
     "Completed": "Terminé",
     "Pending": "En Attente",
-    "Revenue Summary": "Résumé des Revenus",
-    "Total Revenue": "Revenu Total",
-    "Pending Revenue": "Revenu En Attente",
-    "Recent Activity": "Activité Récente",
-    "No recent activity recorded": "Aucune activité récente",
-    "Search patients by name, ID or phone number...": "Rechercher par nom, ID ou téléphone...",
-    "No patients found": "Aucun patient trouvé",
+    "Active": "Actif",
+    "Welcome back": "Bienvenue",
+    "Processing": "En Cours",
+    "My Tests": "Mes Analyses",
+    "Transfer Records": "Transférer les Dossiers",
+    "Share Results": "Partager Résultats",
+    "Profile Settings": "Paramètres de Profil",
+    "Recent Test Requests": "Demandes d'Examens Récentes",
+    "No lab test records found": "Aucun dossier d'analyse trouvé",
+    "Visit our laboratory to request your medical tests": "Rendez-vous au laboratoire pour effectuer vos examens",
+    "View All Records": "Tout Afficher",
+    "Pending Sample Collection": "Prélèvements en Attente",
+    "Collect Sample": "Prélever l'Échantillon",
+    "No pending sample collections": "Aucun prélèvement en attente",
+    "No pending patient registrations": "Aucune inscription en attente",
+    "No samples waiting for testing.": "Aucun échantillon en attente d'analyse.",
+    "When phlebotomists complete sample collection, patient booklets appear here instantly.": "Dès que le préleveur valide le prélèvement, les dossiers patients apparaissent ici instantanément.",
+    "No patient bookings found in this view.": "Aucun dossier patient trouvé dans cette vue.",
+    "Loading lab queue...": "Chargement de la file d'attente...",
+    "Age/Sex:": "Âge/Sexe :",
+    "Matrices:": "Matrices :",
+    "Requested Tests": "Analyses Demandées",
+    "Age:": "Âge :",
+    "Sex:": "Sexe :",
+    "PID:": "PID :",
+    "Collected Samples:": "Échantillons Prélevés :",
+    "Yrs": "Ans",
+    "Male": "Masculin",
+    "Female": "Féminin",
+  
+    // Inventory & Tests Catalog
     "Add Inventory Item": "Ajouter un Article",
     "No inventory items available": "Aucun article en stock",
     "Edit Inventory Item": "Modifier l'Article",
@@ -169,26 +232,18 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     "No staff members registered": "Aucun membre du personnel enregistré",
     "Add Catalog Test": "Ajouter un Examen au Catalogue",
     "No tests currently in catalog": "Aucun examen dans le catalogue",
-    "Add New Test": "Ajouter un Nouvel Examen",
-    "Edit Test Details": "Modifier l'Examen",
     "Test Name": "Nom de l'Examen",
     "Price": "Prix",
     "Description": "Description",
-    "Welcome back": "Bienvenue",
-    "Processing": "En Cours",
-    "My Tests": "Mes Analyses",
-    "Transfer Records": "Transférer les Dossiers",
-    "Share Results": "Partager Résultats",
-    "Profile Settings": "Paramètres de Profil",
-    "Recent Test Requests": "Demandes d'Examens Récentes",
-    "No lab test records found": "Aucune analyse trouvée",
-    "Visit our laboratory to request your medical tests": "Rendez-vous au laboratoire pour effectuer vos examens",
-    "View All Records": "Tout Afficher",
-    "Pending Sample Collection": "Prélèvements en Attente",
-    "Collect Sample": "Prélever l'Échantillon",
-    "No pending sample collections": "Aucun prélèvement en attente",
-    "Active": "Actif",
-    "No pending patient registrations": "Aucune inscription en attente"
+  
+    // Offline Banner
+    "Offline Cache Active": "Mode Hors-Ligne Actif",
+    "Connection Restored": "Connexion Rétablie",
+    "Cloud Synced": "Synchronisé avec le Cloud",
+    "All patient intakes, test results & payments are safely saved locally. Auto-sync will run when connected.": "Toutes les admissions, résultats et reçus sont enregistrés localement. La synchronisation s'exécutera automatiquement dès le retour d'internet.",
+    "All local changes successfully uploaded to nanoLabs Cloud.": "Toutes les modifications locales ont été synchronisées avec succès sur le Cloud nanoLabs.",
+    "Why this works": "Pourquoi cela fonctionne",
+    "Hide Info": "Masquer les Infos"
   };
   
   // Bi-directional dictionary for switching back to English
@@ -197,8 +252,13 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     FRENCH_TO_ENGLISH[fr] = en;
   });
   
+  // Sort translation keys from longest to shortest to avoid partial prefix collisions
+  const SORTED_EN_KEYS = Object.keys(MEDICAL_AND_UI_TRANSLATIONS).sort((a, b) => b.length - a.length);
+  const SORTED_FR_KEYS = Object.keys(FRENCH_TO_ENGLISH).sort((a, b) => b.length - a.length);
+  
   let domObserver: MutationObserver | null = null;
   let currentActiveLanguage = 'en';
+  const originalTextMap = new WeakMap<Node, string>();
   
   // Translate a single text string
   export const translateString = (text: string, targetLang: string = 'fr'): string => {
@@ -210,14 +270,24 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
       if (MEDICAL_AND_UI_TRANSLATIONS[trimmed]) {
         return text.replace(trimmed, MEDICAL_AND_UI_TRANSLATIONS[trimmed]);
       }
-      // Partial word replacements for common compound titles
-      for (const [enKey, frVal] of Object.entries(MEDICAL_AND_UI_TRANSLATIONS)) {
-        if (trimmed === enKey) return frVal;
+      let res = text;
+      for (const key of SORTED_EN_KEYS) {
+        if (res.includes(key)) {
+          res = res.replaceAll(key, MEDICAL_AND_UI_TRANSLATIONS[key]);
+        }
       }
+      return res;
     } else if (targetLang === 'en') {
       if (FRENCH_TO_ENGLISH[trimmed]) {
         return text.replace(trimmed, FRENCH_TO_ENGLISH[trimmed]);
       }
+      let res = text;
+      for (const key of SORTED_FR_KEYS) {
+        if (res.includes(key)) {
+          res = res.replaceAll(key, FRENCH_TO_ENGLISH[key]);
+        }
+      }
+      return res;
     }
     return text;
   };
@@ -234,7 +304,6 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
       NodeFilter.SHOW_TEXT,
       {
         acceptNode: (node) => {
-          // Skip script, style, code, and editable fields
           const parent = node.parentElement;
           if (!parent) return NodeFilter.FILTER_REJECT;
           const tag = parent.tagName.toLowerCase();
@@ -254,15 +323,20 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
       const rawVal = currentNode.nodeValue || '';
       const trimmed = rawVal.trim();
       if (trimmed) {
+        // Store original English if first encounter
+        if (!originalTextMap.has(currentNode)) {
+          originalTextMap.set(currentNode, rawVal);
+        }
+        const origEnglish = originalTextMap.get(currentNode) || rawVal;
+  
         if (targetLang === 'fr') {
-          const translated = MEDICAL_AND_UI_TRANSLATIONS[trimmed];
-          if (translated && translated !== trimmed) {
-            nodesToUpdate.push({ node: currentNode, newText: rawVal.replace(trimmed, translated) });
+          const translated = translateString(origEnglish, 'fr');
+          if (translated !== rawVal) {
+            nodesToUpdate.push({ node: currentNode, newText: translated });
           }
         } else if (targetLang === 'en') {
-          const original = FRENCH_TO_ENGLISH[trimmed];
-          if (original && original !== trimmed) {
-            nodesToUpdate.push({ node: currentNode, newText: rawVal.replace(trimmed, original) });
+          if (origEnglish !== rawVal) {
+            nodesToUpdate.push({ node: currentNode, newText: origEnglish });
           }
         }
       }
@@ -274,19 +348,22 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
     });
   
     // Also translate input placeholders
-    const inputs = document.querySelectorAll('input[placeholder], textarea[placeholder]');
+    const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[placeholder], textarea[placeholder]');
     inputs.forEach((el) => {
-      const ph = el.getAttribute('placeholder') || '';
-      const trimmed = ph.trim();
-      if (targetLang === 'fr' && MEDICAL_AND_UI_TRANSLATIONS[trimmed]) {
-        el.setAttribute('placeholder', MEDICAL_AND_UI_TRANSLATIONS[trimmed]);
-      } else if (targetLang === 'en' && FRENCH_TO_ENGLISH[trimmed]) {
-        el.setAttribute('placeholder', FRENCH_TO_ENGLISH[trimmed]);
+      const orig = el.getAttribute('data-orig-placeholder') || el.getAttribute('placeholder') || '';
+      if (!el.getAttribute('data-orig-placeholder')) {
+        el.setAttribute('data-orig-placeholder', orig);
+      }
+      if (targetLang === 'fr') {
+        el.setAttribute('placeholder', translateString(orig, 'fr'));
+      } else {
+        el.setAttribute('placeholder', orig);
       }
     });
   };
   
   // Start observation for dynamic React renders
+  let debounceTimer: any = null;
   export const initDomObserver = (lang: string) => {
     currentActiveLanguage = lang;
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -297,23 +374,18 @@ export const MEDICAL_AND_UI_TRANSLATIONS: Record<string, string> = {
   
     translateDOM(lang);
   
-    domObserver = new MutationObserver((mutations) => {
+    domObserver = new MutationObserver(() => {
       if (currentActiveLanguage === 'en') return;
-      let shouldScan = false;
-      for (const m of mutations) {
-        if (m.type === 'childList' && m.addedNodes.length > 0) {
-          shouldScan = true;
-          break;
-        }
-      }
-      if (shouldScan) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
         translateDOM(currentActiveLanguage);
-      }
+      }, 40);
     });
   
     domObserver.observe(document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
+      characterData: false
     });
   };
   

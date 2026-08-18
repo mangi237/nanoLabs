@@ -26,6 +26,8 @@ export interface BookingTestItem {
   receptionistValidated?: boolean;
   validatedBy?: string;
   validatedAt?: string;
+  virtualRequested?: boolean;
+  virtualRequestedAt?: string;
   subParameters?: Array<{
     id: string;
     name: string;
@@ -75,6 +77,9 @@ export interface PatientBooking {
   validatedBy?: string;
   validatedAt?: string;
   registrationType?: 'online' | 'walk_in';
+  isOnlineBooking?: boolean;
+  virtualRequested?: boolean;
+  virtualRequestedAt?: string;
 
   // Sample collection details
   collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine']
@@ -538,6 +543,41 @@ export const limsService = {
             updatedAt: timestamp
           });
 
+          // Also update the Patient document and booklet records so the patient booklet shows who is assigned!
+          if (data.patientId) {
+            try {
+              const patientRef = doc(db, 'labs', labId, 'patients', data.patientId);
+              const patientSnap = await getDoc(patientRef);
+              if (patientSnap.exists()) {
+                const patientData = patientSnap.data();
+                const updatedLabTests = (patientData.labTests || []).map((t: any) => {
+                  const matchesBooking = data.tests?.some(bt => bt.id === t.id || bt.testName === (t.testName || t.name));
+                  if (matchesBooking || !t.assignedTo) {
+                    return {
+                      ...t,
+                      assignedTo: techName,
+                      assignedTechName: techName,
+                      assignedTechId: techId,
+                      assignedAt: timestamp
+                    };
+                  }
+                  return t;
+                });
+
+                await updateDoc(patientRef, {
+                  assignedLabTech: techName,
+                  assignedTechId: techId,
+                  assignedTechName: techName,
+                  assignedAt: timestamp,
+                  labTests: updatedLabTests,
+                  updatedAt: timestamp
+                });
+              }
+            } catch (patErr) {
+              console.warn('Could not update patient doc with assigned lab tech:', patErr);
+            }
+          }
+
           await auditService.logPatientAccess({
             labId,
             patientId: data.patientId,
@@ -919,6 +959,7 @@ export const limsService = {
                 : (isValidated ? 'Pending_Payment' : 'Pending_Validation');
 
             // Parse all individual tests from appointment
+            const isVirtualBooking = Boolean(apptData.virtualRequested || apptData.isVirtual || apptData.deliveryMethod === 'virtual');
             let apptTests: BookingTestItem[] = [];
             if (Array.isArray(apptData.tests) && apptData.tests.length > 0) {
               apptTests = apptData.tests.map((at: any, idx: number) => ({
@@ -936,7 +977,9 @@ export const limsService = {
                 status: (isValidated || at.receptionistValidated) 
                   ? (isPaid ? 'Pending_Collection' : 'Pending_Payment') 
                   : 'Pending_Validation',
-                receptionistValidated: isValidated || at.receptionistValidated === true
+                receptionistValidated: isValidated || at.receptionistValidated === true,
+                virtualRequested: Boolean(at.virtualRequested || isVirtualBooking),
+                virtualRequestedAt: at.virtualRequestedAt || apptData.virtualRequestedAt
               }));
             } else {
               apptTests = [{
@@ -952,7 +995,9 @@ export const limsService = {
                 refRangeChild: '10 - 40',
                 price: apptData.price || apptData.totalPrice || 5000,
                 status,
-                receptionistValidated: isValidated
+                receptionistValidated: isValidated,
+                virtualRequested: isVirtualBooking,
+                virtualRequestedAt: apptData.virtualRequestedAt
               }];
             }
 
@@ -977,6 +1022,13 @@ export const limsService = {
               receptionistValidated: isValidated,
               validatedBy: apptData.validatedBy || (isValidated ? 'Front Desk' : ''),
               validatedAt: apptData.validatedAt || (isValidated ? apptData.createdAt : ''),
+              registrationType: apptData.registrationType || 'online',
+              isOnlineBooking: true,
+              virtualRequested: isVirtualBooking,
+              virtualRequestedAt: apptData.virtualRequestedAt || apptData.createdAt,
+              assignedTechId: apptData.assignedTechId,
+              assignedTechName: apptData.assignedTechName,
+              assignedAt: apptData.assignedAt,
               collectedSamples: apptData.collectedSamples || (apptData.sampleCollected ? [apptData.sampleType || 'Venous Blood'] : []),
               tests: apptTests,
               overallStatus: status,

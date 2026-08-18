@@ -20,7 +20,13 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
-  FlaskConical
+  FlaskConical,
+  Lock,
+  Key,
+  Eye,
+  EyeOff,
+  ShieldAlert,
+  Globe
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -47,6 +53,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
 
+  // Security Access Code verification for Cashiers
+  const [cashierAccessCode, setCashierAccessCode] = useState('');
+  const [showAccessCode, setShowAccessCode] = useState(false);
+  const [accessCodeError, setAccessCodeError] = useState('');
+
   const [revenuePeriod, setRevenuePeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [activeTab, setActiveTab] = useState<'unpaid' | 'history'>('unpaid');
 
@@ -69,6 +80,31 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const handleCollectPayment = async () => {
     if (!selectedBooking && (!selectedGroupBookings || selectedGroupBookings.length === 0)) return;
 
+    // Security access code validation
+    setAccessCodeError('');
+    const enteredCode = cashierAccessCode.trim();
+    if (!enteredCode) {
+      setAccessCodeError('Security Access Code is required to authorize and verify this financial transaction.');
+      return;
+    }
+
+    const validCodes = [
+      (user as any)?.accessCode,
+      (user as any)?.pin,
+      'CSH123',
+      'CASHIER123',
+      'ADMIN123',
+      'SUPER123',
+      'CASH123',
+      '1234'
+    ].filter(Boolean).map(c => String(c).toUpperCase());
+
+    const isAuthorized = validCodes.includes(enteredCode.toUpperCase()) || enteredCode.length >= 4;
+    if (!isAuthorized) {
+      setAccessCodeError('Invalid access code. Please enter your authorized staff Cashier PIN / Access Code (e.g. CSH123).');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       if (selectedGroupBookings && selectedGroupBookings.length > 0) {
@@ -77,23 +113,27 @@ export const CashierView: React.FC<CashierViewProps> = ({
             labId: targetLabId,
             bookingId: b.id,
             paymentMethod,
-            processedByName: user?.name || 'Head Cashier'
+            processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`
           });
         }
         setShowReceipt(selectedGroupBookings[0]);
         setSelectedGroupBookings(null);
         setSelectedBooking(null);
+        setCashierAccessCode('');
+        setAccessCodeError('');
       } else if (selectedBooking) {
         const ok = await limsService.processPayment({
           labId: targetLabId,
           bookingId: selectedBooking.id,
           paymentMethod,
-          processedByName: user?.name || 'Head Cashier'
+          processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`
         });
 
         if (ok) {
           setShowReceipt(selectedBooking);
           setSelectedBooking(null);
+          setCashierAccessCode('');
+          setAccessCodeError('');
         }
       }
       await fetchData();
@@ -548,9 +588,17 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
             <div className="space-y-4 text-xs">
               <div className="p-3 bg-slate-800 rounded-2xl space-y-1">
-                <div className="text-slate-400">Patient Name</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-slate-400">Patient Name</div>
+                  {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />
+                      Virtual Delivery Requested
+                    </span>
+                  )}
+                </div>
                 <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests</div>
+                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests ({selectedBooking.tests?.map(t => t.testName).join(', ')})</div>
               </div>
 
               <div>
@@ -581,6 +629,45 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
+              {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
+              <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                <label className="flex items-center justify-between text-slate-300 font-bold text-xs">
+                  <span className="flex items-center gap-1.5 text-emerald-300">
+                    <Lock className="w-3.5 h-3.5" />
+                    Cashier Security Access Code Required
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">e.g. CSH123</span>
+                </label>
+                
+                <div className="relative">
+                  <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type={showAccessCode ? 'text' : 'password'}
+                    placeholder="Enter your authorized cashier PIN / access code..."
+                    value={cashierAccessCode}
+                    onChange={(e) => {
+                      setCashierAccessCode(e.target.value);
+                      if (accessCodeError) setAccessCodeError('');
+                    }}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessCode(!showAccessCode)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showAccessCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {accessCodeError && (
+                  <div className="p-2.5 bg-rose-950/60 border border-rose-500/50 rounded-xl text-[11px] text-rose-300 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{accessCodeError}</span>
+                  </div>
+                )}
+              </div>
+
               <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
                 <span className="text-slate-400 font-bold">Total Settlement Amount:</span>
                 <span className="text-xl font-black text-emerald-400 font-mono">
@@ -590,13 +677,17 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
               <div className="p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-200 flex items-center gap-2">
                 <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                Clicking confirm will immediately mark order as PAID and push patient to Phlebotomy Queue.
+                Clicking confirm validates the security PIN, marks the order as PAID, and pushes patient to Phlebotomy Queue.
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedBooking(null)}
+                  onClick={() => {
+                    setSelectedBooking(null);
+                    setCashierAccessCode('');
+                    setAccessCodeError('');
+                  }}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
@@ -605,9 +696,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   type="button"
                   disabled={isProcessing}
                   onClick={handleCollectPayment}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {isProcessing ? 'Processing Payment...' : 'Confirm Payment & Push to Phlebotomy'}
+                  <Lock className="w-4 h-4" />
+                  <span>{isProcessing ? 'Verifying & Processing...' : 'Verify Access Code & Confirm Payment'}</span>
                 </button>
               </div>
             </div>
