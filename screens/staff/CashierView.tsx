@@ -26,7 +26,11 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
-  Globe
+  Globe,
+  Banknote,
+  PhoneCall,
+  Shield,
+  Percent
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -52,18 +56,52 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
+  const [revenuePeriod, setRevenuePeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [activeTab, setActiveTab] = useState<'unpaid' | 'history'>('unpaid');
 
   // Security Access Code verification for Cashiers
   const [cashierAccessCode, setCashierAccessCode] = useState('');
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [accessCodeError, setAccessCodeError] = useState('');
 
-  const [revenuePeriod, setRevenuePeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
-  const [activeTab, setActiveTab] = useState<'unpaid' | 'history'>('unpaid');
+  // FIXED: Payment details state
+  const [paymentDetails, setPaymentDetails] = useState<{
+    phoneNumber?: string;
+    cardType?: string;
+    bankNumber?: string;
+    insuranceCompany?: string;
+    coveragePercentage?: number;
+  }>({});
+
+  // FIXED: Total revenue state - auto updates
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalCollectedToday, setTotalCollectedToday] = useState(0);
+
+  // FIXED: Batch selection state
+  const [selectedBookingsMap, setSelectedBookingsMap] = useState<Record<string, boolean>>({});
+  const [selectAllMode, setSelectAllMode] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, [targetLabId]);
+
+  // FIXED: Calculate revenue whenever bookings change
+  useEffect(() => {
+    calculateRevenue();
+  }, [bookings]);
+
+  const calculateRevenue = () => {
+    const paid = bookings.filter(b => b.paymentStatus === 'paid');
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    const total = paid.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const todayTotal = paid
+      .filter(b => (b.paidAt || b.createdAt || '').startsWith(todayStr))
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    
+    setTotalRevenue(total);
+    setTotalCollectedToday(todayTotal);
+  };
 
   const fetchData = async () => {
     try {
@@ -101,7 +139,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
     const isAuthorized = validCodes.includes(enteredCode.toUpperCase()) || enteredCode.length >= 4;
     if (!isAuthorized) {
-      setAccessCodeError('Invalid access code. Please enter your authorized staff Cashier PIN / Access Code (e.g. CSH123).');
+      setAccessCodeError('Invalid access code. Please enter your authorized staff Cashier PIN / Access Code.');
       return;
     }
 
@@ -121,6 +159,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         setSelectedBooking(null);
         setCashierAccessCode('');
         setAccessCodeError('');
+        setPaymentDetails({});
       } else if (selectedBooking) {
         const ok = await limsService.processPayment({
           labId: targetLabId,
@@ -134,6 +173,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
           setSelectedBooking(null);
           setCashierAccessCode('');
           setAccessCodeError('');
+          setPaymentDetails({});
         }
       }
       await fetchData();
@@ -152,7 +192,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
 
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -167,19 +207,46 @@ export const CashierView: React.FC<CashierViewProps> = ({
     if (revenuePeriod === 'month') {
       return paidDate >= thirtyDaysAgo;
     }
-    return true; // 'all'
+    return true;
   });
 
   const periodRevenue = filteredPaidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-  const totalCollectedToday = paidBookings
-    .filter(b => (b.paidAt || b.createdAt || '').startsWith(todayStr))
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
   const filteredUnpaid = unpaidBookings.filter(b => 
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // FIXED: Toggle individual booking selection
+  const toggleBookingSelection = (bookingId: string) => {
+    setSelectedBookingsMap(prev => ({
+      ...prev,
+      [bookingId]: !prev[bookingId]
+    }));
+    // Deselect "select all" if any is unchecked
+    if (selectAllMode) setSelectAllMode(false);
+  };
+
+  // FIXED: Toggle select all
+  const toggleSelectAll = () => {
+    const allIds = filteredUnpaid.map(b => b.id);
+    const allSelected = allIds.every(id => selectedBookingsMap[id]);
+    if (allSelected) {
+      setSelectedBookingsMap({});
+      setSelectAllMode(false);
+    } else {
+      const newMap: Record<string, boolean> = {};
+      allIds.forEach(id => { newMap[id] = true; });
+      setSelectedBookingsMap(newMap);
+      setSelectAllMode(true);
+    }
+  };
+
+  // FIXED: Get selected bookings for batch payment
+  const getSelectedBookings = () => {
+    return filteredUnpaid.filter(b => selectedBookingsMap[b.id]);
+  };
 
   const patientGroups = React.useMemo(() => {
     const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number } } = {};
@@ -212,7 +279,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      {/* Staff Hero Banner */}
       <StaffHeroBanner
         workstationNumber="Workstation 02"
         workstationTitle="Head Cashier & Billing Gatekeeper"
@@ -227,10 +293,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider">
               Collected Revenue ({revenuePeriod.toUpperCase()})
             </div>
+            {/* FIXED: Real-time auto-updating revenue */}
             <div className="text-2xl font-black text-emerald-400 font-mono">
               {periodRevenue.toLocaleString()} XAF
             </div>
-            {/* Timeframe Filter Selector */}
+            <div className="text-[9px] text-emerald-300/80">
+              Today: {totalCollectedToday.toLocaleString()} XAF
+            </div>
             <div className="flex items-center justify-end gap-1 pt-1">
               {[
                 { id: 'today', label: 'Today' },
@@ -341,12 +410,24 @@ export const CashierView: React.FC<CashierViewProps> = ({
       {activeTab === 'unpaid' ? (
         /* Unpaid Invoices Queue Table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-emerald-600" />
               Unpaid Invoices Awaiting Settlement ({filteredUnpaid.length})
             </h3>
-            <span className="text-xs text-slate-500">Gatekeeper Status: Blocked from Phlebotomy</span>
+            <div className="flex items-center gap-3">
+              {/* FIXED: Select All toggle */}
+              {filteredUnpaid.length > 0 && (
+                <button
+                  onClick={toggleSelectAll}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${selectAllMode ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  {selectAllMode ? 'Deselect All' : 'Select All'}
+                </button>
+              )}
+              <span className="text-xs text-slate-500">Gatekeeper Status: Blocked from Phlebotomy</span>
+            </div>
           </div>
 
           {loading ? (
@@ -360,25 +441,40 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="divide-y divide-slate-100">
               {patientGroups.map((group) => {
                 const isExpanded = expandedPatientKey === group.key;
+                const groupAllSelected = group.bookings.every(b => selectedBookingsMap[b.id]);
+                const groupSomeSelected = group.bookings.some(b => selectedBookingsMap[b.id]);
 
                 return (
                   <div key={group.key} className="p-4 hover:bg-slate-50/80 transition-colors space-y-3">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">
-                            {group.patientName}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                            PID: {group.patientPid}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            {group.bookings.length} Unpaid Order{group.bookings.length > 1 ? 's' : ''}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-3">
+                        {/* FIXED: Group-level checkbox */}
+                        <input
+                          type="checkbox"
+                          checked={groupAllSelected}
+                          onChange={() => {
+                            group.bookings.forEach(b => {
+                              toggleBookingSelection(b.id);
+                            });
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded-md focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm text-slate-900">
+                              {group.patientName}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                              PID: {group.patientPid}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              {group.bookings.length} Unpaid Order{group.bookings.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
 
-                        <div className="text-xs text-slate-500 flex items-center gap-3">
-                          <span>Total Payable Balance: <strong className="font-mono text-emerald-700 font-bold">{group.totalAmount.toLocaleString()} XAF</strong></span>
+                          <div className="text-xs text-slate-500 flex items-center gap-3">
+                            <span>Total Payable Balance: <strong className="font-mono text-emerald-700 font-bold">{group.totalAmount.toLocaleString()} XAF</strong></span>
+                          </div>
                         </div>
                       </div>
 
@@ -388,7 +484,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
                         >
                           <FlaskConical className="w-4 h-4 text-emerald-600" />
-                          <span>View Tests Dropdown</span>
+                          <span>View Tests</span>
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-slate-600" />
                           ) : (
@@ -399,19 +495,25 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         {group.bookings.length > 1 ? (
                           <button
                             onClick={() => {
-                              setSelectedGroupBookings(group.bookings);
-                              setSelectedBooking(group.bookings[0]);
+                              const selected = getSelectedBookings();
+                              if (selected.length === 0) {
+                                alert('Please select at least one booking to pay.');
+                                return;
+                              }
+                              setSelectedGroupBookings(selected);
+                              setSelectedBooking(selected[0]);
                             }}
                             className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                           >
                             <DollarSign className="w-4 h-4" />
-                            <span>Collect All ({group.totalAmount.toLocaleString()} FCFA)</span>
+                            <span>Pay Selected ({group.bookings.filter(b => selectedBookingsMap[b.id]).length})</span>
                           </button>
                         ) : (
                           <button
                             onClick={() => {
                               setSelectedGroupBookings(null);
                               setSelectedBooking(group.bookings[0]);
+                              setPaymentDetails({});
                             }}
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                           >
@@ -422,7 +524,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                       </div>
                     </div>
 
-                    {/* EXPANDED ACCORDION DROPDOWN SHOWING ALL REQUESTED TESTS */}
+                    {/* EXPANDED ACCORDION DROPDOWN */}
                     {isExpanded && (
                       <div className="p-4 bg-slate-50 rounded-2xl border border-emerald-200 space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-200">
@@ -436,49 +538,66 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         </div>
 
                         <div className="space-y-3">
-                          {group.bookings.map((booking) => (
-                            <div
-                              key={booking.id}
-                              className="p-3.5 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                            >
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-bold text-xs text-teal-800">
-                                    {booking.bookingCode}
-                                  </span>
-                                  <span className="text-xs text-slate-500">• Invoice: <strong className="font-mono">{booking.invoiceNumber}</strong></span>
-                                </div>
+                          {group.bookings.map((booking) => {
+                            const isSelected = selectedBookingsMap[booking.id];
+                            return (
+                              <div
+                                key={booking.id}
+                                className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
+                                  isSelected ? 'bg-emerald-50 border-emerald-400' : 'bg-white border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {/* FIXED: Individual booking checkbox */}
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleBookingSelection(booking.id)}
+                                    className="w-4 h-4 text-emerald-600 rounded-md focus:ring-emerald-500 cursor-pointer"
+                                  />
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-xs text-teal-800">
+                                        {booking.bookingCode}
+                                      </span>
+                                      <span className="text-xs text-slate-500">• Invoice: <strong className="font-mono">{booking.invoiceNumber}</strong></span>
+                                    </div>
 
-                                <div className="flex flex-wrap gap-1.5 pt-1">
-                                  {booking.tests?.map((t) => (
-                                    <span
-                                      key={t.id}
-                                      className="px-2.5 py-1 bg-emerald-50 text-emerald-900 rounded-lg text-xs font-semibold border border-emerald-200"
-                                    >
-                                      {t.testName} ({(t.price || 5500).toLocaleString()} FCFA)
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                                <div className="text-right">
-                                  <div className="text-[10px] text-slate-400 font-semibold uppercase">Invoice Total</div>
-                                  <div className="text-sm font-black text-emerald-700 font-mono">
-                                    {(booking.totalAmount || 0).toLocaleString()} FCFA
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                      {booking.tests?.map((t) => (
+                                        <span
+                                          key={t.id}
+                                          className="px-2.5 py-1 bg-emerald-50 text-emerald-900 rounded-lg text-xs font-semibold border border-emerald-200"
+                                        >
+                                          {t.testName} ({(t.price || 5500).toLocaleString()} FCFA)
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
 
-                                <button
-                                  onClick={() => setSelectedBooking(booking)}
-                                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                                >
-                                  <DollarSign className="w-3.5 h-3.5" />
-                                  Verify & Pay Order
-                                </button>
+                                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                                  <div className="text-right">
+                                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Invoice Total</div>
+                                    <div className="text-sm font-black text-emerald-700 font-mono">
+                                      {(booking.totalAmount || 0).toLocaleString()} FCFA
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => {
+                                      setSelectedBooking(booking);
+                                      setPaymentDetails({});
+                                    }}
+                                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                                  >
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                    Verify & Pay
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -568,7 +687,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* COLLECT PAYMENT MODAL */}
+      {/* COLLECT PAYMENT MODAL - FIXED with payment details */}
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
@@ -593,12 +712,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
                       <Globe className="w-3 h-3" />
-                      Virtual Delivery Requested
+                      Virtual Delivery
                     </span>
                   )}
                 </div>
                 <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests ({selectedBooking.tests?.map(t => t.testName).join(', ')})</div>
+                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests</div>
               </div>
 
               <div>
@@ -606,9 +725,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'cash', label: 'Cash Payment', icon: DollarSign },
-                    { id: 'mobile_money', label: 'Mobile Money (MoMo/OM)', icon: Smartphone },
+                    { id: 'mobile_money', label: 'Mobile Money', icon: Smartphone },
                     { id: 'card', label: 'Credit / Debit Card', icon: CreditCard },
-                    { id: 'insurance', label: 'Insurance Co-Pay', icon: ShieldCheck }
+                    { id: 'insurance', label: 'Insurance Co-Pay', icon: Shield }
                   ].map(m => {
                     const Icon = m.icon;
                     const isSel = paymentMethod === m.id;
@@ -627,6 +746,77 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     );
                   })}
                 </div>
+              </div>
+
+              {/* FIXED: Payment method specific details */}
+              <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                <label className="text-slate-300 font-bold text-xs flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5" />
+                  Payment Details for {paymentMethod.replace('_', ' ').toUpperCase()}
+                </label>
+
+                {paymentMethod === 'mobile_money' && (
+                  <input
+                    type="text"
+                    placeholder="Enter MoMo phone number used for payment (e.g. 672638094)"
+                    value={paymentDetails.phoneNumber || ''}
+                    onChange={(e) => setPaymentDetails({ ...paymentDetails, phoneNumber: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                )}
+
+                {paymentMethod === 'card' && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Card Type (e.g. Visa, Mastercard)"
+                      value={paymentDetails.cardType || ''}
+                      onChange={(e) => setPaymentDetails({ ...paymentDetails, cardType: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Bank / Account Number (last 4 digits)"
+                      value={paymentDetails.bankNumber || ''}
+                      onChange={(e) => setPaymentDetails({ ...paymentDetails, bankNumber: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                )}
+
+                {paymentMethod === 'insurance' && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Insurance Company Name (e.g. Ascoma, NSIA)"
+                      value={paymentDetails.insuranceCompany || ''}
+                      onChange={(e) => setPaymentDetails({ ...paymentDetails, insuranceCompany: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        placeholder="Coverage Percentage (e.g. 80)"
+                        value={paymentDetails.coveragePercentage || ''}
+                        onChange={(e) => setPaymentDetails({ ...paymentDetails, coveragePercentage: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <span className="text-slate-400 text-xs font-bold">%</span>
+                    </div>
+                    {paymentDetails.coveragePercentage && (
+                      <div className="text-[11px] text-emerald-300 bg-emerald-950/30 p-2 rounded-xl">
+                        Patient Co-pay: {(selectedBooking.totalAmount || 0) * (1 - (paymentDetails.coveragePercentage || 0) / 100)} FCFA
+                        {' • '}Insurance covers: {(selectedBooking.totalAmount || 0) * ((paymentDetails.coveragePercentage || 0) / 100)} FCFA
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {paymentMethod === 'cash' && (
+                  <div className="text-slate-400 text-xs italic">
+                    Cash payment - no additional details required.
+                  </div>
+                )}
               </div>
 
               {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
@@ -687,6 +877,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     setSelectedBooking(null);
                     setCashierAccessCode('');
                     setAccessCodeError('');
+                    setPaymentDetails({});
                   }}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer"
                 >
@@ -723,12 +914,24 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1 text-left font-mono">
               <div className="flex justify-between"><span>Invoice:</span> <strong>{showReceipt.invoiceNumber}</strong></div>
               <div className="flex justify-between"><span>Method:</span> <strong className="uppercase">{paymentMethod}</strong></div>
+              {paymentMethod === 'mobile_money' && paymentDetails.phoneNumber && (
+                <div className="flex justify-between"><span>MoMo Number:</span> <strong>{paymentDetails.phoneNumber}</strong></div>
+              )}
+              {paymentMethod === 'card' && paymentDetails.cardType && (
+                <div className="flex justify-between"><span>Card:</span> <strong>{paymentDetails.cardType} (****{paymentDetails.bankNumber})</strong></div>
+              )}
+              {paymentMethod === 'insurance' && paymentDetails.insuranceCompany && (
+                <div className="flex justify-between"><span>Insurance:</span> <strong>{paymentDetails.insuranceCompany} ({paymentDetails.coveragePercentage}%)</strong></div>
+              )}
               <div className="flex justify-between"><span>Amount Paid:</span> <strong className="text-emerald-700">{showReceipt.totalAmount?.toLocaleString()} XAF</strong></div>
               <div className="flex justify-between"><span>Phlebotomy Queue:</span> <strong className="text-emerald-600">UNLOCKED</strong></div>
             </div>
 
             <button
-              onClick={() => setShowReceipt(null)}
+              onClick={() => {
+                setShowReceipt(null);
+                setPaymentDetails({});
+              }}
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md cursor-pointer"
             >
               Done / Return to Queue
