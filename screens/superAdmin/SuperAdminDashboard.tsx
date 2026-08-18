@@ -21,11 +21,129 @@ import {
   Check,
   X,
   AlertTriangle,
-  Lock
+  Lock,
+  Eye,
+  EyeOff,
+  CreditCard,
+  Percent
 } from 'lucide-react';
 import { collection, getDocs, deleteDoc, updateDoc, doc, db } from '../../services/firebase';
 import { LabRegistrationModal } from './LabRegistrationModal';
 import { LabDetailsScreen } from './LabDetailsScreen';
+
+// FIXED: Commission payment modal
+interface CommissionPaymentModalProps {
+  lab: any;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const CommissionPaymentModal: React.FC<CommissionPaymentModalProps> = ({ lab, onClose, onConfirm }) => {
+  const [amount, setAmount] = useState('');
+  const [commissionDue, setCommissionDue] = useState(0);
+  const [reference, setReference] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Calculate commission due (500 FCFA per confirmed test)
+    const totalTests = lab.confirmedTestsCount || 0;
+    const due = totalTests * 500;
+    setCommissionDue(due);
+    setAmount(due.toString());
+  }, [lab]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reference.trim()) {
+      alert('Please enter a payment reference.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'labs', lab.id), {
+        lastCommissionPaidAt: new Date().toISOString(),
+        lastCommissionAmount: parseInt(amount),
+        commissionPaymentReference: reference,
+        commissionBalance: 0,
+        updatedAt: new Date().toISOString()
+      });
+      onConfirm();
+    } catch (err) {
+      console.error('Error processing commission payment:', err);
+      alert('Failed to process commission payment.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-white">Commission Payment</h3>
+              <p className="text-[11px] text-slate-400">{lab.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-lg cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-xs">Total Confirmed Tests:</span>
+              <span className="font-bold text-white">{lab.confirmedTestsCount || 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-xs">Commission Rate:</span>
+              <span className="font-bold text-emerald-400">500 FCFA / test</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-slate-400 text-xs font-bold">Total Commission Due:</span>
+              <span className="text-xl font-black text-emerald-400">{commissionDue.toLocaleString()} FCFA</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-300 mb-1">Payment Reference / Transaction ID</label>
+            <input
+              type="text"
+              required
+              placeholder="Enter payment reference..."
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSubmitting ? 'Processing...' : 'Confirm Payment'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 interface SuperAdminDashboardProps {
   onNavigate?: (screen: string, params?: any) => void;
@@ -46,6 +164,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'plan_requests'>('active');
 
+  // FIXED: Commission payment modal state
+  const [commissionLab, setCommissionLab] = useState<any | null>(null);
+
   // SuperAdmin Access Code Confirmation Modal
   const [confirmingLab, setConfirmingLab] = useState<any | null>(null);
   const [confirmingPlanRequestLab, setConfirmingPlanRequestLab] = useState<any | null>(null);
@@ -53,11 +174,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [codeError, setCodeError] = useState('');
   const [processingAction, setProcessingAction] = useState(false);
 
+  // FIXED: Masked revenue - only show commission
+  const [totalCommission, setTotalCommission] = useState(0);
+  const [totalTests, setTotalTests] = useState(0);
+
   const fetchNetworkStats = async () => {
     try {
       setLoading(true);
       const labsSnap = await getDocs(collection(db, 'labs'));
       const labsData: any[] = [];
+      let totalCommission = 0;
+      let totalTests = 0;
 
       for (const labDoc of labsSnap.docs) {
         const labInfo = { id: labDoc.id, ...labDoc.data() };
@@ -92,21 +219,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         (labInfo as any).confirmedTestsCount = labConfirmedTestsCount;
         (labInfo as any).totalTestsCount = labTotalTestsCount;
 
-        // Calculate revenue
-        let labRevenue = 0;
-        if ((labInfo as any).pricingModel === 'flat_subscription') {
-          labRevenue = (labInfo as any).subscriptionPrice || (
-            (labInfo as any).subscriptionTier === 'large' || (labInfo as any).subscriptionTier === 'business' ? 60000 :
-            (labInfo as any).subscriptionTier === 'medium' || (labInfo as any).subscriptionTier === 'growth' ? 45000 : 25000
-          );
-        } else if ((labInfo as any).pricingModel === 'lifetime_space') {
-          labRevenue = (labInfo as any).monthlyMaintenanceFee || 15000;
-        } else {
-          const fee = (labInfo as any).feePerPatient || (labInfo as any).feePerTest || 500;
-          labRevenue = labConfirmedTestsCount * fee;
-        }
-
-        (labInfo as any).royaltyEarnings = labRevenue;
+        // FIXED: Only calculate commission, not total revenue
+        const commission = labConfirmedTestsCount * 500;
+        (labInfo as any).commissionDue = commission;
+        totalCommission += commission;
+        totalTests += labConfirmedTestsCount;
 
         try {
           const staffSnap = await getDocs(collection(db, 'labs', labDoc.id, 'staff'));
@@ -118,6 +235,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         labsData.push(labInfo);
       }
 
+      setTotalCommission(totalCommission);
+      setTotalTests(totalTests);
       setLabs(labsData);
     } catch (err) {
       console.error('Error fetching network labs:', err);
@@ -198,6 +317,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   };
 
+  // FIXED: Handle commission payment
+  const handleCommissionPayment = async () => {
+    if (commissionLab) {
+      // Refresh data
+      await fetchNetworkStats();
+      setCommissionLab(null);
+    }
+  };
+
   if (selectedLabId) {
     return (
       <LabDetailsScreen 
@@ -216,11 +344,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const pendingLabs = labs.filter(l => l.status === 'pending_approval' || l.confirmed === false);
   const planRequestLabs = labs.filter(l => !!l.requestedPricingModel);
 
-  // Aggregate metrics
+  // Aggregate metrics - FIXED: Only show commission and test count
   const totalLabs = activeLabs.length;
   const totalPatients = activeLabs.reduce((acc, l) => acc + (l.patientCount || 0), 0);
-  const totalConfirmedTests = activeLabs.reduce((acc, l) => acc + (l.confirmedTestsCount || 0), 0);
-  const totalRevenue = activeLabs.reduce((acc, l) => acc + (l.royaltyEarnings || 0), 0);
 
   const displayedLabs = 
     activeTab === 'pending' ? pendingLabs :
@@ -238,7 +364,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         subtitle="Global laboratory franchise & multi-tenant operations"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
-        
       />
 
       {/* Top Banner */}
@@ -276,7 +401,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* Network Stats Grid */}
+      {/* FIXED: Network Stats Grid - Only showing commission and tests */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
@@ -303,18 +428,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">{totalConfirmedTests}</div>
+            <div className="text-2xl font-bold text-slate-900">{totalTests}</div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Tests</div>
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-            <TrendingUp className="w-6 h-6" />
+            <Percent className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xl font-bold text-emerald-700">{totalRevenue.toLocaleString()} FCFA</div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Confirmed Royalty</div>
+            <div className="text-xl font-bold text-emerald-700">{totalCommission.toLocaleString()} FCFA</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Platform Commission</div>
           </div>
         </div>
       </div>
@@ -446,34 +571,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           ? `Monthly SaaS (${(labItem.subscriptionTier || 'small').toUpperCase()})` 
                           : 'Pay-Per-Test (500 FCFA Commission)'}
                       </span>
-
-                      {/* 30-day countdown indicator */}
-                      {(() => {
-                        const rawDate = labItem.subscriptionStartDate || labItem.createdAt;
-                        let start = Date.now();
-                        if (rawDate) {
-                          if (typeof rawDate === 'object' && typeof (rawDate as any).seconds === 'number') {
-                            start = (rawDate as any).seconds * 1000;
-                          } else {
-                            const parsed = new Date(rawDate).getTime();
-                            if (!isNaN(parsed)) start = parsed;
-                          }
-                        }
-                        const elapsedDays = Math.floor(Math.max(0, Date.now() - start) / (1000 * 60 * 60 * 24));
-                        const daysLeft = Math.max(0, 30 - elapsedDays);
-                        const isExpired = daysLeft === 0;
-                        return (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
-                            isExpired
-                              ? 'bg-rose-50 text-rose-800 border-rose-200'
-                              : daysLeft <= 5
-                              ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : 'bg-teal-50 text-teal-800 border-teal-200'
-                          }`}>
-                            {isExpired ? `Expired (${elapsedDays}d)` : `${daysLeft}d left (Day ${elapsedDays + 1}/30)`}
-                          </span>
-                        );
-                      })()}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
@@ -483,13 +580,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       </span>
                       <span>• Patients: <strong className="text-slate-900 font-bold">{labItem.patientCount || 0}</strong></span>
                       <span>• Total Tests: <strong className="text-slate-900 font-bold">{labItem.confirmedTestsCount || 0}</strong></span>
-                      <span>• Total Lab Revenue: <strong className="text-slate-900 font-bold">{((labItem.confirmedTestsCount || 0) * 5500).toLocaleString()} FCFA</strong></span>
-                      <span>• Platform Royalty/Commission: <strong className="text-emerald-700 font-extrabold font-mono">{(labItem.royaltyEarnings || (labItem.confirmedTestsCount || 0) * 500).toLocaleString()} FCFA</strong></span>
+                      {/* FIXED: Only show commission */}
+                      <span>• Commission Due: <strong className="text-emerald-700 font-extrabold font-mono">{(labItem.commissionDue || 0).toLocaleString()} FCFA</strong></span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {/* FIXED: Commission payment button */}
+                  {labItem.confirmedTestsCount > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCommissionLab(labItem);
+                      }}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Pay Commission ({labItem.commissionDue?.toLocaleString()})</span>
+                    </button>
+                  )}
+
                   {/* Pending Approval Confirm Action Button */}
                   {(labItem.status === 'pending_approval' || labItem.confirmed === false) && (
                     <button
@@ -500,7 +611,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Approve & Activate Facility</span>
+                      <span>Approve & Activate</span>
                     </button>
                   )}
 
@@ -535,6 +646,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* FIXED: Commission Payment Modal */}
+      {commissionLab && (
+        <CommissionPaymentModal
+          lab={commissionLab}
+          onClose={() => setCommissionLab(null)}
+          onConfirm={handleCommissionPayment}
+        />
+      )}
 
       {/* Confirmation Modal for Pending Lab Activation */}
       {confirmingLab && (
