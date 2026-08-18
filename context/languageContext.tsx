@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { initDomObserver, translateDOM, MEDICAL_AND_UI_TRANSLATIONS } from '../utils/domTranslator';
 
 interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
+  toggleLanguage: () => void;
   t: (key: string) => string;
 }
 
@@ -63,6 +65,14 @@ const translations: Record<string, Record<string, string>> = {
     transfer: "Transfer Records",
     share: "Share Results",
     profile: "Profile Settings",
+    profile_title: "Profile & Identity Settings",
+    profile_subtitle: "Manage your personal details, credentials & facility workspace",
+    language_preference: "Language Preference / Langue",
+    language_desc: "Choose between English and French for the entire application interface.",
+    english: "English",
+    french: "Français",
+    switch_to_french: "Passer en Français",
+    switch_to_english: "Switch to English",
     recent_tests: "Recent Test Requests",
     no_tests_yet: "No lab test records found",
     visit_lab_for_tests: "Visit our laboratory to request your medical tests",
@@ -74,7 +84,15 @@ const translations: Record<string, Record<string, string>> = {
     no_pending_tests: "No pending sample collections",
     active: "Active",
     confirm: "Confirm",
-    no_patients: "No pending patient registrations"
+    no_patients: "No pending patient registrations",
+    sign_out: "Sign Out of Portal",
+    switch_role: "Switch Active Role",
+    edit_my_details: "Edit My Details",
+    personal_info: "Personal & Security Information",
+    email_address: "Email Address",
+    phone_number: "Phone Number",
+    access_code: "Security Access Code",
+    assigned_lab: "Assigned Lab ID"
   },
   fr: {
     select_your_lab: "Sélectionnez Votre Laboratoire",
@@ -132,6 +150,14 @@ const translations: Record<string, Record<string, string>> = {
     transfer: "Transférer les Dossiers",
     share: "Partager Résultats",
     profile: "Paramètres de Profil",
+    profile_title: "Paramètres du Profil et Identité",
+    profile_subtitle: "Gérez vos informations personnelles, identifiants et espace laboratoire",
+    language_preference: "Préférence de Langue / Language",
+    language_desc: "Basculez entre le Français et l'Anglais pour l'ensemble de l'interface.",
+    english: "English",
+    french: "Français",
+    switch_to_french: "Passer en Français",
+    switch_to_english: "Switch to English",
     recent_tests: "Analyses Récentes",
     no_tests_yet: "Aucun résultat d'analyse trouvé",
     visit_lab_for_tests: "Rendez-vous à notre laboratoire pour effectuer vos examens",
@@ -143,38 +169,99 @@ const translations: Record<string, Record<string, string>> = {
     no_pending_tests: "Aucun prélèvement en attente",
     active: "Actif",
     confirm: "Confirmer",
-    no_patients: "Aucune inscription en attente"
+    no_patients: "Aucune inscription en attente",
+    sign_out: "Se Déconnecter du Portail",
+    switch_role: "Changer de Rôle Actif",
+    edit_my_details: "Modifier Mes Informations",
+    personal_info: "Informations Personnelles & Sécurité",
+    email_address: "Adresse Email",
+    phone_number: "Numéro de Téléphone",
+    access_code: "Code d'Accès de Sécurité",
+    assigned_lab: "ID Laboratoire Assigné"
   }
 };
 
 const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   setLanguage: () => {},
+  toggleLanguage: () => {},
   t: (key: string) => key,
 });
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguageState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('nanolabs_language') || 'en';
+    } catch {
+      return 'en';
+    }
+  });
+
+  const syncGoogleTranslate = (lang: string) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    try {
+      // Set the standard Google Translate cookie
+      const targetVal = `/en/${lang}`;
+      document.cookie = `googtrans=${targetVal}; path=/;`;
+      if (window.location.hostname) {
+        document.cookie = `googtrans=${targetVal}; domain=${window.location.hostname}; path=/;`;
+      }
+
+      // If Google Translate select box is mounted in the DOM, trigger it
+      const select = document.querySelector<HTMLSelectElement>('.goog-te-combo');
+      if (select) {
+        select.value = lang;
+        select.dispatchEvent(new Event('change'));
+      }
+    } catch (e) {
+      console.warn('Google Translate sync warning:', e);
+    }
+  };
+
+  const setLanguage = (lang: string) => {
+    setLanguageState(lang);
+    try {
+      localStorage.setItem('nanolabs_language', lang);
+    } catch {
+      // ignore
+    }
+    syncGoogleTranslate(lang);
+    initDomObserver(lang);
+  };
+
+  const toggleLanguage = () => {
+    const nextLang = language === 'fr' ? 'en' : 'fr';
+    setLanguage(nextLang);
+  };
+
+  useEffect(() => {
+    // Synchronize DOM translation & Google Translate on mount or initial load
+    syncGoogleTranslate(language);
+    initDomObserver(language);
+  }, [language]);
 
   const t = (key: string): string => {
-    // If exact key found, return translated string
     if (translations[language]?.[key]) {
       return translations[language][key];
+    }
+    if (MEDICAL_AND_UI_TRANSLATIONS[key] && language === 'fr') {
+      return MEDICAL_AND_UI_TRANSLATIONS[key];
     }
     if (translations.en?.[key]) {
       return translations.en[key];
     }
-    // Fallback: replace underscores with spaces and capitalize words nicely
     return key
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );
 };
 
 export const useLanguage = () => useContext(LanguageContext);
+
