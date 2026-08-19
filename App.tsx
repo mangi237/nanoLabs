@@ -36,7 +36,7 @@ import ProfileScreen from './screens/ProfileScreen';
 
 import { Activity, Shield, User, Users, RefreshCw, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
 
-
+import { useEffect } from 'react';
 type ScreenType =
   | 'login'
   | 'register'
@@ -93,6 +93,14 @@ const MainAppContent: React.FC = () => {
       default: setScreen('dashboard'); break;
     }
   };
+  useEffect(() => {
+    return () => {
+      // Cleanup any pending animations or timeouts
+      const timeouts = (window as any).__timeouts || [];
+      timeouts.forEach((t: number) => clearTimeout(t));
+      (window as any).__timeouts = [];
+    };
+  }, []);
 
   // Render Screen Switcher
   const renderScreen = () => {
