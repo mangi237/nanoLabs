@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { initDomObserver, translateDOM, MEDICAL_AND_UI_TRANSLATIONS } from '../utils/domTranslator';
+// import { initDomObserver, translateDOM, MEDICAL_AND_UI_TRANSLATIONS } from '../utils/domTranslator';
 
 interface LanguageContextType {
   language: string;
@@ -197,81 +197,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   });
 
-  const syncGoogleTranslate = (lang: string) => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return;
-
-    try {
-      // Set the standard Google Translate cookie for domain and path
-      const targetVal = `/en/${lang}`;
-      document.cookie = `googtrans=${targetVal}; path=/;`;
-      if (window.location.hostname) {
-        document.cookie = `googtrans=${targetVal}; domain=${window.location.hostname}; path=/;`;
-        document.cookie = `googtrans=${targetVal}; domain=.${window.location.hostname}; path=/;`;
-      }
-
-      // Try immediate select trigger
-      const triggerSelect = () => {
-        const select = document.querySelector<HTMLSelectElement>('.goog-te-combo');
-        if (select) {
-          if (select.value !== lang) {
-            select.value = lang;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-          return true;
-        }
-        return false;
-      };
-
-      if (!triggerSelect()) {
-        // Poll for Google Translate widget initialization
-        let attempts = 0;
-        const interval = setInterval(() => {
-          attempts++;
-          if (triggerSelect() || attempts > 20) {
-            clearInterval(interval);
-          }
-        }, 250);
-      }
-    } catch (e) {
-      console.warn('Google Translate sync warning:', e);
-    }
-  };
-
   const setLanguage = (lang: string) => {
     setLanguageState(lang);
     try {
       localStorage.setItem('nanolabs_language', lang);
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("Failed to save language preference", e);
     }
-    syncGoogleTranslate(lang);
-    initDomObserver(lang);
+    // ❌ DO NOT call syncGoogleTranslate(lang) or translateDOM() here
   };
 
   const toggleLanguage = () => {
-    const nextLang = language === 'fr' ? 'en' : 'fr';
-    setLanguage(nextLang);
+    setLanguage(language === 'en' ? 'fr' : 'en');
   };
 
-  useEffect(() => {
-    // Synchronize DOM translation & Google Translate on mount or initial load
-    syncGoogleTranslate(language);
-    initDomObserver(language);
-  }, [language]);
-
+  // Safe translation lookup helper
   const t = (key: string): string => {
-    if (translations[language]?.[key]) {
-      return translations[language][key];
-    }
-    if (MEDICAL_AND_UI_TRANSLATIONS[key] && language === 'fr') {
-      return MEDICAL_AND_UI_TRANSLATIONS[key];
-    }
-    if (translations.en?.[key]) {
-      return translations.en[key];
-    }
-    return key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
+    return translations[language]?.[key] || translations['en']?.[key] || key;
   };
 
   return (
@@ -282,4 +224,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 };
 
 export const useLanguage = () => useContext(LanguageContext);
+
+
 
