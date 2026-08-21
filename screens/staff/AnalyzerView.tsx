@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
+import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
-import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
-import { authService } from '../../services/authService';
-import {
-  Microscope,
-  Search,
-  CheckCircle2,
-  TestTube,
-  Check,
-  ShieldCheck,
-  Clock,
+import { 
+  Microscope, 
+  Search, 
+  CheckCircle2, 
+  TestTube, 
+  Check, 
+  ShieldCheck, 
+  Clock, 
   AlertCircle,
   FileText,
   Users,
@@ -19,15 +18,13 @@ import {
   Droplets,
   Syringe,
   CheckSquare,
-  KeyRound,
-  Lock,
-  Printer,
-  Tag,
   ChevronDown,
   ChevronUp,
   MapPin,
-  Plus,
-  X
+  Barcode,
+  Layers,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 
 const COMMON_SAMPLE_MATRICES = [
@@ -42,25 +39,17 @@ const COMMON_SAMPLE_MATRICES = [
   'CSF / Sterile Body Fluid Tube'
 ];
 
-interface SpecimenLabel {
-  code: string;
-  matrix: string;
-  patientName: string;
-  patientPid: string;
-  bookingCode: string;
-  testsCovered: string[];
-  collectedBy: string;
-  collectedAt: string;
-  storageLocation: string;
-}
-
 interface AnalyzerViewProps {
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
   onRoleSwitcherPress?: () => void;
 }
 
-export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress, onProfilePress, onRoleSwitcherPress }) => {
+export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
+  onNotificationPress,
+  onProfilePress,
+  onRoleSwitcherPress
+}) => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
 
@@ -68,29 +57,16 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress,
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Expanded booking state
-  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
-  
-  // Per-test collection status
-  const [testCollectionStatus, setTestCollectionStatus] = useState<Record<string, { 
-    matrix: string; 
-    location: string; 
-    collected: boolean;
-    sampleCode?: string;
-  }>>({});
-  
-  // Storage location for each test
-  const [storageLocation, setStorageLocation] = useState<Record<string, string>>({});
-  const [showLocationInput, setShowLocationInput] = useState<Record<string, boolean>>({});
+  // Grouped accordion expansion state
+  const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
 
-  // Access code for collection confirmation
-  const [accessCodeInput, setAccessCodeInput] = useState('');
-  const [accessCodeError, setAccessCodeError] = useState('');
-  const [verifyingCode, setVerifyingCode] = useState(false);
+  // Specimen Collection Modal State
+  const [selectedBooking, setSelectedBooking] = useState<PatientBooking | null>(null);
+  const [selectedSingleTest, setSelectedSingleTest] = useState<any | null>(null);
+  const [checkedMatrices, setCheckedMatrices] = useState<string[]>([]);
+  const [sampleBarcodeName, setSampleBarcodeName] = useState('');
+  const [storageLocation, setStorageLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Generated labels
-  const [generatedLabels, setGeneratedLabels] = useState<SpecimenLabel[] | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -100,11 +76,8 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress,
     try {
       setLoading(true);
       const allBookings = await limsService.fetchAllBookings(targetLabId);
-      // Show only PAID bookings that are in Pending_Collection or In_Lab_Testing
-      setBookings(allBookings.filter(b => 
-        b.paymentStatus === 'paid' && 
-        (b.overallStatus === 'Pending_Collection' || b.overallStatus === 'In_Lab_Testing')
-      ));
+      // Filter for PAID bookings awaiting sample collection
+      setBookings(allBookings.filter(b => b.paymentStatus === 'paid'));
     } catch (e) {
       console.error('Error fetching phlebotomy queue:', e);
     } finally {
@@ -112,214 +85,177 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress,
     }
   };
 
-  // Toggle expanded booking
-  const toggleExpandBooking = (bookingId: string) => {
-    if (expandedBookingId === bookingId) {
-      setExpandedBookingId(null);
+  // Helper to generate generic sample name from patient name + numbers
+  const generateSampleName = (patientName: string, testName?: string) => {
+    const cleanName = patientName.replace(/[^a-zA-Z]/g, '').toUpperCase();
+    const initials = cleanName.slice(0, 4) || 'SMPL';
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const testPrefix = testName ? testName.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() : 'TST';
+    return `SMP-${initials}-${testPrefix}-${randomNum}`;
+  };
+
+  const handleOpenBooking = (b: PatientBooking, singleTest?: any) => {
+    setSelectedBooking(b);
+    setSelectedSingleTest(singleTest || null);
+    
+    // Auto-generate sample name based on patient name + number
+    const autoSampleName = generateSampleName(b.patientName, singleTest?.testName);
+    setSampleBarcodeName(autoSampleName);
+    setStorageLocation('');
+
+    const required = new Set<string>();
+    if (singleTest) {
+      if (singleTest.sampleTypeRequired) required.add(singleTest.sampleTypeRequired);
+      else required.add('Whole Blood (EDTA Purple Top Tube)');
     } else {
-      setExpandedBookingId(bookingId);
-      // Initialize test status for this booking
-      const booking = bookings.find(b => b.id === bookingId);
-      if (booking) {
-        const status: Record<string, { matrix: string; location: string; collected: boolean; sampleCode?: string }> = {};
-        booking.tests.forEach(t => {
-          const testId = t.id || t.testId;
-          status[testId] = {
-            matrix: t.sampleTypeRequired || 'Venous Blood',
-            location: '',
-            collected: false
-          };
-        });
-        setTestCollectionStatus(status);
-        setStorageLocation({});
-        setShowLocationInput({});
-        setAccessCodeInput('');
-        setAccessCodeError('');
-      }
+      b.tests?.forEach(t => {
+        if (t.sampleTypeRequired) required.add(t.sampleTypeRequired);
+      });
+      if (required.size === 0) required.add('Whole Blood (EDTA Purple Top Tube)');
     }
+    setCheckedMatrices(Array.from(required));
   };
 
-  // Toggle individual test collection
-  const toggleTestCollection = (testId: string) => {
-    setTestCollectionStatus(prev => ({
-      ...prev,
-      [testId]: {
-        ...prev[testId],
-        collected: !prev[testId]?.collected
-      }
-    }));
-  };
-
-  // Set storage location for a test
-  const setTestStorageLocation = (testId: string, location: string) => {
-    setStorageLocation(prev => ({ ...prev, [testId]: location }));
-    setTestCollectionStatus(prev => ({
-      ...prev,
-      [testId]: {
-        ...prev[testId],
-        location
-      }
-    }));
-  };
-
-  // Generate unique sample code
-  const generateSampleCode = (patientName: string, testName: string, index: number): string => {
-    const nameParts = patientName.trim().split(' ');
-    let prefix = '';
-    if (nameParts.length >= 2) {
-      prefix = (nameParts[0]?.substring(0, 2) + nameParts[nameParts.length - 1]?.substring(0, 2)).toUpperCase();
+  const toggleMatrix = (matrix: string) => {
+    if (checkedMatrices.includes(matrix)) {
+      setCheckedMatrices(checkedMatrices.filter(m => m !== matrix));
     } else {
-      prefix = patientName.substring(0, 4).toUpperCase();
+      setCheckedMatrices([...checkedMatrices, matrix]);
     }
-    // Get first 3 letters of test name
-    const testPrefix = testName.substring(0, 3).toUpperCase();
-    return `SPC-${prefix}-${testPrefix}-${String(index + 1).padStart(3, '0')}`;
   };
 
-  // Build specimen labels
-  const buildSpecimenLabels = (
-    booking: PatientBooking, 
-    collectedTests: Array<{ testId: string; matrix: string; location: string }>, 
-    collectedByName: string
-  ): SpecimenLabel[] => {
-    const timestamp = new Date();
-    const dateLabel = timestamp.toLocaleString('en-GB', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    return collectedTests.map((item, idx) => {
-      const test = booking.tests.find(t => (t.id || t.testId) === item.testId);
-      return {
-        code: generateSampleCode(booking.patientName, test?.testName || 'Test', idx),
-        matrix: item.matrix,
-        patientName: booking.patientName,
-        patientPid: booking.patientPid || booking.patientId,
-        bookingCode: booking.bookingCode,
-        testsCovered: test ? [test.testName] : ['General'],
-        collectedBy: collectedByName,
-        collectedAt: dateLabel,
-        storageLocation: item.location || 'Standard Storage'
-      };
-    });
-  };
-
-  // Confirm collection for selected tests only
-  const handleConfirmCollection = async (booking: PatientBooking) => {
-    // Get only collected tests
-    const collectedTests = Object.entries(testCollectionStatus)
-      .filter(([_, status]) => status.collected)
-      .map(([testId, status]) => ({
-        testId,
-        matrix: status.matrix,
-        location: status.location || 'Standard Storage'
-      }));
-
-    if (collectedTests.length === 0) {
-      setAccessCodeError('Please collect at least one test sample.');
+  const handleConfirmCollection = async () => {
+    if (!selectedBooking) return;
+    if (checkedMatrices.length === 0) {
+      alert('Please check off at least one sample matrix physically drawn/collected.');
       return;
     }
-
-    // Check if all collected tests have a storage location
-    const missingLocation = collectedTests.some(t => !t.location || t.location.trim() === '');
-    if (missingLocation) {
-      setAccessCodeError('Please specify a storage location for each collected sample.');
-      return;
-    }
-
-    setAccessCodeError('');
-
-    // Verify staff access code
-    setVerifyingCode(true);
-    const verification = await authService.verifyStaffActionCode(
-      accessCodeInput,
-      ['analyzer', 'labtech', 'admin', 'phlebotomist'],
-      user?.accessCode,
-      targetLabId
-    );
-    setVerifyingCode(false);
-
-    if (!verification.authorized) {
-      setAccessCodeError(verification.error || 'Invalid access code. Sample collection was not recorded.');
-      return;
-    }
-
-    const collectorName = verification.staffName || user?.name || 'Phlebotomist Collector';
 
     setIsSubmitting(true);
     try {
-      // Get all matrices from collected tests
-      const matrices = collectedTests.map(t => t.matrix);
-      
-      const ok = await limsService.completeSampleCollection({
+      const sampleLabel = `${sampleBarcodeName || generateSampleName(selectedBooking.patientName)} ${storageLocation ? `[Loc: ${storageLocation}]` : ''}`;
+
+      await limsService.completeSampleCollection({
         labId: targetLabId,
-        bookingId: booking.id,
-        collectedSamples: matrices,
-        collectorName
+        bookingId: selectedBooking.id,
+        collectedSamples: [sampleLabel, ...checkedMatrices],
+        collectorName: user?.name || 'Phlebotomist Collector'
       });
 
-      if (!ok) {
-        setAccessCodeError('Could not save sample collection — please try again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Generate labels
-      const labels = buildSpecimenLabels(booking, collectedTests, collectorName);
-      setGeneratedLabels(labels);
-
-      // Reset state
-      setExpandedBookingId(null);
-      setAccessCodeInput('');
+      setSelectedBooking(null);
+      setSelectedSingleTest(null);
       await fetchData();
     } catch (e) {
       console.error('Error completing sample collection:', e);
-      setAccessCodeError('An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const pendingCollection = bookings.filter(b => b.overallStatus === 'Pending_Collection');
-  const filteredQueue = pendingCollection.filter(b =>
-    b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase())
+  const pendingCollection = bookings.filter(b => 
+    b.overallStatus === 'Pending_Collection' || 
+    (b.paymentStatus === 'paid' && b.overallStatus !== 'Completed' && b.overallStatus !== 'In_Lab_Testing' && b.overallStatus !== 'Ready_For_Pickup')
   );
+
+  const filteredQueue = pendingCollection.filter(b => 
+    b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.patientPid?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Group queue by patient identifier/name so patient appears once
+  const groupedPatientsMap = new Map<string, { patientName: string; patientAge: number; patientGender: string; patientPhone: string; bookings: PatientBooking[] }>();
+
+  filteredQueue.forEach(b => {
+    const key = b.patientPid || b.patientId || b.patientName;
+    if (!groupedPatientsMap.has(key)) {
+      groupedPatientsMap.set(key, {
+        patientName: b.patientName,
+        patientAge: b.patientAge || 30,
+        patientGender: b.patientGender || 'Male',
+        patientPhone: b.patientPhone || '',
+        bookings: [b]
+      });
+    } else {
+      groupedPatientsMap.get(key)!.bookings.push(b);
+    }
+  });
+
+  const groupedPatients = Array.from(groupedPatientsMap.entries()).map(([key, data]) => ({
+    key,
+    ...data
+  }));
 
   return (
     <div className="space-y-6">
       <Header
-        title="Phlebotomist & Sample Collection Workstation"
-        subtitle="Step 3: Draw physical specimens, select sample matrices & label tubes"
+        title="Phlebotomist & Specimen Collection Desk"
+        subtitle="Step 3: Accession patient test batches, draw physical specimens, label sample tubes & route to Lab Technologists"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      <div className="bg-purple-900/90 text-white p-4 rounded-2xl border border-purple-700 shadow-md flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0 font-bold">
-            <Syringe className="w-6 h-6" />
+      {/* Staff Hero Banner */}
+      <StaffHeroBanner
+        workstationNumber="Workstation 03"
+        workstationTitle="Phlebotomy & Specimen Accessioning Station"
+        description="Verify paid patient test batches, auto-generate specimen barcode names, assign storage rack locations, and verify test specimens sequentially."
+        gradientFrom="from-purple-950"
+        gradientVia="from-slate-900"
+        gradientTo="to-purple-900"
+        borderColor="border-purple-800"
+        badgeBg="bg-purple-400 text-slate-950"
+        rightBadge={
+          <div className="text-right bg-purple-950/80 p-4 rounded-2xl border border-purple-700/60 shadow-md">
+            <div className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">Pending Specimen Collection</div>
+            <div className="text-2xl font-black text-purple-300 font-mono mt-0.5">{groupedPatients.length} Patients ({filteredQueue.length} Batches)</div>
           </div>
+        }
+      />
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-sm text-white">Phlebotomy Mandatory Specimen Selection</h3>
-            <p className="text-xs text-purple-100/80">
-              Collect samples test-by-test with storage location tracking. Only selected tests are marked as collected.
-            </p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Patients in Sampling Queue</p>
+            <h3 className="text-2xl font-black text-purple-700 mt-1">{groupedPatients.length}</h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700 font-bold">
+            <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="text-right text-xs shrink-0 font-mono font-bold text-purple-200 bg-purple-950/60 px-3 py-1.5 rounded-xl border border-purple-800">
-          Paid Queue: {pendingCollection.length}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Samples Processed to Lab</p>
+            <h3 className="text-2xl font-black text-emerald-700 mt-1">
+              {bookings.filter(b => b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Completed').length}
+            </h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Barcode Identification</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">Auto-Generated</h3>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+            <Barcode className="w-6 h-6" />
+          </div>
         </div>
       </div>
 
-      {/* Search Input */}
+      {/* Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Search paid patient name or Booking ID (BK-...)"
+            placeholder="Search patient name, PID, or booking barcode..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -327,244 +263,126 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress,
         </div>
       </div>
 
-      {/* Phlebotomy Digital Queue Table */}
+      {/* Grouped Phlebotomy Patient Queue */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-            <Droplets className="w-4 h-4 text-purple-600" />
-            Paid Specimen Collection Queue ({filteredQueue.length})
+            <Syringe className="w-4 h-4 text-purple-600" />
+            Paid Patient Specimen Accessioning Queue ({groupedPatients.length})
           </h3>
-          <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            Payment Verified
-          </span>
+          <span className="text-xs text-slate-500 font-medium">Verify test-by-test or accession entire batch</span>
         </div>
 
         {loading ? (
           <div className="p-8 text-center text-xs text-slate-500">Loading phlebotomy queue...</div>
-        ) : filteredQueue.length === 0 ? (
+        ) : groupedPatients.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 space-y-1">
-            <p className="font-bold text-slate-700">No patients waiting for specimen collection.</p>
-            <p className="text-slate-500">When the cashier marks an invoice as paid, the patient automatically appears here.</p>
+            <p className="font-bold text-purple-900">No patients currently in specimen collection queue.</p>
+            <p>Patients will appear once Cashier verifies their payment settlement.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {filteredQueue.map((booking) => {
-              const isExpanded = expandedBookingId === booking.id;
-              const totalTests = booking.tests?.length || 0;
-              const collectedCount = Object.values(testCollectionStatus).filter(s => s.collected).length;
+            {groupedPatients.map((group) => {
+              const isExpanded = expandedPatientId === group.key || groupedPatients.length === 1;
+              const totalTestsCount = group.bookings.reduce((sum, b) => sum + (b.tests?.length || 0), 0);
 
               return (
-                <div key={booking.id} className="p-4 hover:bg-slate-50/80 transition-colors">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm text-slate-900">
-                          {booking.patientName}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                          {booking.bookingCode}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          PAID
-                        </span>
-                        {isExpanded && collectedCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
-                            {collectedCount}/{totalTests} Collected
-                          </span>
-                        )}
+                <div key={group.key} className="p-4 transition-colors">
+                  {/* Single Patient Row Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-800 border border-purple-200 flex items-center justify-center font-extrabold text-sm">
+                        {group.patientName.charAt(0) || 'P'}
                       </div>
-
-                      <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
-                        <span>Age/Sex: <strong>{booking.patientAge || 28} Yrs • {booking.patientGender || 'Male'}</strong></span>
-                        <span>Tests: <strong className="text-purple-700 font-bold">{totalTests} tests</strong></span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-sm text-slate-900">{group.patientName}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            PAID SETTLED
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 flex items-center gap-3 mt-0.5">
+                          <span>PID: <strong className="font-mono text-purple-700">{group.key}</strong></span>
+                          <span>Age: <strong>{group.patientAge} Yrs</strong> ({group.patientGender})</span>
+                          <span>Total Tests: <strong className="text-purple-700 font-bold">{totalTestsCount}</strong></span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => toggleExpandBooking(booking.id)}
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
+                        onClick={() => setExpandedPatientId(isExpanded ? null : group.key)}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Syringe className="w-4 h-4 text-purple-600" />
-                        <span>{isExpanded ? 'Hide Tests' : 'Collect Samples'}</span>
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-slate-600" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-600" />
-                        )}
+                        <span>{isExpanded ? 'Hide Test Batches' : 'View Test Batches'}</span>
+                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+
+                      {/* Batch Accession for this patient */}
+                      <button
+                        onClick={() => handleOpenBooking(group.bookings[0])}
+                        className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                      >
+                        <Syringe className="w-3.5 h-3.5" />
+                        Draw All Tests
                       </button>
                     </div>
                   </div>
 
-                  {/* Expanded test-by-test collection */}
+                  {/* Expanded Dropdown of all Batches & Tests for this Patient */}
                   {isExpanded && (
-                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-purple-200 space-y-4">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                        <h4 className="font-bold text-xs text-slate-800 flex items-center gap-2">
-                          <TestTube className="w-4 h-4 text-purple-600" />
-                          Collect Tests Individually
-                        </h4>
-                        <span className="text-[10px] font-semibold text-slate-500">
-                          {collectedCount} of {totalTests} collected
-                        </span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 space-y-3 bg-purple-50/40 p-3 rounded-2xl border border-purple-100">
+                      <div className="text-[11px] font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-purple-600" />
+                        Batches & Individual Tests for {group.patientName}
                       </div>
 
-                      {booking.tests.map((test, idx) => {
-                        const testId = test.id || test.testId;
-                        const status = testCollectionStatus[testId] || { 
-                          matrix: test.sampleTypeRequired || 'Venous Blood', 
-                          location: '', 
-                          collected: false 
-                        };
-                        const isCollected = status.collected;
-
-                        return (
-                          <div
-                            key={testId}
-                            className={`p-3.5 rounded-xl border transition-all ${
-                              isCollected 
-                                ? 'bg-emerald-50 border-emerald-400' 
-                                : 'bg-white border-slate-200'
-                            }`}
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={isCollected}
-                                  onChange={() => toggleTestCollection(testId)}
-                                  className="w-4 h-4 text-purple-600 rounded-md focus:ring-purple-500 cursor-pointer"
-                                />
-                                <div>
-                                  <div className="font-extrabold text-xs text-slate-900">
-                                    {test.testName}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                    <span>Matrix: {status.matrix}</span>
-                                    {isCollected && status.location && (
-                                      <span className="text-emerald-600">📍 {status.location}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
+                      <div className="space-y-2">
+                        {group.bookings.map(b => (
+                          <div key={b.id} className="p-3 bg-white rounded-xl border border-purple-200/80 shadow-xs space-y-2">
+                            <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-2">
-                                {isCollected && (
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                                    ✓ Collected
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setShowLocationInput(prev => ({
-                                      ...prev,
-                                      [testId]: !prev[testId]
-                                    }));
-                                  }}
-                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
-                                >
-                                  <MapPin className="w-3 h-3" />
-                                  {status.location ? 'Update Location' : 'Add Location'}
-                                </button>
+                                <span className="font-mono font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                                  {b.bookingCode}
+                                </span>
+                                <span className="text-slate-500 text-[11px]">
+                                  Doctor: {b.doctorName || 'Attending Physician'}
+                                </span>
                               </div>
+                              <button
+                                onClick={() => handleOpenBooking(b)}
+                                className="text-purple-700 hover:text-purple-900 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                              >
+                                Draw Batch <ArrowRight className="w-3 h-3" />
+                              </button>
                             </div>
 
-                            {/* Storage location input */}
-                            {showLocationInput[testId] && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Storage Unit A-3, Refrigerator 2, Drawer 5..."
-                                  value={storageLocation[testId] || status.location || ''}
-                                  onChange={(e) => setStorageLocation(prev => ({ ...prev, [testId]: e.target.value }))}
-                                  className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                />
-                                <button
-                                  onClick={() => {
-                                    const loc = storageLocation[testId] || '';
-                                    if (loc.trim()) {
-                                      setTestStorageLocation(testId, loc.trim());
-                                      setShowLocationInput(prev => ({ ...prev, [testId]: false }));
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg cursor-pointer"
-                                >
-                                  Save Location
-                                </button>
-                                <button
-                                  onClick={() => setShowLocationInput(prev => ({ ...prev, [testId]: false }))}
-                                  className="p-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                            {/* Test by test items */}
+                            <div className="divide-y divide-slate-100">
+                              {b.tests?.map((t, tIdx) => (
+                                <div key={t.id || tIdx} className="py-1.5 flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <TestTube className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                    <div>
+                                      <span className="font-bold text-slate-800">{t.testName}</span>
+                                      <span className="text-[10px] text-slate-500 ml-2">
+                                        Matrix: <strong>{t.sampleTypeRequired || 'Whole Blood'}</strong>
+                                      </span>
+                                    </div>
+                                  </div>
 
-                      {/* Access Code & Collection Action */}
-                      <div className="pt-3 border-t border-slate-200 space-y-3">
-                        {/* Access Code Input */}
-                        <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200">
-                          <label className="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                            <KeyRound className="w-4 h-4" />
-                            Enter your staff access code to confirm collection
-                          </label>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <input
-                              type="password"
-                              value={accessCodeInput}
-                              onChange={e => { 
-                                setAccessCodeInput(e.target.value); 
-                                setAccessCodeError(''); 
-                              }}
-                              placeholder="Your personal access code"
-                              className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                              autoComplete="off"
-                            />
-                            <button
-                              onClick={() => {
-                                if (collectedCount === 0) {
-                                  setAccessCodeError('Please collect at least one test sample.');
-                                  return;
-                                }
-                                handleConfirmCollection(booking);
-                              }}
-                              disabled={isSubmitting || verifyingCode || !accessCodeInput.trim() || collectedCount === 0}
-                              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
-                            >
-                              <Lock className="w-4 h-4" />
-                              {verifyingCode ? 'Verifying...' : isSubmitting ? 'Saving...' : `Confirm ${collectedCount} Test${collectedCount !== 1 ? 's' : ''}`}
-                            </button>
-                          </div>
-                          {accessCodeError && (
-                            <div className="flex items-center gap-1.5 text-rose-600 text-[11px] font-semibold mt-1.5">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              {accessCodeError}
+                                  <button
+                                    onClick={() => handleOpenBooking(b, t)}
+                                    className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Syringe className="w-3 h-3" />
+                                    Verify This Test
+                                  </button>
+                                </div>
+                              ))}
                             </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>
-                            <span className="font-bold">{collectedCount}</span> of {totalTests} tests ready for collection
-                          </span>
-                          <button
-                            onClick={() => {
-                              // Select all uncollected tests
-                              booking.tests.forEach(t => {
-                                const tid = t.id || t.testId;
-                                if (!testCollectionStatus[tid]?.collected) {
-                                  toggleTestCollection(tid);
-                                }
-                              });
-                            }}
-                            className="text-purple-700 font-semibold hover:text-purple-900 underline cursor-pointer"
-                          >
-                            Select All
-                          </button>
-                        </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -575,59 +393,115 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({ onNotificationPress,
         )}
       </div>
 
-      {/* GENERATED SPECIMEN LABELS MODAL */}
-      {generatedLabels && (
+      {/* SAMPLE COLLECTION MODAL */}
+      {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
-                  <Tag className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white flex items-center justify-center font-bold">
+                  <Syringe className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Specimen Labels Ready</h3>
-                  <p className="text-xs text-slate-500">Unique sample codes generated for each collected test.</p>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    {selectedSingleTest ? `Draw & Verify Test: ${selectedSingleTest.testName}` : 'Draw & Log Specimen Matrices'}
+                  </h3>
+                  <p className="text-xs text-purple-700 font-bold">
+                    Patient: {selectedBooking.patientName} ({selectedBooking.bookingCode})
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setGeneratedLabels(null)} className="p-2 text-slate-400 hover:text-slate-700 cursor-pointer">✕</button>
+              <button 
+                onClick={() => { setSelectedBooking(null); setSelectedSingleTest(null); }} 
+                className="p-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="space-y-3">
-              {generatedLabels.map((label) => (
-                <div
-                  key={label.code}
-                  className="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 font-mono text-xs space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-sm text-emerald-700">NANOLABS — SPECIMEN LABEL</span>
-                    <span className="px-2 py-0.5 bg-slate-900 text-white rounded font-bold text-[11px]">{label.code}</span>
-                  </div>
-                  <div className="text-slate-800"><strong>Patient:</strong> {label.patientName} (PID: {label.patientPid})</div>
-                  <div className="text-slate-800"><strong>Booking:</strong> {label.bookingCode}</div>
-                  <div className="text-slate-800"><strong>Sample:</strong> {label.matrix}</div>
-                  <div className="text-slate-800"><strong>Test:</strong> {label.testsCovered.join(', ')}</div>
-                  <div className="text-slate-800"><strong>Storage:</strong> {label.storageLocation}</div>
-                  <div className="text-slate-600 text-[11px]"><strong>Collected:</strong> {label.collectedAt} — <strong>By:</strong> {label.collectedBy}</div>
+            <div className="space-y-4 text-xs">
+              {/* Auto-Generated Sample Name / Barcode */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Barcode className="w-4 h-4 text-purple-600" />
+                    Auto-Generated Specimen Barcode / Label
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSampleBarcodeName(generateSampleName(selectedBooking.patientName, selectedSingleTest?.testName))}
+                    className="text-[10px] text-purple-700 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Regenerate
+                  </button>
                 </div>
-              ))}
-            </div>
+                <input
+                  type="text"
+                  value={sampleBarcodeName}
+                  onChange={e => setSampleBarcodeName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+              </div>
 
-            <div className="flex justify-end gap-3 pt-2 print:hidden">
-              <button
-                type="button"
-                onClick={() => setGeneratedLabels(null)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
-              >
-                Done
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" />
-                Print Labels
-              </button>
+              {/* Optional Storage Location */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                  Storage / Rack Location (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rack A-4, Freezer -20°C Tray 2, Centrifuge Box 1"
+                  value={storageLocation}
+                  onChange={e => setStorageLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Physical Matrices Checklist */}
+              <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200">
+                <div className="font-bold text-purple-900 mb-1">Check Off Physical Matrices Collected:</div>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto p-1">
+                  {COMMON_SAMPLE_MATRICES.map(m => {
+                    const isChecked = checkedMatrices.includes(m);
+                    return (
+                      <label 
+                        key={m}
+                        className={`p-2 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                          isChecked ? 'bg-purple-100 border-purple-400 text-purple-950 font-bold' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleMatrix(m)}
+                          className="w-4 h-4 text-purple-700 rounded-md focus:ring-purple-500"
+                        />
+                        <span>{m}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedBooking(null); setSelectedSingleTest(null); }}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting || checkedMatrices.length === 0}
+                  onClick={handleConfirmCollection}
+                  className="px-5 py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Logging Specimen...' : 'Confirm Specimen & Transfer to Tech'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

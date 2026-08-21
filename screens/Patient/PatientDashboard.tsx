@@ -55,6 +55,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [showBookletModal, setShowBookletModal] = useState(false);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [receiptModalBooking, setReceiptModalBooking] = useState<PatientBooking | null>(null);
+  const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
 
   useEffect(() => {
     fetchPatientData();
@@ -330,266 +331,307 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           })}
         </div>
 
-        {/* MULTI-TEST BOOKING RECEIPTS & ITEMIZATION */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-teal-600" />
-                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-                  My Multi-Test Orders & Itemized Receipts ({bookings.length})
-                </h3>
+        {/* HORIZONTAL TAB NAVIGATION BAR */}
+        <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+          <button
+            onClick={() => setActiveSegmentTab('tests')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+              activeSegmentTab === 'tests'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+            }`}
+          >
+            <TestTube className="w-4 h-4" />
+            <span>Diagnostic Tests & Live Tracking</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeSegmentTab === 'tests' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {tests.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveSegmentTab('receipts')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+              activeSegmentTab === 'receipts'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>Invoices & Payment Receipts</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeSegmentTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {bookings.length}
+            </span>
+          </button>
+        </div>
+
+        {/* TAB 1: DIAGNOSTIC TESTS & LIVE TRACKING */}
+        {activeSegmentTab === 'tests' && (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">Recent Test Requests</h3>
+                <p className="text-xs text-slate-500">Track status, price paid & virtual PDF availability</p>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Every test selected is grouped into your daily diagnostic booklet with itemized costs & running totals
-              </p>
+              {onNavigateTab && (
+                <button
+                  onClick={() => onNavigateTab('history')}
+                  className="text-xs font-semibold text-teal-600 hover:text-teal-800 cursor-pointer"
+                >
+                  View Full History
+                </button>
+              )}
             </div>
-            {onNavigateTab && (
-              <button
-                onClick={() => onNavigateTab('book')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Book More Tests
-              </button>
-            )}
-          </div>
 
-          <div className="divide-y divide-slate-100">
-            {bookings.map((booking) => {
-              const isExpanded = expandedBookingId === booking.id;
-              const isPaid = booking.paymentStatus === 'paid';
-              const formattedDate = booking.createdAt ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today';
+            <div className="divide-y divide-slate-100">
+              {tests.map(test => {
+                const price = test.price || test.amount || 5000;
+                const hasPdf = Boolean(test.pdfUrl || test.fileUrl);
 
-              return (
-                <div key={booking.id} className="p-5 hover:bg-slate-50/50 transition-colors">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="font-mono font-bold text-xs bg-slate-900 text-white px-2.5 py-1 rounded-lg">
-                          {booking.bookingCode}
-                        </span>
-                        <span className="font-mono text-xs text-slate-500 font-semibold">
-                          Invoice: {booking.invoiceNumber || 'INV-0001'}
-                        </span>
-                        <span className="text-xs text-slate-400">•</span>
-                        <span className="text-xs text-slate-600 font-medium">
-                          {formattedDate}
-                        </span>
+                return (
+                  <div
+                    key={test.id}
+                    onClick={() => onSelectTest && onSelectTest(test)}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-teal-50/30 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 mt-0.5">
+                        <TestTube className="w-5 h-5" />
                       </div>
-                      
-                      <div className="text-xs text-slate-600 pt-1">
-                        <span className="font-bold text-slate-900">{booking.tests?.length || 0} Test{booking.tests?.length !== 1 ? 's' : ''} in this Order: </span>
-                        <span className="text-slate-500">
-                          {booking.tests?.map(t => t.testName).join(', ')}
-                        </span>
+                      <div className="min-w-0 space-y-1">
+                        <h4 className="font-bold text-slate-900 text-sm truncate">
+                          {test.testName || test.name}
+                        </h4>
+                        
+                        <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                          <span>Category: {test.category || 'General'}</span>
+                          <span>•</span>
+                          {test.paid === true || test.paymentStatus === 'paid' ? (
+                            <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                              Paid: {price.toLocaleString()} FCFA
+                            </span>
+                          ) : (
+                            <span className="font-bold text-amber-800 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              Unpaid: {price.toLocaleString()} FCFA
+                            </span>
+                          )}
+                          <span>•</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] uppercase ${
+                            test.status === 'completed' 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : test.status === 'analyzing'
+                                ? 'bg-blue-100 text-blue-800'
+                                : test.paid
+                                  ? 'bg-teal-100 text-teal-800'
+                                  : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {test.status === 'completed' ? 'Results Ready' : test.status === 'analyzing' ? 'In Analysis' : test.paid ? 'Awaiting Specimen' : 'Pending Payment'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                      <div className="text-right">
-                        <div className="text-sm font-black text-slate-900 font-mono">
-                          {(booking.totalAmount || 0).toLocaleString()} FCFA
-                        </div>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                          isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {isPaid ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Clock className="w-3 h-3 text-amber-600" />}
-                          {isPaid ? 'PAID & UNLOCKED' : 'PENDING AT CASHIER'}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      {hasPdf ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
+                          <FileText className="w-4 h-4 text-emerald-600" />
+                          PDF Virtual Result Ready
                         </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
+                      ) : test.virtualRequested ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200">
+                          <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          Virtual Requested
+                        </span>
+                      ) : (
                         <button
-                          onClick={() => setReceiptModalBooking(booking)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          onClick={(e) => handleRequestVirtual(e, test)}
+                          disabled={requestingId === test.id}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
                         >
-                          <Receipt className="w-3.5 h-3.5 text-slate-600" />
-                          <span>Receipt</span>
+                          <Laptop className="w-3.5 h-3.5" />
+                          {requestingId === test.id ? 'Requesting...' : 'Request Virtual Result'}
                         </button>
+                      )}
 
-                        <button
-                          onClick={() => setExpandedBookingId(isExpanded ? null : booking.id)}
-                          className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl border border-slate-200 transition-all cursor-pointer"
-                        >
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
-                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-400" />
                     </div>
                   </div>
+                );
+              })}
 
-                  {/* EXPANDED ITEMIZED TEST RECEIPT BREAKDOWN */}
-                  {isExpanded && (
-                    <div className="mt-4 pt-4 border-t border-slate-200/80 bg-teal-50/30 p-4 rounded-2xl space-y-3">
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                        <span>Itemized Diagnostic Test Breakdown</span>
-                        <span className="font-mono text-teal-700">Ref: {booking.bookingCode}</span>
+              {tests.length === 0 && (
+                <div className="p-10 text-center text-slate-400 space-y-2">
+                  <TestTube className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-600">No laboratory test records found</p>
+                  <p className="text-xs text-slate-400">Book an appointment to request tests</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: MULTI-TEST BOOKING RECEIPTS & ITEMIZATION */}
+        {activeSegmentTab === 'receipts' && (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-teal-600" />
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                    My Multi-Test Orders & Itemized Receipts ({bookings.length})
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Every test selected is grouped into your daily diagnostic booklet with itemized costs & running totals
+                </p>
+              </div>
+              {onNavigateTab && (
+                <button
+                  onClick={() => onNavigateTab('book')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Book More Tests
+                </button>
+              )}
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {bookings.map((booking) => {
+                const isExpanded = expandedBookingId === booking.id;
+                const isPaid = booking.paymentStatus === 'paid';
+                const formattedDate = booking.createdAt ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today';
+
+                return (
+                  <div key={booking.id} className="p-5 hover:bg-slate-50/50 transition-colors">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="font-mono font-bold text-xs bg-slate-900 text-white px-2.5 py-1 rounded-lg">
+                            {booking.bookingCode}
+                          </span>
+                          <span className="font-mono text-xs text-slate-500 font-semibold">
+                            Invoice: {booking.invoiceNumber || 'INV-0001'}
+                          </span>
+                          <span className="text-xs text-slate-400">•</span>
+                          <span className="text-xs text-slate-600 font-medium">
+                            {formattedDate}
+                          </span>
+                        </div>
+                        
+                        <div className="text-xs text-slate-600 pt-1">
+                          <span className="font-bold text-slate-900">{booking.tests?.length || 0} Test{booking.tests?.length !== 1 ? 's' : ''} in this Order: </span>
+                          <span className="text-slate-500">
+                            {booking.tests?.map(t => t.testName).join(', ')}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="bg-white rounded-xl border border-teal-200/80 overflow-hidden">
-                        <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200">
-                            <tr>
-                              <th className="py-2.5 px-3">#</th>
-                              <th className="py-2.5 px-3">Diagnostic Test Name</th>
-                              <th className="py-2.5 px-3">Category / Matrix</th>
-                              <th className="py-2.5 px-3">Individual Price</th>
-                              <th className="py-2.5 px-3 text-right">Test Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {booking.tests?.map((t, idx) => (
-                              <tr key={t.id || idx} className="hover:bg-slate-50/60">
-                                <td className="py-2.5 px-3 text-slate-400 font-mono">{idx + 1}</td>
-                                <td className="py-2.5 px-3 font-bold text-slate-900">{t.testName}</td>
-                                <td className="py-2.5 px-3 text-slate-500">{t.category || 'General'} • {t.sampleTypeRequired || 'Blood'}</td>
-                                <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{(t.price || 5000).toLocaleString()} FCFA</td>
-                                <td className="py-2.5 px-3 text-right">
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                    t.status === 'Completed' || t.status === 'Ready_For_Pickup'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : t.status === 'In_Lab_Testing'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : isPaid
-                                      ? 'bg-teal-100 text-teal-800'
-                                      : 'bg-amber-100 text-amber-800'
-                                  }`}>
-                                    {t.status || (isPaid ? 'Awaiting Specimen' : 'Pending Payment')}
-                                  </span>
+                      <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900 font-mono">
+                            {(booking.totalAmount || 0).toLocaleString()} FCFA
+                          </div>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                            isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {isPaid ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Clock className="w-3 h-3 text-amber-600" />}
+                            {isPaid ? 'PAID & UNLOCKED' : 'PENDING AT CASHIER'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setReceiptModalBooking(booking)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Receipt</span>
+                          </button>
+
+                          <button
+                            onClick={() => setExpandedBookingId(isExpanded ? null : booking.id)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl border border-slate-200 transition-all cursor-pointer"
+                          >
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* EXPANDED ITEMIZED TEST RECEIPT BREAKDOWN */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-200/80 bg-teal-50/30 p-4 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                          <span>Itemized Diagnostic Test Breakdown</span>
+                          <span className="font-mono text-teal-700">Ref: {booking.bookingCode}</span>
+                        </div>
+
+                        <div className="bg-white rounded-xl border border-teal-200/80 overflow-hidden">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                              <tr>
+                                <th className="py-2.5 px-3">#</th>
+                                <th className="py-2.5 px-3">Diagnostic Test Name</th>
+                                <th className="py-2.5 px-3">Category / Matrix</th>
+                                <th className="py-2.5 px-3">Individual Price</th>
+                                <th className="py-2.5 px-3 text-right">Test Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {booking.tests?.map((t, idx) => (
+                                <tr key={t.id || idx} className="hover:bg-slate-50/60">
+                                  <td className="py-2.5 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                                  <td className="py-2.5 px-3 font-bold text-slate-900">{t.testName}</td>
+                                  <td className="py-2.5 px-3 text-slate-500">{t.category || 'General'} • {t.sampleTypeRequired || 'Blood'}</td>
+                                  <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{(t.price || 5000).toLocaleString()} FCFA</td>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                      t.status === 'Completed' || t.status === 'Ready_For_Pickup'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : t.status === 'In_Lab_Testing'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : isPaid
+                                        ? 'bg-teal-100 text-teal-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {t.status || (isPaid ? 'Awaiting Specimen' : 'Pending Payment')}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="bg-slate-50 border-t border-slate-200 font-black text-xs">
+                              <tr>
+                                <td colSpan={3} className="py-2.5 px-3 text-slate-700">Total Order Amount ({booking.tests?.length || 0} Tests)</td>
+                                <td colSpan={2} className="py-2.5 px-3 text-right font-mono text-sm text-teal-800">
+                                  {(booking.totalAmount || 0).toLocaleString()} FCFA
                                 </td>
                               </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="bg-slate-50 border-t border-slate-200 font-black text-xs">
-                            <tr>
-                              <td colSpan={3} className="py-2.5 px-3 text-slate-700">Total Order Amount ({booking.tests?.length || 0} Tests)</td>
-                              <td colSpan={2} className="py-2.5 px-3 text-right font-mono text-sm text-teal-800">
-                                {(booking.totalAmount || 0).toLocaleString()} FCFA
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                            </tfoot>
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {bookings.length === 0 && (
-              <div className="p-8 text-center text-slate-400 space-y-1">
-                <Receipt className="w-8 h-8 mx-auto text-slate-300" />
-                <p className="text-xs font-semibold text-slate-600">No multi-test booking receipts yet</p>
-                <p className="text-[11px] text-slate-400">When you book tests, your itemized receipts will automatically appear here</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Recent Tests Section */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Recent Test Requests</h3>
-              <p className="text-xs text-slate-500">Track status, price paid & virtual PDF availability</p>
-            </div>
-            {onNavigateTab && (
-              <button
-                onClick={() => onNavigateTab('history')}
-                className="text-xs font-semibold text-teal-600 hover:text-teal-800 cursor-pointer"
-              >
-                View Full History
-              </button>
-            )}
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {tests.map(test => {
-              const price = test.price || test.amount || 5000;
-              const hasPdf = Boolean(test.pdfUrl || test.fileUrl);
-
-              return (
-                <div
-                  key={test.id}
-                  onClick={() => onSelectTest && onSelectTest(test)}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-teal-50/30 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 mt-0.5">
-                      <TestTube className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <h4 className="font-bold text-slate-900 text-sm truncate">
-                        {test.testName || test.name}
-                      </h4>
-                      
-                      <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                        <span>Category: {test.category || 'General'}</span>
-                        <span>•</span>
-                        {test.paid === true || test.paymentStatus === 'paid' ? (
-                          <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                            Paid: {price.toLocaleString()} FCFA
-                          </span>
-                        ) : (
-                          <span className="font-bold text-amber-800 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            Unpaid: {price.toLocaleString()} FCFA
-                          </span>
-                        )}
-                        <span>•</span>
-                        <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] uppercase ${
-                          test.status === 'completed' 
-                            ? 'bg-emerald-100 text-emerald-800' 
-                            : test.status === 'analyzing'
-                              ? 'bg-blue-100 text-blue-800'
-                              : test.paid
-                                ? 'bg-teal-100 text-teal-800'
-                                : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {test.status === 'completed' ? 'Results Ready' : test.status === 'analyzing' ? 'In Analysis' : test.paid ? 'Awaiting Specimen' : 'Pending Payment'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    {hasPdf ? (
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
-                        <FileText className="w-4 h-4 text-emerald-600" />
-                        PDF Virtual Result Ready
-                      </span>
-                    ) : test.virtualRequested ? (
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200">
-                        <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                        Virtual Requested
-                      </span>
-                    ) : (
-                      <button
-                        onClick={(e) => handleRequestVirtual(e, test)}
-                        disabled={requestingId === test.id}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Laptop className="w-3.5 h-3.5" />
-                        {requestingId === test.id ? 'Requesting...' : 'Request Virtual Result'}
-                      </button>
                     )}
-
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            {tests.length === 0 && (
-              <div className="p-10 text-center text-slate-400 space-y-2">
-                <TestTube className="w-8 h-8 mx-auto text-slate-300" />
-                <p className="text-sm font-semibold text-slate-600">No laboratory test records found</p>
-                <p className="text-xs text-slate-400">Book an appointment to request tests</p>
-              </div>
-            )}
+              {bookings.length === 0 && (
+                <div className="p-8 text-center text-slate-400 space-y-1">
+                  <Receipt className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-semibold text-slate-600">No multi-test booking receipts yet</p>
+                  <p className="text-[11px] text-slate-400">When you book tests, your itemized receipts will automatically appear here</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Medical Booklet Modal */}
