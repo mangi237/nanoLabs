@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header';
 import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
@@ -6,7 +6,9 @@ import { db, getDocs, collection } from '../../services/firebase';
 import authService from '../../services/authService';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
+import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
+import { uploadService } from '../../api/upload';
 import { 
   Search, 
   UserPlus, 
@@ -33,8 +35,39 @@ import {
   Receipt,
   ChevronDown,
   ChevronUp,
-  FlaskConical
+  FlaskConical,
+  Shield,
+  CreditCard,
+  Droplet,
+  Upload,
+  AlertCircle,
+  FileCheck,
+  Stethoscope
 } from 'lucide-react';
+
+const BLOOD_GROUPS = [
+  { value: 'Unknown', label: 'Unknown', badge: 'Uncertain', desc: 'Can be verified at lab' },
+  { value: 'O+', label: 'O Positive (O+)', badge: 'Universal Red Donor', desc: 'Most common blood type' },
+  { value: 'O-', label: 'O Negative (O-)', badge: 'Universal Donor', desc: 'Emergency red cells' },
+  { value: 'A+', label: 'A Positive (A+)', badge: 'Common', desc: 'A & O compatibility' },
+  { value: 'A-', label: 'A Negative (A-)', badge: 'Rare', desc: 'A- & O- compatibility' },
+  { value: 'B+', label: 'B Positive (B+)', badge: 'Common', desc: 'B & O compatibility' },
+  { value: 'B-', label: 'B Negative (B-)', badge: 'Rare', desc: 'B- & O- compatibility' },
+  { value: 'AB+', label: 'AB Positive (AB+)', badge: 'Universal Recipient', desc: 'Accepts all blood types' },
+  { value: 'AB-', label: 'AB Negative (AB-)', badge: 'Very Rare', desc: 'Accepts negative types' }
+];
+
+const COMMON_INSURANCES = [
+  'Ascoma Health',
+  'AXA Mansard',
+  'Allianz Care',
+  'Cigna Global',
+  'CNPS / National Social Insurance',
+  'NHIS / Universal Health',
+  'GMC Henner',
+  'Sanlam Health',
+  'Other Corporate / Private HMO'
+];
 
 interface ReceptionistViewProps {
   onBack?: () => void;
@@ -68,19 +101,27 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   // Add Test Order Modal for Existing Patient State
   const [selectedPatientForTest, setSelectedPatientForTest] = useState<any | null>(null);
   const [selectedMasterTestIds, setSelectedMasterTestIds] = useState<string[]>([]);
-  const [attendingDoctor, setAttendingDoctor] = useState('');
+  const [attendingDoctor, setAttendingDoctor] = useState('Dr. Alexis Vance');
+  const [customDoctorName, setCustomDoctorName] = useState('');
+  const [testOrderCategory, setTestOrderCategory] = useState<string>('All');
+  const [testOrderSearch, setTestOrderSearch] = useState('');
+  const [testOrderNotes, setTestOrderNotes] = useState('');
   const [isOrderingTest, setIsOrderingTest] = useState(false);
 
   // Registration Form Fields
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [age, setAge] = useState('');
+  const [age, setAge] = useState('28');
   const [gender, setGender] = useState('Male');
   const [city, setCity] = useState('Douala');
+  const [nationalId, setNationalId] = useState('');
   const [bloodType, setBloodType] = useState('O+');
-  const [insuranceProvider, setInsuranceProvider] = useState('Out-of-Pocket / Self');
+  const [hasInsurance, setHasInsurance] = useState(false);
+  const [insuranceProvider, setInsuranceProvider] = useState('Ascoma Health');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
+  const [insuranceCardUrl, setInsuranceCardUrl] = useState('');
+  const [uploadingCard, setUploadingCard] = useState(false);
   const [allergies, setAllergies] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -90,7 +131,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
   const [validatingId, setValidatingId] = useState<string | null>(null);
 
-  // Checkbox-based test selection state for patient activation - FIXED: store by test ID not patient ID
+  // Checkbox-based test selection state for patient activation
   const [selectedTestsMap, setSelectedTestsMap] = useState<Record<string, string[]>>({});
   
   // Access Code Modal for Receptionist Activation
@@ -100,17 +141,27 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [activationError, setActivationError] = useState('');
   const [isActivating, setIsActivating] = useState(false);
 
-  // Doctor list for dropdown
-  const [doctorList, setDoctorList] = useState<Array<{id: string, name: string}>>([
-    { id: 'dr-1', name: 'Dr. Hiren Shah' },
-    { id: 'dr-2', name: 'Dr. Marie-Claire Ngo' },
-    { id: 'dr-3', name: 'Dr. Jean-Paul Essomba' },
-    { id: 'dr-4', name: 'Dr. Laure Kamga' },
-    { id: 'dr-5', name: 'Dr. Emmanuel Tchoumi' },
-  ]);
-  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // FIXED: Get patient tests with proper filtering
+  const handleInsuranceCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCard(true);
+    try {
+      const res = await uploadService.uploadFile(file);
+      if (res.success && res.fileUrl) {
+        setInsuranceCardUrl(res.fileUrl);
+      } else {
+        alert('Could not upload insurance card image. Please try another image.');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+    } finally {
+      setUploadingCard(false);
+    }
+  };
+
   const getPatientTests = (patient: any) => {
     const patientId = patient.id || patient.patientId;
     const matchedBookings = bookings.filter(b => 
@@ -121,19 +172,21 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       (b.patientPhone && patient.phone && b.patientPhone === patient.phone)
     );
 
-    const allTestsFromBookings = matchedBookings.flatMap(b => (b.tests || []).map((t, idx) => ({
-      id: t.id || t.testId || `bt-${b.id}-${idx}`,
-      testId: t.testId || t.id || `t-${idx}`,
-      testName: t.testName || (t as any).name || 'Diagnostic Test',
-      category: t.category || 'General Diagnostic',
-      price: t.price || 5500,
-      status: t.status || (b.paymentStatus === 'paid' ? 'Paid' : 'Pending_Payment'),
-      bookingCode: b.bookingCode,
-      bookingId: b.id,
-      receptionistValidated: b.receptionistValidated === true || (t as any).receptionistValidated === true || b.paymentStatus === 'paid',
-      createdAt: b.createdAt,
-      sampleTypeRequired: t.sampleTypeRequired || 'Venous Blood'
-    })));
+    const allTestsFromBookings = matchedBookings.flatMap(b => (b.tests || []).map((t, idx) => {
+      const isThisTestValidated = (t as any).receptionistValidated === true || t.status === 'Completed' || t.status === 'In_Lab_Testing' || b.paymentStatus === 'paid';
+      return {
+        id: t.id || t.testId || `bt-${b.id}-${idx}`,
+        testId: t.testId || t.id || `t-${idx}`,
+        testName: t.testName || (t as any).name || 'Diagnostic Test',
+        category: t.category || 'General Diagnostic',
+        price: t.price || 5500,
+        status: t.status || (isThisTestValidated ? (b.paymentStatus === 'paid' ? 'Pending_Collection' : 'Pending_Payment') : 'Pending_Validation'),
+        bookingCode: b.bookingCode,
+        bookingId: b.id,
+        receptionistValidated: isThisTestValidated,
+        createdAt: b.createdAt
+      };
+    }));
 
     const directLabTests = (patient.labTests || []).map((t: any, idx: number) => ({
       id: t.id || t.testId || `direct-${idx}-${t.name || t.testName}`,
@@ -145,12 +198,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       bookingCode: t.bookingCode || 'DIRECT',
       bookingId: t.bookingId || t.id || `direct-${idx}`,
       receptionistValidated: t.receptionistValidated === true || t.status === 'Paid' || t.paid === true,
-      createdAt: t.requestedDate || t.requestedAt || patient.createdAt || new Date().toISOString(),
-      sampleTypeRequired: t.sampleType || 'Venous Blood'
+      createdAt: t.requestedDate || t.requestedAt || patient.createdAt || new Date().toISOString()
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt: any) => {
+    directLabTests.forEach((dt: any ) => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -163,7 +215,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     return combined;
   };
 
-  // FIXED: Toggle test selection by test ID
   const toggleTestSelection = (patientId: string, testIdentifier: string) => {
     setSelectedTestsMap(prev => {
       const currentList = prev[patientId] || [];
@@ -179,8 +230,8 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     const pId = patient.id || patient.patientId;
     const pTests = getPatientTests(patient);
     const unvalidatedKeys = pTests
-      .filter(t => !t.receptionistValidated && t.status !== 'Completed')
-      .map(t => t.id || t.testName || t.bookingId);
+      .filter(t => !t.receptionistValidated && (t.status as string) !== 'Paid' && t.status !== 'Completed')
+      .map(t => t.id || t.testName);
     
     setSelectedTestsMap(prev => ({
       ...prev,
@@ -188,36 +239,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
   };
 
-  // FIXED: Handle opening activation modal with proper test filtering
   const handleOpenActivationModal = (patient: any, testIdentifiers: string[]) => {
     if (testIdentifiers.length === 0) return;
-    const pTests = getPatientTests(patient);
-    
-    // Gather all related IDs - ONLY the ones selected
-    const allRelevantIds: string[] = [];
-    
-    // Add the selected test identifiers directly
-    testIdentifiers.forEach(id => {
-      if (!allRelevantIds.includes(id)) allRelevantIds.push(id);
-    });
-    
-    // Find and add the actual test IDs and booking IDs for the selected tests
-    pTests.forEach(t => {
-      if (testIdentifiers.includes(t.id) || testIdentifiers.includes(t.testName) || testIdentifiers.includes(t.bookingId)) {
-        if (t.id && !allRelevantIds.includes(t.id)) allRelevantIds.push(t.id);
-        if (t.bookingId && !allRelevantIds.includes(t.bookingId)) allRelevantIds.push(t.bookingId);
-        if (t.testId && !allRelevantIds.includes(t.testId)) allRelevantIds.push(t.testId);
-        if (t.testName && !allRelevantIds.includes(t.testName)) allRelevantIds.push(t.testName);
-      }
-    });
-
     setActivationModalPatient(patient);
-    setActivationBookingIds(allRelevantIds);
+    setActivationBookingIds(testIdentifiers);
     setReceptionistCode('');
     setActivationError('');
   };
 
-  // FIXED: Handle confirmation with proper test filtering
   const handleConfirmActivationWithCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setActivationError('');
@@ -228,6 +257,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       return;
     }
 
+    // Verify staff credentials with await
     const authResult = await authService.verifyStaffActionCode(
       cleanCode,
       ['receptionist', 'admin', 'superadmin', 'lab_director'],
@@ -236,18 +266,16 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     );
 
     if (!authResult.authorized) {
-      setActivationError(authResult.error || 'Access Denied: Invalid Receptionist PIN / Passcode.');
+      setActivationError(authResult.error || 'Access Denied: Invalid Receptionist PIN / Passcode. Only authorized front desk or supervisor credentials can validate tests.');
       return;
     }
 
     setIsActivating(true);
     try {
       const pId = activationModalPatient?.id || activationModalPatient?.patientId;
-      
-      // FIXED: Pass ONLY the selected test IDs to the validation function
       await limsService.validateBatchBookingsCheckIn({
         labId: targetLabId,
-        bookingIds: activationBookingIds, // Now only contains selected tests
+        bookingIds: activationBookingIds,
         validatorName: authResult.staffName || user?.name || 'Front Desk Receptionist',
         patientId: pId,
         patientData: activationModalPatient
@@ -277,10 +305,12 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Fetch patients
       const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const allPatients: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setPatients(allPatients);
 
+      // Fetch bookings (includes test requests)
       const allBookings = await limsService.fetchAllBookings(targetLabId);
       setBookings(allBookings);
     } catch (e) {
@@ -290,7 +320,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }
   };
 
-  // FIXED: Register patient using the same modal as online booking
   const handleRegisterPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !phone.trim()) {
@@ -300,7 +329,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
     const phoneValidation = validatePhoneNumber(phone);
     if (!phoneValidation.isValid) {
-      alert(phoneValidation.errorMessage || 'Please provide a valid 9-digit phone number.');
+      alert(phoneValidation.errorMessage || 'Please provide a valid 9-digit phone number (e.g., 671234567).');
       return;
     }
 
@@ -315,18 +344,26 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     setIsSubmitting(true);
     try {
       const generatedPid = 'PT-' + Math.floor(10000 + Math.random() * 90000);
-      const generatedAccessCode = 'PAT' + Math.floor(100 + Math.random() * 900);
+      const generatedAccessCode = 'PAT-' + Math.floor(1000 + Math.random() * 9000);
+
+      const chosenInsurance = hasInsurance ? insuranceProvider : 'Out-of-Pocket / Self';
+      const chosenPolicy = hasInsurance ? (insurancePolicyNumber.trim() || 'N/A') : 'N/A';
 
       const rawPayload = {
         name: fullName.trim(),
         phone: phoneValidation.formatted || phone.trim(),
         email: email.trim().toLowerCase() || `${generatedPid.toLowerCase()}@nanolabs.cm`,
-        age: parseInt(age) || 30,
+        age: parseInt(age) || 28,
         gender,
         city: city || 'Douala',
+        address: city || 'Douala',
+        nationalId: nationalId.trim() || 'N/A',
         bloodType: bloodType || 'O+',
-        insuranceProvider: insuranceProvider || 'Out-of-Pocket / Self',
-        insurancePolicyNumber: insurancePolicyNumber.trim() || 'N/A',
+        bloodGroup: bloodType || 'O+',
+        hasInsurance,
+        insuranceProvider: chosenInsurance,
+        insurancePolicyNumber: chosenPolicy,
+        insuranceCardUrl: hasInsurance && insuranceCardUrl ? insuranceCardUrl : null,
         allergies: allergies.trim() || 'None reported',
         emergencyContactName: emergencyContactName.trim() || 'N/A',
         emergencyContactPhone: emergencyContactPhone.trim() || 'N/A',
@@ -352,16 +389,22 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
           accessCode: generatedAccessCode,
           phone: phoneValidation.formatted || phone.trim(),
           bloodType,
-          insuranceProvider
+          insuranceProvider: chosenInsurance,
+          rawPatient: patientPayload
         });
 
         setFullName('');
         setPhone('');
         setEmail('');
-        setAge('');
+        setAge('28');
+        setGender('Male');
+        setCity('Douala');
+        setNationalId('');
         setBloodType('O+');
-        setInsuranceProvider('Out-of-Pocket / Self');
+        setHasInsurance(false);
+        setInsuranceProvider('Ascoma Health');
         setInsurancePolicyNumber('');
+        setInsuranceCardUrl('');
         setAllergies('');
         setEmergencyContactName('');
         setEmergencyContactPhone('');
@@ -378,18 +421,16 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }
   };
 
-  // FIXED: Create test order with dynamic price calculation
   const handleCreateTestOrderForPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatientForTest || selectedMasterTestIds.length === 0) {
-      alert('Please select at least one laboratory test from the catalog.');
+      alert('Please select at least one diagnostic test from the catalog.');
       return;
     }
 
-    if (!attendingDoctor.trim()) {
-      alert('Please select a referring physician.');
-      return;
-    }
+    const doctorToUse = attendingDoctor === 'Other' 
+      ? (customDoctorName.trim() || 'External Attending Physician')
+      : attendingDoctor;
 
     setIsOrderingTest(true);
     try {
@@ -402,15 +443,17 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         patientPhone: selectedPatientForTest.phone || '',
         patientEmail: selectedPatientForTest.email || '',
         patientPid: selectedPatientForTest.patientId || selectedPatientForTest.id,
-        doctorName: attendingDoctor,
+        doctorName: doctorToUse,
         selectedMasterTestIds,
+        clinicalNotes: testOrderNotes.trim() || undefined,
         creatorName: user?.name || 'Front Desk Receptionist'
       });
 
-      alert(`Test order generated successfully for ${selectedPatientForTest.name}!`);
+      alert(`Test order generated successfully for ${selectedPatientForTest.name}! Unpaid invoice routed to Cashier.`);
       setSelectedPatientForTest(null);
       setSelectedMasterTestIds([]);
-      setAttendingDoctor('');
+      setTestOrderNotes('');
+      setCustomDoctorName('');
       await fetchData();
     } catch (err) {
       console.error('Error creating test order:', err);
@@ -418,14 +461,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     } finally {
       setIsOrderingTest(false);
     }
-  };
-
-  // FIXED: Dynamically calculate total price
-  const calculateTotalPrice = () => {
-    return selectedMasterTestIds.reduce((acc, id) => {
-      const item = MASTER_TESTS_CATALOG.find(m => m.id === id);
-      return acc + (item?.basePrice || 0);
-    }, 0);
   };
 
   const copyCredentials = (code: string) => {
@@ -455,6 +490,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
+      {/* Staff Hero Banner */}
       <StaffHeroBanner
         workstationNumber="Workstation 01"
         workstationTitle="Patient Admissions & Intake Counter"
@@ -473,7 +509,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         }
       />
 
-      {/* Metrics Row */}
+      {/* Top Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
@@ -506,7 +542,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         </div>
       </div>
 
-      {/* Pending Patient Test Requests Queue */}
+      {/* PENDING PATIENT TEST REQUESTS QUEUE */}
       {pendingBookings.length > 0 && (
         <div className="bg-amber-500/10 rounded-2xl border border-amber-300/80 p-5 space-y-3">
           <div className="flex items-center justify-between">
@@ -522,7 +558,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {pendingBookings.slice(0, 4).map(b => (
+            {pendingBookings.map(b => (
               <div key={b.id} className="p-3.5 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-3 shadow-xs">
                 <div>
                   <div className="font-extrabold text-xs text-slate-900">{b.patientName}</div>
@@ -534,7 +570,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 <div className="text-right shrink-0">
                   <span className="font-mono font-bold text-xs text-slate-900 block">{b.totalAmount?.toLocaleString()} XAF</span>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800">
-                    Unpaid
+                    Unpaid • Unlocked at Cashier
                   </span>
                 </div>
               </div>
@@ -588,8 +624,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   const pTests = getPatientTests(patient);
                   const isExpanded = expandedPatientId === patient.id;
                   const isWalkIn = patient.registrationType === 'walk_in' || patient.isWalkIn === true || (patient.registeredBy && !patient.registeredBy.toLowerCase().includes('online'));
-                  const unvalidatedCount = pTests.filter(t => !t.receptionistValidated && t.status !== 'Completed').length;
-                  const pId = patient.id || patient.patientId;
+                  const unvalidatedCount = pTests.filter(t => !t.receptionistValidated && (t.status as string) !== 'Paid' && t.status !== 'Completed').length;
 
                   return (
                     <React.Fragment key={patient.id}>
@@ -649,7 +684,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                 onClick={() => {
                                   setSelectedPatientForTest(patient);
                                   setSelectedMasterTestIds([]);
-                                  setAttendingDoctor('');
                                 }}
                                 className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[11px] shadow-xs"
                               >
@@ -697,7 +731,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                 <div className="space-y-4">
                                   <div className="flex items-center justify-between">
                                     <div className="text-[11px] font-bold text-slate-600">
-                                      Select tests for Check-in & Cashier Activation:
+                                      Click test cards or use checkboxes below to select tests for Check-in & Cashier Activation:
                                     </div>
                                     {pTests.some((t: any) => !t.receptionistValidated && t.status !== 'Paid' && t.status !== 'Completed') && (
                                       <button
@@ -716,6 +750,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {pTests.map((t: any, idx: number) => {
                                       const isValidated = t.receptionistValidated === true || t.status === 'Paid' || t.status === 'Completed';
+                                      const pId = patient.id || patient.patientId;
                                       const testKey = t.id || t.testName || t.bookingId;
                                       const isChecked = (selectedTestsMap[pId] || []).includes(testKey) || 
                                                         (selectedTestsMap[pId] || []).includes(t.id) ||
@@ -786,12 +821,12 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                     })}
                                   </div>
 
-                                  {/* BOTTOM ACTION PANEL FOR ACTIVATION */}
+                                  {/* BOTTOM ACTION PANEL FOR ACTIVATION WITH ACCESS CODE */}
                                   <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl">
                                     <div className="text-xs text-slate-600">
                                       <span className="font-bold text-slate-900">Selected Tests: </span>
                                       <span className="font-mono font-black text-teal-700">
-                                        {(selectedTestsMap[pId] || []).length}
+                                        {(selectedTestsMap[patient.id || patient.patientId] || []).length}
                                       </span> test(s) checked
                                     </div>
 
@@ -801,17 +836,17 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                           onClick={() => {
                                             setSelectedPatientForTest(patient);
                                             setSelectedMasterTestIds([]);
-                                            setAttendingDoctor('');
                                           }}
                                           className="px-3 py-2 bg-white hover:bg-slate-100 text-teal-800 font-bold rounded-xl text-xs border border-teal-200 flex items-center gap-1 cursor-pointer transition-all"
                                         >
                                           <PlusCircle className="w-3.5 h-3.5 text-teal-600" />
-                                          + Add Test
+                                          + Add Walk-In Test
                                         </button>
                                       )}
 
                                       <button
                                         onClick={() => {
+                                          const pId = patient.id || patient.patientId;
                                           const selIds = selectedTestsMap[pId] || [];
                                           if (selIds.length === 0) {
                                             alert('Please select at least one test checkbox to activate.');
@@ -819,11 +854,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                                           }
                                           handleOpenActivationModal(patient, selIds);
                                         }}
-                                        disabled={(selectedTestsMap[pId] || []).length === 0}
+                                        disabled={(selectedTestsMap[patient.id || patient.patientId] || []).length === 0}
                                         className="w-full sm:w-auto px-5 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                       >
                                         <ShieldCheck className="w-4 h-4" />
-                                        <span>Activate Selected Tests ({(selectedTestsMap[pId] || []).length})</span>
+                                        <span>Activate Selected Tests ({(selectedTestsMap[patient.id || patient.patientId] || []).length})</span>
                                       </button>
                                     </div>
                                   </div>
@@ -842,139 +877,223 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         )}
       </div>
 
-      {/* ORDER TEST FOR EXISTING PATIENT MODAL - FIXED with doctor dropdown and live price calculation */}
+      {/* ORDER TEST FOR EXISTING PATIENT MODAL */}
       {selectedPatientForTest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="font-extrabold text-base text-slate-900">
-                  Generate Test Order for Registered Patient
-                </h3>
-                <p className="text-xs text-teal-700 font-semibold">
-                  Patient: {selectedPatientForTest.name} ({selectedPatientForTest.patientId || selectedPatientForTest.id})
-                </p>
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative my-auto max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center">
+                  <FlaskConical className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Generate Diagnostic Test Order
+                  </h3>
+                  <p className="text-xs text-teal-700 font-semibold flex items-center gap-1.5">
+                    <span>Patient: {selectedPatientForTest.name}</span>
+                    <span className="font-mono bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded text-[10px]">
+                      {selectedPatientForTest.patientId || selectedPatientForTest.id}
+                    </span>
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setSelectedPatientForTest(null)}
+                onClick={() => {
+                  setSelectedPatientForTest(null);
+                  setSelectedMasterTestIds([]);
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTestOrderForPatient} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Referring Physician / Doctor Name *</label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowDoctorDropdown(!showDoctorDropdown)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 flex items-center justify-between cursor-pointer"
+            <form onSubmit={handleCreateTestOrderForPatient} className="space-y-4 overflow-y-auto pr-1 flex-1">
+              {/* Doctor / Lab Tech Selection Dropdown */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700">
+                  Attending / Referring Physician or Lab Specialist *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={attendingDoctor}
+                    onChange={e => setAttendingDoctor(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                   >
-                    <span className={attendingDoctor ? 'text-slate-900' : 'text-slate-400'}>
-                      {attendingDoctor || 'Select a referring physician...'}
-                    </span>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showDoctorDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  
-                  {showDoctorDropdown && (
-                    <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                      {doctorList.map(doc => (
-                        <button
-                          key={doc.id}
-                          type="button"
-                          onClick={() => {
-                            setAttendingDoctor(doc.name);
-                            setShowDoctorDropdown(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 flex items-center gap-2"
-                        >
-                          <span className="font-medium">{doc.name}</span>
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const customName = prompt('Enter doctor name:');
-                          if (customName && customName.trim()) {
-                            setAttendingDoctor(customName.trim());
-                            setDoctorList([...doctorList, { id: `dr-${Date.now()}`, name: customName.trim() }]);
-                          }
-                          setShowDoctorDropdown(false);
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs text-teal-600 hover:bg-teal-50 border-t border-slate-100 font-semibold"
-                      >
-                        + Add Custom Doctor
-                      </button>
-                    </div>
+                    <option value="Dr. Alexis Vance">Dr. Alexis Vance (Lab Specialist & Director)</option>
+                    <option value="Dr. Hiren Shah">Dr. Hiren Shah (Chief Medical Officer)</option>
+                    <option value="Lab Tech Jean">Lab Tech Jean (Senior Phlebotomist)</option>
+                    <option value="Lab Tech Claire">Lab Tech Claire (Microbiology Analyst)</option>
+                    <option value="Dr. Paul Biya Medical Clinic">Dr. Paul Biya Medical Center (Referring)</option>
+                    <option value="General OPD Consultation">General OPD Walk-in Doctor</option>
+                    <option value="Other">Other / External Referring Doctor...</option>
+                  </select>
+
+                  {attendingDoctor === 'Other' && (
+                    <input
+                      type="text"
+                      value={customDoctorName}
+                      onChange={e => setCustomDoctorName(e.target.value)}
+                      required
+                      placeholder="Enter Doctor / Hospital Name"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
                   )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Select Diagnostic Tests from Master Catalog</label>
-                <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-3 bg-slate-50">
-                  {MASTER_TESTS_CATALOG.map(item => {
-                    const isChecked = selectedMasterTestIds.includes(item.id);
+              {/* Test Catalog Filtering & Selection */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Select Diagnostic Tests from Master Catalog ({selectedMasterTestIds.length} Selected)
+                  </label>
+                </div>
 
-                    return (
-                      <label 
-                        key={item.id}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                          isChecked 
-                            ? 'bg-teal-50 border-teal-500 text-teal-900 font-bold' 
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                {/* Search and Category Filter Chips */}
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={testOrderSearch}
+                      onChange={e => setTestOrderSearch(e.target.value)}
+                      placeholder="Search test by name, code or specimen..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+                    {['All', 'Microbiology', 'Hematology', 'Serology / Immunology', 'Biochemistry', 'Hormones'].map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setTestOrderCategory(cat)}
+                        className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                          testOrderCategory === cat
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMasterTestIds([...selectedMasterTestIds, item.id]);
-                              } else {
-                                setSelectedMasterTestIds(selectedMasterTestIds.filter(id => id !== item.id));
-                              }
-                            }}
-                            className="w-4 h-4 text-teal-600 rounded-md focus:ring-teal-500"
-                          />
-                          <div>
-                            <div className="text-xs">{item.name}</div>
-                            <div className="text-[10px] text-slate-400 font-medium">{item.category} • {item.sampleType}</div>
-                          </div>
-                        </div>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                        <span className="font-mono text-xs text-teal-700 font-bold">{item.basePrice.toLocaleString()} XAF</span>
-                      </label>
-                    );
-                  })}
+                {/* Test Items List */}
+                <div className="max-h-56 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-2.5 bg-slate-50">
+                  {OFFICIAL_MASTER_TEST_CATALOG
+                    .filter(item => {
+                      const matchesCat = testOrderCategory === 'All' || item.category.toLowerCase().includes(testOrderCategory.toLowerCase());
+                      const matchesSearch = !testOrderSearch || 
+                        item.name.toLowerCase().includes(testOrderSearch.toLowerCase()) ||
+                        (item.aliases && item.aliases.some(a => a.toLowerCase().includes(testOrderSearch.toLowerCase()))) ||
+                        item.sampleType.toLowerCase().includes(testOrderSearch.toLowerCase());
+                      return matchesCat && matchesSearch;
+                    })
+                    .map(item => {
+                      const isChecked = selectedMasterTestIds.includes(item.id);
+
+                      return (
+                        <label 
+                          key={item.id}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                            isChecked 
+                              ? 'bg-teal-50/80 border-teal-500 text-teal-950 font-bold shadow-xs' 
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedMasterTestIds([...selectedMasterTestIds, item.id]);
+                                } else {
+                                  setSelectedMasterTestIds(selectedMasterTestIds.filter(id => id !== item.id));
+                                }
+                              }}
+                              className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 cursor-pointer"
+                            />
+                            <div>
+                              <div className="text-xs font-bold text-slate-900">{item.name}</div>
+                              <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2">
+                                <span>{item.category}</span>
+                                <span>•</span>
+                                <span>{item.sampleType}</span>
+                                <span>•</span>
+                                <span className="text-teal-700 font-semibold">{item.turnaroundTime || '24 hrs'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="font-mono text-xs text-teal-700 font-black shrink-0">
+                            {item.price.toLocaleString()} XAF
+                          </span>
+                        </label>
+                      );
+                    })}
                 </div>
               </div>
 
-              {/* FIXED: Live price calculation */}
-              <div className="p-3 bg-slate-100 rounded-xl flex items-center justify-between text-xs">
-                <span className="font-semibold text-slate-600">Total Order Amount:</span>
-                <span className="font-mono font-black text-sm text-teal-800">
-                  {calculateTotalPrice().toLocaleString()} XAF
-                </span>
+              {/* Clinical Notes / Symptoms */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Clinical Notes / Reason for Testing (Optional)</label>
+                <input
+                  type="text"
+                  value={testOrderNotes}
+                  onChange={e => setTestOrderNotes(e.target.value)}
+                  placeholder="e.g. Routine annual checkup, persistent fever, pre-op screening"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+              {/* Live Synchronized Pricing Card */}
+              <div className="p-3 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-teal-900 block">Total Order Amount:</span>
+                  <span className="text-[11px] text-teal-700 font-medium">
+                    {selectedMasterTestIds.length} test{selectedMasterTestIds.length === 1 ? '' : 's'} selected • Invoice routed to Cashier
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-black text-lg text-teal-800">
+                    {selectedMasterTestIds.reduce((acc, id) => {
+                      const item = OFFICIAL_MASTER_TEST_CATALOG.find(m => m.id === id) || MASTER_TESTS_CATALOG.find(m => m.id === id);
+                      const priceVal = item ? ('price' in item ? item.price : (item as any).basePrice) : 0;
+                      return acc + (priceVal || 0);
+                    }, 0).toLocaleString()} XAF
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setSelectedPatientForTest(null)}
+                  onClick={() => {
+                    setSelectedPatientForTest(null);
+                    setSelectedMasterTestIds([]);
+                  }}
                   className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isOrderingTest || selectedMasterTestIds.length === 0 || !attendingDoctor.trim()}
-                  className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  disabled={isOrderingTest || selectedMasterTestIds.length === 0}
+                  className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isOrderingTest ? 'Generating Order...' : 'Generate Unpaid Test Order'}
+                  {isOrderingTest ? (
+                    'Generating Order...'
+                  ) : (
+                    <>
+                      <Receipt className="w-4 h-4" />
+                      Generate Unpaid Test Order ({selectedMasterTestIds.length})
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -982,18 +1101,18 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         </div>
       )}
 
-      {/* WALK-IN REGISTRATION MODAL - FIXED with insurance toggle and online booking parity */}
+      {/* WALK-IN REGISTRATION MODAL */}
       {showRegisterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative my-auto max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-md">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900">Walk-in Patient Account Intake</h3>
-                  <p className="text-xs text-slate-500">Register new patient & auto-issue PID passcode credentials</p>
+                  <p className="text-xs text-slate-500">Register new patient, configure insurance, & auto-issue PID passcode</p>
                 </div>
               </div>
               <button
@@ -1005,10 +1124,10 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
             </div>
 
             {createdPatientCredentials ? (
-              <div className="space-y-4 p-5 bg-teal-50/80 border border-teal-200 rounded-2xl">
+              <div className="space-y-4 p-5 bg-teal-50/80 border border-teal-200 rounded-2xl my-auto">
                 <div className="flex items-center gap-2 text-teal-800 font-extrabold text-sm">
                   <CheckCircle2 className="w-5 h-5 text-teal-600" />
-                  Patient Account Created & Credentials Issued!
+                  Walk-in Patient Registered & Credentials Issued!
                 </div>
 
                 <div className="space-y-2 text-xs bg-white p-4 rounded-xl border border-teal-200">
@@ -1025,161 +1144,281 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                     <span className="font-mono font-extrabold text-indigo-700">{createdPatientCredentials.accessCode}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1.5">
-                    <span className="text-slate-500">Insurance Provider:</span>
-                    <span className="font-bold text-slate-900">{createdPatientCredentials.insuranceProvider || 'Out-of-Pocket'}</span>
+                    <span className="text-slate-500">Phone:</span>
+                    <span className="font-mono text-slate-700">{createdPatientCredentials.phone}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Blood Group:</span>
-                    <span className="font-bold text-red-600">{createdPatientCredentials.bloodType || 'O+'}</span>
+                    <span className="text-slate-500">Payment Classification:</span>
+                    <span className="font-bold text-teal-800">{createdPatientCredentials.insuranceProvider}</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => copyCredentials(createdPatientCredentials.accessCode)}
-                  className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Copy className="w-4 h-4" />
-                  {copiedCode ? 'Copied Access Passcode!' : 'Copy Access Passcode'}
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={() => copyCredentials(createdPatientCredentials.accessCode)}
+                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {copiedCode ? 'Copied Passcode!' : 'Copy Access Passcode'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const p = createdPatientCredentials.rawPatient || {
+                        name: createdPatientCredentials.name,
+                        patientId: createdPatientCredentials.patientId,
+                        id: createdPatientCredentials.patientId,
+                        phone: createdPatientCredentials.phone
+                      };
+                      setShowRegisterModal(false);
+                      setCreatedPatientCredentials(null);
+                      setSelectedPatientForTest(p);
+                    }}
+                    className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  >
+                    <FlaskConical className="w-4 h-4" />
+                    Order Diagnostic Tests Now
+                  </button>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleRegisterPatient} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <form onSubmit={handleRegisterPatient} className="space-y-4 overflow-y-auto pr-1 flex-1">
+                {/* Personal Information */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-teal-600" />
+                    1. Patient Identity & Contact
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={e => setFullName(e.target.value)}
+                        required
+                        placeholder="e.g. Marie Ebode"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number *</label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        required
+                        placeholder="+237 670000000"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        placeholder="marie.ebode@gmail.com"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">National ID / Passport</label>
+                      <input
+                        type="text"
+                        value={nationalId}
+                        onChange={e => setNationalId(e.target.value)}
+                        placeholder="e.g. 109823481"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">City / Residential Address</label>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={e => setCity(e.target.value)}
+                        placeholder="Douala, Akwa"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Age (Years)</label>
+                        <input
+                          type="number"
+                          value={age}
+                          onChange={e => setAge(e.target.value)}
+                          placeholder="28"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Gender</label>
+                        <select
+                          value={gender}
+                          onChange={e => setGender(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Child">Child</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Blood Group Selection */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Droplet className="w-3.5 h-3.5 text-rose-500" />
+                    2. Blood Group Classification
+                  </h4>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    {BLOOD_GROUPS.map(bg => (
+                      <button
+                        key={bg.value}
+                        type="button"
+                        onClick={() => setBloodType(bg.value)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          bloodType === bg.value
+                            ? 'bg-rose-50 border-rose-500 text-rose-900 font-bold shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{bg.value}</div>
+                        <div className="text-[9px] text-slate-500 truncate">{bg.badge}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Insurance Policy Section with Toggle */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div className="flex items-center gap-2.5">
+                      <Shield className="w-4 h-4 text-indigo-600" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Health Insurance Coverage</div>
+                        <div className="text-[11px] text-slate-500">Enable if the patient is covered under private or corporate HMO</div>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={hasInsurance} 
+                        onChange={e => setHasInsurance(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                    </label>
+                  </div>
+
+                  {hasInsurance && (
+                    <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Insurance Provider *</label>
+                          <select
+                            value={insuranceProvider}
+                            onChange={e => setInsuranceProvider(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                          >
+                            {COMMON_INSURANCES.map(ins => (
+                              <option key={ins} value={ins}>{ins}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Policy / Member ID *</label>
+                          <input
+                            type="text"
+                            value={insurancePolicyNumber}
+                            onChange={e => setInsurancePolicyNumber(e.target.value)}
+                            required={hasInsurance}
+                            placeholder="e.g. ASC-998234-A"
+                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Insurance Card Upload */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Insurance Card Photo / Document (Optional)</label>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleInsuranceCardUpload}
+                          accept="image/*,.pdf"
+                          className="hidden"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingCard}
+                            className="px-3 py-2 bg-white hover:bg-slate-50 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-700 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            {uploadingCard ? 'Uploading Card...' : insuranceCardUrl ? 'Replace Card Photo' : 'Upload Insurance Card'}
+                          </button>
+                          {insuranceCardUrl && (
+                            <span className="text-[11px] text-teal-700 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Card attached
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Emergency Contact & Clinical History */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-amber-500" />
+                    3. Emergency Contact & Clinical Notes
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Emergency Contact Name</label>
+                      <input
+                        type="text"
+                        value={emergencyContactName}
+                        onChange={e => setEmergencyContactName(e.target.value)}
+                        placeholder="e.g. Paul Ebode"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Emergency Contact Phone</label>
+                      <input
+                        type="tel"
+                        value={emergencyContactPhone}
+                        onChange={e => setEmergencyContactPhone(e.target.value)}
+                        placeholder="+237 680000000"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Name *</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Known Allergies / Clinical Notes</label>
                     <input
                       type="text"
-                      value={fullName}
-                      onChange={e => setFullName(e.target.value)}
-                      required
-                      placeholder="e.g. Marie Ebode"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number *</label>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      required
-                      placeholder="+237 670000000"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder="marie.ebode@gmail.com"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">City / Address</label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={e => setCity(e.target.value)}
-                      placeholder="Douala, Akwa"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Age (Years)</label>
-                    <input
-                      type="number"
-                      value={age}
-                      onChange={e => setAge(e.target.value)}
-                      placeholder="30"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Gender</label>
-                    <select
-                      value={gender}
-                      onChange={e => setGender(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Child">Child</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Blood Group</label>
-                    <select
-                      value={bloodType}
-                      onChange={e => setBloodType(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                        <option key={bg} value={bg}>{bg}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Insurance Provider</label>
-                    <select
-                      value={insuranceProvider}
-                      onChange={e => setInsuranceProvider(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      <option value="Out-of-Pocket / Self">Out-of-Pocket / Self</option>
-                      <option value="Ascoma">Ascoma</option>
-                      <option value="NSIA">NSIA</option>
-                      <option value="AXA">AXA</option>
-                      <option value="Allianz">Allianz</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Insurance Policy Number</label>
-                    <input
-                      type="text"
-                      value={insurancePolicyNumber}
-                      onChange={e => setInsurancePolicyNumber(e.target.value)}
-                      placeholder="e.g. INS-123456"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Emergency Contact Name</label>
-                    <input
-                      type="text"
-                      value={emergencyContactName}
-                      onChange={e => setEmergencyContactName(e.target.value)}
-                      placeholder="e.g. Paul Ebode"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Emergency Contact Phone</label>
-                    <input
-                      type="tel"
-                      value={emergencyContactPhone}
-                      onChange={e => setEmergencyContactPhone(e.target.value)}
-                      placeholder="+237 680000000"
+                      value={allergies}
+                      onChange={e => setAllergies(e.target.value)}
+                      placeholder="e.g. Penicillin allergy, Fasting required"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Known Allergies / Clinical Notes</label>
-                  <input
-                    type="text"
-                    value={allergies}
-                    onChange={e => setAllergies(e.target.value)}
-                    placeholder="e.g. Penicillin allergy, Fasting required"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+                <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100 shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowRegisterModal(false)}
@@ -1232,7 +1471,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block">Security Passcode</span>
                   <span className="font-mono text-xs font-bold text-emerald-700 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Protected
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Protected (Patient Only)
                   </span>
                 </div>
                 <div>
@@ -1243,20 +1482,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   <span className="text-[10px] text-slate-400 font-semibold block">Insurance Provider</span>
                   <span className="font-semibold text-slate-800">{selectedPatient.insuranceProvider || 'Out-of-Pocket'}</span>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-[10px] text-slate-400 font-semibold block">Insurance Policy Number</span>
-                  <span className="font-semibold text-slate-800">{selectedPatient.insurancePolicyNumber || 'N/A'}</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-[10px] text-slate-400 font-semibold block">Emergency Contact</span>
-                  <span className="font-semibold text-slate-800">{selectedPatient.emergencyContactName || 'N/A'} {selectedPatient.emergencyContactPhone ? `(${selectedPatient.emergencyContactPhone})` : ''}</span>
-                </div>
-                {selectedPatient.allergies && selectedPatient.allergies !== 'None reported' && (
-                  <div className="col-span-2">
-                    <span className="text-[10px] text-slate-400 font-semibold block">Allergies / Clinical Notes</span>
-                    <span className="font-semibold text-amber-700">{selectedPatient.allergies}</span>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1299,7 +1524,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
               <div className="font-bold text-teal-300">Patient: {activationModalPatient.name}</div>
               <div className="text-slate-400">Activating <span className="text-white font-bold">{activationBookingIds.length}</span> test request(s).</div>
               <div className="text-[11px] text-teal-400/90 italic pt-1">
-                ✓ Only the selected tests will be activated, not all tests.
+                ✓ Once activated, these tests move to Cashier for payment & appear in Patient Portal.
               </div>
             </div>
 
