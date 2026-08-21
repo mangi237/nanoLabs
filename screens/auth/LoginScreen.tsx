@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
-import founderPortraitImg from 'assets/images/me.jpeg';
+// import founderPortraitImg from '../../assets/images/founder.JPG';
 
 interface LoginScreenProps {
   onLoginSuccess?: (user: any) => void;
@@ -567,12 +567,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5">
                 <div className="relative shrink-0">
                   <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-teal-400 shadow-xl shadow-teal-500/20 bg-slate-900">
-                    <img
-                      src={founderPortraitImg}
-                      alt="Mangi Lerine Laslie Jr - Founder of nanoLabs"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover object-top"
-                    />
+                    
                   </div>
                   <span className="absolute -bottom-2 -right-1 px-2.5 py-0.5 bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 font-black text-[10px] rounded-full shadow-md">
                     Founder at 16
