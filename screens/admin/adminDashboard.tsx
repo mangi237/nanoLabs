@@ -7,6 +7,7 @@ import InventoryManagement from './InventoryManagement';
 import TestCatalogManagement from './TestCatalogManagement';
 import ReportsScreen from './ReportsScreen';
 import PatientManagement from './PatientManagement';
+import ReferringDoctorsManagement from './ReferringDoctorsManagement';
 import LabProfileModal from '../../components/admin/LabProfileModal';
 import { 
   LayoutDashboard, 
@@ -18,7 +19,8 @@ import {
   FileText,
   ShieldCheck,
   Building2,
-  Camera
+  Camera,
+  Stethoscope
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 
@@ -38,11 +40,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { lab } = useAuth();
   const [showLabProfileModal, setShowLabProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'inventory' | 'catalog' | 'staff' | 'analytics' | 'reports' | 'patients'
+    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'analytics' | 'reports' | 'patients'
   >('overview');
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'doctors', label: 'Referring Doctors', icon: Stethoscope, badge: '20% Comm.' },
     { id: 'inventory', label: 'Inventory Manager', icon: Package, badge: 'Reagents' },
     { id: 'catalog', label: 'Test Catalog', icon: FlaskConical },
     { id: 'staff', label: 'Manage Staff', icon: UserCog },
@@ -118,13 +121,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'overview' && (
           <Overview 
             onNavigateTab={(tab) => {
-              if (tab === 'inventory' || tab === 'catalog' || tab === 'reports' || tab === 'staff' || tab === 'analytics' || tab === 'patients') {
+              if (tab === 'inventory' || tab === 'catalog' || tab === 'reports' || tab === 'staff' || tab === 'doctors' || tab === 'analytics' || tab === 'patients') {
                 setActiveTab(tab as any);
               } else if (onNavigateTab) {
                 onNavigateTab(tab);
               }
             }}
           />
+        )}
+
+        {activeTab === 'doctors' && (
+          <ReferringDoctorsManagement embedded={true} />
         )}
 
         {activeTab === 'inventory' && (
