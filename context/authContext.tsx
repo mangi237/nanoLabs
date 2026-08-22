@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
+import { ensureFirebaseAuth } from '../services/firebase';
 
 // Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
 const AsyncStorage = {
@@ -38,6 +39,10 @@ interface AuthContextType {
   clearSession: () => Promise<void>;
   setUser: (user: any) => void;
   setLab: (lab: any) => void;
+  createStaffWithCode: (staffData: any, adminUser?: any) => Promise<any>;
+  resetStaffAccessCode: (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => Promise<any>;
+  verifyAccessCode: (code: string, labId: string) => Promise<any>;
+  verifyStaffActionCode: (inputCode: string, allowedRoles: string[], currentUserCode?: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuthStatus = async () => {
     try {
+      await ensureFirebaseAuth();
       const storedUser = await AsyncStorage.getItem('user');
       const storedLab = await AsyncStorage.getItem('lab');
       const lastLogin = await AsyncStorage.getItem('lastLogin');
@@ -153,6 +159,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await authService.getLabDetails(labId);
   };
 
+  const createStaffWithCode = async (staffData: any, adminUser?: any) => {
+    return await authService.createStaffWithCode(staffData, adminUser);
+  };
+
+  const resetStaffAccessCode = async (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => {
+    return await authService.resetStaffAccessCode(staffId, email, newAccessCode, labId, adminUser);
+  };
+
+  const verifyAccessCode = async (code: string, labId: string) => {
+    return await authService.verifyAccessCode(code, labId);
+  };
+
+  const verifyStaffActionCode = async (inputCode: string, allowedRoles: string[], currentUserCode?: string) => {
+    return await authService.verifyStaffActionCode(inputCode, allowedRoles, currentUserCode);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -167,7 +189,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshToken,
       clearSession,
       setUser,
-      setLab
+      setLab,
+      createStaffWithCode,
+      resetStaffAccessCode,
+      verifyAccessCode,
+      verifyStaffActionCode
     }}>
       {children}
     </AuthContext.Provider>
@@ -181,7 +207,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-
-
-
