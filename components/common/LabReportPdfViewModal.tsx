@@ -15,6 +15,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem } from '../../services/limsService';
+import { formatDOBDisplay } from '../../data/cameroonInsurances';
 
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
@@ -138,18 +139,31 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-700">
                   <div>
-                    <span className="font-semibold text-slate-500">Age: </span>
-                    <span className="font-bold">{booking.patientAge || 28} Yrs</span>
+                    <span className="font-semibold text-slate-500">Age / DOB: </span>
+                    <div className="font-bold">
+                      {booking.patientAge || 28} Yrs
+                      {booking.dateOfBirth && (
+                        <span className="block text-[10px] font-normal text-slate-600 font-mono">
+                          {formatDOBDisplay(booking.dateOfBirth)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <span className="font-semibold text-slate-500">Sex: </span>
-                    <span className="font-bold">{booking.patientGender || 'Male'}</span>
+                    <div className="font-bold">{booking.patientGender || 'Male'}</div>
                   </div>
                 </div>
                 <div>
                   <span className="font-semibold text-slate-500">PID / Record #: </span>
                   <span className="font-mono font-bold text-blue-700">{booking.patientPid || 'PID-555'}</span>
                 </div>
+                {booking.insuranceProvider && (
+                  <div className="pt-1 border-t border-slate-200 text-[11px]">
+                    <span className="font-semibold text-slate-500">Insurance: </span>
+                    <span className="font-bold text-indigo-900">{booking.insuranceProvider}</span>
+                  </div>
+                )}
               </div>
 
               {/* Column 2: QR & Barcode */}
@@ -169,8 +183,8 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               {/* Column 3: Dates & Doctor */}
               <div className="space-y-1.5 text-slate-700">
                 <div>
-                  <span className="font-semibold text-slate-500">Ref. By: </span>
-                  <span className="font-bold text-slate-900">{booking.doctorName || 'Dr. Hiren Shah'}</span>
+                  <span className="font-semibold text-slate-500">Ref. By / Doctor: </span>
+                  <div className="font-bold text-slate-900">{booking.doctorName || 'Dr. Hiren Shah'}</div>
                 </div>
                 <div className="space-y-0.5 text-[11px]">
                   <div><span className="text-slate-500">Registered: </span><span className="font-semibold">{new Date(booking.createdAt).toLocaleString()}</span></div>
@@ -295,19 +309,19 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 
               <div>
                 <div className="h-10 flex items-center justify-center font-serif text-blue-800 italic font-bold">
-                {booking.assignedTechName}
+                  Dr. Payal Shah
                 </div>
-                <div className="font-extrabold text-slate-900">Dr. Payal Shah</div>
-                <div className="text-[10px] text-slate-500">(Lab Technician at  ) {labName}</div>
+                {/* <div className="font-extrabold text-slate-900">Dr. Payal Shah</div>
+                <div className="text-[10px] text-slate-500">(MD, Pathologist)</div> */}
               </div>
 
-              {/* <div>
+              <div>
                 <div className="h-10 flex items-center justify-center font-serif text-blue-900 italic font-bold">
                   Dr. Vimal Shah
                 </div>
-                <div className="font-extrabold text-slate-900">Dr. Vimal Shah</div>
-                <div className="text-[10px] text-slate-500">(MD, Pathologist)</div>
-              </div> */}
+                {/* <div className="font-extrabold text-slate-900">Dr. Vimal Shah</div>
+                <div className="text-[10px] text-slate-500">(MD, Pathologist)</div> */}
+              </div>
 
             </div>
 
