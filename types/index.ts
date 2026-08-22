@@ -1,4 +1,23 @@
-export type RoleType = 'admin' | 'receptionist' | 'cashier' | 'analyzer' | 'lab_tech' | 'patient' | 'matron' | 'doctor' | 'nurse' | 'pharmacy' | 'lab' | 'superadmin' | 'inventory_manager';
+export interface ReferringDoctor {
+  id: string;
+  labId: string;
+  name: string;
+  specialty?: string;
+  hospital?: string;
+  phone?: string;
+  email?: string;
+  commissionRate?: number; // e.g. 20 for 20%
+  notes?: string;
+  totalReferrals?: number;
+  totalRevenueGenerated?: number;
+  totalCommissionEarned?: number;
+  totalCommissionPaid?: number;
+  status?: 'active' | 'inactive';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type RoleType = 'admin' | 'receptionist' | 'cashier' | 'analyzer' | 'lab_tech' | 'biologist' | 'patient' | 'matron' | 'doctor' | 'nurse' | 'pharmacy' | 'lab' | 'superadmin' | 'inventory_manager';
 
 export interface User {
   id: string;
@@ -17,6 +36,12 @@ export interface User {
   nationalId?: string;
   age?: number;
   dateOfBirth?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  isStaffMember?: boolean;
+  staffDesignation?: string;
   bloodGroup?: string;
   hasInsurance?: boolean;
   insuranceProvider?: string;
@@ -27,7 +52,7 @@ export interface User {
 }
 
 export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
-export type SubscriptionTierType = 'starter' | 'growth' | 'business' | 'enterprise';
+export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
   id: string;
@@ -50,12 +75,16 @@ export interface Lab {
   avatarUrl?: string;
   feePerTest?: number;
   feePerPatient?: number;
+  defaultDoctorCommissionRate?: number; // e.g. 20%
   pricingModel?: PricingModelType;
+  subscriptionPlan?: PricingModelType;
   subscriptionTier?: SubscriptionTierType;
   subscriptionPrice?: number;
+  subscriptionStartDate?: string;
   billingPeriod?: 'monthly' | 'annual';
   monthlyMaintenanceFee?: number;
   staffLimit?: number;
+  patientLimit?: number;
   sitesCount?: number;
   collectionCentresCount?: number;
   verificationStatus?: 'verified' | 'trial_active' | 'pending';
@@ -63,6 +92,14 @@ export interface Lab {
   verifiedAt?: string;
   termsAccepted?: boolean;
   termsAcceptedAt?: string;
+  status?: 'active' | 'pending_approval' | 'suspended' | 'rejected';
+  confirmed?: boolean;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  requestedPricingModel?: PricingModelType;
+  requestedSubscriptionTier?: SubscriptionTierType;
+  planChangeRequestedAt?: string;
+  isCustomSelected?: boolean;
   createdAt?: string;
 }
 
@@ -91,6 +128,7 @@ export interface LabTest {
   status?: 'requested' | 'confirmed' | 'collected' | 'sample-collected' | 'processing' | 'completed' | 'paid';
   paymentStatus?: 'paid' | 'pending';
   paid?: boolean;
+  receptionistValidated?: boolean;
   confirmedByReceptionist?: boolean;
   confirmedAt?: string;
   confirmedBy?: string;
@@ -133,10 +171,21 @@ export interface Patient {
   hasInsurance?: boolean;
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
+  insuranceCoveragePercent?: number;
+  insuranceCoveredAmount?: number;
+  patientCoPayAmount?: number;
   insuranceCardUrl?: string;
   avatarUrl?: string;
   profilePicture?: string;
   accessCode?: string;
+  isWalkIn?: boolean;
+  registrationType?: 'online' | 'walk_in';
+  emergencyContact?: string;
+  doctorName?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
   labId?: string;
   labName?: string;
   termsAccepted?: boolean;
