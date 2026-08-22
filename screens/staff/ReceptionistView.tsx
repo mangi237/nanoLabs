@@ -9,6 +9,7 @@ import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
 import { uploadService } from '../../api/upload';
+import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
 import { 
   Search, 
   UserPlus, 
@@ -112,19 +113,45 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [dob, setDob] = useState('1996-05-15');
   const [age, setAge] = useState('28');
   const [gender, setGender] = useState('Male');
   const [city, setCity] = useState('Douala');
   const [nationalId, setNationalId] = useState('');
   const [bloodType, setBloodType] = useState('O+');
   const [hasInsurance, setHasInsurance] = useState(false);
-  const [insuranceProvider, setInsuranceProvider] = useState('Ascoma Health');
+  const [insuranceProvider, setInsuranceProvider] = useState('Activa Assurances (Douala)');
+  const [insuranceCoveragePercent, setInsuranceCoveragePercent] = useState<number>(80);
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
   const [insuranceCardUrl, setInsuranceCardUrl] = useState('');
   const [uploadingCard, setUploadingCard] = useState(false);
   const [allergies, setAllergies] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+
+  // Referral Fields
+  const [referringDoctor, setReferringDoctor] = useState('');
+  const [referralHospital, setReferralHospital] = useState('');
+  const [referralNotes, setReferralNotes] = useState('');
+
+  // Staff Member Exemption Fields
+  const [isStaffMember, setIsStaffMember] = useState(false);
+  const [staffDesignation, setStaffDesignation] = useState('');
+
+  // Helper to calculate exact age from DOB
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob);
+    if (!newDob) return;
+    const birthDate = new Date(newDob);
+    const today = new Date();
+    let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    const finalAge = Math.max(0, calculatedAge);
+    setAge(finalAge.toString());
+  };
 
   // Selected Patient Details Modal
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
@@ -202,7 +229,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt: any ) => {
+    directLabTests.forEach(dt => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -353,6 +380,8 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         name: fullName.trim(),
         phone: phoneValidation.formatted || phone.trim(),
         email: email.trim().toLowerCase() || `${generatedPid.toLowerCase()}@nanolabs.cm`,
+        dob: dob || null,
+        dateOfBirth: dob || null,
         age: parseInt(age) || 28,
         gender,
         city: city || 'Douala',
@@ -363,7 +392,13 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         hasInsurance,
         insuranceProvider: chosenInsurance,
         insurancePolicyNumber: chosenPolicy,
+        insuranceCoveragePercent: hasInsurance ? insuranceCoveragePercent : 0,
         insuranceCardUrl: hasInsurance && insuranceCardUrl ? insuranceCardUrl : null,
+        referringDoctor: referringDoctor.trim() || 'None / Self-Referred',
+        referralHospital: referralHospital.trim() || 'N/A',
+        referralNotes: referralNotes.trim() || '',
+        isStaffMember,
+        staffDesignation: isStaffMember ? (staffDesignation.trim() || 'Staff Personnel') : undefined,
         allergies: allergies.trim() || 'None reported',
         emergencyContactName: emergencyContactName.trim() || 'N/A',
         emergencyContactPhone: emergencyContactPhone.trim() || 'N/A',
@@ -396,6 +431,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         setFullName('');
         setPhone('');
         setEmail('');
+        setDob('1996-05-15');
         setAge('28');
         setGender('Male');
         setCity('Douala');
@@ -405,6 +441,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         setInsuranceProvider('Ascoma Health');
         setInsurancePolicyNumber('');
         setInsuranceCardUrl('');
+        setReferringDoctor('');
+        setReferralHospital('');
+        setReferralNotes('');
+        setIsStaffMember(false);
+        setStaffDesignation('');
         setAllergies('');
         setEmergencyContactName('');
         setEmergencyContactPhone('');
@@ -438,18 +479,30 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         labId: targetLabId,
         patientId: selectedPatientForTest.id || selectedPatientForTest.patientId,
         patientName: selectedPatientForTest.name,
+        dateOfBirth: selectedPatientForTest.dob || undefined,
         patientAge: selectedPatientForTest.age || 30,
         patientGender: selectedPatientForTest.gender || 'Male',
         patientPhone: selectedPatientForTest.phone || '',
         patientEmail: selectedPatientForTest.email || '',
         patientPid: selectedPatientForTest.patientId || selectedPatientForTest.id,
+        referringDoctor: doctorToUse || selectedPatientForTest.referringDoctor,
+        referralHospital: selectedPatientForTest.referralHospital,
+        referralNotes: selectedPatientForTest.referralNotes,
+        isStaffExemption: Boolean(selectedPatientForTest.isStaffMember),
+        staffMemberName: selectedPatientForTest.isStaffMember ? selectedPatientForTest.name : undefined,
+        staffDesignation: selectedPatientForTest.staffDesignation,
         doctorName: doctorToUse,
         selectedMasterTestIds,
         clinicalNotes: testOrderNotes.trim() || undefined,
         creatorName: user?.name || 'Front Desk Receptionist'
       });
 
-      alert(`Test order generated successfully for ${selectedPatientForTest.name}! Unpaid invoice routed to Cashier.`);
+      if (selectedPatientForTest.isStaffMember) {
+        alert(`Staff Free Test Exemption Applied for ${selectedPatientForTest.name}! Billed at 0 FCFA with instant Admin Alert triggered.`);
+      } else {
+        alert(`Test order generated successfully for ${selectedPatientForTest.name}! Unpaid invoice routed to Cashier.`);
+      }
+
       setSelectedPatientForTest(null);
       setSelectedMasterTestIds([]);
       setTestOrderNotes('');
@@ -1245,14 +1298,20 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Age (Years)</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Date of Birth (DOB) *
+                        </label>
                         <input
-                          type="number"
-                          value={age}
-                          onChange={e => setAge(e.target.value)}
-                          placeholder="28"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          type="date"
+                          value={dob}
+                          max={new Date().toISOString().split('T')[0]}
+                          onChange={e => handleDobChange(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                         />
+                        <span className="text-[10px] text-teal-700 font-bold block mt-0.5">
+                          Calculated: {age} yrs
+                        </span>
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Gender</label>
@@ -1270,11 +1329,88 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   </div>
                 </div>
 
+                {/* Referring Doctor & Medical Center */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+                    2. Referral & Clinical Recommendation
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Referring Doctor / Practitioner</label>
+                      <input
+                        type="text"
+                        value={referringDoctor}
+                        onChange={e => setReferringDoctor(e.target.value)}
+                        placeholder="e.g. Dr. Alexis Vance"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Hospital / Medical Center</label>
+                      <input
+                        type="text"
+                        value={referralHospital}
+                        onChange={e => setReferralHospital(e.target.value)}
+                        placeholder="e.g. Central Hospital / PolyClinic"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Referral Indication / Clinical Notes</label>
+                    <input
+                      type="text"
+                      value={referralNotes}
+                      onChange={e => setReferralNotes(e.target.value)}
+                      placeholder="e.g. Suspected typhoid fever, pre-op blood screen"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Staff Member Free Benefit Exemption */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between bg-amber-50/70 p-3 rounded-2xl border border-amber-200">
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck className="w-4 h-4 text-amber-700" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Internal Staff Member Exemption</div>
+                        <div className="text-[11px] text-amber-800 font-medium">Free test rule: 0 FCFA diagnostic charge with instant Admin Dashboard alert</div>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={isStaffMember} 
+                        onChange={e => setIsStaffMember(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                    </label>
+                  </div>
+
+                  {isStaffMember && (
+                    <div className="p-3 bg-amber-100/50 border border-amber-300 rounded-xl">
+                      <label className="block text-[11px] font-bold text-amber-950 mb-1">Staff Designation / Department *</label>
+                      <input
+                        type="text"
+                        value={staffDesignation}
+                        onChange={e => setStaffDesignation(e.target.value)}
+                        placeholder="e.g. Senior Phlebotomist / Night Shift Nurse"
+                        required={isStaffMember}
+                        className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
                 {/* Blood Group Selection */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                     <Droplet className="w-3.5 h-3.5 text-rose-500" />
-                    2. Blood Group Classification
+                    3. Blood Group Classification
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {BLOOD_GROUPS.map(bg => (
@@ -1320,27 +1456,51 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                     <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Insurance Provider *</label>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Cameroon Insurance Provider *</label>
                           <select
                             value={insuranceProvider}
                             onChange={e => setInsuranceProvider(e.target.value)}
                             className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                           >
-                            {COMMON_INSURANCES.map(ins => (
-                              <option key={ins} value={ins}>{ins}</option>
+                            {CAMEROON_INSURANCE_COMPANIES.map(company => (
+                              <option key={company.id} value={company.name}>{company.name}</option>
                             ))}
+                            <option value="Other Corporate Insurance (Cameroon)">Other Corporate Insurance (Cameroon)</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Policy / Member ID *</label>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Policy / Matricule ID *</label>
                           <input
                             type="text"
                             value={insurancePolicyNumber}
                             onChange={e => setInsurancePolicyNumber(e.target.value)}
                             required={hasInsurance}
-                            placeholder="e.g. ASC-998234-A"
+                            placeholder="e.g. POL-998234-ACT / MAT-5521"
                             className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                           />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                            <span>Coverage Rate (% Insurance vs Patient Co-Pay)</span>
+                            <span className="text-teal-700 font-bold">{insuranceCoveragePercent}% Insurer / {100 - insuranceCoveragePercent}% Co-Pay</span>
+                          </label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {[100, 80, 70, 50].map((rate) => (
+                              <button
+                                key={rate}
+                                type="button"
+                                onClick={() => setInsuranceCoveragePercent(rate)}
+                                className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-colors ${
+                                  insuranceCoveragePercent === rate
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                }`}
+                              >
+                                {rate}% Covered
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
@@ -1463,10 +1623,16 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 gap-2.5">
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block">Patient ID (PID)</span>
                   <span className="font-mono font-bold text-teal-700">{selectedPatient.patientId || selectedPatient.id}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block">Date of Birth & Age</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedPatient.dob ? `${selectedPatient.dob} (${selectedPatient.age || 28} yrs)` : `${selectedPatient.age || 28} yrs`}
+                  </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block">Security Passcode</span>
@@ -1479,9 +1645,19 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   <span className="font-bold text-red-600">{selectedPatient.bloodType || 'O+'}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-semibold block">Insurance Provider</span>
+                  <span className="text-[10px] text-slate-400 font-semibold block">Insurance / HMO</span>
                   <span className="font-semibold text-slate-800">{selectedPatient.insuranceProvider || 'Out-of-Pocket'}</span>
                 </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block">Referring Doctor</span>
+                  <span className="font-semibold text-teal-800">{selectedPatient.referringDoctor || 'Self-Referred'}</span>
+                </div>
+                {selectedPatient.isStaffMember && (
+                  <div className="col-span-2 p-2 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 font-bold flex items-center justify-between">
+                    <span>Staff Member Exemption: {selectedPatient.staffDesignation || 'Internal Staff'}</span>
+                    <span className="text-[10px] bg-amber-200 text-amber-950 px-2 py-0.5 rounded">100% Free Tests</span>
+                  </div>
+                )}
               </div>
             </div>
 
