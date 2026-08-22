@@ -23,7 +23,7 @@ import {
   Timestamp,
   Firestore
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
 // Web app Firebase configuration
@@ -59,6 +59,24 @@ try {
 
 const storage = getStorage(app);
 const auth = getAuth(app);
+
+/**
+ * Ensures the client holds a cryptographically valid Firebase Auth session
+ * so all Firestore queries and writes satisfy request.auth != null security rules.
+ */
+export const ensureFirebaseAuth = async (): Promise<void> => {
+  try {
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+      console.log('[nanoLabs Auth] Secured Firebase session initialized.');
+    }
+  } catch (err: any) {
+    console.warn('[nanoLabs Auth] Session note:', err?.message || err);
+  }
+};
+
+// Immediate background initialization
+ensureFirebaseAuth();
 
 export { 
   db, 
