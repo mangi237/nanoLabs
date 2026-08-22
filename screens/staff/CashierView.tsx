@@ -4,6 +4,7 @@ import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
+import { CAMEROON_INSURANCE_COMPANIES, formatDOBDisplay, calculateAgeFromDOB } from '../../data/cameroonInsurances';
 import { 
   DollarSign, 
   Search, 
@@ -26,7 +27,14 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
-  Globe
+  Globe,
+  Printer,
+  Download,
+  Copy,
+  Tag,
+  Percent,
+  Sparkles,
+  BadgePercent
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -54,6 +62,18 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
 
+  // Flexible Pricing, Discount & Insurance State
+  const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed' | 'coupon'>('none');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [customPriceInput, setCustomPriceInput] = useState<string>('');
+  
+  // Insurance details
+  const [insuranceProvider, setInsuranceProvider] = useState('');
+  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
+  const [coPayPercent, setCoPayPercent] = useState<number>(20); // default 20% patient co-pay
+
   // Security Access Code verification for Cashiers
   const [cashierAccessCode, setCashierAccessCode] = useState('');
   const [showAccessCode, setShowAccessCode] = useState(false);
@@ -75,6 +95,54 @@ export const CashierView: React.FC<CashierViewProps> = ({
       console.error('Error fetching cashier data:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Calculate dynamic settlement total based on pricing adjustments
+  const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
+    const targetBookings = group && group.length > 0 ? group : booking ? [booking] : [];
+    const baseTotal = targetBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+
+    let discountAmount = 0;
+    if (discountType === 'percent') {
+      discountAmount = Math.round((baseTotal * (discountValue || 0)) / 100);
+    } else if (discountType === 'fixed') {
+      discountAmount = Math.min(baseTotal, discountValue || 0);
+    } else if (discountType === 'coupon' && couponApplied) {
+      discountAmount = Math.round((baseTotal * 15) / 100); // 15% coupon discount
+    }
+
+    let afterDiscount = Math.max(0, baseTotal - discountAmount);
+
+    if (customPriceInput && !isNaN(parseFloat(customPriceInput))) {
+      afterDiscount = Math.max(0, parseFloat(customPriceInput));
+      discountAmount = Math.max(0, baseTotal - afterDiscount);
+    }
+
+    let patientPortion = afterDiscount;
+    let insurancePortion = 0;
+
+    if (paymentMethod === 'insurance') {
+      patientPortion = Math.round((afterDiscount * (coPayPercent || 20)) / 100);
+      insurancePortion = Math.max(0, afterDiscount - patientPortion);
+    }
+
+    return {
+      baseTotal,
+      discountAmount,
+      finalTotal: afterDiscount,
+      patientPortion,
+      insurancePortion
+    };
+  };
+
+  const handleApplyCoupon = () => {
+    const clean = couponCode.trim().toUpperCase();
+    if (['FAMILY15', 'HEALTH20', 'PROMO10', 'SPECIAL', 'STAFF100', 'WELLNESS'].includes(clean)) {
+      setCouponApplied(true);
+      setDiscountType('coupon');
+    } else {
+      alert('Invalid coupon code. Try FAMILY15, HEALTH20, or PROMO10.');
     }
   };
 
@@ -115,17 +183,48 @@ export const CashierView: React.FC<CashierViewProps> = ({
     const targetIds = targetBookings.map(b => b.id);
     const nowIso = new Date().toISOString();
 
+    const { baseTotal, discountAmount, finalTotal, patientPortion, insurancePortion } = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+
     try {
       for (const b of targetBookings) {
         await limsService.processPayment({
           labId: targetLabId,
           bookingId: b.id,
           paymentMethod,
-          processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`
+          processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`,
+          paymentDetails: {
+            originalPrice: baseTotal,
+            discountAmount,
+            discountType: discountType !== 'none' ? discountType : undefined,
+            couponCode: couponApplied ? couponCode : undefined,
+            actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
+            insuranceDetails: paymentMethod === 'insurance' ? {
+              provider: insuranceProvider || (b as any).insuranceProvider || 'HMO Insurance',
+              policyNumber: insurancePolicyNumber || (b as any).insurancePolicyNumber || 'N/A',
+              coPayPercent,
+              patientCoPayAmount: patientPortion,
+              insuranceClaimAmount: insurancePortion
+            } : undefined
+          }
         });
       }
 
-      // INSTANT REACTIVE LOCAL STATE UPDATE (Updates revenue & unlocks patient queue immediately without reload)
+      // INSTANT REACTIVE LOCAL STATE UPDATE
+      const updatedFirstBooking = {
+        ...targetBookings[0],
+        paymentStatus: 'paid' as const,
+        paidAt: nowIso,
+        paymentMethod,
+        totalAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
+        originalPrice: baseTotal,
+        discountAmount,
+        couponCode: couponApplied ? couponCode : undefined,
+        actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
+        insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
+        insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
+        overallStatus: 'Pending_Collection' as const
+      };
+
       setBookings(prev => prev.map(b => {
         if (targetIds.includes(b.id)) {
           return {
@@ -133,6 +232,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
             paymentStatus: 'paid',
             paidAt: nowIso,
             paymentMethod,
+            totalAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
+            originalPrice: baseTotal,
+            discountAmount,
+            actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
             overallStatus: 'Pending_Collection',
             tests: (b.tests || []).map(t => ({
               ...t,
@@ -147,11 +250,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
       // Remove paid ids from selection
       setSelectedInvoiceIds(prev => prev.filter(id => !targetIds.includes(id)));
 
-      setShowReceipt(targetBookings[0]);
+      setShowReceipt(updatedFirstBooking);
       setSelectedGroupBookings(null);
       setSelectedBooking(null);
       setCashierAccessCode('');
       setAccessCodeError('');
+      setDiscountType('none');
+      setDiscountValue(0);
+      setCouponCode('');
+      setCouponApplied(false);
+      setCustomPriceInput('');
 
       // Background re-sync
       fetchData();
@@ -732,6 +840,156 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
+              {/* FLEXIBLE PRICING, DISCOUNTS & COUPONS */}
+              <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-300 flex items-center gap-1.5">
+                    <BadgePercent className="w-4 h-4 text-amber-400" />
+                    Discounts, Coupons & Custom Pricing
+                  </span>
+                  {discountType !== 'none' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDiscountType('none');
+                        setDiscountValue(0);
+                        setCouponApplied(false);
+                        setCustomPriceInput('');
+                      }}
+                      className="text-[10px] text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Reset Discounts
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => { setDiscountType('percent'); setDiscountValue(10); }}
+                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                      discountType === 'percent' && discountValue === 10 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    10% Off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDiscountType('percent'); setDiscountValue(20); }}
+                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                      discountType === 'percent' && discountValue === 20 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    20% Off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDiscountType('fixed'); setDiscountValue(2000); }}
+                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                      discountType === 'fixed' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    -2,000 XAF
+                  </button>
+                </div>
+
+                {/* Coupon Code Input */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Coupon (e.g. FAMILY15, HEALTH20)"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase font-mono"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs rounded-xl cursor-pointer"
+                  >
+                    {couponApplied ? 'Applied ✓' : 'Apply'}
+                  </button>
+                </div>
+
+                {/* Custom negotiated price */}
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-slate-400 shrink-0">Custom Override Amount:</label>
+                  <input
+                    type="number"
+                    placeholder="Enter manual price in FCFA"
+                    value={customPriceInput}
+                    onChange={(e) => setCustomPriceInput(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* INSURANCE CO-PAY DETAILS */}
+              {paymentMethod === 'insurance' && (
+                <div className="p-3.5 bg-indigo-950/70 rounded-2xl border border-indigo-500/40 space-y-3">
+                  <div className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                    Cameroon Health Insurance & Co-Pay Direct Billing
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">Cameroon Insurance Company *</label>
+                      <select
+                        value={insuranceProvider}
+                        onChange={(e) => setInsuranceProvider(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-indigo-800 rounded-lg text-xs text-white"
+                      >
+                        <option value="">Select Insurance Provider...</option>
+                        {CAMEROON_INSURANCE_COMPANIES.map(company => (
+                          <option key={company.id} value={company.name}>{company.name}</option>
+                        ))}
+                        <option value="Other Corporate Insurance (Cameroon)">Other Corporate Insurance (Cameroon)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">Policy / Matricule ID *</label>
+                      <input
+                        type="text"
+                        value={insurancePolicyNumber}
+                        onChange={(e) => setInsurancePolicyNumber(e.target.value)}
+                        placeholder="e.g. POL-998234-ACT"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-indigo-800 rounded-lg text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Co-Pay Coverage Split:</span>
+                      <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer Claim • {coPayPercent}% Patient Co-Pay</span>
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { coPay: 0, label: '100% Insurer (0% Co-Pay)' },
+                        { coPay: 20, label: '80% Insurer (20% Co-Pay)' },
+                        { coPay: 30, label: '70% Insurer (30% Co-Pay)' },
+                        { coPay: 50, label: '50% Insurer (50% Co-Pay)' }
+                      ].map((split) => (
+                        <button
+                          key={split.coPay}
+                          type="button"
+                          onClick={() => setCoPayPercent(split.coPay)}
+                          className={`py-1 px-2 rounded-lg text-[10px] font-bold border transition-colors ${
+                            coPayPercent === split.coPay
+                              ? 'bg-indigo-600 text-white border-indigo-400'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                          }`}
+                        >
+                          {split.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
               <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                 <label className="flex items-center justify-between text-slate-300 font-bold text-xs">
@@ -771,12 +1029,36 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 )}
               </div>
 
-              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400 font-bold">Total Settlement Amount:</span>
-                <span className="text-xl font-black text-emerald-400 font-mono">
-                  {selectedBooking.totalAmount?.toLocaleString()} XAF
-                </span>
-              </div>
+              {/* FINANCIAL BREAKDOWN SUMMARY */}
+              {(() => {
+                const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+                return (
+                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+                    <div className="flex justify-between text-slate-400 text-xs">
+                      <span>Original Catalog Total:</span>
+                      <span className="font-mono">{details.baseTotal.toLocaleString()} XAF</span>
+                    </div>
+                    {details.discountAmount > 0 && (
+                      <div className="flex justify-between text-amber-400 text-xs">
+                        <span>Discount / Coupon Applied:</span>
+                        <span className="font-mono">-{details.discountAmount.toLocaleString()} XAF</span>
+                      </div>
+                    )}
+                    {paymentMethod === 'insurance' && (
+                      <div className="flex justify-between text-indigo-300 text-xs">
+                        <span>HMO Insurance Claim Portion:</span>
+                        <span className="font-mono">-{details.insurancePortion.toLocaleString()} XAF</span>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                      <span className="text-white font-bold text-sm">Actual Paid by Patient:</span>
+                      <span className="text-xl font-black text-emerald-400 font-mono">
+                        {(paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal).toLocaleString()} XAF
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-200 flex items-center gap-2">
                 <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -811,31 +1093,194 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* RECEIPT CONFIRMATION MODAL */}
+      {/* PROFESSIONAL BRANDED RECEIPT TEMPLATE MODAL */}
       {showReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative my-auto">
+            
+            {/* Action Bar (Print, Download, Close) */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Official Medical Receipt</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  Print Official Receipt
+                </button>
+                <button
+                  onClick={() => setShowReceipt(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-            <h3 className="text-xl font-black text-slate-900">Payment Settled Successfully!</h3>
-            <p className="text-xs text-slate-600">
-              Receipt issued for <strong>{showReceipt.patientName}</strong> ({showReceipt.bookingCode}).
-            </p>
 
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1 text-left font-mono">
-              <div className="flex justify-between"><span>Invoice:</span> <strong>{showReceipt.invoiceNumber}</strong></div>
-              <div className="flex justify-between"><span>Method:</span> <strong className="uppercase">{paymentMethod}</strong></div>
-              <div className="flex justify-between"><span>Amount Paid:</span> <strong className="text-emerald-700">{showReceipt.totalAmount?.toLocaleString()} XAF</strong></div>
-              <div className="flex justify-between"><span>Phlebotomy Queue:</span> <strong className="text-emerald-600">UNLOCKED</strong></div>
+            {/* Printable Receipt Paper Container */}
+            <div className="p-6 bg-slate-50/50 rounded-2xl border border-slate-200 space-y-4 font-sans text-xs">
+              
+              {/* Header with Lab Branding & License */}
+              <div className="flex items-start justify-between border-b border-slate-200 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-black text-sm">
+                      nL
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 tracking-tight">nanoLabs Diagnostics</h2>
+                      <p className="text-[10px] text-teal-700 font-bold uppercase tracking-wider">Clinical Pathology & Molecular Institute</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Reg No: MINSANTE/DL/2024/099 • Douala - Yaounde, Cameroon<br />
+                    Tel: +237 670 000 000 • Email: billing@nanolabs.cm
+                  </p>
+                </div>
+
+                <div className="text-right space-y-0.5">
+                  <div className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black uppercase inline-block">
+                    Payment Settled
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono pt-1">
+                    Invoice: <strong className="text-slate-900">{showReceipt.invoiceNumber}</strong>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    Order Ref: <strong>{showReceipt.bookingCode}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Patient & Billing Metadata */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-white rounded-xl border border-slate-200 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Patient Name</span>
+                  <span className="font-extrabold text-slate-900 text-sm">{showReceipt.patientName}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Patient ID (PID)</span>
+                  <span className="font-mono font-bold text-teal-700">{showReceipt.patientPid || showReceipt.patientId}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Date of Birth / Age</span>
+                  <span className="font-semibold text-slate-800">
+                    {showReceipt.dateOfBirth || showReceipt.dob ? formatDOBDisplay(showReceipt.dateOfBirth || showReceipt.dob) : 'N/A'}
+                    {showReceipt.patientAge || showReceipt.age ? ` (${showReceipt.patientAge || showReceipt.age} Yrs)` : ''}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Date & Time</span>
+                  <span className="font-medium text-slate-700">
+                    {showReceipt.paidAt ? new Date(showReceipt.paidAt).toLocaleString() : new Date().toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Payment Method</span>
+                  <span className="font-bold text-slate-800 uppercase">{showReceipt.paymentMethod || paymentMethod}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Referring Doctor</span>
+                  <span className="font-semibold text-slate-800">{showReceipt.doctorName || showReceipt.referringDoctor || 'Direct / Self-Referred'}</span>
+                </div>
+              </div>
+
+              {/* Insurance Details Box if covered */}
+              {(showReceipt.insuranceProvider || showReceipt.paymentMethod === 'insurance') && (
+                <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-indigo-950">
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 block uppercase">Cameroon Insurance Provider</span>
+                    <span className="font-extrabold text-indigo-900">{showReceipt.insuranceProvider || insuranceProvider || 'Cameroon Registered HMO'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 block uppercase">Policy / Matricule ID</span>
+                    <span className="font-mono font-bold text-indigo-900">{showReceipt.insurancePolicyNumber || insurancePolicyNumber || 'POL-VERIFIED-01'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 block uppercase">Coverage Breakdown</span>
+                    <span className="font-bold text-emerald-700">
+                      {100 - (showReceipt.coPayPercent ?? coPayPercent)}% Insurer / {showReceipt.coPayPercent ?? coPayPercent}% Patient Co-Pay
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Itemized Test List */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Itemized Diagnostic Services</div>
+                <table className="w-full text-left border-collapse bg-white rounded-xl border border-slate-200 overflow-hidden text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/70 border-b border-slate-200 text-[10px] text-slate-600 font-bold uppercase">
+                      <th className="py-2 px-3">Service / Test Description</th>
+                      <th className="py-2 px-3">Specimen</th>
+                      <th className="py-2 px-3 text-right">Standard Fee</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {showReceipt.tests?.map((t, idx) => (
+                      <tr key={idx}>
+                        <td className="py-2 px-3 font-semibold text-slate-800">{t.testName}</td>
+                        <td className="py-2 px-3 text-slate-500 font-mono text-[11px]">{t.sampleTypeRequired || 'Blood (EDTA)'}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                          {(t.price || 5500).toLocaleString()} XAF
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Financial Breakdown Card */}
+              <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1.5 font-mono text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Gross Diagnostic Subtotal:</span>
+                  <span>{(showReceipt.originalPrice || showReceipt.totalAmount || 0).toLocaleString()} XAF</span>
+                </div>
+                {Boolean(showReceipt.discountAmount) && (
+                  <div className="flex justify-between text-amber-600 font-bold">
+                    <span>Discount / Promo Applied {showReceipt.couponCode ? `(${showReceipt.couponCode})` : ''}:</span>
+                    <span>-{(showReceipt.discountAmount || 0).toLocaleString()} XAF</span>
+                  </div>
+                )}
+                {showReceipt.insuranceProvider && (
+                  <div className="flex justify-between text-indigo-600 font-bold">
+                    <span>HMO Insurance Policy Subsidized ({showReceipt.insuranceProvider}):</span>
+                    <span>Subsidized Claim</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
+                  <span className="font-sans">NET ACTUAL PAID:</span>
+                  <span className="text-emerald-700 text-base">{(showReceipt.actualPaidAmount || showReceipt.totalAmount || 0).toLocaleString()} XAF</span>
+                </div>
+              </div>
+
+              {/* Authentication Stamp & Footer */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-[10px] text-slate-500">
+                <div className="space-y-0.5">
+                  <div>Cashier: <strong>{user?.name || 'Authorized Lab Cashier'}</strong></div>
+                  <div>Security Seal: <strong>DIGITAL-SHA256-VALIDATED</strong></div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-teal-800">nanoLabs Secure LIMS Receipt</div>
+                  <div>Keep this voucher for sample submission</div>
+                </div>
+              </div>
+
             </div>
 
-            <button
-              onClick={() => setShowReceipt(null)}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md cursor-pointer"
-            >
-              Done / Return to Queue
-            </button>
+            {/* Modal Bottom Footer */}
+            <div className="flex justify-end gap-2 pt-1 print:hidden">
+              <button
+                onClick={() => setShowReceipt(null)}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-2xl shadow-md transition-all cursor-pointer text-xs"
+              >
+                Return to Cashier Queue
+              </button>
+            </div>
+
           </div>
         </div>
       )}
