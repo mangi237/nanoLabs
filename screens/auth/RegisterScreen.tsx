@@ -375,8 +375,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       // Save to Firestore under the selected lab's patients subcollection
       const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
 
+      const fullPatientRecord = { id: docRef.id, ...cleanedPatient };
+      try {
+        localStorage.setItem('last_registered_patient', JSON.stringify(fullPatientRecord));
+      } catch (e) {
+        // ignore localStorage quota errors
+      }
+
       if (onRegisterSuccess) {
-        onRegisterSuccess({ id: docRef.id, ...cleanedPatient });
+        onRegisterSuccess(fullPatientRecord);
       }
     } catch (error: any) {
       console.error('Error registering patient:', error);
