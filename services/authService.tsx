@@ -114,18 +114,54 @@ export const authService = {
         };
       }
 
+      // Helper to check if a staff record matches the credentials
+      const matchesStaff = (d: any, dData: any) => {
+        const dCode = (dData.accessCode || dData.initialCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
+        const dEmail = (dData.email || '').trim().toLowerCase();
+        const dName = (dData.name || '').trim().toUpperCase();
+        const dUsername = (dData.username || '').trim().toUpperCase();
+        const dStaffId = (dData.staffId || dData.id || d.id || '').trim().toUpperCase();
+        const dPhoneDigits = (dData.phone || dData.phoneNumber || '').replace(/\D/g, '');
+
+        if (dCode && dCode === upperCode) return true;
+        if (dStaffId && dStaffId === upperCode) return true;
+        if (dEmail && (dEmail === lowerCode || dEmail === cleanCode.toLowerCase())) return true;
+        if (dName && dName === upperCode) return true;
+        if (dUsername && dUsername === upperCode) return true;
+        if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
+        return false;
+      };
+
+      // Helper to check if a patient record matches the credentials
+      const matchesPatient = (d: any, dData: any) => {
+        const dAccessCode = (dData.accessCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
+        const dPatientId = (dData.patientId || dData.id || d.id || '').trim().toUpperCase();
+        const dEmail = (dData.email || '').trim().toLowerCase();
+        const dName = (dData.name || '').trim().toUpperCase();
+        const dUsername = (dData.username || '').trim().toUpperCase();
+        const dNationalId = (dData.nationalId || '').trim().toUpperCase();
+        const dPhoneDigits = (dData.phone || dData.phoneNumber || '').replace(/\D/g, '');
+
+        if (dAccessCode && dAccessCode === upperCode) return true;
+        if (dPatientId && dPatientId === upperCode) return true;
+        if (dEmail && (dEmail === lowerCode || dEmail === cleanCode.toLowerCase())) return true;
+        if (dName && dName === upperCode) return true;
+        if (dUsername && dUsername === upperCode) return true;
+        if (dNationalId && dNationalId === upperCode) return true;
+        if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
+        return false;
+      };
+
+      const lowerCode = cleanCode.toLowerCase();
+      const cleanDigits = cleanCode.replace(/\D/g, '');
+
       // 3. Search Firestore Staff subcollection in target lab
       try {
         console.log('🔍 Checking Firestore staff in lab:', targetLabId);
         const staffRef = collection(db, 'labs', targetLabId, 'staff');
         const staffSnap = await getDocs(staffRef);
 
-        const foundStaffDoc = staffSnap.docs.find(d => {
-          const dData = d.data();
-          const dCode = (dData.accessCode || dData.initialCode || '').trim();
-          const dEmail = (dData.email || '').trim().toLowerCase();
-          return dCode === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase());
-        });
+        const foundStaffDoc = staffSnap.docs.find(d => matchesStaff(d, d.data()));
 
         if (foundStaffDoc) {
           const staffData = foundStaffDoc.data();
@@ -154,12 +190,7 @@ export const authService = {
         for (const lDoc of allLabsSnap.docs) {
           if (lDoc.id === targetLabId) continue;
           const otherStaffSnap = await getDocs(collection(db, 'labs', lDoc.id, 'staff'));
-          const foundOtherStaff = otherStaffSnap.docs.find(d => {
-            const dData = d.data();
-            const dCode = (dData.accessCode || dData.initialCode || '').trim();
-            const dEmail = (dData.email || '').trim().toLowerCase();
-            return dCode === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase());
-          });
+          const foundOtherStaff = otherStaffSnap.docs.find(d => matchesStaff(d, d.data()));
 
           if (foundOtherStaff) {
             const staffData = foundOtherStaff.data();
@@ -193,13 +224,7 @@ export const authService = {
         const patientsRef = collection(db, 'labs', targetLabId, 'patients');
         const patientsSnap = await getDocs(patientsRef);
 
-        const foundPatientDoc = patientsSnap.docs.find(d => {
-          const dData = d.data();
-          const dAccessCode = (dData.accessCode || '').trim();
-          const dPatientId = (dData.patientId || '').trim();
-          const dEmail = (dData.email || '').trim().toLowerCase();
-          return dAccessCode === cleanCode || dPatientId === cleanCode || (dEmail && dEmail === cleanCode.toLowerCase()) || d.id === cleanCode;
-        });
+        const foundPatientDoc = patientsSnap.docs.find(d => matchesPatient(d, d.data()));
 
         if (foundPatientDoc) {
           const patientData = foundPatientDoc.data();
@@ -225,13 +250,7 @@ export const authService = {
         for (const labDoc of allLabsSnap.docs) {
           if (labDoc.id === targetLabId) continue;
           const otherPatientsSnap = await getDocs(collection(db, 'labs', labDoc.id, 'patients'));
-          const foundOtherDoc = otherPatientsSnap.docs.find(d => {
-            const dData = d.data();
-            const dAccessCode = (dData.accessCode || '').trim().toUpperCase();
-            const dPatientId = (dData.patientId || '').trim().toUpperCase();
-            const dEmail = (dData.email || '').trim().toUpperCase();
-            return dAccessCode === upperCode || dPatientId === upperCode || dEmail === upperCode || d.id.toUpperCase() === upperCode;
-          });
+          const foundOtherDoc = otherPatientsSnap.docs.find(d => matchesPatient(d, d.data()));
 
           if (foundOtherDoc) {
             const patientData = foundOtherDoc.data();
@@ -253,6 +272,31 @@ export const authService = {
         }
       } catch (patientErr) {
         console.warn('Error querying patient collection:', patientErr);
+      }
+
+      // 5. Check local client fallback cache (for instant login after local registration)
+      try {
+        const localPatientRaw = localStorage.getItem('last_registered_patient');
+        if (localPatientRaw) {
+          const localPatient = JSON.parse(localPatientRaw);
+          if (matchesPatient({ id: localPatient.id }, localPatient)) {
+            console.log('✅ Patient matched from local registration cache:', localPatient.name);
+            return {
+              success: true,
+              user: {
+                ...localPatient,
+                role: 'patient',
+                roles: ['patient'],
+                mustChangePassword: false
+              },
+              lab: { id: localPatient.labId || targetLabId, name: localPatient.labName || 'Laboratory Center' },
+              role: 'patient',
+              mustChangePassword: false
+            };
+          }
+        }
+      } catch (locErr) {
+        // silent
       }
 
       // No arbitrary string fallbacks. Only valid registered credentials are authorized!
