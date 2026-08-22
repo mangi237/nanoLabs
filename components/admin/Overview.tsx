@@ -24,7 +24,8 @@ import {
   ShieldCheck,
   CreditCard,
   Clock,
-  Zap
+  Zap,
+  Stethoscope
 } from 'lucide-react';
 import LabProfileModal from './LabProfileModal';
 import SubscriptionRechargeModal from './SubscriptionRechargeModal';
@@ -49,9 +50,9 @@ const parseLabDate = (rawDate: any): Date => {
 };
 
 export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateTab }) => {
-  const { lab, setLab } = useAuth();
+  const { lab } = useAuth();
   const [liveLab, setLiveLab] = useState<any>(lab);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showLabModal, setShowLabModal] = useState(false);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [stats, setStats] = useState({
@@ -62,25 +63,17 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
   });
   const [recentPatients, setRecentPatients] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchData();
-  }, [lab?.id]);
-
   const fetchData = async () => {
     try {
-      setLoading(true);
       const targetLabId = lab?.id || 'lab-1';
 
-      // 1. Fetch live lab doc from Firestore to ensure real-time subscription timestamps & pricing model
+      // 1. Fetch live lab doc from Firestore
       try {
         const labDocRef = doc(db, 'labs', targetLabId);
         const labDocSnap = await getDoc(labDocRef);
         if (labDocSnap.exists()) {
           const freshLabData = { id: labDocSnap.id, ...labDocSnap.data() };
           setLiveLab(freshLabData);
-          if (setLab) {
-            setLab(freshLabData);
-          }
         }
       } catch (err) {
         console.warn('Could not refresh live lab doc in Overview:', err);
@@ -106,14 +99,15 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
         tests: totalTestsCount,
         revenue: confirmedRevenue
       });
-
       setRecentPatients(patientList.slice(0, 5));
     } catch (e) {
       console.error('Error fetching overview stats:', e);
-    } finally {
-      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, [lab?.id]);
 
   const statCards = [
     {
@@ -369,7 +363,23 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
 
       {/* Quick Access Action Hub */}
       {onNavigateTab && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <button
+            onClick={() => onNavigateTab('doctors')}
+            className="flex items-center gap-3 p-4 bg-white hover:bg-slate-50 border border-teal-200/80 rounded-2xl text-left transition-all group shadow-xs cursor-pointer bg-gradient-to-br from-white to-teal-50/40"
+          >
+            <div className="p-3 bg-teal-50 text-teal-700 border border-teal-200 rounded-xl group-hover:bg-teal-100 transition-colors">
+              <Stethoscope className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                Referring Doctors
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500" />
+              </div>
+              <p className="text-[11px] text-teal-700 font-medium">Commissions & Volume</p>
+            </div>
+          </button>
+
           <button
             onClick={() => onNavigateTab('inventory')}
             className="flex items-center gap-3 p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-left transition-all group shadow-xs cursor-pointer"
