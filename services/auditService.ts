@@ -9,8 +9,10 @@ export type AuditActionType =
   | 'CLAIM_TEST_ASSIGNMENT'
   | 'REASSIGN_TEST'
   | 'COLLECT_SAMPLE'
+  | 'VERIFY_SAMPLE'
   | 'UPLOAD_RESULTS'
   | 'VALIDATE_FINDINGS'
+  | 'RELEASE_RESULTS'
   | 'PROCESS_PAYMENT'
   | 'EDIT_PATIENT_RECORD'
   | 'STAFF_SELF_PROFILE_UPDATE'
@@ -71,14 +73,21 @@ const ACTION_METADATA: Record<AuditActionType, { label: string; category: AuditL
     label: 'Collected Biological Specimen',
     category: 'SAMPLE_CHAIN_OF_CUSTODY'
   },
+  VERIFY_SAMPLE: {
+    label: 'Verified Biological Sample Barcode & Integrity',
+    category: 'SAMPLE_CHAIN_OF_CUSTODY'
+  },
   UPLOAD_RESULTS: {
     label: 'Uploaded & Encrypted Diagnostic Findings',
     category: 'DIAGNOSTIC_MODIFICATION'
   },
- 
   VALIDATE_FINDINGS: {
     label: 'Validated & Signed Off Biochemical Values',
     category: 'DIAGNOSTIC_MODIFICATION'
+  },
+  RELEASE_RESULTS: {
+    label: 'Authorized & Released Official Clinical Report',
+    category: 'CLINICAL_ACCESS'
   },
   PROCESS_PAYMENT: {
     label: 'Settled Billing Invoice & Issued Receipt',
