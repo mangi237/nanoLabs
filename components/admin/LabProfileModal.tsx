@@ -15,7 +15,9 @@ import {
   Mail,
   ShieldCheck,
   CheckCircle2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Percent,
+  Stethoscope
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { db, doc, updateDoc } from '../../services/firebase';
@@ -51,6 +53,7 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
     email: lab?.email || '',
     description: lab?.description || '',
     logoUrl: lab?.logoUrl || '',
+    defaultDoctorCommissionRate: lab?.defaultDoctorCommissionRate !== undefined ? lab.defaultDoctorCommissionRate : 20,
     primaryColor: lab?.primaryColor || '#0D9488',
     secondaryColor: lab?.secondaryColor || '#0F766E',
     accentColor: lab?.accentColor || '#14B8A6'
@@ -179,6 +182,7 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
         description: formData.description.trim(),
         logoUrl: formData.logoUrl || null,
         avatarUrl: formData.logoUrl || null,
+        defaultDoctorCommissionRate: Number(formData.defaultDoctorCommissionRate) || 20,
         primaryColor: formData.primaryColor,
         secondaryColor: formData.secondaryColor,
         accentColor: formData.accentColor,
@@ -197,6 +201,7 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
           description: formData.description.trim(),
           logoUrl: formData.logoUrl || null,
           avatarUrl: formData.logoUrl || null,
+          defaultDoctorCommissionRate: Number(formData.defaultDoctorCommissionRate) || 20,
           primaryColor: formData.primaryColor,
           secondaryColor: formData.secondaryColor,
           accentColor: formData.accentColor,
@@ -437,6 +442,36 @@ export const LabProfileModal: React.FC<LabProfileModalProps> = ({
                   placeholder="e.g. contact@stlukelabs.com"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all font-medium"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Doctor Referral Commission Configuration */}
+          <div className="p-5 bg-teal-50/60 border border-teal-200/80 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-teal-600 text-white shadow-xs">
+                  <Percent className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-teal-950">Referring Doctor Commission Rate</h3>
+                  <p className="text-xs text-teal-800">
+                    Default commission percentage rewarded to referring physicians (standard is 20%).
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative w-28">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.defaultDoctorCommissionRate}
+                  onChange={e => setFormData({ ...formData, defaultDoctorCommissionRate: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-sm font-bold text-slate-900 bg-white border border-teal-300 rounded-xl text-center focus:ring-2 focus:ring-teal-500 focus:outline-none shadow-2xs"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-teal-700 pointer-events-none">%</span>
               </div>
             </div>
           </div>
