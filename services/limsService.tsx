@@ -1,9 +1,10 @@
-import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc } from './firebase';
+import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc } from './firebase';
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
+import { ReferringDoctor } from '../types';
 
-export type { MasterTestItem };
+export type { MasterTestItem, ReferringDoctor };
 
 export type TestStatus = 'Pending_Validation' | 'Pending_Payment' | 'Pending_Collection' | 'In_Lab_Testing' | 'Completed' | 'Ready_For_Pickup';
 
@@ -58,19 +59,49 @@ export interface PatientBooking {
   patientId: string;
   patientName: string;
   patientAge?: number;
+  age?: number;
+  dateOfBirth?: string;
+  dob?: string;
   patientGender?: 'Male' | 'Female' | 'Child';
   patientPhone?: string;
   patientEmail?: string;
   patientPid?: string; // PID number
   doctorName?: string; // Referring physician
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  referralCommissionRate?: number; // e.g. 20 (20%)
+  referralCommissionAmount?: number; // Commission calculated in FCFA
+  referralCommissionStatus?: 'unpaid' | 'paid' | 'settled';
+  referralCommissionPaidAt?: string;
+  referralCommissionPaidBy?: string;
   sampleCollectedAt?: string;
   invoiceNumber: string;
   totalAmount: number;
+  originalTotalAmount?: number;
+  originalPrice?: number;
+  actualPaidAmount?: number;
+  isStaffExemption?: boolean;
+  staffMemberName?: string;
+  staffDesignation?: string;
+  hasInsurance?: boolean;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent?: number; // e.g. 80 for 80% coverage
+  coPayPercent?: number; // Patient direct co-payment percentage
+  insuranceCoveredAmount?: number; // Amount covered by insurance
+  patientCoPayAmount?: number; // Patient direct co-payment balance
+  discountType?: 'percentage' | 'fixed' | 'coupon' | 'staff_exemption';
+  discountValue?: number;
+  discountAmount?: number;
+  couponCode?: string;
   paymentStatus: 'unpaid' | 'paid';
   paymentMethod?: 'cash' | 'mobile_money' | 'card' | 'insurance';
   paymentDate?: string;
   paidAt?: string;
   paymentProcessedBy?: string;
+  paymentDetails?: any;
   
   // Receptionist Validation & Walk-In Flags
   receptionistValidated?: boolean;
@@ -85,6 +116,9 @@ export interface PatientBooking {
   collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine']
   sampleCollectedAtDate?: string;
   sampleCollectedBy?: string;
+  adminSampleVerified?: boolean;
+  adminSampleVerifiedBy?: string;
+  adminSampleVerifiedAt?: string;
 
   // Security & Privacy Lockdown
   assignedTechId?: string;
@@ -104,6 +138,15 @@ export interface PatientBooking {
   pdfReportUrl?: string; // Digital generated report
   externalPdfUrl?: string; // Option 2 fallback PDF
   physicalPickupAlertSent?: boolean;
+  
+  // Biologist Sign-off & Release
+  biologistSigned?: boolean;
+  biologistName?: string;
+  biologistSignedAt?: string;
+  biologistRemarks?: string;
+  biologistPasscodeVerified?: boolean;
+  labTechSigned?: boolean;
+  labTechSignedAt?: string;
   
   createdAt: string;
   updatedAt: string;
@@ -134,11 +177,20 @@ export const limsService = {
     patientId: string;
     patientName: string;
     patientAge?: number;
+    dateOfBirth?: string;
     patientGender?: 'Male' | 'Female' | 'Child';
     patientPhone?: string;
     patientEmail?: string;
     patientPid?: string;
     doctorName?: string;
+    referringDoctorId?: string;
+    referringDoctor?: string;
+    referralHospital?: string;
+    referralNotes?: string;
+    referralCommissionRate?: number;
+    isStaffExemption?: boolean;
+    staffMemberName?: string;
+    staffDesignation?: string;
     sampleCollectedAt?: string;
     selectedMasterTestIds?: string[];
     selectedTests?: Array<{
@@ -170,11 +222,20 @@ export const limsService = {
       patientId,
       patientName,
       patientAge = 30,
+      dateOfBirth,
       patientGender = 'Male',
       patientPhone = '',
       patientEmail = '',
       patientPid = `PID-${Math.floor(100 + Math.random() * 900)}`,
       doctorName = 'Dr. Attending Specialist',
+      referringDoctorId,
+      referringDoctor,
+      referralHospital,
+      referralNotes,
+      referralCommissionRate,
+      isStaffExemption = false,
+      staffMemberName,
+      staffDesignation,
       sampleCollectedAt = 'Central Diagnostic Facility',
       selectedMasterTestIds = [],
       selectedTests = [],
@@ -190,8 +251,9 @@ export const limsService = {
 
     const isValidated = receptionistValidated !== undefined ? receptionistValidated : isStaffCreator;
 
-    // Determine lab pricing model to apply per-test fee ONLY if lab is on 'pay_per_test'
+    // Determine lab pricing model and default doctor commission rate
     let feePerTest = 0;
+    let labCommissionRate = 20; // Standard 20% commission by default
     try {
       const labDocRef = doc(db, 'labs', labId);
       const labDocSnap = await getDoc(labDocRef);
@@ -200,10 +262,18 @@ export const limsService = {
         if (labData.pricingModel === 'pay_per_test') {
           feePerTest = labData.feePerTest !== undefined ? Number(labData.feePerTest) : 500;
         }
+        if (labData.defaultDoctorCommissionRate !== undefined) {
+          labCommissionRate = Number(labData.defaultDoctorCommissionRate);
+        }
       }
     } catch (labErr) {
       console.warn('Could not read lab pricing model for fee check:', labErr);
     }
+
+    // Determine final commission rate for this referral
+    const effectiveCommissionRate = referralCommissionRate !== undefined 
+      ? referralCommissionRate 
+      : (referringDoctor ? labCommissionRate : 0);
 
     let testItems: BookingTestItem[] = [];
 
@@ -225,8 +295,8 @@ export const limsService = {
           refRangeChild: t.refRangeChild || 'Normal',
           basePrice: base,
           systemFee: sFee,
-          price: tot,
-          totalPrice: tot,
+          price: isStaffExemption ? 0 : tot,
+          totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
           subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
@@ -268,8 +338,8 @@ export const limsService = {
           refRangeChild: (found as any).refRangeChild || 'Normal',
           basePrice: base,
           systemFee: sFee,
-          price: tot,
-          totalPrice: tot,
+          price: isStaffExemption ? 0 : tot,
+          totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
           subParameters: (found as any).subParameters ? (found as any).subParameters.map((sp: any) => ({
             ...sp,
@@ -280,10 +350,17 @@ export const limsService = {
       });
     }
 
-    const totalAmount = testItems.reduce((acc, t) => acc + t.price, 0);
+    const standardTotalAmount = testItems.reduce((acc, t) => acc + (t.basePrice || t.price || 5000), 0);
+    const totalAmount = isStaffExemption ? 0 : testItems.reduce((acc, t) => acc + t.price, 0);
     const bookingCode = this.generateBookingCode();
     const invoiceNumber = this.generateInvoiceCode();
     const timestamp = new Date().toISOString();
+
+    // Calculate Referral Commission Amount
+    const commissionBase = isStaffExemption ? 0 : (totalAmount > 0 ? totalAmount : standardTotalAmount);
+    const referralCommissionAmount = referringDoctor && effectiveCommissionRate > 0
+      ? Math.round(commissionBase * (effectiveCommissionRate / 100))
+      : 0;
 
     const newBooking: PatientBooking = {
       id: `booking-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -292,22 +369,45 @@ export const limsService = {
       patientId,
       patientName,
       patientAge,
+      dateOfBirth,
       patientGender,
       patientPhone,
       patientEmail,
       patientPid,
-      doctorName,
+      doctorName: referringDoctor || doctorName,
+      referringDoctorId,
+      referringDoctor,
+      referralHospital,
+      referralNotes,
+      referralCommissionRate: referringDoctor ? effectiveCommissionRate : undefined,
+      referralCommissionAmount: referringDoctor ? referralCommissionAmount : undefined,
+      referralCommissionStatus: referringDoctor ? 'unpaid' : undefined,
+      isStaffExemption,
+      staffMemberName: staffMemberName || (isStaffExemption ? patientName : undefined),
+      staffDesignation: staffDesignation || (isStaffExemption ? 'Clinical Staff' : undefined),
+      originalTotalAmount: standardTotalAmount,
+      actualPaidAmount: isStaffExemption ? 0 : undefined,
+      discountType: isStaffExemption ? 'staff_exemption' : undefined,
+      discountAmount: isStaffExemption ? standardTotalAmount : 0,
       sampleCollectedAt,
       invoiceNumber,
       totalAmount,
       clinicalNotes: clinicalNotes || undefined,
-      paymentStatus: 'unpaid',
+      paymentStatus: isStaffExemption ? 'paid' : 'unpaid',
+      paidAt: isStaffExemption ? timestamp : undefined,
+      paymentMethod: isStaffExemption ? 'cash' : undefined,
+      paymentProcessedBy: isStaffExemption ? 'System (Staff Exemption Rule)' : undefined,
       receptionistValidated: isValidated,
       validatedBy: isValidated ? creatorName : '',
       validatedAt: isValidated ? timestamp : '',
       collectedSamples: [],
-      tests: testItems,
-      overallStatus: isValidated ? 'Pending_Payment' : 'Pending_Validation',
+      tests: testItems.map(t => ({
+        ...t,
+        paid: isStaffExemption ? true : false,
+        paymentStatus: isStaffExemption ? 'paid' : 'unpaid',
+        status: isStaffExemption ? 'Pending_Collection' : t.status
+      })),
+      overallStatus: isStaffExemption ? 'Pending_Collection' : (isValidated ? 'Pending_Payment' : 'Pending_Validation'),
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -318,6 +418,29 @@ export const limsService = {
       await addDoc(bookingsCol, cleanFirestoreData(newBooking));
     } catch (e) {
       console.warn('Firestore booking save bypassed, using local memory state:', e);
+    }
+
+    // If staff exemption, push instant alert to Admin Notifications collection
+    if (isStaffExemption) {
+      try {
+        const notifCol = collection(db, 'labs', labId, 'notifications');
+        await addDoc(notifCol, cleanFirestoreData({
+          title: `Staff Test Request (100% Exemption): ${patientName}`,
+          type: 'bill',
+          subType: 'staff_test_exemption',
+          message: `Staff member "${patientName}" (${staffDesignation || 'Internal Staff'}) requested ${testItems.length} laboratory diagnostic test(s). Standard Value: ${standardTotalAmount.toLocaleString()} FCFA (Billed: 0 FCFA per staff benefit policy).`,
+          staffName: patientName,
+          staffDesignation: staffDesignation || 'Internal Staff',
+          testCount: testItems.length,
+          standardValue: standardTotalAmount,
+          bookingCode,
+          invoiceNumber,
+          timestamp,
+          read: false
+        }));
+      } catch (notifErr) {
+        console.warn('Admin notification push warning:', notifErr);
+      }
     }
 
     // Also sync tests into Patient record labTests array
@@ -336,19 +459,25 @@ export const limsService = {
           systemFee: t.systemFee,
           price: t.price,
           totalPrice: t.totalPrice,
-          priceDisplay: t.systemFee && t.systemFee > 0 
-            ? `${(t.basePrice || t.price).toLocaleString()} + ${t.systemFee.toLocaleString()} FCFA System Fee` 
-            : `${(t.basePrice || t.price).toLocaleString()} FCFA`,
-          status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
+          priceDisplay: isStaffExemption 
+            ? `0 FCFA (Staff Exemption - Valued at ${(t.basePrice || 5000).toLocaleString()} FCFA)`
+            : (t.systemFee && t.systemFee > 0 
+                ? `${(t.basePrice || t.price).toLocaleString()} + ${t.systemFee.toLocaleString()} FCFA System Fee` 
+                : `${(t.basePrice || t.price).toLocaleString()} FCFA`),
+          status: isStaffExemption ? 'Pending_Collection' : (isValidated ? 'Pending_Payment' : 'Pending_Validation'),
           receptionistValidated: isValidated,
           validatedBy: isValidated ? creatorName : undefined,
           validatedAt: isValidated ? timestamp : undefined,
-          paid: false,
-          paymentStatus: 'unpaid',
+          paid: isStaffExemption ? true : false,
+          paymentStatus: isStaffExemption ? 'paid' : 'unpaid',
+          isStaffExemption,
           requestedDate: timestamp
         }));
         await updateDoc(patientRef, cleanFirestoreData({
           labTests: [...mappedForPatientDoc, ...existingTests],
+          referringDoctor: referringDoctor || patientSnap.data().referringDoctor,
+          referralHospital: referralHospital || patientSnap.data().referralHospital,
+          dateOfBirth: dateOfBirth || patientSnap.data().dateOfBirth,
           updatedAt: timestamp
         }));
       }
@@ -363,7 +492,9 @@ export const limsService = {
       patientName,
       action: 'EDIT_PATIENT_RECORD',
       performedBy: { id: 'rec-1', name: creatorName, role: isStaffCreator ? 'receptionist' : 'patient' },
-      details: `Generated Order Booking ${bookingCode} with ${testItems.length} tests (Invoice ${invoiceNumber}, Amount: ${totalAmount} XAF). Receptionist Validated: ${isValidated ? 'YES' : 'NO'}`
+      details: isStaffExemption
+        ? `Staff Exemption Order Booking ${bookingCode} created for ${patientName} (${testItems.length} tests, Standard Value: ${standardTotalAmount} XAF, Charged: 0 XAF).`
+        : `Generated Order Booking ${bookingCode} with ${testItems.length} tests (Invoice ${invoiceNumber}, Amount: ${totalAmount} XAF). Receptionist Validated: ${isValidated ? 'YES' : 'NO'}`
     });
 
     return newBooking;
@@ -389,6 +520,13 @@ export const limsService = {
       cashGiven?: number;
       cashChange?: number;
       transactionRef?: string;
+      originalPrice?: number;
+      discountAmount?: number;
+      discountType?: string;
+      couponCode?: string;
+      actualPaidAmount?: number;
+      insuranceDetails?: any;
+      [key: string]: any;
     };
   }): Promise<boolean> {
     const { labId, bookingId, paymentMethod, processedByName, paymentDetails } = params;
@@ -558,6 +696,36 @@ export const limsService = {
           updatedAt: timestamp
         });
 
+        // Sync to patient's document so patient tracker updates dynamically
+        if (data.patientId) {
+          try {
+            const patRef = doc(db, 'labs', labId, 'patients', data.patientId);
+            const patSnap = await getDoc(patRef);
+            if (patSnap.exists()) {
+              const currentTests: any[] = patSnap.data().labTests || [];
+              const updatedPatTests = currentTests.map(pt => {
+                const isMatch = data.tests?.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name));
+                if (isMatch || pt.bookingCode === data.bookingCode) {
+                  return {
+                    ...pt,
+                    status: 'In_Lab_Testing',
+                    sampleCollected: true,
+                    sampleCollectedAt: timestamp,
+                    collectedSamples
+                  };
+                }
+                return pt;
+              });
+              await updateDoc(patRef, cleanFirestoreData({
+                labTests: updatedPatTests,
+                updatedAt: timestamp
+              }));
+            }
+          } catch (patErr) {
+            console.warn('Patient collection status sync note:', patErr);
+          }
+        }
+
         // Audit chain of custody
         await auditService.logPatientAccess({
           labId,
@@ -574,6 +742,49 @@ export const limsService = {
       console.error('Error in completeSampleCollection:', e);
     }
     return false;
+  },
+
+  /**
+   * Admin verifies sample integrity and physical access code clearance
+   */
+  async verifySampleByAdmin(params: {
+    labId: string;
+    bookingId: string;
+    adminName: string;
+    adminAccessCode: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { labId, bookingId, adminName } = params;
+    const timestamp = new Date().toISOString();
+
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+
+      if (bookingDoc) {
+        const data = bookingDoc.data() as PatientBooking;
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
+          adminSampleVerified: true,
+          adminSampleVerifiedBy: adminName,
+          adminSampleVerifiedAt: timestamp,
+          updatedAt: timestamp
+        });
+
+        await auditService.logPatientAccess({
+          labId,
+          patientId: data.patientId,
+          patientName: data.patientName,
+          action: 'VERIFY_SAMPLE',
+          performedBy: { id: 'admin-1', name: adminName, role: 'admin' },
+          details: `Administrator ${adminName} performed physical specimen verification and verified integrity for Booking ${data.bookingCode}.`
+        });
+
+        return { success: true };
+      }
+      return { success: false, error: 'Booking not found.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Sample verification failed.' };
+    }
   },
 
   /**
@@ -793,8 +1004,44 @@ export const limsService = {
           tests: updatedTests,
           overallStatus: 'Completed',
           pdfReportUrl: pdfReportDataUrl || data.pdfReportUrl,
+          labTechSigned: true,
+          labTechSignedAt: timestamp,
           updatedAt: timestamp
         });
+
+        // 4. Also update Patient record labTests array so patient portal sees completed findings immediately!
+        if (data.patientId) {
+          try {
+            const patRef = doc(db, 'labs', labId, 'patients', data.patientId);
+            const patSnap = await getDoc(patRef);
+            if (patSnap.exists()) {
+              const currentTests: any[] = patSnap.data().labTests || [];
+              const updatedPatTests = currentTests.map(pt => {
+                const matchedTest = updatedTests.find(ut => ut.id === pt.id || ut.testId === pt.testId || ut.testName === (pt.testName || pt.name));
+                if (matchedTest || pt.bookingCode === data.bookingCode) {
+                  return {
+                    ...pt,
+                    status: 'Completed',
+                    completedAt: timestamp,
+                    completedBy: techName,
+                    resultValue: matchedTest?.resultValue || pt.resultValue,
+                    subParameters: matchedTest?.subParameters || pt.subParameters,
+                    labNotes: matchedTest?.labNotes || pt.labNotes,
+                    pdfReportUrl: pdfReportDataUrl || pt.pdfReportUrl,
+                    reportUrl: pdfReportDataUrl || pt.reportUrl
+                  };
+                }
+                return pt;
+              });
+              await updateDoc(patRef, cleanFirestoreData({
+                labTests: updatedPatTests,
+                updatedAt: timestamp
+              }));
+            }
+          } catch (patErr) {
+            console.warn('Patient results sync error:', patErr);
+          }
+        }
 
         // Audit Log
         await auditService.logPatientAccess({
@@ -843,10 +1090,45 @@ export const limsService = {
 
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
           externalPdfUrl,
+          pdfReportUrl: externalPdfUrl,
           tests: updatedTests,
           overallStatus: 'Completed',
+          labTechSigned: true,
+          labTechSignedAt: timestamp,
           updatedAt: timestamp
         });
+
+        // Sync to patient record
+        if (data.patientId) {
+          try {
+            const patRef = doc(db, 'labs', labId, 'patients', data.patientId);
+            const patSnap = await getDoc(patRef);
+            if (patSnap.exists()) {
+              const currentTests: any[] = patSnap.data().labTests || [];
+              const updatedPatTests = currentTests.map(pt => {
+                const isMatch = data.tests.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name));
+                if (isMatch || pt.bookingCode === data.bookingCode) {
+                  return {
+                    ...pt,
+                    status: 'Completed',
+                    completedAt: timestamp,
+                    completedBy: techName,
+                    externalPdfUrl,
+                    pdfReportUrl: externalPdfUrl,
+                    reportUrl: externalPdfUrl
+                  };
+                }
+                return pt;
+              });
+              await updateDoc(patRef, cleanFirestoreData({
+                labTests: updatedPatTests,
+                updatedAt: timestamp
+              }));
+            }
+          } catch (patErr) {
+            console.warn('Patient upload sync note:', patErr);
+          }
+        }
 
         await auditService.logPatientAccess({
           labId,
@@ -863,6 +1145,92 @@ export const limsService = {
       console.error('Error in uploadExternalPdfResult:', e);
     }
     return false;
+  },
+
+  /**
+   * Biologist validates, provides diagnosis interpretation, signs with authorization code, and releases results to patient portal
+   */
+  async signAndReleaseByBiologist(params: {
+    labId: string;
+    bookingId: string;
+    biologistName: string;
+    biologistAccessCode: string;
+    biologistRemarks?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { labId, bookingId, biologistName, biologistRemarks } = params;
+    const timestamp = new Date().toISOString();
+
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+
+      if (bookingDoc) {
+        const data = bookingDoc.data() as PatientBooking;
+        const updatedTests = data.tests.map(t => ({
+          ...t,
+          status: 'Completed' as TestStatus,
+          biologistSigned: true,
+          biologistSignedAt: timestamp
+        }));
+
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
+          biologistSigned: true,
+          biologistName,
+          biologistSignedAt: timestamp,
+          biologistRemarks: biologistRemarks || 'Clinical findings reviewed and authorized for official release.',
+          biologistPasscodeVerified: true,
+          overallStatus: 'Completed',
+          tests: updatedTests,
+          updatedAt: timestamp
+        });
+
+        // Sync to patient record
+        if (data.patientId) {
+          try {
+            const patRef = doc(db, 'labs', labId, 'patients', data.patientId);
+            const patSnap = await getDoc(patRef);
+            if (patSnap.exists()) {
+              const currentTests: any[] = patSnap.data().labTests || [];
+              const updatedPatTests = currentTests.map(pt => {
+                const isMatch = data.tests.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name));
+                if (isMatch || pt.bookingCode === data.bookingCode) {
+                  return {
+                    ...pt,
+                    status: 'Completed',
+                    biologistSigned: true,
+                    biologistName,
+                    biologistSignedAt: timestamp,
+                    biologistRemarks: biologistRemarks || 'Authorized and released by Clinical Biologist.'
+                  };
+                }
+                return pt;
+              });
+              await updateDoc(patRef, cleanFirestoreData({
+                labTests: updatedPatTests,
+                updatedAt: timestamp
+              }));
+            }
+          } catch (patErr) {
+            console.warn('Patient biologist signoff sync note:', patErr);
+          }
+        }
+
+        await auditService.logPatientAccess({
+          labId,
+          patientId: data.patientId,
+          patientName: data.patientName,
+          action: 'RELEASE_RESULTS',
+          performedBy: { id: 'bio-1', name: biologistName, role: 'biologist' },
+          details: `Clinical Biologist ${biologistName} verified with passcode, reviewed findings, and officially released test results for Booking ${data.bookingCode}.`
+        });
+
+        return { success: true };
+      }
+      return { success: false, error: 'Booking not found.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Biologist signoff failed.' };
+    }
   },
 
   /**
@@ -1472,5 +1840,289 @@ export const limsService = {
     });
 
     return true;
+  },
+
+  /**
+   * Fetch all registered referring doctors for a lab directly from Firestore.
+   * Returns purely live database records. If none exist, returns an empty array.
+   */
+  async fetchReferringDoctors(labId: string = 'lab-1'): Promise<ReferringDoctor[]> {
+    if (!labId) return [];
+    try {
+      const docsCol = collection(db, 'labs', labId, 'referring_doctors');
+      const snap = await getDocs(docsCol);
+
+      if (!snap.empty) {
+        return snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        })) as ReferringDoctor[];
+      }
+
+      return [];
+    } catch (e) {
+      console.warn('Error fetching referring doctors from Firestore:', e);
+      return [];
+    }
+  },
+
+  /**
+   * Add a new referring doctor to the laboratory directory
+   */
+  async addReferringDoctor(
+    labId: string = 'lab-1',
+    doctorData: Omit<ReferringDoctor, 'id' | 'createdAt' | 'updatedAt' | 'labId'>
+  ): Promise<ReferringDoctor> {
+    const timestamp = new Date().toISOString();
+    const newDoc: ReferringDoctor = {
+      ...doctorData,
+      id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      labId,
+      commissionRate: doctorData.commissionRate !== undefined ? Number(doctorData.commissionRate) : 20,
+      totalReferrals: 0,
+      totalRevenueGenerated: 0,
+      totalCommissionEarned: 0,
+      totalCommissionPaid: 0,
+      status: doctorData.status || 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    try {
+      const docsCol = collection(db, 'labs', labId, 'referring_doctors');
+      const res = await addDoc(docsCol, cleanFirestoreData(newDoc));
+      if (res.id) {
+        newDoc.id = res.id;
+      }
+    } catch (e) {
+      console.warn('Firestore add referring doctor error, retained in memory:', e);
+    }
+
+    return newDoc;
+  },
+
+  /**
+   * Update an existing referring doctor's details
+   */
+  async updateReferringDoctor(
+    labId: string = 'lab-1',
+    doctorId: string,
+    updates: Partial<ReferringDoctor>
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, 'labs', labId, 'referring_doctors', doctorId);
+      await updateDoc(docRef, cleanFirestoreData({
+        ...updates,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (e) {
+      console.warn('Error updating referring doctor in Firestore:', e);
+    }
+  },
+
+  /**
+   * Delete a referring doctor from the laboratory directory
+   */
+  async deleteReferringDoctor(
+    labId: string = 'lab-1',
+    doctorId: string
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, 'labs', labId, 'referring_doctors', doctorId);
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.warn('Error deleting referring doctor from Firestore:', e);
+    }
+  },
+
+  /**
+   * Update laboratory's default doctor referral commission rate (e.g. 20%)
+   */
+  async updateLabDefaultCommissionRate(
+    labId: string = 'lab-1',
+    rate: number
+  ): Promise<void> {
+    try {
+      const labDocRef = doc(db, 'labs', labId);
+      await updateDoc(labDocRef, cleanFirestoreData({
+        defaultDoctorCommissionRate: Number(rate),
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (e) {
+      console.warn('Error updating lab commission rate:', e);
+    }
+  },
+
+  /**
+   * Comprehensive Doctor Commission Analytics
+   * Aggregates real bookings and matches doctors with revenue, referral volume, and 20% commission payouts
+   */
+  async fetchDoctorCommissionAnalytics(labId: string = 'lab-1'): Promise<{
+    doctors: ReferringDoctor[];
+    totalReferredPatients: number;
+    totalRevenueFromReferrals: number;
+    totalCommissionsEarned: number;
+    totalCommissionsPaid: number;
+    totalCommissionsPending: number;
+    referralBookings: PatientBooking[];
+    defaultCommissionRate: number;
+  }> {
+    const [doctorsList, allBookings] = await Promise.all([
+      this.fetchReferringDoctors(labId),
+      this.fetchAllBookings(labId)
+    ]);
+
+    // Fetch lab default commission rate
+    let defaultCommissionRate = 20;
+    try {
+      const labDocRef = doc(db, 'labs', labId);
+      const labSnap = await getDoc(labDocRef);
+      if (labSnap.exists() && labSnap.data().defaultDoctorCommissionRate !== undefined) {
+        defaultCommissionRate = Number(labSnap.data().defaultDoctorCommissionRate);
+      }
+    } catch (e) {
+      // fallback 20%
+    }
+
+    // Filter bookings that have a referring doctor
+    const referralBookings = allBookings.filter(b => 
+      Boolean(b.referringDoctor || b.referringDoctorId) && 
+      b.referringDoctor?.toLowerCase() !== 'self-referred' &&
+      b.referringDoctor?.toLowerCase() !== 'none'
+    );
+
+    // Compute live per-doctor statistics
+    const doctorStatsMap = new Map<string, {
+      totalReferrals: number;
+      totalRevenue: number;
+      totalCommissionEarned: number;
+      totalCommissionPaid: number;
+    }>();
+
+    for (const b of referralBookings) {
+      const docKey = (b.referringDoctorId || b.referringDoctor || '').trim().toLowerCase();
+      const existing = doctorStatsMap.get(docKey) || {
+        totalReferrals: 0,
+        totalRevenue: 0,
+        totalCommissionEarned: 0,
+        totalCommissionPaid: 0
+      };
+
+      const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
+      const commRate = b.referralCommissionRate || defaultCommissionRate;
+      const commAmount = b.referralCommissionAmount !== undefined 
+        ? b.referralCommissionAmount 
+        : Math.round(billAmount * (commRate / 100));
+
+      existing.totalReferrals += 1;
+      existing.totalRevenue += billAmount;
+      existing.totalCommissionEarned += commAmount;
+      if (b.referralCommissionStatus === 'paid' || b.referralCommissionStatus === 'settled') {
+        existing.totalCommissionPaid += commAmount;
+      }
+
+      doctorStatsMap.set(docKey, existing);
+    }
+
+    // Merge computed stats with doctors list
+    const enrichedDoctors = doctorsList.map(doc => {
+      const keyById = (doc.id || '').trim().toLowerCase();
+      const keyByName = (doc.name || '').trim().toLowerCase();
+      const stats = doctorStatsMap.get(keyById) || doctorStatsMap.get(keyByName);
+
+      const liveReferrals = stats ? stats.totalReferrals : (doc.totalReferrals || 0);
+      const liveRevenue = stats ? stats.totalRevenue : (doc.totalRevenueGenerated || 0);
+      const liveEarned = stats ? stats.totalCommissionEarned : (doc.totalCommissionEarned || Math.round(liveRevenue * ((doc.commissionRate || defaultCommissionRate) / 100)));
+      const livePaid = stats ? stats.totalCommissionPaid : (doc.totalCommissionPaid || 0);
+
+      return {
+        ...doc,
+        commissionRate: doc.commissionRate || defaultCommissionRate,
+        totalReferrals: liveReferrals,
+        totalRevenueGenerated: liveRevenue,
+        totalCommissionEarned: liveEarned,
+        totalCommissionPaid: livePaid
+      };
+    });
+
+    const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
+    const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
+    const totalCommissionsEarned = enrichedDoctors.reduce((acc, d) => acc + (d.totalCommissionEarned || 0), 0);
+    const totalCommissionsPaid = enrichedDoctors.reduce((acc, d) => acc + (d.totalCommissionPaid || 0), 0);
+    const totalCommissionsPending = Math.max(0, totalCommissionsEarned - totalCommissionsPaid);
+
+    return {
+      doctors: enrichedDoctors,
+      totalReferredPatients,
+      totalRevenueFromReferrals,
+      totalCommissionsEarned,
+      totalCommissionsPaid,
+      totalCommissionsPending,
+      referralBookings,
+      defaultCommissionRate
+    };
+  },
+
+  /**
+   * Mark a single referral booking commission as paid / settled
+   */
+  async markCommissionPaid(
+    labId: string = 'lab-1',
+    bookingId: string,
+    paidBy: string = 'Admin Cashier'
+  ): Promise<boolean> {
+    try {
+      const timestamp = new Date().toISOString();
+      const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
+      await updateDoc(bookingRef, cleanFirestoreData({
+        referralCommissionStatus: 'settled',
+        referralCommissionPaidAt: timestamp,
+        referralCommissionPaidBy: paidBy,
+        updatedAt: timestamp
+      }));
+      return true;
+    } catch (e) {
+      console.warn('Error settling booking referral commission:', e);
+      return false;
+    }
+  },
+
+  /**
+   * Settle all pending commissions for a specific doctor
+   */
+  async markAllCommissionsPaidForDoctor(
+    labId: string = 'lab-1',
+    doctorIdOrName: string,
+    paidBy: string = 'Admin Cashier'
+  ): Promise<number> {
+    try {
+      const timestamp = new Date().toISOString();
+      const allBookings = await this.fetchAllBookings(labId);
+      const targetDocKey = doctorIdOrName.trim().toLowerCase();
+
+      const doctorBookings = allBookings.filter(b => 
+        (b.referringDoctorId?.trim().toLowerCase() === targetDocKey ||
+         b.referringDoctor?.trim().toLowerCase() === targetDocKey) &&
+        b.referralCommissionStatus !== 'settled' &&
+        b.referralCommissionStatus !== 'paid'
+      );
+
+      let count = 0;
+      for (const b of doctorBookings) {
+        const bookingRef = doc(db, 'labs', labId, 'bookings', b.id);
+        await updateDoc(bookingRef, cleanFirestoreData({
+          referralCommissionStatus: 'settled',
+          referralCommissionPaidAt: timestamp,
+          referralCommissionPaidBy: paidBy,
+          updatedAt: timestamp
+        }));
+        count++;
+      }
+
+      return count;
+    } catch (e) {
+      console.warn('Error settling doctor commissions in batch:', e);
+      return 0;
+    }
   }
 };
