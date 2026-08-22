@@ -65,6 +65,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     billingPeriod: 'monthly' as 'monthly' | 'annual',
     feePerTest: 500,
     monthlyMaintenanceFee: 15000,
+    defaultDoctorCommissionRate: 20,
     staffLimit: 12,
     sitesCount: 2,
 
@@ -151,13 +152,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const handleSelectTier = (tier: SubscriptionTierType) => {
     let staff = 5;
     let sites = 1;
-    if (tier === 'starter') {
+    if (tier === 'small' || tier === 'starter') {
       staff = 5;
       sites = 1;
-    } else if ( tier === 'growth') {
+    } else if (tier === 'medium' || tier === 'growth') {
       staff = 15;
       sites = 2;
-    } else if (tier === 'business' || tier === 'enterprise') {
+    } else if (tier === 'large' || tier === 'business' || tier === 'enterprise') {
       staff = 999;
       sites = 5;
     }
@@ -190,13 +191,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     if (formData.pricingModel === 'pay_per_test') return 0;
     if (formData.pricingModel === 'lifetime_space') return formData.monthlyMaintenanceFee;
     
-    if ( formData.subscriptionTier === 'starter') {
+    if (formData.subscriptionTier === 'small' || formData.subscriptionTier === 'starter') {
       return 25000;
     }
-    if (formData.subscriptionTier === 'growth') {
+    if (formData.subscriptionTier === 'medium' || formData.subscriptionTier === 'growth') {
       return 45000;
     }
-    if (formData.subscriptionTier === 'business' || formData.subscriptionTier === 'enterprise') {
+    if (formData.subscriptionTier === 'large' || formData.subscriptionTier === 'business' || formData.subscriptionTier === 'enterprise') {
       return 60000;
     }
     return 25000;
@@ -256,6 +257,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         monthlyMaintenanceFee: formData.pricingModel === 'lifetime_space' ? formData.monthlyMaintenanceFee : 0,
         feePerPatient: formData.pricingModel === 'pay_per_test' ? formData.feePerTest : 0,
         feePerTest: formData.pricingModel === 'pay_per_test' ? formData.feePerTest : 0,
+        defaultDoctorCommissionRate: Number(formData.defaultDoctorCommissionRate) || 20,
         staffLimit: formData.staffLimit,
         sitesCount: formData.sitesCount,
         collectionCentresCount: formData.sitesCount,
@@ -729,7 +731,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               )}
 
               {/* Capacity Limit Quick Adjusters */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Staff User Limit</span>
                   <span className="text-sm font-bold text-slate-900">{formData.staffLimit === 999 ? 'Unlimited' : `${formData.staffLimit} Staff Logins`}</span>
@@ -737,6 +739,20 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Included Sites / Centres</span>
                   <span className="text-sm font-bold text-slate-900">{formData.sitesCount} Physical Location(s)</span>
+                </div>
+                <div className="p-3 bg-teal-50/70 border border-teal-200 rounded-xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider block">Doctor Referral Comm. %</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.defaultDoctorCommissionRate}
+                      onChange={(e) => setFormData({ ...formData, defaultDoctorCommissionRate: Number(e.target.value) })}
+                      className="w-16 px-2 py-0.5 text-xs font-bold text-slate-900 bg-white border border-teal-300 rounded-md text-center focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    />
+                    <span className="text-xs font-bold text-teal-800">% (Std 20%)</span>
+                  </div>
                 </div>
               </div>
 

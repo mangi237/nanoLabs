@@ -18,7 +18,8 @@ import {
   Building2,
   CheckCircle2,
   Droplet,
-  Shield
+  Shield,
+  Stethoscope
 } from 'lucide-react';
 
 interface PatientListProps {
@@ -325,6 +326,24 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
                   {selectedAdminPatient.insurancePolicyNumber && (
                     <span className="text-[10px] font-mono text-slate-500 block truncate">
                       Policy: {selectedAdminPatient.insurancePolicyNumber}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Referring Doctor */}
+              <div className="p-3 bg-teal-50/70 rounded-xl border border-teal-200/80 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-teal-800 flex items-center gap-1">
+                  <Stethoscope className="w-3 h-3 text-teal-600" />
+                  Referring Physician / Clinic
+                </span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-xs">
+                    {selectedAdminPatient.referringDoctor || 'Self-Referred / Walk-in'}
+                  </span>
+                  {selectedAdminPatient.referralHospital && (
+                    <span className="text-[11px] text-slate-600 font-medium">
+                      {selectedAdminPatient.referralHospital}
                     </span>
                   )}
                 </div>
