@@ -30,7 +30,8 @@ import {
   User, 
   BadgeAlert,
   History,
-  Lock
+  Lock,
+  Stethoscope
 } from 'lucide-react';
 
 interface ResultViewScreenProps {
@@ -440,27 +441,98 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
 
           {/* CLINICAL FINDINGS & ATTACHED PDF CARD */}
           <div className="space-y-4 pt-4 border-t border-slate-200">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Clinical Findings & Results Document</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Clinical Findings & Diagnostic Report</h3>
 
             {isCompleted ? (
               <div className="space-y-4">
-                {currentTest.result ? (
+                {/* Structured Sub-Parameters Table if available */}
+                {Array.isArray(currentTest.subParameters) && currentTest.subParameters.length > 0 && (
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                      <FileCheck className="w-4 h-4 text-teal-600" />
+                      Biochemical Parameter Values & Reference Ranges
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-bold">
+                          <tr>
+                            <th className="py-2.5 px-3">Analyte / Parameter</th>
+                            <th className="py-2.5 px-3">Measured Finding</th>
+                            <th className="py-2.5 px-3">Unit</th>
+                            <th className="py-2.5 px-3">Biological Reference Range</th>
+                            <th className="py-2.5 px-3 text-right">Status Flag</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {currentTest.subParameters.map((sp: any, idx: number) => {
+                            const isHigh = sp.flag === 'High';
+                            const isLow = sp.flag === 'Low';
+                            const refStr = sp.refRangeMale || sp.refRange || sp.refRangeFemale || `${sp.maleMin || 0} - ${sp.maleMax || 100}`;
+
+                            return (
+                              <tr key={sp.id || idx} className="hover:bg-slate-50/50">
+                                <td className="py-2.5 px-3 font-semibold text-slate-900">{sp.name}</td>
+                                <td className="py-2.5 px-3 font-mono font-black text-slate-900">{sp.value || 'Normal'}</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">{sp.unit || '-'}</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">{refStr}</td>
+                                <td className="py-2.5 px-3 text-right">
+                                  {isHigh ? (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">HIGH</span>
+                                  ) : isLow ? (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">LOW</span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">NORMAL</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Single value or text result */}
+                {currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
+                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
+                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                      <FileCheck className="w-4 h-4 text-teal-600" />
+                      Validated Laboratory Findings
+                    </div>
+                    <div className="font-mono font-black text-lg text-slate-900">
+                      {currentTest.resultValue} {currentTest.units || ''}
+                    </div>
+                  </div>
+                )}
+
+                {/* Legacy or general text result */}
+                {currentTest.result && !currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
                   <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
                     <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
                       <FileCheck className="w-4 h-4 text-teal-600" />
                       Validated Laboratory Findings
                     </div>
                     <p className="text-slate-800 font-medium whitespace-pre-wrap">{currentTest.result}</p>
-                    {currentTest.notes && (
-                      <p className="text-xs text-slate-500 pt-2 border-t border-slate-200">
-                        <strong>Clinical Observations: </strong> {currentTest.notes}
-                      </p>
-                    )}
                   </div>
-                ) : (
-                  <div className="p-4 bg-emerald-50 text-emerald-800 text-xs rounded-2xl border border-emerald-200 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Biochemical analysis verified by Lead Technologist. Official PDF report attached below.</span>
+                )}
+
+                {/* Biologist / Clinical Pathologist Remarks */}
+                {(currentTest.biologistRemarks || currentTest.notes || currentTest.labNotes) && (
+                  <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-1.5 text-xs">
+                    <div className="font-bold text-purple-950 flex items-center gap-1.5">
+                      <Stethoscope className="w-4 h-4 text-purple-700" />
+                      Clinical Pathologist & Biologist Interpretation
+                    </div>
+                    <p className="text-purple-900 leading-relaxed font-medium">
+                      {currentTest.biologistRemarks || currentTest.notes || currentTest.labNotes}
+                    </p>
+                    {currentTest.biologistName && (
+                      <div className="pt-1 text-[11px] text-purple-700 font-semibold">
+                        Signed: {currentTest.biologistName} (Verified Clinical Biologist)
+                      </div>
+                    )}
                   </div>
                 )}
 
