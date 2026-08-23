@@ -52,11 +52,10 @@ const labWebsite = labInfo?.website || '';
   const collectedTimeStr = booking.sampleCollectedAtDate
     ? new Date(booking.sampleCollectedAtDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.sampleCollectedAtDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '03:11 PM 02 Dec, 2026';
-
-  const reportedTimeStr = booking.completedAt
-    ? new Date(booking.completedAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '04:35 PM 02 Dec, 2026';
-
+    const firstCompletedAt = booking.tests?.find(t => t.completedAt)?.completedAt;
+    const reportedTimeStr = firstCompletedAt
+      ? new Date(firstCompletedAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(firstCompletedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'Pending';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
       <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
@@ -272,8 +271,8 @@ const labWebsite = labInfo?.website || '';
                         testItem.subParameters.map((sp) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
-                          const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
-
+                          // const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
+                          const isBorderline = sp.name?.toLowerCase().includes('platelet');
                           const refVal = booking.patientGender === 'Female' 
                             ? (sp.refRangeFemale || sp.refRangeMale || 'Normal')
                             : booking.patientGender === 'Child' 
