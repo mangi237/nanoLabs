@@ -1117,7 +1117,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
             paymentMethod: showReceipt.paymentMethod || paymentMethod,
             insuranceProvider: showReceipt.insuranceProvider || insuranceProvider,
             insurancePolicyNumber: showReceipt.insurancePolicyNumber || insurancePolicyNumber,
-            insuranceCoveragePercent: showReceipt.coPayPercent ? 100 - showReceipt.coPayPercent : undefined,
+            insuranceCovertagePercent: showReceipt.coPayPercent ? 100 - showReceipt.coPayPercent : undefined,
             discountAmount: showReceipt.discountAmount,
             cashierName: user?.name || 'Authorized Lab Cashier',
             paidAt: showReceipt.paidAt || new Date().toISOString()

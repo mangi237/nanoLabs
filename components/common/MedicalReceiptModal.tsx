@@ -34,7 +34,9 @@ interface MedicalReceiptModalProps {
     cashierName?: string;
     actualPaidAmount?: number;
     currency?: string;
+    insuranceCovertagePercent?: number;
     allOrderedBookings?: PatientBooking[];
+    paidAt: string;
   };
 }
 
