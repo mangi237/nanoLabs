@@ -6,6 +6,7 @@ import { db } from '../../services/firebase';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { auditService } from '../../services/auditService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
   ArrowLeft, 
   Printer, 
@@ -54,6 +55,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   const [virtualRequested, setVirtualRequested] = useState(Boolean(test?.virtualRequested));
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [showReportPdfModal, setShowReportPdfModal] = useState(false);
 
   // Sync / fetch latest test state from Firestore
   const fetchLatestTestData = async () => {
@@ -145,7 +147,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
       details: `Generated physical printed report for ${currentTest.testName || currentTest.name || 'Laboratory Test'}.`
     }).catch(e => console.warn('Audit print log error:', e));
 
-    window.print();
+    setShowReportPdfModal(true);
   };
 
   const handleDownloadWithAudit = () => {
@@ -615,6 +617,28 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
         }}
         labId={lab?.id || 'lab-1'}
         labName={lab?.name || 'nanoLabs Central Diagnostics'}
+      />
+
+      {/* Official Laboratory Report Modal (Template matching medicalreport.webp) */}
+      <LabReportPdfViewModal
+        isOpen={showReportPdfModal}
+        onClose={() => setShowReportPdfModal(false)}
+        booking={{
+          id: currentTest.id || 'tst-view',
+          patientName: currentTest.patientName || user?.name || 'Patient',
+          patientPid: currentTest.patientCode || currentTest.patientId || user?.patientId || 'PID-1000',
+          dateOfBirth: currentTest.dob || currentTest.dateOfBirth,
+          patientAge: currentTest.age || currentTest.patientAge,
+          patientGender: currentTest.gender || currentTest.patientGender,
+          doctorName: currentTest.doctorName || currentTest.referringDoctor || 'Direct / Self-Referred',
+          bookingCode: currentTest.bookingCode || currentTest.sampleBarcode || currentTest.id,
+          invoiceNumber: currentTest.invoiceNumber || `INV-${currentTest.id || '001'}`,
+          sampleCollectedAt: currentTest.collectedAt || currentTest.sampleCollectedAt,
+          resultEnteredAt: currentTest.completedAt || currentTest.resultEnteredAt,
+          verifiedAt: currentTest.verifiedAt || currentTest.completedAt || new Date().toISOString(),
+          tests: [currentTest]
+        }}
+        labInfo={lab}
       />
     </div>
   );
