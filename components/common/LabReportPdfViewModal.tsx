@@ -34,13 +34,12 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 }) => {
   if (!isOpen || !booking) return null;
 
-  const labName = labInfo?.name || booking.sampleCollectedAt || 'DRLOGY PATHOLOGY LAB';
-  const labSlogan = labInfo?.slogan || 'Accurate | Caring | Instant';
-  const labAddress = labInfo?.address || labInfo?.location || '105-108, SMART VISION COMPLEX, HEALTHCARE ROAD, OPPOSITE HEALTHCARE COMPLEX. MUMBAI - 689578';
-  const labPhone = labInfo?.phone || '0123456789 | 0912345678';
-  const labEmail = labInfo?.email || 'drlogypathlab@drlogy.com';
-  const labWebsite = labInfo?.website || 'www.drlogy.com';
-
+  const labName = labInfo?.name || 'Laboratory Name Not Configured';
+const labSlogan = labInfo?.slogan || '';
+const labAddress = labInfo?.address || labInfo?.location || 'Address not configured';
+const labPhone = labInfo?.phone || 'N/A';
+const labEmail = labInfo?.email || 'N/A';
+const labWebsite = labInfo?.website || '';
   const handlePrint = () => {
     window.print();
   };
@@ -369,37 +368,19 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Signatures & Pathologist Sign-Off Block (Matching medicalreport.webp) */}
-            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-3 gap-3 text-center text-xs">
-              
-              {/* Medical Lab Technician */}
-              <div>
-                <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
-                  {booking.tests[0]?.completedBy || 'Mangi Lerine Laslie'}
-                </div>
-                <div className="font-black text-slate-900">Medical Lab Technician</div>
-                <div className="text-[10px] text-slate-500 font-medium">(DMLT, BMLT)</div>
-              </div>
+            <div>
+  <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
+    {booking.tests[0]?.completedBy || 'Pending Technician Signature'}
+  </div>
+  <div className="font-black text-slate-900">Medical Lab Technician</div>
+</div>
 
-              {/* Dr. Payal Shah */}
-              <div>
-                <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
-                  Dr. Payal Shah
-                </div>
-                <div className="font-black text-slate-900">Dr. Payal Shah</div>
-                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
-              </div>
-
-              {/* Dr. Vimal Shah */}
-              <div>
-                <div className="h-8 flex items-center justify-center font-serif text-blue-950 italic font-bold text-sm tracking-wide">
-                  Dr. Vimal Shah
-                </div>
-                <div className="font-black text-slate-900">Dr. Vimal Shah</div>
-                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
-              </div>
-
-            </div>
-
+<div>
+  <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
+    {booking.biologistName || 'Pending Biologist Sign-off'}
+  </div>
+  <div className="font-black text-slate-900">{booking.biologistName || 'Pending Biologist Sign-off'}</div>
+</div>
             {/* Bottom Footer Bar Matching medicalreport.webp */}
             <div className="bg-slate-900 text-white rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-xs">
               
