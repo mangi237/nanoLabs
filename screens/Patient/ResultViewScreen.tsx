@@ -187,12 +187,10 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
       if (foundPatientDoc) {
         const patientData = foundPatientDoc.data();
         const updatedTests = (patientData.labTests || []).map((t: any) => {
-          if (t.id === currentTest.id || t.testName === currentTest.testName) {
-            return {
-              ...t,
-              virtualRequested: true,
-              virtualRequestedAt: new Date().toISOString()
-            };
+          const isMatch = t.id === currentTest.id ||
+            (t.testName === currentTest.testName && t.requestedDate === currentTest.requestedDate);
+          if (isMatch) {
+            return { ...t, virtualRequested: true, virtualRequestedAt: new Date().toISOString() };
           }
           return t;
         });
@@ -635,6 +633,8 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
           invoiceNumber: currentTest.invoiceNumber || `INV-${currentTest.id || '001'}`,
           sampleCollectedAt: currentTest.collectedAt || currentTest.sampleCollectedAt,
           resultEnteredAt: currentTest.completedAt || currentTest.resultEnteredAt,
+          // resultEnteredAt: currentTest.completedAt,
+  // verifiedAt: currentTest.biologistSignedAt || currentTest.completedAt,
           verifiedAt: currentTest.verifiedAt || currentTest.completedAt || new Date().toISOString(),
           tests: [currentTest]
         }}

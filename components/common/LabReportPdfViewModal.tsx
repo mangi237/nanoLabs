@@ -22,7 +22,7 @@ import { formatDOBDisplay } from '../../data/cameroonInsurances';
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  booking: PatientBooking | null;
+  booking: (Partial<PatientBooking> & { tests: BookingTestItem[] }) | null;
   labInfo?: any;
 }
 
