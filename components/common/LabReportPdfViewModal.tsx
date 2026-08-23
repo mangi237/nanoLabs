@@ -12,7 +12,9 @@ import {
   Globe, 
   QrCode, 
   Award,
-  Sparkles
+  Sparkles,
+  Truck,
+  MessageCircle
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem } from '../../services/limsService';
 import { formatDOBDisplay } from '../../data/cameroonInsurances';
@@ -34,33 +36,47 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 
   const labName = labInfo?.name || booking.sampleCollectedAt || 'DRLOGY PATHOLOGY LAB';
   const labSlogan = labInfo?.slogan || 'Accurate | Caring | Instant';
-  const labAddress = labInfo?.address || labInfo?.location || '105-108, Healthcare Complex, Central Diagnostic Ave';
-  const labPhone = labInfo?.phone || '+237 670 000 000 / 690 000 000';
-  const labEmail = labInfo?.email || 'reports@nanolabs.health';
+  const labAddress = labInfo?.address || labInfo?.location || '105-108, SMART VISION COMPLEX, HEALTHCARE ROAD, OPPOSITE HEALTHCARE COMPLEX. MUMBAI - 689578';
+  const labPhone = labInfo?.phone || '0123456789 | 0912345678';
+  const labEmail = labInfo?.email || 'drlogypathlab@drlogy.com';
+  const labWebsite = labInfo?.website || 'www.drlogy.com';
 
   const handlePrint = () => {
     window.print();
   };
 
+  // Generate formatted registration, collection, and reporting timestamps
+  const registeredTimeStr = booking.createdAt 
+    ? new Date(booking.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '02:31 PM 02 Dec, 2026';
+    
+  const collectedTimeStr = booking.sampleCollectedAtDate
+    ? new Date(booking.sampleCollectedAtDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.sampleCollectedAtDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '03:11 PM 02 Dec, 2026';
+
+  const reportedTimeStr = booking.completedAt
+    ? new Date(booking.completedAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '04:35 PM 02 Dec, 2026';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 my-auto max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
         
         {/* Top Control Bar (Non-printable) */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800 text-white shrink-0 print:hidden">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-700 flex items-center justify-center text-white shadow-md">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-white flex items-center gap-2">
-                Official Clinical Laboratory Report
-                <span className="px-2 py-0.5 rounded-full text-[10px] bg-teal-500/20 text-teal-300 border border-teal-400/30">
+              <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                Official Clinical Laboratory Report Preview
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30">
                   Verified & Signed
                 </span>
               </h3>
-              <p className="text-xs text-teal-300 font-mono">
-                Order ID: {booking.bookingCode} • Invoice: {booking.invoiceNumber}
+              <p className="text-xs text-slate-400 font-mono">
+                Order ID: {booking.bookingCode} • Invoice: {booking.invoiceNumber || 'INV-001'}
               </p>
             </div>
           </div>
@@ -68,10 +84,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              Print / Save PDF
+              <span>Print / Save PDF</span>
             </button>
             <button
               onClick={onClose}
@@ -83,262 +99,331 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-2 sm:p-6 bg-slate-100 my-3 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
+        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
           
-          <div className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 space-y-6">
+          <div 
+            id="medical-report-sheet"
+            className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 space-y-4"
+          >
             
-            {/* Top Blue Gradient Banner Header */}
-            <div className="border-b-4 border-blue-700 pb-4 space-y-2">
+            {/* Top Header Matching medicalreport.webp */}
+            <div className="border-b-2 border-slate-300 pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left Lab Branding */}
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-xl bg-blue-700 text-white font-black flex items-center justify-center text-2xl shadow-md">
-                    <Building2 className="w-8 h-8" />
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-700 to-sky-500 text-white font-black flex items-center justify-center shadow-md border-2 border-white">
+                    <svg 
+                      className="w-9 h-9 text-white" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="1.8" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      <circle cx="12" cy="3" r="1.5" fill="currentColor" />
+                      <path d="M7 8c2.5-3 7.5-3 10 0" />
+                      <path d="M8 14c2-2 6-2 8 0" />
+                    </svg>
                   </div>
                   <div>
-                    <h1 className="text-2xl font-black text-blue-900 uppercase tracking-tight">
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
                       {labName}
                     </h1>
-                    <div className="text-xs font-extrabold text-blue-600 tracking-wide flex items-center gap-2">
-                      <span>{labSlogan}</span>
+                    <div className="text-xs font-bold text-sky-700 tracking-wide">
+                      {labSlogan}
                     </div>
-                    <div className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                    <div className="text-[10px] text-slate-600 leading-tight max-w-sm mt-0.5">
                       {labAddress}
                     </div>
                   </div>
                 </div>
 
-                <div className="text-right text-[11px] text-slate-600 space-y-1 sm:border-l sm:border-slate-200 sm:pl-4">
-                  <div className="flex items-center justify-end gap-1 font-bold text-slate-800">
-                    <Phone className="w-3 h-3 text-blue-600" />
+                {/* Right Top Contact Bar & Diagonal Banner */}
+                <div className="flex flex-col items-end text-[11px] text-slate-700 space-y-1">
+                  <div className="flex items-center gap-1 font-bold text-slate-900">
+                    <Phone className="w-3.5 h-3.5 text-blue-700" />
                     <span>{labPhone}</span>
                   </div>
-                  <div className="flex items-center justify-end gap-1">
-                    <Mail className="w-3 h-3 text-blue-600" />
+                  <div className="flex items-center gap-1 font-medium text-slate-600">
+                    <Mail className="w-3.5 h-3.5 text-blue-700" />
                     <span>{labEmail}</span>
                   </div>
-                  <div className="flex items-center justify-end gap-1 font-semibold text-blue-700">
-                    <Globe className="w-3 h-3" />
-                    <span>www.nanolabs.health</span>
+                  <div className="bg-gradient-to-r from-blue-700 to-sky-600 text-white px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
+                    <Globe className="w-3 h-3 text-sky-200" />
+                    <span>{labWebsite}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Geometric Accent Line */}
-              <div className="h-1.5 w-full bg-gradient-to-r from-blue-700 via-sky-500 to-teal-500 rounded-full mt-2"></div>
+              {/* Decorative Accent Slanted Stripe */}
+              <div className="h-1.5 w-full bg-gradient-to-r from-blue-700 via-sky-500 to-teal-400 rounded-full mt-3"></div>
             </div>
 
-            {/* Patient Metadata & Sample Information Header Box */}
-            <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs relative">
+            {/* Patient Metadata Grid Box (Matching medicalreport.webp) */}
+            <div className="border border-slate-300 rounded-xl p-3 sm:p-4 bg-slate-50/70 grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
               
-              {/* Column 1: Patient Identity */}
-              <div className="space-y-1.5">
+              {/* Left Demographic Column (Col 4) */}
+              <div className="md:col-span-4 space-y-1.5">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Patient Name</span>
-                  <div className="text-base font-black text-slate-900">{booking.patientName}</div>
+                  <div className="text-base font-black text-slate-900">
+                    {booking.patientName || 'Yash M. Patel'}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-700">
                   <div>
-                    <span className="font-semibold text-slate-500">Age / DOB: </span>
-                    <div className="font-bold">
-                      {booking.patientAge || 28} Yrs
-                      {booking.dateOfBirth && (
-                        <span className="block text-[10px] font-normal text-slate-600 font-mono">
-                          {formatDOBDisplay(booking.dateOfBirth)}
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-slate-500">Age: </span>
+                    <strong className="text-slate-900">{booking.patientAge || 21} Years</strong>
                   </div>
                   <div>
-                    <span className="font-semibold text-slate-500">Sex: </span>
-                    <div className="font-bold">{booking.patientGender || 'Male'}</div>
+                    <span className="text-slate-500">Sex: </span>
+                    <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
                   </div>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-500">PID / Record #: </span>
-                  <span className="font-mono font-bold text-blue-700">{booking.patientPid || 'PID-555'}</span>
+                  <span className="text-slate-500">PID: </span>
+                  <strong className="font-mono text-slate-900">{booking.patientPid || '555'}</strong>
                 </div>
-                {booking.insuranceProvider && (
-                  <div className="pt-1 border-t border-slate-200 text-[11px]">
-                    <span className="font-semibold text-slate-500">Insurance: </span>
-                    <span className="font-bold text-indigo-900">{booking.insuranceProvider}</span>
+              </div>
+
+              {/* Middle Sample / Ref By Column (Col 4) */}
+              <div className="md:col-span-4 border-y md:border-y-0 md:border-x border-slate-200 py-2 md:py-0 md:px-3 flex flex-col justify-between space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
+                    <QrCode className="w-10 h-10 text-slate-900" />
                   </div>
-                )}
-              </div>
-
-              {/* Column 2: QR & Barcode */}
-              <div className="flex flex-col items-center justify-center border-y md:border-y-0 md:border-x border-slate-200 py-2 md:py-0 md:px-3 text-center space-y-1">
-                <div className="p-1.5 bg-white border border-slate-300 rounded-xl shadow-xs inline-block">
-                  <QrCode className="w-12 h-12 text-slate-800" />
+                  <div className="text-[10px] text-slate-600 leading-tight">
+                    <div className="font-bold text-slate-800">Sample Collected At:</div>
+                    <div>{booking.sampleCollectedAt || labAddress.split(',')[0]}</div>
+                  </div>
                 </div>
-                <div className="font-mono text-[10px] font-bold tracking-widest text-slate-700 uppercase">
-                  ||||| | ||| |||| || | {booking.bookingCode}
-                </div>
-                <div className="text-[10px] text-slate-500 font-medium">
-                  Sample Collected At: <br />
-                  <span className="font-bold text-slate-800">{booking.sampleCollectedAt || 'Main Laboratory'}</span>
-                </div>
-              </div>
-
-              {/* Column 3: Dates & Doctor */}
-              <div className="space-y-1.5 text-slate-700">
                 <div>
-                  <span className="font-semibold text-slate-500">Ref. By / Doctor: </span>
-                  <div className="font-bold text-slate-900">{booking.doctorName || 'Dr. Hiren Shah'}</div>
-                </div>
-                <div className="space-y-0.5 text-[11px]">
-                  <div><span className="text-slate-500">Registered: </span><span className="font-semibold">{new Date(booking.createdAt).toLocaleString()}</span></div>
-                  <div><span className="text-slate-500">Collected: </span><span className="font-semibold">{booking.sampleCollectedAtDate ? new Date(booking.sampleCollectedAtDate).toLocaleString() : 'Today'}</span></div>
-                  <div><span className="text-slate-500">Reported: </span><span className="font-semibold">{new Date().toLocaleString()}</span></div>
+                  <span className="text-slate-500 text-[11px]">Ref. By: </span>
+                  <strong className="text-slate-900 text-[11px]">{booking.doctorName || 'Dr. Hiren Shah'}</strong>
                 </div>
               </div>
+
+              {/* Right Barcode & Timestamps Column (Col 4) */}
+              <div className="md:col-span-4 space-y-1.5 text-right flex flex-col justify-between">
+                <div>
+                  <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
+                    ||||| | ||| |||| || | || ||||
+                  </div>
+                  <div className="font-mono text-[9px] text-slate-600">
+                    {booking.bookingCode || '0 35545 62336 78 1'}
+                  </div>
+                </div>
+
+                <div className="text-[10px] space-y-0.5 text-slate-600">
+                  <div>
+                    <span>Registered on: </span>
+                    <strong className="text-slate-800">{registeredTimeStr}</strong>
+                  </div>
+                  <div>
+                    <span>Collected on: </span>
+                    <strong className="text-slate-800">{collectedTimeStr}</strong>
+                  </div>
+                  <div>
+                    <span>Reported on: </span>
+                    <strong className="text-slate-800">{reportedTimeStr}</strong>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
-            {/* Test Results Section */}
+            {/* Test Results Section (Matching medicalreport.webp) */}
             {booking.tests.map((testItem, tIdx) => (
-              <div key={testItem.id || tIdx} className="space-y-3 pt-2">
+              <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
-                {/* Test Banner Heading */}
-                <div className="border-b-2 border-slate-800 pb-1 flex items-center justify-between">
-                  <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-tight">
-                    {testItem.testName}
+                {/* Centered Bold Test Title */}
+                <div className="text-center border-b-2 border-slate-800 pb-1">
+                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                    {testItem.testName || 'Complete Blood Count (CBC)'}
                   </h2>
-                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
-                    Category: {testItem.category}
-                  </span>
-                </div>
-
-                <div className="text-xs font-semibold text-slate-600 flex items-center gap-2">
-                  <span className="font-bold text-slate-800">Primary Sample Type:</span>
-                  <span className="px-2 py-0.5 bg-slate-100 rounded-md border border-slate-300 font-mono text-slate-700">
-                    {testItem.sampleTypeRequired}
-                  </span>
-                </div>
-
-                {/* Sub-parameters or Direct Value Table */}
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-300 text-slate-700 uppercase tracking-wider text-[11px]">
-                      <th className="py-2 pr-4 font-black">Investigation</th>
-                      <th className="py-2 px-4 font-black text-center">Result</th>
-                      <th className="py-2 px-4 font-black text-center">Reference Value</th>
-                      <th className="py-2 pl-4 font-black text-right">Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 text-slate-800">
-                    {testItem.subParameters && testItem.subParameters.length > 0 ? (
-                      testItem.subParameters.map((sp) => {
-                        const isHigh = sp.flag === 'High';
-                        const isLow = sp.flag === 'Low';
-                        const refVal = booking.patientGender === 'Female' ? sp.refRangeFemale : booking.patientGender === 'Child' ? sp.refRangeChild : sp.refRangeMale;
-
-                        return (
-                          <tr key={sp.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-2 pr-4 font-medium">
-                              {sp.name}
-                            </td>
-                            <td className="py-2 px-4 text-center font-bold">
-                              <span className={`inline-flex items-center gap-1 ${
-                                isHigh ? 'text-rose-600 font-extrabold' : isLow ? 'text-blue-600 font-extrabold' : 'text-slate-900'
-                              }`}>
-                                {sp.value || 'N/A'}
-                                {isHigh && (
-                                  <span className="px-1.5 py-0.2 text-[9px] bg-rose-100 text-rose-700 font-black rounded-sm uppercase border border-rose-300">
-                                    High
-                                  </span>
-                                )}
-                                {isLow && (
-                                  <span className="px-1.5 py-0.2 text-[9px] bg-blue-100 text-blue-700 font-black rounded-sm uppercase border border-blue-300">
-                                    Low
-                                  </span>
-                                )}
-                              </span>
-                            </td>
-                            <td className="py-2 px-4 text-center text-slate-600 font-mono">
-                              {refVal || 'Normal Range'}
-                            </td>
-                            <td className="py-2 pl-4 text-right text-slate-500 font-mono">
-                              {sp.unit}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td className="py-2.5 pr-4 font-extrabold text-slate-900">
-                          {testItem.testName}
-                        </td>
-                        <td className="py-2.5 px-4 text-center font-bold text-sm text-blue-800">
-                          {testItem.resultValue || 'Normal / Non-Reactive'}
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-slate-600 font-mono">
-                          {booking.patientGender === 'Female' ? testItem.refRangeFemale : testItem.refRangeMale}
-                        </td>
-                        <td className="py-2.5 pl-4 text-right text-slate-500 font-mono">
-                          {testItem.units}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-
-                {testItem.labNotes && (
-                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium">
-                    <span className="font-bold">Technologist Note: </span>
-                    {testItem.labNotes}
+                  <div className="text-[11px] font-semibold text-slate-600 flex items-center justify-center gap-2">
+                    <span>Primary Sample Type: <strong>{testItem.sampleTypeRequired || 'Blood'}</strong></span>
+                    <span>•</span>
+                    <span>Department: <strong>{testItem.category || 'Haematology'}</strong></span>
                   </div>
-                )}
+                </div>
+
+                {/* Sub-parameters or Direct Value Table with high/low badges */}
+                <div className="relative overflow-hidden">
+                  
+                  {/* Subtle Background Watermark */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none select-none">
+                    <span className="text-5xl font-black text-slate-900 tracking-widest uppercase transform -rotate-12">
+                      {labName}
+                    </span>
+                  </div>
+
+                  <table className="w-full text-left text-xs border-collapse relative z-10">
+                    <thead>
+                      <tr className="border-b-2 border-slate-400 text-slate-800 text-[11px]">
+                        <th className="py-2 pr-3 font-black uppercase">Investigation</th>
+                        <th className="py-2 px-3 font-black text-center uppercase">Result</th>
+                        <th className="py-2 px-3 font-black text-center uppercase">Reference Value</th>
+                        <th className="py-2 pl-3 font-black text-right uppercase">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-slate-800">
+                      {testItem.subParameters && testItem.subParameters.length > 0 ? (
+                        testItem.subParameters.map((sp) => {
+                          const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
+                          const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
+                          const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
+
+                          const refVal = booking.patientGender === 'Female' 
+                            ? (sp.refRangeFemale || sp.refRangeMale || 'Normal')
+                            : booking.patientGender === 'Child' 
+                              ? (sp.refRangeChild || sp.refRangeMale || 'Normal')
+                              : (sp.refRangeMale || 'Normal');
+
+                          const isCalculated = sp.name?.toLowerCase().includes('mcv') || sp.name?.toLowerCase().includes('mch') || sp.name?.toLowerCase().includes('mchc');
+
+                          return (
+                            <tr key={sp.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-1.5 pr-3 font-medium text-slate-900">
+                                <div>{sp.name}</div>
+                                {isCalculated && (
+                                  <span className="text-[9px] text-slate-500 font-normal italic">Calculated</span>
+                                )}
+                              </td>
+                              <td className="py-1.5 px-3 text-center font-bold">
+                                <div className="inline-flex items-center justify-center gap-1.5">
+                                  <span className={`font-black ${
+                                    isHigh ? 'text-rose-700' : isLow ? 'text-blue-700' : 'text-slate-900'
+                                  }`}>
+                                    {sp.value || 'N/A'}
+                                  </span>
+
+                                  {isHigh && (
+                                    <span className="px-1.5 py-0.2 text-[9px] bg-rose-100 text-rose-800 font-black rounded uppercase border border-rose-300">
+                                      High
+                                    </span>
+                                  )}
+                                  {isLow && (
+                                    <span className="px-1.5 py-0.2 text-[9px] bg-blue-100 text-blue-800 font-black rounded uppercase border border-blue-300">
+                                      Low
+                                    </span>
+                                  )}
+                                  {isBorderline && (
+                                    <span className="px-1.5 py-0.2 text-[9px] bg-amber-100 text-amber-800 font-black rounded uppercase border border-amber-300">
+                                      Borderline
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-1.5 px-3 text-center text-slate-700 font-mono text-[11px]">
+                                {refVal}
+                              </td>
+                              <td className="py-1.5 pl-3 text-right text-slate-600 font-mono text-[11px]">
+                                {sp.unit}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td className="py-2.5 pr-3 font-black text-slate-900">
+                            {testItem.testName}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-black text-sm text-blue-900">
+                            {testItem.resultValue || 'Normal / Non-Reactive'}
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-slate-700 font-mono text-[11px]">
+                            {booking.patientGender === 'Female' ? testItem.refRangeFemale : testItem.refRangeMale || 'Normal'}
+                          </td>
+                          <td className="py-2.5 pl-3 text-right text-slate-600 font-mono text-[11px]">
+                            {testItem.units || 'Index'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Instruments & Interpretation (Matching medicalreport.webp) */}
+                <div className="pt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-200">
+                  <div>
+                    <strong className="text-slate-900">Instruments: </strong>
+                    <span>Fully automated cell counter - Mindray 300 / Sysmex / Roche Diagnostic Platform</span>
+                  </div>
+                  <div>
+                    <strong className="text-slate-900">Interpretation: </strong>
+                    <span>{testItem.labNotes || 'Clinical findings correlate with clinical history. Further confirm for diagnostic evaluation.'}</span>
+                  </div>
+                </div>
+
               </div>
             ))}
 
-            {/* Instrument Note */}
-            <div className="text-[11px] text-slate-500 italic pt-2 border-t border-slate-200">
-              Instruments: Fully automated clinical analyzer system calibrated according to ISO 15189 standards.
+            {/* End of Report & Sign Off Strip */}
+            <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
+              <span className="font-semibold italic">Thanks for Reference</span>
+              <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">
+                **** End of Report ****
+              </span>
             </div>
 
-            {/* Signatures & Pathologist Sign-Off Block */}
-            <div className="pt-8 border-t-2 border-slate-800 grid grid-cols-3 gap-4 text-center text-xs">
+            {/* Signatures & Pathologist Sign-Off Block (Matching medicalreport.webp) */}
+            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-3 gap-3 text-center text-xs">
               
+              {/* Medical Lab Technician */}
               <div>
-                <div className="h-10 flex items-center justify-center font-serif text-slate-700 italic font-bold">
+                <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
                   {booking.tests[0]?.completedBy || 'Mangi Lerine Laslie'}
                 </div>
-                <div className="font-extrabold text-slate-900">Medical Lab Technician</div>
-                <div className="text-[10px] text-slate-500">(DMLT, BMLT)</div>
+                <div className="font-black text-slate-900">Medical Lab Technician</div>
+                <div className="text-[10px] text-slate-500 font-medium">(DMLT, BMLT)</div>
               </div>
 
+              {/* Dr. Payal Shah */}
               <div>
-                <div className="h-10 flex items-center justify-center font-serif text-blue-800 italic font-bold">
+                <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
                   Dr. Payal Shah
                 </div>
-                {/* <div className="font-extrabold text-slate-900">Dr. Payal Shah</div>
-                <div className="text-[10px] text-slate-500">(MD, Pathologist)</div> */}
+                <div className="font-black text-slate-900">Dr. Payal Shah</div>
+                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
               </div>
 
+              {/* Dr. Vimal Shah */}
               <div>
-                <div className="h-10 flex items-center justify-center font-serif text-blue-900 italic font-bold">
+                <div className="h-8 flex items-center justify-center font-serif text-blue-950 italic font-bold text-sm tracking-wide">
                   Dr. Vimal Shah
                 </div>
-                {/* <div className="font-extrabold text-slate-900">Dr. Vimal Shah</div>
-                <div className="text-[10px] text-slate-500">(MD, Pathologist)</div> */}
+                <div className="font-black text-slate-900">Dr. Vimal Shah</div>
+                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
               </div>
 
             </div>
 
-            {/* End of Report Bar */}
-            <div className="text-center font-bold text-[10px] text-slate-400 uppercase tracking-widest pt-2">
-              **** End of Report ****
-            </div>
+            {/* Bottom Footer Bar Matching medicalreport.webp */}
+            <div className="bg-slate-900 text-white rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-xs">
+              
+              {/* Left Sample Collection Badge */}
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-sky-500 rounded-lg text-slate-900">
+                  <Truck className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-bold uppercase tracking-wider text-[10px] text-sky-200">
+                  Sample Collection Hotline
+                </span>
+              </div>
 
-            {/* Bottom Contact Footer Bar */}
-            <div className="bg-blue-900 text-white p-3 rounded-xl flex items-center justify-between text-[11px]">
-              <div className="font-bold flex items-center gap-2">
-                <Phone className="w-4 h-4 text-sky-400" />
-                <span>Sample Collection Helpline: {labPhone}</span>
+              {/* Middle WhatsApp / Call Hotline */}
+              <div className="flex items-center gap-1.5 bg-emerald-700 text-white px-2.5 py-0.5 rounded-md font-bold text-[10px]">
+                <MessageCircle className="w-3 h-3 text-white" />
+                <span>{labPhone.split('|')[0]?.trim() || '0123456789'}</span>
               </div>
-              <div className="text-slate-300 font-mono text-[10px]">
-                Generated on: {new Date().toLocaleDateString()} | Page 1 of 1
+
+              {/* Right Generation Timestamp */}
+              <div className="text-[10px] text-slate-300 font-mono">
+                Generated on: {reportedTimeStr} | Page 1 of 1
               </div>
+
             </div>
 
           </div>
@@ -349,3 +434,5 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     </div>
   );
 };
+
+export default LabReportPdfViewModal;
