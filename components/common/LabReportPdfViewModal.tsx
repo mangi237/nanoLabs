@@ -396,7 +396,7 @@ const labWebsite = labInfo?.website || '';
               {/* Middle WhatsApp / Call Hotline */}
               <div className="flex items-center gap-1.5 bg-emerald-700 text-white px-2.5 py-0.5 rounded-md font-bold text-[10px]">
                 <MessageCircle className="w-3 h-3 text-white" />
-                <span>{labPhone.split('|')[0]?.trim() || '0123456789'}</span>
+                <span>{labPhone.split('|')[0]?.trim() || '(+237) 672 638 094'}</span>
               </div>
 
               {/* Right Generation Timestamp */}
