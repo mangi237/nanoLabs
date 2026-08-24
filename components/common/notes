@@ -1,0 +1,16 @@
+#todo for to review on 
+first off  verify the slow authentication adn data loading process for firebase 
+review the payment plan, like reviewing the percentage instead fo per test 
+reviewing the process for self referrred patients like instead they can search for a test from our official 80 catalog and they see labs around them (closest proximity) that offer that test
+for self reffered patients that just see a lab and were not referred by a doctor , means the lab was referreed by nanolabs ,so we take the said 20% commision fee 
+the  receptionist confirms one test and the other ones get verified, 
+when cashier verifies a certain test payment all of them gets verified 
+when the analyzer collects sample for a specific test all of them get verified 
+when the lab tech upoads a specific test all of them gets uploaded, 
+the patient can not see uploaded result adn all of that , so its bad
+the auditing process to is not workign because we can only see when and what we did in the audiiting 
+the patient receipt inthe patient dashboard shuld also be the same template as that of the casier dashobard,
+the status also ends only in the analyzer and doesn't reach int eh lab technician
+the biologist portal is not there, its taking you instead back to the admin dashboard 
+cause all test have to be taking to the biologist   to confirm before they upload  to the patients portal 
+we have to put a logo in our app when we load i 
