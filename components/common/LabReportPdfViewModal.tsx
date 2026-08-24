@@ -360,7 +360,7 @@ const labWebsite = labInfo?.website || '';
 
             {/* End of Report & Sign Off Strip */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
-              <span className="font-semibold italic">Thanks for Reference</span>
+              <span className="font-semibold italic">Thanks for The Reference</span>
               <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">
                 **** End of Report ****
               </span>
