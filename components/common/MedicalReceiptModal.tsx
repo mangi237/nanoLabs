@@ -285,7 +285,7 @@ const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any) => ct.id === t.id
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-                      {confirmedAndPaidTests.map((testItem, idx) => {
+                    {confirmedAndPaidTests.map((testItem: any, idx: number) => {
                         const unitPrice = testItem.price || 5000;
                         const qty = 1;
                         const lineTotal = unitPrice * qty;
