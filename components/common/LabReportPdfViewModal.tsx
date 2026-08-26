@@ -22,7 +22,7 @@ import { formatDOBDisplay } from '../../data/cameroonInsurances';
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  booking: (Partial<PatientBooking> & { tests: BookingTestItem[] }) | null;
+  booking: PatientBooking | any;
   labInfo?: any;
 }
 
@@ -34,12 +34,13 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 }) => {
   if (!isOpen || !booking) return null;
 
-  const labName = labInfo?.name || 'Laboratory Name Not Configured';
-const labSlogan = labInfo?.slogan || '';
-const labAddress = labInfo?.address || labInfo?.location || 'Address not configured';
-const labPhone = labInfo?.phone || 'N/A';
-const labEmail = labInfo?.email || 'N/A';
-const labWebsite = labInfo?.website || '';
+  const labName = labInfo?.name || booking.sampleCollectedAt || 'DRLOGY PATHOLOGY LAB';
+  const labSlogan = labInfo?.slogan || 'Accurate | Caring | Instant';
+  const labAddress = labInfo?.address || labInfo?.location || '105-108, SMART VISION COMPLEX, HEALTHCARE ROAD, OPPOSITE HEALTHCARE COMPLEX. MUMBAI - 689578';
+  const labPhone = labInfo?.phone || '0123456789 | 0912345678';
+  const labEmail = labInfo?.email || 'drlogypathlab@drlogy.com';
+  const labWebsite = labInfo?.website || 'www.drlogy.com';
+
   const handlePrint = () => {
     window.print();
   };
@@ -52,10 +53,11 @@ const labWebsite = labInfo?.website || '';
   const collectedTimeStr = booking.sampleCollectedAtDate
     ? new Date(booking.sampleCollectedAtDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.sampleCollectedAtDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '03:11 PM 02 Dec, 2026';
-    const firstCompletedAt = booking.tests?.find(t => t.completedAt)?.completedAt;
-    const reportedTimeStr = firstCompletedAt
-      ? new Date(firstCompletedAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(firstCompletedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : 'Pending';
+
+  const reportedTimeStr = (booking.completedAt || booking.tests?.[0]?.completedAt)
+    ? new Date(booking.completedAt || booking.tests?.[0]?.completedAt || '').toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.completedAt || booking.tests?.[0]?.completedAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '04:35 PM 02 Dec, 2026';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
       <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
@@ -271,8 +273,8 @@ const labWebsite = labInfo?.website || '';
                         testItem.subParameters.map((sp) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
-                          // const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
-                          const isBorderline = sp.name?.toLowerCase().includes('platelet');
+                          const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
+
                           const refVal = booking.patientGender === 'Female' 
                             ? (sp.refRangeFemale || sp.refRangeMale || 'Normal')
                             : booking.patientGender === 'Child' 
@@ -360,26 +362,44 @@ const labWebsite = labInfo?.website || '';
 
             {/* End of Report & Sign Off Strip */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
-              <span className="font-semibold italic">Thanks for The Reference</span>
+              <span className="font-semibold italic">Thanks for Reference</span>
               <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">
                 **** End of Report ****
               </span>
             </div>
 
             {/* Signatures & Pathologist Sign-Off Block (Matching medicalreport.webp) */}
-            <div>
-  <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
-    {booking.tests[0]?.completedBy || 'Pending Technician Signature'}
-  </div>
-  <div className="font-black text-slate-900">Medical Lab Technician</div>
-</div>
+            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-3 gap-3 text-center text-xs">
+              
+              {/* Medical Lab Technician */}
+              <div>
+                <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
+                  {booking.tests[0]?.completedBy || 'Mangi Lerine Laslie'}
+                </div>
+                <div className="font-black text-slate-900">Medical Lab Technician</div>
+                <div className="text-[10px] text-slate-500 font-medium">(DMLT, BMLT)</div>
+              </div>
 
-<div>
-  <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
-    {booking.biologistName || 'Pending Biologist Sign-off'}
-  </div>
-  <div className="font-black text-slate-900">{booking.biologistName || 'Pending Biologist Sign-off'}</div>
-</div>
+              {/* Dr. Payal Shah */}
+              <div>
+                <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
+                  Dr. Payal Shah
+                </div>
+                <div className="font-black text-slate-900">Dr. Payal Shah</div>
+                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
+              </div>
+
+              {/* Dr. Vimal Shah */}
+              <div>
+                <div className="h-8 flex items-center justify-center font-serif text-blue-950 italic font-bold text-sm tracking-wide">
+                  Dr. Vimal Shah
+                </div>
+                <div className="font-black text-slate-900">Dr. Vimal Shah</div>
+                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
+              </div>
+
+            </div>
+
             {/* Bottom Footer Bar Matching medicalreport.webp */}
             <div className="bg-slate-900 text-white rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-xs">
               
@@ -396,7 +416,7 @@ const labWebsite = labInfo?.website || '';
               {/* Middle WhatsApp / Call Hotline */}
               <div className="flex items-center gap-1.5 bg-emerald-700 text-white px-2.5 py-0.5 rounded-md font-bold text-[10px]">
                 <MessageCircle className="w-3 h-3 text-white" />
-                <span>{labPhone.split('|')[0]?.trim() || '(+237) 672 638 094'}</span>
+                <span>{labPhone.split('|')[0]?.trim() || '0123456789'}</span>
               </div>
 
               {/* Right Generation Timestamp */}
