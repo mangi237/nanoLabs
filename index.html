@@ -1,16 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="notranslate" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>nanoLabs Healthcare Network | Find & Book Clinical Diagnostic Labs Around You</title>
+    <meta name="google" content="notranslate" />
+    <title>nanoLabs Healthcare Network | Clinical Diagnostics & Laboratory Management</title>
+    
+    <!-- High-Resolution SVG Favicon for Tab Bar in all Browsers -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Cpath d='M16 6v20M6 16h20' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='9' cy='9' r='1.5' fill='%232dd4bf'/%3E%3Ccircle cx='23' cy='23' r='1.5' fill='%232dd4bf'/%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Cpath d='M16 6v20M6 16h20' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2338bdf8'/%3E%3C/svg%3E" />
     
     <!-- SEO Meta Tags -->
     <meta name="description" content="Search, locate, and book appointments at accredited clinical laboratories around you. View test catalogs, prices, turnaround times, and get instant digital diagnostic results with nanoLabs Health Care." />
     <meta name="keywords" content="nanoLabs, clinical laboratory, diagnostic center, lab test Cameroon, Douala lab, Yaoundé lab, Bafoussam lab, blood culture, PCR test, diagnostic appointment, health care network, PILEM laboratory" />
     <meta name="author" content="nanoLabs Health Care" />
     <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://pmdiagnosticlab.com" />
+    <link rel="canonical" href="https://nano-labs.vercel.app" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -31,7 +36,7 @@
       "@type": "MedicalOrganization",
       "name": "nanoLabs Healthcare Network",
       "alternateName": "nanoLabs",
-      "url": "https://pmdiagnosticlab.com",
+      "url": "https://nano-labs.vercel.app",
       "description": "Next-generation healthcare network enabling patients to search, locate, and book diagnostic laboratory services around them.",
       "medicalSpecialty": [
         "Microbiology",
@@ -65,13 +70,39 @@
         background: transparent !important;
         box-shadow: none !important;
       }
+      /* Prevent mobile input zoom */
+      @media screen and (max-width: 768px) {
+        input, select, textarea {
+          font-size: 16px !important;
+        }
+      }
+      /* Print stylesheet for official medical patient booklets and receipts */
+      @media print {
+        body {
+          background: #ffffff !important;
+          color: #000000 !important;
+        }
+        header, nav, footer, .no-print, button, .role-switcher {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+        .printable-medical-sheet {
+          box-shadow: none !important;
+          border: 1px solid #cbd5e1 !important;
+          padding: 20px !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+      }
     </style>
   </head>
-  <body class="bg-slate-900 text-slate-100 antialiased selection:bg-teal-500 selection:text-white">
+  <body class="bg-slate-900 text-slate-100 antialiased selection:bg-teal-500 selection:text-white notranslate" translate="no">
     <!-- Hidden Google Translate Element -->
-    <!-- <div id="google_translate_element" style="display: none;"></div> -->
+    <div id="google_translate_element" style="display: none;"></div>
 
-    <!-- This must be OUTSIDE the comment tags -->
     <div id="root"></div>
 
     <!-- <script type="text/javascript">
@@ -86,9 +117,7 @@
       }
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script> -->
-     <!-- google translate removed since it caused problems when launching . -->
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/App.tsx"></script>
   </body>
-
 </html>
 

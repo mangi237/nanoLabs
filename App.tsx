@@ -126,6 +126,7 @@ const MainAppContent: React.FC = () => {
       );
     }
 
+
     switch (screen) {
       case 'login':
         return (
