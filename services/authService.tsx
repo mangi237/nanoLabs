@@ -155,14 +155,18 @@ export const authService = {
       const lowerCode = cleanCode.toLowerCase();
       const cleanDigits = cleanCode.replace(/\D/g, '');
 
-      // 3. Search Firestore Staff subcollection in target lab
+      // 3. Search Firestore Staff & Patient subcollections concurrently
       try {
-        console.log('🔍 Checking Firestore staff in lab:', targetLabId);
+        console.log('🔍 Checking Firestore credentials in target lab:', targetLabId);
         const staffRef = collection(db, 'labs', targetLabId, 'staff');
-        const staffSnap = await getDocs(staffRef);
+        const patientsRef = collection(db, 'labs', targetLabId, 'patients');
+
+        const [staffSnap, patientsSnap] = await Promise.all([
+          getDocs(staffRef).catch(() => ({ docs: [] as any[] })),
+          getDocs(patientsRef).catch(() => ({ docs: [] as any[] }))
+        ]);
 
         const foundStaffDoc = staffSnap.docs.find(d => matchesStaff(d, d.data()));
-
         if (foundStaffDoc) {
           const staffData = foundStaffDoc.data();
           console.log('✅ Firestore Staff found:', staffData.name);
@@ -185,47 +189,7 @@ export const authService = {
           };
         }
 
-        // Global check across all lab staff collections if not found in target lab
-        const allLabsSnap = await getDocs(collection(db, 'labs'));
-        for (const lDoc of allLabsSnap.docs) {
-          if (lDoc.id === targetLabId) continue;
-          const otherStaffSnap = await getDocs(collection(db, 'labs', lDoc.id, 'staff'));
-          const foundOtherStaff = otherStaffSnap.docs.find(d => matchesStaff(d, d.data()));
-
-          if (foundOtherStaff) {
-            const staffData = foundOtherStaff.data();
-            console.log('✅ Staff found in facility:', lDoc.id, staffData.name);
-            const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
-            const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
-
-            return {
-              success: true,
-              user: {
-                id: foundOtherStaff.id,
-                ...staffData,
-                role,
-                roles: staffData.roles || [role],
-                mustChangePassword: mustChange,
-                isTemporaryPassword: mustChange
-              },
-              lab: { id: lDoc.id, name: staffData.labName || lDoc.data()?.name || 'Laboratory Center' },
-              role,
-              mustChangePassword: mustChange
-            };
-          }
-        }
-      } catch (staffErr) {
-        console.warn('Error querying staff collection:', staffErr);
-      }
-
-      // 4. Search Firestore Patients subcollection across target lab or any lab
-      try {
-        console.log('🔍 Checking Firestore patients in lab:', targetLabId);
-        const patientsRef = collection(db, 'labs', targetLabId, 'patients');
-        const patientsSnap = await getDocs(patientsRef);
-
         const foundPatientDoc = patientsSnap.docs.find(d => matchesPatient(d, d.data()));
-
         if (foundPatientDoc) {
           const patientData = foundPatientDoc.data();
           console.log('✅ Firestore Patient found:', patientData.name);
@@ -245,33 +209,63 @@ export const authService = {
           };
         }
 
-        // Global check across all lab patient collections if specific lab query didn't match
-        const allLabsSnap = await getDocs(collection(db, 'labs'));
-        for (const labDoc of allLabsSnap.docs) {
-          if (labDoc.id === targetLabId) continue;
-          const otherPatientsSnap = await getDocs(collection(db, 'labs', labDoc.id, 'patients'));
-          const foundOtherDoc = otherPatientsSnap.docs.find(d => matchesPatient(d, d.data()));
+        // Global parallel check across other facilities if not in target lab
+        const allLabsSnap = await getDocs(collection(db, 'labs')).catch(() => ({ docs: [] as any[] }));
+        const otherLabIds = allLabsSnap.docs.map(d => d.id).filter(id => id !== targetLabId);
 
-          if (foundOtherDoc) {
-            const patientData = foundOtherDoc.data();
-            console.log('✅ Patient found in lab:', labDoc.id, patientData.name);
-            return {
-              success: true,
-              user: {
-                id: foundOtherDoc.id,
-                ...patientData,
+        if (otherLabIds.length > 0) {
+          const allOtherFetches = otherLabIds.map(async (labId) => {
+            const [sSnap, pSnap] = await Promise.all([
+              getDocs(collection(db, 'labs', labId, 'staff')).catch(() => ({ docs: [] as any[] })),
+              getDocs(collection(db, 'labs', labId, 'patients')).catch(() => ({ docs: [] as any[] }))
+            ]);
+            return { labId, staffDocs: sSnap.docs, patientDocs: pSnap.docs };
+          });
+
+          const results = await Promise.all(allOtherFetches);
+          for (const res of results) {
+            const otherStaff = res.staffDocs.find(d => matchesStaff(d, d.data()));
+            if (otherStaff) {
+              const staffData = otherStaff.data();
+              const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
+              const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
+              return {
+                success: true,
+                user: {
+                  id: otherStaff.id,
+                  ...staffData,
+                  role,
+                  roles: staffData.roles || [role],
+                  mustChangePassword: mustChange,
+                  isTemporaryPassword: mustChange
+                },
+                lab: { id: res.labId, name: staffData.labName || 'Laboratory Center' },
+                role,
+                mustChangePassword: mustChange
+              };
+            }
+
+            const otherPatient = res.patientDocs.find(d => matchesPatient(d, d.data()));
+            if (otherPatient) {
+              const patientData = otherPatient.data();
+              return {
+                success: true,
+                user: {
+                  id: otherPatient.id,
+                  ...patientData,
+                  role: 'patient',
+                  roles: ['patient'],
+                  mustChangePassword: false
+                },
+                lab: { id: res.labId, name: patientData.labName || 'Laboratory Center' },
                 role: 'patient',
-                roles: ['patient'],
                 mustChangePassword: false
-              },
-              lab: { id: labDoc.id, name: patientData.labName || labDoc.data()?.name || 'Laboratory' },
-              role: 'patient',
-              mustChangePassword: false
-            };
+              };
+            }
           }
         }
-      } catch (patientErr) {
-        console.warn('Error querying patient collection:', patientErr);
+      } catch (authErr) {
+        console.warn('Error during concurrent credential verification:', authErr);
       }
 
       // 5. Check local client fallback cache (for instant login after local registration)
