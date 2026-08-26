@@ -21,10 +21,15 @@ import {
   Layers,
   HardDrive,
   CheckCircle2,
-  Clock
+  Clock,
+  Mail,
+  Lock,
+  RefreshCw,
+  UserCheck
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
+import { sendOtpVerification, verifyOtpCode } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import { PricingModelType, SubscriptionTierType } from '../../types';
 
@@ -48,6 +53,17 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const [authorizedRepConfirmed, setAuthorizedRepConfirmed] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  // Human Verification OTP State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpDispatched, setOtpDispatched] = useState(false);
+  const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
+  const [verificationId, setVerificationId] = useState('');
+  const [debugOtpCode, setDebugOtpCode] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     // Step 1: Info
     name: '',
@@ -66,7 +82,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     feePerTest: 500,
     monthlyMaintenanceFee: 15000,
     defaultDoctorCommissionRate: 20,
-    staffLimit: 12,
+    staffLimit: 15,
     sitesCount: 2,
 
     // Step 3: Theme
@@ -132,7 +148,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         pricingModel: 'flat_subscription',
         subscriptionTier: 'growth',
         feePerTest: 0,
-        staffLimit: 12,
+        staffLimit: 15,
         sitesCount: 2
       }));
     } else if (model === 'lifetime_space') {
@@ -192,20 +208,21 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     if (formData.pricingModel === 'lifetime_space') return formData.monthlyMaintenanceFee;
     
     if (formData.subscriptionTier === 'small' || formData.subscriptionTier === 'starter') {
-      return 25000;
+      return formData.billingPeriod === 'annual' ? 250000 : 25000;
     }
     if (formData.subscriptionTier === 'medium' || formData.subscriptionTier === 'growth') {
-      return 45000;
+      return formData.billingPeriod === 'annual' ? 450000 : 45000;
     }
     if (formData.subscriptionTier === 'large' || formData.subscriptionTier === 'business' || formData.subscriptionTier === 'enterprise') {
-      return 60000;
+      return formData.billingPeriod === 'annual' ? 750000 : 75000;
     }
-    return 25000;
+    return formData.billingPeriod === 'annual' ? 450000 : 45000;
   };
 
-  const handleSubmit = async () => {
+  // Trigger Human Verification OTP Flow
+  const handleInitiateHumanVerification = async () => {
     if (!formData.adminName.trim() || !formData.adminEmail.trim()) {
-      alert('Please fill in Lab Administrator credentials.');
+      alert('Please fill in Lab Administrator name and email address.');
       return;
     }
 
@@ -219,6 +236,64 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
       return;
     }
 
+    setOtpSending(true);
+    setOtpError('');
+    setShowOtpModal(true);
+
+    try {
+      const res = await sendOtpVerification(
+        formData.adminEmail.trim(),
+        'lab_creation',
+        formData.adminName.trim(),
+        formData.name.trim()
+      );
+
+      if (res.success) {
+        setOtpDispatched(true);
+        setVerificationId(res.verificationId || '');
+        setOtpSuccessMessage(res.message || `Verification code sent to ${formData.adminEmail}`);
+        if (res.debugCode) {
+          setDebugOtpCode(res.debugCode);
+        }
+      } else {
+        setOtpError(res.error || 'Failed to dispatch verification code. Please check email address.');
+      }
+    } catch (e: any) {
+      console.error('Error sending OTP:', e);
+      setOtpError('Error connecting to verification service.');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtpAndProvision = async () => {
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setOtpError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setOtpVerifying(true);
+    setOtpError('');
+
+    try {
+      const verifyRes = await verifyOtpCode(formData.adminEmail.trim(), otpCode.trim(), verificationId);
+      if (!verifyRes.success || !verifyRes.verified) {
+        setOtpError(verifyRes.error || 'Invalid or expired verification code. Please re-enter.');
+        setOtpVerifying(false);
+        return;
+      }
+
+      // Verification passed! Commit lab creation
+      setShowOtpModal(false);
+      await commitLabCreation();
+    } catch (e: any) {
+      console.error('Error verifying OTP:', e);
+      setOtpError(e.message || 'Verification failed.');
+      setOtpVerifying(false);
+    }
+  };
+
+  const commitLabCreation = async () => {
     setLoading(true);
     try {
       const subPrice = getSubscriptionPrice();
@@ -243,9 +318,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         royaltyEarnings: 0,
         staffCount: 1,
         
-        // Pending approval workflow
+        // Pending approval workflow & Human verification confirmation
         status: 'pending_approval',
         confirmed: false,
+        humanVerified: true,
+        humanVerifiedAt: new Date().toISOString(),
         
         // Commercial Model Setup
         pricingModel: formData.pricingModel,
@@ -271,16 +348,18 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
       const labId = labRef.id;
 
-      // 2. Create Initial Admin Account
+      // 2. Create Initial Admin Account with temporary passcode & first-login change password flag
       await addDoc(collection(db, 'labs', labId, 'staff'), {
         name: formData.adminName.trim(),
         email: formData.adminEmail.trim(),
         phone: formData.adminPhone.trim(),
-        accessCode: formData.accessCode || 'ADMIN1',
+        accessCode: formData.accessCode || 'ADM-8800',
         role: 'admin',
         roles: ['admin', 'receptionist', 'cashier', 'analyzer', 'lab_tech'],
         labId: labId,
         labName: formData.name.trim(),
+        mustChangePassword: true,
+        status: 'active',
         createdAt: new Date().toISOString()
       });
 
@@ -625,17 +704,20 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Starter Tier */}
+                    {/* Starter Tier - Private Clinics */}
                     <div
                       onClick={() => handleSelectTier('starter')}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                         formData.subscriptionTier === 'starter'
                           ? 'border-teal-600 bg-white ring-2 ring-teal-500/20 shadow-xs'
                           : 'border-slate-200 bg-white/70 hover:bg-white'
                       }`}
                     >
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-slate-900">Starter Lab</span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">Private Clinic / Solo</span>
+                          <span className="text-[10px] text-teal-700 font-semibold">600–1,000+ tests/mo</span>
+                        </div>
                         {formData.subscriptionTier === 'starter' && <Check className="w-3.5 h-3.5 text-teal-600" />}
                       </div>
                       <div className="mt-2 text-sm font-black text-teal-700">
@@ -643,60 +725,69 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       </div>
                       <p className="text-[10px] text-slate-500 font-medium">~₦75,000 / $48 / mo</p>
                       <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
-                        <li>• Unlimited Diagnostic Tests</li>
-                        <li>• Up to 5 Staff Seats</li>
-                        <li>• 1 Primary Laboratory</li>
+                        <li>• Complete Diagnostic Intake</li>
+                        <li>• Up to 5 Staff Workstations</li>
+                        <li>• 1 Dedicated Laboratory</li>
+                        <li>• Cashier & Analyzer Routing</li>
                       </ul>
                     </div>
 
-                    {/* Professional Tier */}
+                    {/* Professional Tier - District / Public Hospitals */}
                     <div
                       onClick={() => handleSelectTier('growth')}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer relative ${
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer relative ${
                         formData.subscriptionTier === 'growth'
                           ? 'border-teal-600 bg-white ring-2 ring-teal-500/20 shadow-xs'
                           : 'border-slate-200 bg-white/70 hover:bg-white'
                       }`}
                     >
-                      <span className="absolute -top-2 right-2 bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                        Recommended
+                      <span className="absolute -top-2 right-2 bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-xs">
+                        District Hospitals ⭐
                       </span>
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-slate-900">Professional Lab ⭐</span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">District Hospital Lab</span>
+                          <span className="text-[10px] text-teal-700 font-semibold">1,300–1,400 tests/mo</span>
+                        </div>
                         {formData.subscriptionTier === 'growth' && <Check className="w-3.5 h-3.5 text-teal-600" />}
                       </div>
                       <div className="mt-2 text-sm font-black text-teal-700">
-                        {formData.billingPeriod === 'annual' ? '550,000 FCFA / yr' : '55,000 FCFA / mo'}
+                        {formData.billingPeriod === 'annual' ? '450,000 FCFA / yr' : '45,000 FCFA / mo'}
                       </div>
-                      <p className="text-[10px] text-slate-500 font-medium">~₦120,000 / $76 / mo</p>
+                      <p className="text-[10px] text-slate-500 font-medium">~₦100,000 / $72 / mo</p>
                       <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
-                        <li>• Unlimited Diagnostic Tests</li>
-                        <li>• Up to 12 Staff Seats</li>
-                        <li>• 1 Lab + 2 Collection Centres</li>
+                        <li>• Decoupled Per-Test Processing</li>
+                        <li>• Up to 15 Clinical Staff</li>
+                        <li>• 1 Primary Lab + 2 Sampling Hubs</li>
+                        <li>• Fast Phlebotomy Barcodes</li>
                       </ul>
                     </div>
 
-                    {/* Business Tier */}
+                    {/* Business Tier - Regional Reference Hospitals */}
                     <div
                       onClick={() => handleSelectTier('business')}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                         formData.subscriptionTier === 'business'
                           ? 'border-teal-600 bg-white ring-2 ring-teal-500/20 shadow-xs'
                           : 'border-slate-200 bg-white/70 hover:bg-white'
                       }`}
                     >
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-slate-900">Business Lab</span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">Regional Reference Center</span>
+                          <span className="text-[10px] text-teal-700 font-semibold">2,000+ tests/mo</span>
+                        </div>
                         {formData.subscriptionTier === 'business' && <Check className="w-3.5 h-3.5 text-teal-600" />}
                       </div>
                       <div className="mt-2 text-sm font-black text-teal-700">
-                        {formData.billingPeriod === 'annual' ? '1,200,000 FCFA / yr' : '120,000 FCFA / mo'}
+                        {formData.billingPeriod === 'annual' ? '750,000 FCFA / yr' : '75,000 FCFA / mo'}
                       </div>
-                      <p className="text-[10px] text-slate-500 font-medium">~₦200,000 / $127 / mo</p>
+                      <p className="text-[10px] text-slate-500 font-medium">~₦180,000 / $120 / mo</p>
                       <ul className="mt-2 text-[10px] text-slate-700 font-medium space-y-0.5">
-                        <li>• Unlimited Diagnostic Tests</li>
-                        <li>• Up to 25 Staff Seats</li>
-                        <li>• 3 Labs + 5 Collection Centres</li>
+                        <li>• Unlimited Attending Staff</li>
+                        <li>• Multi-Site Sampling Network</li>
+                        <li>• AI Diagnostic Insights</li>
+                        <li>• Secure Physician Report Emailing</li>
                       </ul>
                     </div>
 
@@ -987,19 +1078,19 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
             </button>
           ) : (
             <button
-              onClick={handleSubmit}
-              disabled={loading || !termsAccepted || !authorizedRepConfirmed}
+              onClick={handleInitiateHumanVerification}
+              disabled={loading || otpSending || !termsAccepted || !authorizedRepConfirmed}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
-              {loading ? (
+              {otpSending ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Provisioning Center...
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending Verification Code...
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" />
-                  Agree & Complete Lab Provisioning
+                  <ShieldCheck className="w-4 h-4" />
+                  Verify Email & Provision Lab
                 </>
               )}
             </button>
@@ -1007,6 +1098,112 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         </div>
 
       </div>
+
+      {/* Human Verification OTP Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
+            <button
+              onClick={() => {
+                setShowOtpModal(false);
+                setOtpError('');
+                setOtpCode('');
+              }}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center mx-auto shadow-sm">
+                <UserCheck className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900">
+                Human & Admin Verification
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                A 6-digit verification code has been dispatched to <strong className="text-slate-800">{formData.adminEmail}</strong> to confirm legitimate human administrator identity.
+              </p>
+            </div>
+
+            {otpSuccessMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{otpSuccessMessage}</span>
+              </div>
+            )}
+
+            {debugOtpCode && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-900 font-mono flex items-center justify-between">
+                <span>Dev Preview Code: <strong>{debugOtpCode}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setOtpCode(debugOtpCode)}
+                  className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold rounded text-[10px] cursor-pointer"
+                >
+                  Auto-fill
+                </button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 text-center uppercase tracking-wider">
+                Enter 6-Digit Code
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setOtpCode(val);
+                  setOtpError('');
+                }}
+                placeholder="• • • • • •"
+                className="w-full text-center py-3.5 px-4 bg-slate-50 border-2 border-teal-500/40 rounded-2xl text-2xl font-mono font-black tracking-widest text-slate-900 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-500/20 transition-all shadow-inner"
+              />
+            </div>
+
+            {otpError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{otpError}</span>
+              </div>
+            )}
+
+            <div className="space-y-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleVerifyOtpAndProvision}
+                disabled={otpVerifying || otpCode.length !== 6}
+                className="w-full py-3.5 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-lg shadow-teal-700/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {otpVerifying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Validating Security Credentials...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confirm Code & Complete Registration
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleInitiateHumanVerification}
+                disabled={otpSending}
+                className="w-full py-2 text-xs text-slate-500 hover:text-teal-700 font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${otpSending ? 'animate-spin' : ''}`} />
+                Resend Code to {formData.adminEmail}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lab Terms Modal */}
       <LabTermsModal
