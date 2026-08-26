@@ -1,7 +1,7 @@
-// components/admin/AddStaffModal.tsx - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
 import { authService } from '../../services/authService';
+import { sendEmail } from '../../services/emailService';
 import { 
   X, 
   Mail, 
@@ -143,8 +143,6 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
 
     setLoading(true);
     try {
-      // ✅ FIX: Use authService.createStaffWithCode with the correct call
-      // The function exists in authService but we need to call it properly
       const result = await authService.createStaffWithCode(
         {
           name: formData.name.trim(),
@@ -159,20 +157,33 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
         adminUser
       );
 
-      // ✅ If result is successful, show the code
-      if (result && result.success) {
-        setCreatedStaffResult({
-          staffId: result.staffId,
-          accessCode: result.accessCode || formData.accessCode.trim().toUpperCase(),
-          name: formData.name.trim(),
-          roles: formData.roles
-        });
-        onStaffAdded();
-      } else {
-        console.log('failed to add staff ');//fix this when you get back home 
+      // Send welcome onboarding email with temporary access code if staff email is provided
+      if (formData.email.trim()) {
+        try {
+          await sendEmail(
+            formData.email.trim(),
+            `Welcome to ${lab?.name || 'nanoLabs'} - Your Staff Access Code`,
+            `Hello ${formData.name.trim()},\n\nYou have been registered as authorized clinical staff at ${lab?.name || 'nanoLabs Diagnostics'}.\n\nYour Temporary Access Code: ${result.accessCode}\nAssigned Roles: ${formData.roles.join(', ')}\n\nUpon logging in for the first time with this code, you will be prompted to set your permanent private password.\n\nPortal Login: https://nanolabs.health/login\n\nBest regards,\nClinical Administration Team`,
+            {
+              recipient_name: formData.name.trim(),
+              access_code: result.accessCode,
+              lab_name: lab?.name || 'nanoLabs Diagnostics'
+            }
+          );
+        } catch (mailErr) {
+          console.warn('Staff welcome email notice:', mailErr);
+        }
       }
+
+      setCreatedStaffResult({
+        staffId: result.staffId,
+        accessCode: result.accessCode,
+        name: formData.name.trim(),
+        roles: formData.roles
+      });
+
+      onStaffAdded();
     } catch (error: any) {
-      console.error('AddStaffModal error:', error);
       setErrorMessage(error?.message || 'Failed to create staff member. Please try again.');
     } finally {
       setLoading(false);
