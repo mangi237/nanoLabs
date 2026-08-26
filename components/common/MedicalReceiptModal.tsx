@@ -19,7 +19,7 @@ import { formatDOBDisplay } from '../../data/cameroonInsurances';
 interface MedicalReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  booking: PatientBooking | null;
+  booking: PatientBooking | any;
   labInfo?: any;
   // Optional extra settled details if passed directly from cashier action
   paymentDetails?: {
@@ -30,13 +30,13 @@ interface MedicalReceiptModalProps {
     couponCode?: string;
     insuranceProvider?: string;
     insurancePolicyNumber?: string;
+    insuranceCoveragePercent?: number;
     coPayPercent?: number;
     cashierName?: string;
     actualPaidAmount?: number;
+    paidAt?: string;
     currency?: string;
-    insuranceCovertagePercent?: number;
     allOrderedBookings?: PatientBooking[];
-    paidAt: string;
   };
 }
 
