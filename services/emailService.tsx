@@ -1,19 +1,185 @@
 // src/services/emailService.ts
+// Backend-driven Email and Cryptographic OTP Service with Dynamic HTML templates (Resend, SendGrid, & Server API)
 
-const getEnvVar = (key: string, fallback: string) => {
+export interface OtpSendResult {
+  success: boolean;
+  verificationId?: string;
+  expiresAt?: string;
+  provider?: string;
+  message?: string;
+  debugCode?: string;
+  error?: string;
+}
+
+export interface OtpVerifyResult {
+  success: boolean;
+  verified?: boolean;
+  verificationId?: string;
+  email?: string;
+  reason?: string;
+  error?: string;
+}
+
+export interface DoctorReportEmailPayload {
+  doctorEmail: string;
+  doctorName?: string;
+  patientName: string;
+  patientAge?: number | string;
+  patientGender?: string;
+  patientPhone?: string;
+  patientCode?: string;
+  labName: string;
+  labContact?: string;
+  bookingCode: string;
+  tests: Array<{
+    testName: string;
+    category?: string;
+    resultValue?: string;
+    unit?: string;
+    referenceRange?: string;
+    status?: string;
+    subParameters?: Array<{ name: string; value: string; unit?: string; referenceRange?: string; status?: string }>;
+  }>;
+  reportUrl?: string;
+  remarks?: string;
+  biologistName?: string;
+}
+
+/**
+ * Sends a 6-digit cryptographic verification code to an email address via backend API.
+ * Used for:
+ * 1. Lab creation human verification (anti-bot / ownership proof)
+ * 2. Patient sharing diagnostic results with their doctor
+ * 3. Staff onboarding & authentication
+ */
+export const sendOtpVerification = async (
+  email: string,
+  type: 'lab_creation' | 'patient_share' | 'staff_invite' | 'general' = 'general',
+  recipientName?: string,
+  labName?: string,
+  metadata?: any
+): Promise<OtpSendResult> => {
   try {
-    const metaEnv = (import.meta as any).env || {};
-    const procEnv = typeof process !== 'undefined' ? process.env : {};
-    return metaEnv[key] || procEnv[key] || fallback;
-  } catch {
-    return fallback;
+    const res = await fetch('/api/email/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        type,
+        recipientName,
+        labName,
+        metadata
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.error || 'Failed to dispatch verification code'
+      };
+    }
+
+    return {
+      success: true,
+      verificationId: data.verificationId,
+      expiresAt: data.expiresAt,
+      provider: data.provider,
+      message: data.message,
+      debugCode: data.debugCode
+    };
+  } catch (error: any) {
+    console.error('Error dispatching OTP verification code:', error);
+    return {
+      success: false,
+      error: error.message || 'Network error connecting to email subsystem'
+    };
   }
 };
 
-export const SERVICE_ID = getEnvVar('VITE_EMAILJS_SERVICE_ID', 'service_u03r0wb');
-export const TEMPLATE_ID = getEnvVar('VITE_EMAILJS_TEMPLATE_ID', 'template_flqjy5n');
-export const USER_ID = getEnvVar('VITE_EMAILJS_PUBLIC_KEY', 'xLCmdo_YqdRM8UjZP');
+/**
+ * Verifies the 6-digit OTP code against the server's cryptographic hash store.
+ */
+export const verifyOtpCode = async (
+  email: string,
+  code: string,
+  verificationId?: string
+): Promise<OtpVerifyResult> => {
+  try {
+    const res = await fetch('/api/email/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        code: code.trim(),
+        verificationId
+      })
+    });
 
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.verified) {
+      return {
+        success: false,
+        verified: false,
+        error: data.error || 'Invalid or expired verification code'
+      };
+    }
+
+    return {
+      success: true,
+      verified: true,
+      verificationId: data.verificationId,
+      email: data.email,
+      reason: data.reason
+    };
+  } catch (error: any) {
+    console.error('Error verifying OTP code:', error);
+    return {
+      success: false,
+      verified: false,
+      error: error.message || 'Network error verifying code'
+    };
+  }
+};
+
+/**
+ * Sends official diagnostic lab results directly to a physician's inbox via backend mailer.
+ */
+export const sendDoctorReportEmail = async (
+  payload: DoctorReportEmailPayload
+): Promise<{ success: boolean; message?: string; provider?: string; error?: string }> => {
+  try {
+    const res = await fetch('/api/email/send-doctor-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.error || 'Failed to deliver report to doctor email'
+      };
+    }
+
+    return {
+      success: true,
+      message: data.message,
+      provider: data.provider
+    };
+  } catch (error: any) {
+    console.error('Error sending doctor report email:', error);
+    return {
+      success: false,
+      error: error.message || 'Network error dispatching doctor email'
+    };
+  }
+};
+
+/**
+ * Generic notification email dispatcher
+ */
 export const sendEmail = async (
   to: string,
   subject: string,
@@ -21,64 +187,21 @@ export const sendEmail = async (
   extraParams: Record<string, any> = {}
 ) => {
   try {
-    console.log('📧 Preparing to send live email via EmailJS:', {
-      serviceId: SERVICE_ID,
-      templateId: TEMPLATE_ID,
-      userId: USER_ID,
-      to,
-      subject,
-      message
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to,
+        toName: extraParams.to_name || extraParams.patient_name || to.split('@')[0],
+        subject,
+        message,
+        labName: extraParams.lab_name || 'nanoLabs Diagnostics',
+        ...extraParams
+      })
     });
 
-    // Populate standard EmailJS template variable aliases so all template configurations work
-    const templateParams = {
-      to_email: to,
-      to_name: to.split('@')[0] || 'Patient',
-      recipient_email: to,
-      user_email: to,
-      email: to,
-      to: to,
-      subject: subject,
-      message: message,
-      from_name: 'nanoLabs Diagnostics',
-      reply_to: 'support@nanolabs.health',
-      ...extraParams,
-    };
-
-    if (SERVICE_ID && TEMPLATE_ID && USER_ID) {
-      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          service_id: SERVICE_ID,
-          template_id: TEMPLATE_ID,
-          user_id: USER_ID,
-          template_params: templateParams,
-        }),
-      });
-
-      if (response.ok) {
-        const textResp = await response.text();
-        console.log('✅ Email successfully delivered via EmailJS API:', textResp);
-        return { success: true, response: textResp };
-      } else {
-        const errorText = await response.text();
-        console.warn('⚠️ EmailJS API returned error response:', response.status, errorText);
-        return {
-          success: false,
-          status: response.status,
-          error: errorText || `EmailJS returned HTTP ${response.status}`
-        };
-      }
-    }
-
-    return {
-      success: true,
-      simulated: true,
-      message: `Notification email dispatched to ${to}`
-    };
+    const data = await response.json();
+    return data;
   } catch (error: any) {
     console.error('❌ Email dispatch error:', error);
     return { success: false, error: error?.message || 'Network error sending email' };
@@ -87,7 +210,7 @@ export const sendEmail = async (
 
 export const sendResultNotificationEmail = async (
   email: string,
-  patientName: string, 
+  patientName: string,
   testName: string,
   result: string
 ) => {
@@ -104,7 +227,9 @@ export const sendResultNotificationEmail = async (
 };
 
 export default {
+  sendOtpVerification,
+  verifyOtpCode,
+  sendDoctorReportEmail,
   sendEmail,
   sendResultNotificationEmail
 };
-
