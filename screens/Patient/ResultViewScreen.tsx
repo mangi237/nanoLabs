@@ -187,10 +187,12 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
       if (foundPatientDoc) {
         const patientData = foundPatientDoc.data();
         const updatedTests = (patientData.labTests || []).map((t: any) => {
-          const isMatch = t.id === currentTest.id ||
-            (t.testName === currentTest.testName && t.requestedDate === currentTest.requestedDate);
-          if (isMatch) {
-            return { ...t, virtualRequested: true, virtualRequestedAt: new Date().toISOString() };
+          if (t.id === currentTest.id || t.testName === currentTest.testName) {
+            return {
+              ...t,
+              virtualRequested: true,
+              virtualRequestedAt: new Date().toISOString()
+            };
           }
           return t;
         });
@@ -212,13 +214,22 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   };
 
   // Accurate Status Variables
-  const isPaid = Boolean(currentTest.paid === true || currentTest.paymentStatus === 'paid');
-  const isConfirmedByReception = Boolean(currentTest.confirmedByReceptionist || currentTest.confirmedBy || currentTest.status === 'confirmed' || isPaid);
-  const isSampleCollected = Boolean(currentTest.sampleCollected || currentTest.collectedBy || currentTest.status === 'collected' || currentTest.status === 'analyzing' || currentTest.status === 'completed');
-  const isAnalyzing = Boolean(currentTest.status === 'analyzing' || (isSampleCollected && currentTest.status !== 'completed'));
-  const isCompleted = Boolean(currentTest.status === 'completed');
-  const hasPdf = Boolean(currentTest.pdfUrl || currentTest.fileUrl);
-  const pdfLink = currentTest.pdfUrl || currentTest.fileUrl;
+  const isPaid = Boolean(currentTest.paid === true || currentTest.paymentStatus === 'paid' || currentTest.status === 'Paid');
+  const isConfirmedByReception = Boolean(currentTest.receptionistValidated || currentTest.confirmedByReceptionist || currentTest.confirmedBy || currentTest.status === 'confirmed' || currentTest.status === 'Pending_Payment' || isPaid);
+  const isSampleCollected = Boolean(currentTest.sampleCollected || currentTest.collectedBy || currentTest.status === 'collected' || currentTest.status === 'In_Lab_Testing' || currentTest.status === 'analyzing' || currentTest.status === 'completed' || currentTest.status === 'Completed');
+  const isAnalyzing = Boolean(currentTest.status === 'analyzing' || currentTest.status === 'In_Lab_Testing');
+  const isCompleted = Boolean(
+    currentTest.status === 'completed' || 
+    currentTest.status === 'Completed' || 
+    currentTest.status === 'Ready_For_Pickup' || 
+    currentTest.status === 'released' || 
+    Boolean(currentTest.pdfReportUrl) || 
+    Boolean(currentTest.externalPdfUrl) || 
+    Boolean(currentTest.resultValue) || 
+    (Array.isArray(currentTest.subParameters) && currentTest.subParameters.length > 0)
+  );
+  const hasPdf = Boolean(currentTest.pdfReportUrl || currentTest.externalPdfUrl || currentTest.reportUrl || currentTest.pdfUrl || currentTest.fileUrl);
+  const pdfLink = currentTest.pdfReportUrl || currentTest.externalPdfUrl || currentTest.reportUrl || currentTest.pdfUrl || currentTest.fileUrl;
 
   // Accurate Pricing Breakdown
   const isPayPerTest = lab?.pricingModel === 'pay_per_test';
@@ -633,8 +644,6 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
           invoiceNumber: currentTest.invoiceNumber || `INV-${currentTest.id || '001'}`,
           sampleCollectedAt: currentTest.collectedAt || currentTest.sampleCollectedAt,
           resultEnteredAt: currentTest.completedAt || currentTest.resultEnteredAt,
-          // resultEnteredAt: currentTest.completedAt,
-  // verifiedAt: currentTest.biologistSignedAt || currentTest.completedAt,
           verifiedAt: currentTest.verifiedAt || currentTest.completedAt || new Date().toISOString(),
           tests: [currentTest]
         }}
