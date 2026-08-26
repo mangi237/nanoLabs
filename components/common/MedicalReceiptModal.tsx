@@ -79,7 +79,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     ot => !confirmedAndPaidTests.some((ct :  any ) => ct.id === ot.id || ct.testName === ot.testName)
   );
 
-  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum, t) => sum + (t.price || 5000), 0);
+  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum : number , t: any) => sum + (t.price || 5000), 0);
   const finalPaidAmount = paymentDetails?.actualPaidAmount ?? booking.actualPaidAmount ?? booking.totalAmount ?? Math.max(0, subtotal - discountAmount);
 
   // Insurance calculation
