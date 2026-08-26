@@ -28,7 +28,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
-import { uploadService } from '../../services/uploadService';
+import { uploadService } from '../../api/upload';
 import { sendOtpVerification, verifyOtpCode } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import { PricingModelType, SubscriptionTierType } from '../../types';
