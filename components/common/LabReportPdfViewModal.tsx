@@ -234,7 +234,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section (Matching medicalreport.webp) */}
-            {booking.tests.map((testItem, tIdx) => (
+            {booking.tests.map((testItem: any, tIdx: number) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -394,7 +394,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="h-8 flex items-center justify-center font-serif text-blue-950 italic font-bold text-sm tracking-wide">
                   Dr. Vimal Shah
                 </div>
-                <div className="font-black text-slate-900">Dr. Vimal Shah</div>
+                <div className="font-black text-slate-900">
+                /* wil change the data soon */
+              
+                </div>
                 <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
               </div>
 
