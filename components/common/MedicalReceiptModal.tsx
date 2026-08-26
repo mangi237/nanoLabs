@@ -76,7 +76,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   // Identify any requested tests that are pending confirmation/payment
   const otherUnpaidTests = allOrderedTests.filter(
-    ot => !confirmedAndPaidTests.some(ct => ct.id === ot.id || ct.testName === ot.testName)
+    ot => !confirmedAndPaidTests.some((ct :  any ) => ct.id === ot.id || ct.testName === ot.testName)
   );
 
   const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum, t) => sum + (t.price || 5000), 0);
@@ -246,8 +246,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     Below indicates the <strong>actual verified and settled tests</strong> authorized by administration.
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {allOrderedTests.map((t, idx) => {
-                      const isPaidThisInvoice = confirmedAndPaidTests.some(ct => ct.id === t.id || ct.testName === t.testName);
+                    {allOrderedTests.map((t: any, idx: number) => {
+const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any) => ct.id === t.id || ct.testName === t.testName);
                       return (
                         <span 
                           key={idx} 
