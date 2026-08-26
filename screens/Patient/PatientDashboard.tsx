@@ -6,6 +6,8 @@ import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase
 import { limsService, PatientBooking } from '../../services/limsService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
+import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
   Calendar, 
   FileText, 
@@ -665,107 +667,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         labName={lab?.name || 'nanoLabs Diagnostic Facility'}
       />
 
-      {/* Official Itemized Receipt Modal */}
-      {receiptModalBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">Diagnostic Test Receipt</h3>
-                  <p className="text-xs text-slate-500 font-mono">Invoice #{receiptModalBooking.invoiceNumber || 'INV-001'}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setReceiptModalBooking(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Receipt Body */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 text-xs">
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Facility:</span>
-                <span className="font-bold text-slate-900">{lab?.name || 'nanoLabs Central Diagnostics'}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Booking Code:</span>
-                <span className="font-mono font-bold text-teal-800">{receiptModalBooking.bookingCode}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Patient Name:</span>
-                <span className="font-bold text-slate-900">{receiptModalBooking.patientName || user?.name}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Payment Status:</span>
-                <span className={`font-bold px-2 py-0.5 rounded-md uppercase text-[10px] ${
-                  receiptModalBooking.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {receiptModalBooking.paymentStatus === 'paid' ? 'Paid & Reconciled' : 'Unpaid (Pending Cashier)'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Order Date:</span>
-                <span className="font-medium text-slate-900">
-                  {receiptModalBooking.createdAt ? new Date(receiptModalBooking.createdAt).toLocaleString() : new Date().toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Itemized Table */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Itemized Diagnostic Services ({receiptModalBooking.tests?.length || 0})</h4>
-              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 text-xs">
-                {receiptModalBooking.tests?.map((t, idx) => (
-                  <div key={t.id || idx} className="p-3 flex items-center justify-between hover:bg-slate-50/50">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-slate-900">{idx + 1}. {t.testName}</div>
-                      <div className="text-[11px] text-slate-500">{t.category || 'Clinical Pathology'} • {t.sampleTypeRequired || 'Blood Specimen'}</div>
-                    </div>
-                    <div className="font-mono font-bold text-slate-800">
-                      {(t.price || 5000).toLocaleString()} FCFA
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Total */}
-            <div className="bg-teal-900 text-white p-4 rounded-2xl flex items-center justify-between font-mono">
-              <div>
-                <span className="text-xs text-teal-200 uppercase font-semibold">Total Amount Payable</span>
-                <div className="text-lg font-black text-white">{(receiptModalBooking.totalAmount || 0).toLocaleString()} FCFA</div>
-              </div>
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-white/10 text-teal-200 border border-white/20">
-                {receiptModalBooking.paymentStatus === 'paid' ? 'PAID IN FULL' : 'CASHIER CHECKOUT REQUIRED'}
-              </span>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-teal-400" />
-                <span>Print Official Receipt</span>
-              </button>
-              <button
-                onClick={() => setReceiptModalBooking(null)}
-                className="py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-all cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Official Itemized Medical Receipt Modal */}
+      <MedicalReceiptModal
+        isOpen={Boolean(receiptModalBooking)}
+        onClose={() => setReceiptModalBooking(null)}
+        booking={receiptModalBooking}
+        labInfo={lab}
+      />
     </div>
   );
 };
