@@ -229,7 +229,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt : any ) => {
+    directLabTests.forEach((dt : any) => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -326,18 +326,32 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   };
 
   useEffect(() => {
-    fetchData();
+    setLoading(true);
+    // 1. Subscribe to Live Bookings / Test Statuses
+    const unsubBookings = limsService.subscribeToBookings(targetLabId, (updatedBookings) => {
+      setBookings(updatedBookings);
+      setLoading(false);
+    });
+
+    // 2. Subscribe to Live Patients Directory
+    const unsubPatients = limsService.subscribeToPatients(targetLabId, (updatedPatients) => {
+      setPatients(updatedPatients);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubBookings();
+      unsubPatients();
+    };
   }, [targetLabId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch patients
       const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const allPatients: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setPatients(allPatients);
 
-      // Fetch bookings (includes test requests)
       const allBookings = await limsService.fetchAllBookings(targetLabId);
       setBookings(allBookings);
     } catch (e) {
