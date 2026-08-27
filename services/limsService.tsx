@@ -1004,10 +1004,11 @@ export const limsService = {
     testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>;
     techName: string;
     pdfReportDataUrl?: string;
+    reagentsUsed: [];
   }): Promise<boolean> {
-    const { labId, bookingId, testResultsMap, techName, pdfReportDataUrl } = params;
+    const { labId, bookingId, testResultsMap, techName, pdfReportDataUrl, reagentsUsed } = params;
     const timestamp = new Date().toISOString();
-
+ 
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const snap = await getDocs(bookingsCol);
