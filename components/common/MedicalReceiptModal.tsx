@@ -49,12 +49,16 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 }) => {
   if (!isOpen || !booking) return null;
 
-  // Lab metadata
-  const labName = labInfo?.name || booking.sampleCollectedAt || 'Nanolabs Diagnostic Center';
-  const labAddress = labInfo?.address || labInfo?.location || 'Douala - Yaounde, Littoral Cameroon';
-  const labPhone = labInfo?.phone || '+237 670 000 000 / 222 555 7777';
-  const labEmail = labInfo?.email || 'inquire@nanolabs.health';
-  const labWebsite = labInfo?.website || 'www.nanolabs.health';
+  // Lab metadata from real lab configuration
+  const labName = labInfo?.name || booking.labName || booking.sampleCollectedAt || 'Clinical Diagnostics Center';
+  const labSlogan = labInfo?.slogan || labInfo?.tagline || 'Clinical Diagnostics & Laboratory Services';
+  const labAddress = labInfo?.address || labInfo?.location || booking.labAddress || 'Central Medical Diagnostics';
+  const labPhone = labInfo?.phone || labInfo?.contactNumber || booking.labPhone || '+237 600 000 000';
+  const labEmail = labInfo?.email || labInfo?.contactEmail || booking.labEmail || 'info@diagnostics.com';
+  const labWebsite = labInfo?.website || labInfo?.websiteUrl || booking.labWebsite || '';
+  const labLicense = labInfo?.licenseNumber || '';
+  const labTaxId = labInfo?.taxId || '';
+  const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || '';
   const primaryBrandColor = labInfo?.primaryColor || '#0284c7'; // Deep Sky Blue / Medical Cyan
 
   // Payment & Billing attributes
@@ -76,10 +80,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   // Identify any requested tests that are pending confirmation/payment
   const otherUnpaidTests = allOrderedTests.filter(
-    ot => !confirmedAndPaidTests.some((ct :  any ) => ct.id === ot.id || ct.testName === ot.testName)
+    ot => !confirmedAndPaidTests.some((ct: any ) => ct.id === ot.id || ct.testName === ot.testName)
   );
 
-  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum : number , t: any) => sum + (t.price || 5000), 0);
+  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum : number , t : any ) => sum + (t.price || 5000), 0);
   const finalPaidAmount = paymentDetails?.actualPaidAmount ?? booking.actualPaidAmount ?? booking.totalAmount ?? Math.max(0, subtotal - discountAmount);
 
   // Insurance calculation
@@ -146,40 +150,62 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
               </div>
 
               <div className="relative z-10 flex items-start justify-between gap-4">
-                {/* Left Medical Caduceus Box */}
+                {/* Left Medical Logo / Caduceus Box */}
                 <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#48bb78] rounded-xl flex items-center justify-center shadow-lg border-2 border-white/40 shrink-0">
-                    <svg 
-                      className="w-12 h-12 text-white" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="1.8" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    >
-                      {/* Medical Caduceus / Asclepius Emblem */}
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      <circle cx="12" cy="3" r="1.5" fill="currentColor" />
-                      <path d="M7 8c2.5-3 7.5-3 10 0" />
-                      <path d="M8 14c2-2 6-2 8 0" />
-                    </svg>
-                  </div>
+                  {labLogo ? (
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl flex items-center justify-center shadow-lg border-2 border-white/40 shrink-0 p-1 overflow-hidden">
+                      <img 
+                        src={labLogo} 
+                        alt={labName} 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#48bb78] rounded-xl flex items-center justify-center shadow-lg border-2 border-white/40 shrink-0">
+                      <svg 
+                        className="w-12 h-12 text-white" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="1.8" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                      >
+                        {/* Medical Caduceus / Asclepius Emblem */}
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                        <circle cx="12" cy="3" r="1.5" fill="currentColor" />
+                        <path d="M7 8c2.5-3 7.5-3 10 0" />
+                        <path d="M8 14c2-2 6-2 8 0" />
+                      </svg>
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight drop-shadow-xs">
                       {labName}
                     </h1>
                     <p className="text-[11px] text-sky-100 font-semibold tracking-wide">
-                      Clinical Diagnostics & Laboratory Services
+                      {labSlogan}
                     </p>
+                    {labLicense && (
+                      <p className="text-[10px] text-sky-200 font-mono">
+                        Lic: {labLicense} {labTaxId ? `• TIN: ${labTaxId}` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 {/* Right Top Contact Details */}
                 <div className="text-right text-[10px] sm:text-[11px] text-white/95 font-medium space-y-0.5 shrink-0">
                   <div className="font-bold uppercase tracking-wider">{labAddress}</div>
-                  <div className="font-mono text-sky-100">{labEmail.toUpperCase()}</div>
-                  <div className="font-mono text-sky-100">{labWebsite.toUpperCase()}</div>
+                  {labEmail && <div className="font-mono text-sky-100">{labEmail.toUpperCase()}</div>}
+                  {labWebsite && (
+                    <div className="font-mono text-sky-100">
+                      <a href={labWebsite.startsWith('http') ? labWebsite : `https://${labWebsite}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {labWebsite.replace(/^https?:\/\//, '').toUpperCase()}
+                      </a>
+                    </div>
+                  )}
                   <div className="font-bold tracking-wide pt-0.5">{labPhone}</div>
                 </div>
               </div>
@@ -246,8 +272,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     Below indicates the <strong>actual verified and settled tests</strong> authorized by administration.
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {allOrderedTests.map((t: any, idx: number) => {
-const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any) => ct.id === t.id || ct.testName === t.testName);
+                    {allOrderedTests.map((t, idx) => {
+                      const isPaidThisInvoice = confirmedAndPaidTests.some((ct : any )=> ct.id === t.id || ct.testName === t.testName);
                       return (
                         <span 
                           key={idx} 
@@ -285,7 +311,7 @@ const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any) => ct.id === t.id
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-                    {confirmedAndPaidTests.map((testItem: any, idx: number) => {
+                      {confirmedAndPaidTests.map((testItem : any, idx : number) => {
                         const unitPrice = testItem.price || 5000;
                         const qty = 1;
                         const lineTotal = unitPrice * qty;
@@ -405,16 +431,19 @@ const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any) => ct.id === t.id
                 </div>
               </div>
 
-              {/* Professional Thank You Closing (Matching medicalreceipt.png) */}
+              {/* Professional Thank You Closing */}
               <div className="space-y-4 pt-4 border-t border-slate-200 text-xs leading-relaxed text-slate-700">
                 <p>
-                  Thank you for choosing <strong className="text-slate-900 uppercase">[{labName.toUpperCase()}]</strong> for your healthcare needs. Should you have any questions, feel free to reach out.
+                  Thank you for choosing <strong className="text-slate-900">{labName}</strong> for your healthcare and diagnostic needs.
                 </p>
 
                 <div className="h-px bg-slate-200 w-full"></div>
 
                 <p className="text-[11px] text-slate-600">
-                  If you need further assistance with medical receipts, please contact us at <strong className="text-slate-900">[{labEmail.toUpperCase()}]</strong> or call us at <strong className="text-slate-900">[{labPhone}]</strong>.
+                  For billing inquiries or report follow-up, please contact our front desk at <strong className="text-slate-900">{labEmail}</strong> or call <strong className="text-slate-900">{labPhone}</strong>.
+                  {labWebsite && (
+                    <span> Visit our official portal at <strong className="text-teal-700">{labWebsite}</strong>.</span>
+                  )}
                 </p>
               </div>
 
