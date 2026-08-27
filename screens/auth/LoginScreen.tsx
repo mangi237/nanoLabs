@@ -33,7 +33,8 @@ import {
 } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
-// import founderPortraitImg from '../../assets/images/founder.jpg';
+import LanguageSelector from '../../components/common/LanguageSelector';
+// import founderPortraitImg from '../../assets/images/founder_portrait_1787272630258.jpg';
 
 interface LoginScreenProps {
   onLoginSuccess?: (user: any) => void;
@@ -200,13 +201,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => setShowAboutModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Founder Story
-          </button>
+          <div className="flex items-center gap-2">
+            <LanguageSelector variant="compact" />
+            <button
+              onClick={() => setShowAboutModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Founder Story
+            </button>
+          </div>
         </div>
 
         {/* Active Carousel Slide Content */}
@@ -309,7 +313,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       </div>
 
       {/* RIGHT COLUMN: CLEAN WHITE / LIGHT LOGIN PANEL */}
-      <div className="lg:w-1/2 bg-white text-slate-900 p-8 sm:p-12 lg:p-16 flex flex-col justify-center items-center">
+      <div className="lg:w-1/2 bg-white text-slate-900 p-8 sm:p-12 lg:p-16 flex flex-col justify-center items-center relative">
+        {/* Top-Right Language Switcher */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+          <LanguageSelector variant="dropdown" />
+        </div>
+
         <div className="max-w-md w-full space-y-6">
           {/* Right Header: Logo & Title */}
           <div className="text-center space-y-2">
