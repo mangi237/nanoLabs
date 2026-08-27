@@ -61,6 +61,21 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   useEffect(() => {
     fetchPatientData();
+
+    const targetLabId = lab?.id || 'lab-1';
+    const unsubBookings = limsService.subscribeToBookings(targetLabId, (allBookings) => {
+      const myBookings = allBookings.filter(b => 
+        b.patientId === user?.id ||
+        (b.patientEmail && user?.email && b.patientEmail.toLowerCase() === user.email.toLowerCase()) ||
+        (b.patientPhone && user?.phone && b.patientPhone === user.phone) ||
+        (b.patientName && user?.name && b.patientName.toLowerCase() === user.name.toLowerCase())
+      );
+      setBookings(myBookings);
+    });
+
+    return () => {
+      unsubBookings();
+    };
   }, [user?.id, user?.email]);
 
   const fetchPatientData = async () => {
