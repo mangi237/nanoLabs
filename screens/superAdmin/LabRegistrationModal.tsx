@@ -25,11 +25,17 @@ import {
   Mail,
   Lock,
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Phone,
+  Globe,
+  Award,
+  Hash,
+  Stethoscope,
+  MapPin
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
-import { sendOtpVerification, verifyOtpCode } from '../../services/emailService';
+import { sendOtpVerification, verifyOtpCode, sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import { PricingModelType, SubscriptionTierType } from '../../types';
 
@@ -47,6 +53,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [loading, setLoading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [showPendingApprovalModal, setShowPendingApprovalModal] = useState(false);
 
   // Facility Terms & Conditions state
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -62,16 +69,22 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const [otpDispatched, setOtpDispatched] = useState(false);
   const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
   const [verificationId, setVerificationId] = useState('');
-  const [debugOtpCode, setDebugOtpCode] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
-    // Step 1: Info
+    // Step 1: Real Facility Information
     name: '',
     slogan: 'Precision Diagnostics & Clinical Research',
     location: '',
     address: '',
     phone: '',
     email: '',
+    website: '',
+    licenseNumber: '',
+    taxId: '',
+    currency: 'FCFA',
+    currencySymbol: 'FCFA',
+    directorName: '',
+    directorPhone: '',
     description: '',
     logoUrl: '',
     
@@ -163,8 +176,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     }
   };
 
-  const [showPendingApprovalModal, setShowPendingApprovalModal] = useState(false);
-
   const handleSelectTier = (tier: SubscriptionTierType) => {
     let staff = 5;
     let sites = 1;
@@ -189,7 +200,15 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const handleNextStep = () => {
     if (step === 1) {
       if (!formData.name.trim() || !formData.location.trim()) {
-        alert('Please fill in Lab Name and Primary Location.');
+        alert('Please provide the laboratory name and city/location.');
+        return;
+      }
+      if (!formData.phone.trim()) {
+        alert('Please provide the official laboratory phone number (used for receipts & medical reports).');
+        return;
+      }
+      if (!formData.email.trim() || !formData.email.includes('@')) {
+        alert('Please provide a valid official laboratory contact email.');
         return;
       }
       setStep(2);
@@ -252,9 +271,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         setOtpDispatched(true);
         setVerificationId(res.verificationId || '');
         setOtpSuccessMessage(res.message || `Verification code sent to ${formData.adminEmail}`);
-        if (res.debugCode) {
-          setDebugOtpCode(res.debugCode);
-        }
       } else {
         setOtpError(res.error || 'Failed to dispatch verification code. Please check email address.');
       }
@@ -297,15 +313,30 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     setLoading(true);
     try {
       const subPrice = getSubscriptionPrice();
+      const rawWeb = formData.website.trim();
+      const formattedWebsite = rawWeb
+        ? (rawWeb.startsWith('http://') || rawWeb.startsWith('https://') ? rawWeb : `https://${rawWeb}`)
+        : '';
 
-      // 1. Create Lab Document in Pending Approval state
+      // 1. Create Lab Document in Pending Approval state with all real parameters
       const labRef = await addDoc(collection(db, 'labs'), {
         name: formData.name.trim(),
         slogan: formData.slogan.trim(),
+        tagline: formData.slogan.trim(),
         location: formData.location.trim(),
         address: formData.address.trim(),
         phone: formData.phone.trim(),
+        contactNumber: formData.phone.trim(),
         email: formData.email.trim(),
+        contactEmail: formData.email.trim(),
+        website: formattedWebsite,
+        websiteUrl: formattedWebsite,
+        licenseNumber: formData.licenseNumber.trim(),
+        taxId: formData.taxId.trim(),
+        currency: formData.currency || 'FCFA',
+        currencySymbol: formData.currencySymbol || 'FCFA',
+        directorName: formData.directorName.trim(),
+        directorPhone: formData.directorPhone.trim(),
         description: formData.description.trim(),
         logoUrl: formData.logoUrl || null,
         avatarUrl: formData.logoUrl || null,
@@ -352,7 +383,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
       await addDoc(collection(db, 'labs', labId, 'staff'), {
         name: formData.adminName.trim(),
         email: formData.adminEmail.trim(),
-        phone: formData.adminPhone.trim(),
+        phone: formData.adminPhone.trim() || formData.phone.trim(),
         accessCode: formData.accessCode || 'ADM-8800',
         role: 'admin',
         roles: ['admin', 'receptionist', 'cashier', 'analyzer', 'lab_tech'],
@@ -363,7 +394,29 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         createdAt: new Date().toISOString()
       });
 
-      // 3. Seed Standard Test Catalog
+      // 3. Dispatch Official Welcome Email to Laboratory Administrator
+      try {
+        await sendLabWelcomeEmail({
+          labName: formData.name.trim(),
+          adminName: formData.adminName.trim(),
+          adminEmail: formData.adminEmail.trim(),
+          accessCode: formData.accessCode || 'ADM-8800',
+          phone: formData.phone.trim(),
+          address: formData.address.trim(),
+          location: formData.location.trim(),
+          website: formattedWebsite,
+          licenseNumber: formData.licenseNumber.trim(),
+          taxId: formData.taxId.trim(),
+          pricingModel: formData.pricingModel === 'flat_subscription' 
+            ? `Flat Subscription (${formData.subscriptionTier.toUpperCase()})` 
+            : formData.pricingModel === 'pay_per_test' ? 'Pay-Per-Test' : 'Lifetime Space',
+          tier: formData.subscriptionTier
+        });
+      } catch (mailErr) {
+        console.warn('Lab welcome email dispatch note:', mailErr);
+      }
+
+      // 4. Seed Standard Test Catalog
       const defaultTests = [
         { name: 'Complete Blood Count (CBC)', category: 'Hematology', price: 4500, turnaroundTime: '2-4 Hours', description: 'Full cellular analysis including WBC, RBC, Platelets' },
         { name: 'Malaria Microscopy & RDT', category: 'Parasitology', price: 2500, turnaroundTime: '1 Hour', description: 'Detection of Plasmodium species' },
@@ -548,25 +601,147 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
-                    Official Telephone
+                    Official Telephone / WhatsApp <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="+234 800 000 0000 / +237 600 000 000"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
-                  />
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="+234 800 000 0000 / +237 600 000 000"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Printed directly on receipts and patient diagnostic reports</p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
-                    Official Contact Email
+                    Official Contact Email <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="email"
+                      placeholder="lab@facility.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">For lab report notifications and official receipts</p>
+                </div>
+              </div>
+
+              {/* Website URL & Clinical License Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Laboratory Website / Portal (Optional)
+                  </label>
+                  <div className="relative">
+                    <Globe className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. www.hopediagnostics.com"
+                      value={formData.website}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Patients will see your direct link on digital reports & receipts</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Clinical License / Accreditation No.
+                  </label>
+                  <div className="relative">
+                    <Award className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. MOH/LAB/2026/8841 or ISO 15189"
+                      value={formData.licenseNumber}
+                      onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Appears on official pathologist sign-off headers</p>
+                </div>
+              </div>
+
+              {/* Tax ID & Currency */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Tax ID / VAT Registration
+                  </label>
+                  <div className="relative">
+                    <Hash className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. TIN-992834812-M"
+                      value={formData.taxId}
+                      onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Operating Currency
+                  </label>
+                  <select
+                    value={formData.currency}
+                    onChange={(e) => {
+                      const cur = e.target.value;
+                      let sym = 'FCFA';
+                      if (cur === 'USD') sym = '$';
+                      else if (cur === 'EUR') sym = '€';
+                      else if (cur === 'NGN') sym = '₦';
+                      else if (cur === 'GHS') sym = 'GH₵';
+                      else if (cur === 'KES') sym = 'KSh';
+                      else if (cur === 'INR') sym = '₹';
+                      setFormData({ ...formData, currency: cur, currencySymbol: sym });
+                    }}
+                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white cursor-pointer"
+                  >
+                    <option value="FCFA">FCFA (XAF / XOF)</option>
+                    <option value="USD">USD ($ - US Dollar)</option>
+                    <option value="EUR">EUR (€ - Euro)</option>
+                    <option value="NGN">NGN (₦ - Nigerian Naira)</option>
+                    <option value="GHS">GHS (GH₵ - Ghanaian Cedi)</option>
+                    <option value="KES">KES (KSh - Kenyan Shilling)</option>
+                    <option value="INR">INR (₹ - Indian Rupee)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pathologist / Medical Director */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Medical Director / Head Pathologist
+                  </label>
+                  <div className="relative">
+                    <Stethoscope className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Dr. Arthur M. Vance, MD, FRCPath"
+                      value={formData.directorName}
+                      onChange={(e) => setFormData({ ...formData, directorName: e.target.value })}
+                      className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-1">
+                    Director Phone / Emergency
                   </label>
                   <input
-                    type="email"
-                    placeholder="lab@facility.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    type="text"
+                    placeholder="e.g. +234 802 345 6789"
+                    value={formData.directorPhone}
+                    onChange={(e) => setFormData({ ...formData, directorPhone: e.target.value })}
                     className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
                   />
                 </div>
@@ -1130,19 +1305,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{otpSuccessMessage}</span>
-              </div>
-            )}
-
-            {debugOtpCode && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-900 font-mono flex items-center justify-between">
-                <span>Dev Preview Code: <strong>{debugOtpCode}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setOtpCode(debugOtpCode)}
-                  className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold rounded text-[10px] cursor-pointer"
-                >
-                  Auto-fill
-                </button>
               </div>
             )}
 
