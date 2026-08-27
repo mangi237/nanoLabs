@@ -50,6 +50,59 @@ const auditLogs: AuditLogEntry[] = [
     timestamp: new Date(Date.now() - 3600000).toISOString()
   }
 ];
+async function sendEmailWithGmail(params: {
+  to: string;
+  toName?: string;
+  subject: string;
+  html: string;
+  text?: string;
+  replyTo?: string;
+  fromName?: string;
+}): Promise<{ success: boolean; provider: string; messageId?: string; error?: string }> {
+  const { to, toName, subject, html, text, replyTo = 'nanolabsolutions26@gmail.com', fromName = 'nanoLabs Diagnostics' } = params;
+
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
+
+  if (!gmailUser || !gmailAppPassword) {
+    console.warn('Gmail credentials not configured. Email will not be sent.');
+    return { success: false, provider: 'Gmail Not Configured', error: 'Gmail credentials missing' };
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailAppPassword,
+      },
+    });
+
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${gmailUser}>`,
+      to: toName ? `"${toName}" <${to}>` : to,
+      subject,
+      html,
+      text: text || subject,
+      replyTo: replyTo || gmailUser,
+    });
+
+    console.log(`✅ [Gmail SMTP] Sent to ${to} | Message ID: ${info.messageId}`);
+    return {
+      success: true,
+      provider: 'Gmail SMTP',
+      messageId: info.messageId,
+    };
+  } catch (error: any) {
+    console.error('❌ [Gmail SMTP Error]:', error.message);
+    return {
+      success: false,
+      provider: 'Gmail SMTP',
+      error: error.message,
+    };
+  }
+}
+
 
 // Helper to log security actions
 function logAuditEvent(
@@ -1395,66 +1448,37 @@ app.post('/api/staff/resend-invite', async (req: Request, res: Response) => {
 app.post('/api/send-email', async (req: Request, res: Response) => {
   try {
     const { to, toName, subject, message, html, type, labName } = req.body;
+    
     if (!to) {
       return res.status(400).json({ success: false, error: 'Recipient email address is required.' });
     }
 
-    const serviceId = process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID;
-    const templateId = process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY;
-    const privateKey = process.env.EMAILJS_PRIVATE_KEY;
-
-    let dispatchedProvider = 'Server In-Memory Mailer';
-
-    if (serviceId && templateId && (privateKey || publicKey)) {
-      try {
-        const payload: any = {
-          service_id: serviceId,
-          template_id: templateId,
-          user_id: publicKey || 'default',
-          template_params: {
-            to_email: to,
-            to_name: toName || 'User',
-            subject: subject || 'nanoLabs Healthcare Notification',
-            message: message || '',
-            lab_name: labName || 'nanoLabs Health Care'
-          }
-        };
-        if (privateKey) payload.accessToken = privateKey;
-
-        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-          dispatchedProvider = 'EmailJS REST Dispatcher';
-        }
-      } catch (e: any) {
-        console.warn('EmailJS sending fallback:', e.message);
-      }
-    }
-
-    logAuditEvent(
-      'EMAIL_DISPATCHED',
-      'INVITATION',
-      { id: 'system', name: 'Email Dispatcher', role: 'system' },
-      `Dispatched email to ${to} (${subject || 'General Notification'}). Provider: ${dispatchedProvider}`
-    );
-
-    res.json({
-      success: true,
-      message: `Notification email dispatched to ${to}`,
-      provider: dispatchedProvider,
-      timestamp: new Date().toISOString()
+    const result = await sendEmailWithGmail({
+      to,
+      toName,
+      subject,
+      html: html || `<p>${message}</p>`,
+      text: message,
     });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Email dispatched to ${to}`,
+        provider: result.provider,
+        messageId: result.messageId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to send email'
+      });
+    }
   } catch (error: any) {
-    console.error('Error in /api/send-email:', error);
+    console.error('Error in send-email:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 // 5.6 Send Verification Code / OTP (Lab registration human verification, Patient results sharing, etc.)
 app.post('/api/email/send-otp', async (req: Request, res: Response) => {
   try {
