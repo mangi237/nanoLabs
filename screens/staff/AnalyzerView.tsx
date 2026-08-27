@@ -71,7 +71,15 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    setLoading(true);
+    const unsubscribe = limsService.subscribeToBookings(targetLabId, (allBookings) => {
+      setBookings(allBookings.filter(b => b.paymentStatus === 'paid'));
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [targetLabId]);
 
   const fetchData = async () => {
