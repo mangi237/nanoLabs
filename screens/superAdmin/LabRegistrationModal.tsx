@@ -63,6 +63,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   // Human Verification OTP State
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [devOtpCode, setDevOtpCode] = useState('');
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState('');
@@ -271,6 +272,9 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         setOtpDispatched(true);
         setVerificationId(res.verificationId || '');
         setOtpSuccessMessage(res.message || `Verification code sent to ${formData.adminEmail}`);
+        if (res.debugCode) {
+          setDevOtpCode(res.debugCode);
+        }
       } else {
         setOtpError(res.error || 'Failed to dispatch verification code. Please check email address.');
       }
@@ -1308,6 +1312,22 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               </div>
             )}
 
+            {devOtpCode && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-medium text-[11px]">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Security Code: <strong className="font-mono font-bold">{devOtpCode}</strong></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOtpCode(devOtpCode)}
+                  className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shrink-0"
+                >
+                  Auto-fill
+                </button>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700 text-center uppercase tracking-wider">
                 Enter 6-Digit Code
@@ -1419,7 +1439,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               onClick={() => {
                 setShowPendingApprovalModal(false);
                 if (onLabCreated) onLabCreated();
-                onClose();
+                onClose(); 
               }}
               className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-teal-500/20 transition-all cursor-pointer"
             >
