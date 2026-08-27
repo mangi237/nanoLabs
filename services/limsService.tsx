@@ -1,4 +1,4 @@
-import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc } from './firebase';
+import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy } from './firebase';
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
@@ -1718,6 +1718,71 @@ export const limsService = {
       console.warn('Error fetching bookings:', e);
     }
     return [];
+  },
+
+  /**
+   * Real-Time Live Subscription to Bookings and Test Statuses
+   * Immediately notifies UI components when test statuses shift across Reception, Cashier, Analyzer, Lab Tech, Biologist, and Patient.
+   */
+  subscribeToBookings(
+    labId: string = 'lab-1',
+    onUpdate: (bookings: PatientBooking[]) => void,
+    onError?: (err: any) => void
+  ): () => void {
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const unsubscribe = onSnapshot(
+        bookingsCol,
+        async (snap) => {
+          try {
+            // Also merge appointments & patient tests for complete 360-degree real-time view
+            const allBookings = await this.fetchAllBookings(labId);
+            onUpdate(allBookings);
+          } catch (e) {
+            const rawDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as PatientBooking[];
+            onUpdate(rawDocs);
+          }
+        },
+        (err) => {
+          console.warn('[LIMS Real-time Subscription] Error:', err);
+          if (onError) onError(err);
+        }
+      );
+      return unsubscribe;
+    } catch (err) {
+      console.warn('[LIMS Real-time Subscription Init] Error:', err);
+      // Immediate initial load fallback
+      this.fetchAllBookings(labId).then(onUpdate).catch(() => onUpdate([]));
+      return () => {};
+    }
+  },
+
+  /**
+   * Real-Time Live Subscription to Patients Directory
+   */
+  subscribeToPatients(
+    labId: string = 'lab-1',
+    onUpdate: (patients: any[]) => void,
+    onError?: (err: any) => void
+  ): () => void {
+    try {
+      const patientsCol = collection(db, 'labs', labId, 'patients');
+      const unsubscribe = onSnapshot(
+        patientsCol,
+        (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          onUpdate(list);
+        },
+        (err) => {
+          console.warn('[LIMS Patients Subscription] Error:', err);
+          if (onError) onError(err);
+        }
+      );
+      return unsubscribe;
+    } catch (err) {
+      console.warn('[LIMS Patients Subscription Init] Error:', err);
+      return () => {};
+    }
   },
 
   /**
