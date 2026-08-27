@@ -34,12 +34,16 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 }) => {
   if (!isOpen || !booking) return null;
 
-  const labName = labInfo?.name || booking.sampleCollectedAt || 'DRLOGY PATHOLOGY LAB';
-  const labSlogan = labInfo?.slogan || 'Accurate | Caring | Instant';
-  const labAddress = labInfo?.address || labInfo?.location || '105-108, SMART VISION COMPLEX, HEALTHCARE ROAD, OPPOSITE HEALTHCARE COMPLEX. MUMBAI - 689578';
-  const labPhone = labInfo?.phone || '0123456789 | 0912345678';
-  const labEmail = labInfo?.email || 'drlogypathlab@drlogy.com';
-  const labWebsite = labInfo?.website || 'www.drlogy.com';
+  const labName = labInfo?.name || booking.labName || booking.sampleCollectedAt || 'Clinical Diagnostics Center';
+  const labSlogan = labInfo?.slogan || labInfo?.tagline || 'Accurate • Precision • Verified Clinical Diagnostics';
+  const labAddress = labInfo?.address || labInfo?.location || booking.labAddress || 'Central Diagnostic Facility';
+  const labPhone = labInfo?.phone || labInfo?.contactNumber || booking.labPhone || '+237 600 000 000';
+  const labEmail = labInfo?.email || labInfo?.contactEmail || booking.labEmail || 'lab@facility.com';
+  const labWebsite = labInfo?.website || labInfo?.websiteUrl || booking.labWebsite || '';
+  const labLicenseNumber = labInfo?.licenseNumber || '';
+  const labDirectorName = labInfo?.directorName || 'Dr. Arthur M. Vance';
+  const labDirectorPhone = labInfo?.directorPhone || '';
+  const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || '';
 
   const handlePrint = () => {
     window.print();
@@ -111,22 +115,33 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 {/* Left Lab Branding */}
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-700 to-sky-500 text-white font-black flex items-center justify-center shadow-md border-2 border-white">
-                    <svg 
-                      className="w-9 h-9 text-white" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="1.8" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      <circle cx="12" cy="3" r="1.5" fill="currentColor" />
-                      <path d="M7 8c2.5-3 7.5-3 10 0" />
-                      <path d="M8 14c2-2 6-2 8 0" />
-                    </svg>
-                  </div>
+                  {labLogo ? (
+                    <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 p-1 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
+                      <img 
+                        src={labLogo} 
+                        alt={labName} 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-700 to-sky-500 text-white font-black flex items-center justify-center shadow-md border-2 border-white shrink-0">
+                      <svg 
+                        className="w-9 h-9 text-white" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="1.8" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                        <circle cx="12" cy="3" r="1.5" fill="currentColor" />
+                        <path d="M7 8c2.5-3 7.5-3 10 0" />
+                        <path d="M8 14c2-2 6-2 8 0" />
+                      </svg>
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
                       {labName}
@@ -135,7 +150,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                       {labSlogan}
                     </div>
                     <div className="text-[10px] text-slate-600 leading-tight max-w-sm mt-0.5">
-                      {labAddress}
+                      {labAddress} {labLicenseNumber ? `• Lic: ${labLicenseNumber}` : ''}
                     </div>
                   </div>
                 </div>
@@ -146,14 +161,23 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     <Phone className="w-3.5 h-3.5 text-blue-700" />
                     <span>{labPhone}</span>
                   </div>
-                  <div className="flex items-center gap-1 font-medium text-slate-600">
-                    <Mail className="w-3.5 h-3.5 text-blue-700" />
-                    <span>{labEmail}</span>
-                  </div>
-                  <div className="bg-gradient-to-r from-blue-700 to-sky-600 text-white px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
-                    <Globe className="w-3 h-3 text-sky-200" />
-                    <span>{labWebsite}</span>
-                  </div>
+                  {labEmail && (
+                    <div className="flex items-center gap-1 font-medium text-slate-600">
+                      <Mail className="w-3.5 h-3.5 text-blue-700" />
+                      <span>{labEmail}</span>
+                    </div>
+                  )}
+                  {labWebsite && (
+                    <a 
+                      href={labWebsite.startsWith('http') ? labWebsite : `https://${labWebsite}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-gradient-to-r from-blue-700 to-sky-600 hover:from-blue-800 hover:to-sky-700 text-white px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1 transition-all"
+                    >
+                      <Globe className="w-3 h-3 text-sky-200" />
+                      <span>{labWebsite.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -234,7 +258,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section (Matching medicalreport.webp) */}
-            {booking.tests.map((testItem: any, tIdx: number) => (
+            {booking.tests.map((testItem : any, tIdx: number) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -269,9 +293,8 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-800">
-                    {testItem.subParameters && testItem.subParameters.length > 0 ? (
-  testItem.subParameters.map((sp: any) => {
-
+                      {testItem.subParameters && testItem.subParameters.length > 0 ? (
+                        testItem.subParameters.map((sp : any) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
                           const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
@@ -369,37 +392,36 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </span>
             </div>
 
-            {/* Signatures & Pathologist Sign-Off Block (Matching medicalreport.webp) */}
-            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-3 gap-3 text-center text-xs">
+            {/* Signatures & Pathologist Sign-Off Block */}
+            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center text-xs">
               
               {/* Medical Lab Technician */}
               <div>
-                <div className="h-8 flex items-center justify-center font-serif text-slate-700 italic font-bold text-sm tracking-wide">
+                <div className="h-8 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
                   {booking.tests[0]?.completedBy || 'Mangi Lerine Laslie'}
                 </div>
-                <div className="font-black text-slate-900">Medical Lab Technician</div>
-                <div className="text-[10px] text-slate-500 font-medium">(DMLT, BMLT)</div>
+                <div className="font-black text-slate-900">Lab Technician / Analyst</div>
+                <div className="text-[10px] text-slate-500 font-medium">Verified & Analyzed</div>
               </div>
 
-              {/* Dr. Payal Shah */}
+              {/* Head Pathologist / Lab Director */}
               <div>
                 <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
-                  Dr. Payal Shah
+                  {labDirectorName}
                 </div>
-                <div className="font-black text-slate-900">Dr. Payal Shah</div>
-                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
+                <div className="font-black text-slate-900">{labDirectorName}</div>
+                <div className="text-[10px] text-slate-500 font-medium">Medical Director / Pathologist</div>
               </div>
 
-              {/* Dr. Vimal Shah */}
-              <div>
-                <div className="h-8 flex items-center justify-center font-serif text-blue-950 italic font-bold text-sm tracking-wide">
-                  Dr. Vimal Shah
+              {/* Quality & Accreditation Sign-off */}
+              <div className="hidden sm:block">
+                <div className="h-8 flex items-center justify-center font-serif text-teal-800 italic font-bold text-sm tracking-wide">
+                  {labName}
                 </div>
-                <div className="font-black text-slate-900">
-                /* wil change the data soon */
-              
+                <div className="font-black text-slate-900">Clinical Diagnostics QA</div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  {labLicenseNumber ? `Lic: ${labLicenseNumber}` : 'ISO / Quality Certified'}
                 </div>
-                <div className="text-[10px] text-slate-500 font-medium">(MD, Pathologist)</div>
               </div>
 
             </div>
@@ -413,14 +435,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   <Truck className="w-3.5 h-3.5" />
                 </div>
                 <span className="font-bold uppercase tracking-wider text-[10px] text-sky-200">
-                  Sample Collection Hotline
+                  Facility Support Hotline
                 </span>
               </div>
 
               {/* Middle WhatsApp / Call Hotline */}
               <div className="flex items-center gap-1.5 bg-emerald-700 text-white px-2.5 py-0.5 rounded-md font-bold text-[10px]">
                 <MessageCircle className="w-3 h-3 text-white" />
-                <span>{labPhone.split('|')[0]?.trim() || '0123456789'}</span>
+                <span>{labPhone || '+237 600 000 000'}</span>
               </div>
 
               {/* Right Generation Timestamp */}
