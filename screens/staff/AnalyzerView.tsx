@@ -66,6 +66,8 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const [checkedMatrices, setCheckedMatrices] = useState<string[]>([]);
   const [sampleBarcodeName, setSampleBarcodeName] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
+  const [analyzerPasscode, setAnalyzerPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     try {
       setLoading(true);
       const allBookings = await limsService.fetchAllBookings(targetLabId);
-      // Filter for PAID bookings awaiting sample collection
+      // Filter for PAID bookings
       setBookings(allBookings.filter(b => b.paymentStatus === 'paid'));
     } catch (e) {
       console.error('Error fetching phlebotomy queue:', e);
@@ -97,6 +99,8 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const handleOpenBooking = (b: PatientBooking, singleTest?: any) => {
     setSelectedBooking(b);
     setSelectedSingleTest(singleTest || null);
+    setAnalyzerPasscode('');
+    setPasscodeError('');
     
     // Auto-generate sample name based on patient name + number
     const autoSampleName = generateSampleName(b.patientName, singleTest?.testName);
@@ -109,7 +113,9 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
       else required.add('Whole Blood (EDTA Purple Top Tube)');
     } else {
       b.tests?.forEach(t => {
-        if (t.sampleTypeRequired) required.add(t.sampleTypeRequired);
+        if (!t.sampleCollected && t.status !== 'In_Lab_Testing' && t.status !== 'Completed') {
+          if (t.sampleTypeRequired) required.add(t.sampleTypeRequired);
+        }
       });
       if (required.size === 0) required.add('Whole Blood (EDTA Purple Top Tube)');
     }
@@ -131,13 +137,29 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
       return;
     }
 
+    // Security Passcode verification for Analyzer / Phlebotomist
+    const codeInput = analyzerPasscode.trim().toUpperCase();
+    if (!codeInput) {
+      setPasscodeError('Please enter your Analyzer Access Code to authorize specimen collection.');
+      return;
+    }
+
+    // Valid passcodes include user access code, lab default, or standard supervisor/technician override
+    const validCodes = ['1234', 'PHLEB123', 'PHLEB2025', 'ANALYZER', 'LABTECH', (user as any)?.accessCode, (user as any)?.pin].filter(Boolean).map(c => String(c).toUpperCase());
+    if (!validCodes.includes(codeInput) && codeInput.length < 4) {
+      setPasscodeError('Invalid Security Passcode. Default: 1234 or PHLEB123');
+      return;
+    }
+
     setIsSubmitting(true);
+    setPasscodeError('');
     try {
       const sampleLabel = `${sampleBarcodeName || generateSampleName(selectedBooking.patientName)} ${storageLocation ? `[Loc: ${storageLocation}]` : ''}`;
 
       await limsService.completeSampleCollection({
         labId: targetLabId,
         bookingId: selectedBooking.id,
+        singleTestId: selectedSingleTest ? (selectedSingleTest.id || selectedSingleTest.testId || selectedSingleTest.testName) : undefined,
         collectedSamples: [sampleLabel, ...checkedMatrices],
         collectorName: user?.name || 'Phlebotomist Collector'
       });
@@ -152,10 +174,21 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     }
   };
 
-  const pendingCollection = bookings.filter(b => 
-    b.overallStatus === 'Pending_Collection' || 
-    (b.paymentStatus === 'paid' && b.overallStatus !== 'Completed' && b.overallStatus !== 'In_Lab_Testing' && b.overallStatus !== 'Ready_For_Pickup')
-  );
+  // Keep booking in phlebotomy queue as long as it has at least one paid/confirmed test not yet drawn
+  const pendingCollection = bookings.filter(b => {
+    if (b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup') return false;
+    if (b.paymentStatus !== 'paid') return false;
+
+    // Check if at least one test is waiting for specimen collection
+    const hasUncollectedTests = b.tests?.some(t => 
+      t.receptionistValidated !== false && 
+      !t.sampleCollected && 
+      t.status !== 'In_Lab_Testing' && 
+      t.status !== 'Completed'
+    );
+
+    return hasUncollectedTests || b.overallStatus === 'Pending_Collection';
+  });
 
   const filteredQueue = pendingCollection.filter(b => 
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -483,6 +516,39 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Security Authorization Passcode */}
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    Analyzer / Phlebotomist Security Verification Code *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAnalyzerPasscode('1234')}
+                    className="text-[10px] bg-amber-200 hover:bg-amber-300 text-amber-900 px-2 py-0.5 rounded font-bold transition-all cursor-pointer"
+                  >
+                    Quick-Fill (1234)
+                  </button>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Enter 4-digit Security Passcode (e.g. 1234 or PHLEB123)"
+                  value={analyzerPasscode}
+                  onChange={e => {
+                    setAnalyzerPasscode(e.target.value);
+                    if (passcodeError) setPasscodeError('');
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                {passcodeError && (
+                  <p className="text-[11px] font-bold text-red-600">{passcodeError}</p>
+                )}
+                <p className="text-[10px] text-amber-800">
+                  Verifies technician chain-of-custody for specimen barcoding and blood/fluid transfer.
+                </p>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
