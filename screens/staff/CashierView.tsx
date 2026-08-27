@@ -84,7 +84,15 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [activeTab, setActiveTab] = useState<'unpaid' | 'history'>('unpaid');
 
   useEffect(() => {
-    fetchData();
+    setLoading(true);
+    const unsubscribe = limsService.subscribeToBookings(targetLabId, (updatedBookings) => {
+      setBookings(updatedBookings);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [targetLabId]);
 
   const fetchData = async () => {
