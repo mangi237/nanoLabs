@@ -160,6 +160,12 @@ export interface PatientBooking {
   createdAt: string;
   updatedAt: string;
 }
+export interface ReagentUsage {
+  reagentName: string;
+  quantity: number;
+  testName: string;
+  reagentId?: string;
+}
 
 export const limsService = {
   /**
@@ -1004,7 +1010,7 @@ export const limsService = {
     testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>;
     techName: string;
     pdfReportDataUrl?: string;
-    reagentsUsed: string;
+    reagentsUsed: ReagentUsage[];
   }): Promise<boolean> {
     const { labId, bookingId, testResultsMap, techName, pdfReportDataUrl, reagentsUsed } = params;
     const timestamp = new Date().toISOString();
