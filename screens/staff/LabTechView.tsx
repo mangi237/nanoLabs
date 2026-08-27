@@ -66,7 +66,14 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [targetTechName, setTargetTechName] = useState('');
   const [shareError, setShareError] = useState('');
   const [colleagueTechs, setColleagueTechs] = useState<Array<{ id: string; name: string }>>([]);
-
+  const [availableReagents, setAvailableReagents] = useState<any[]>([]);
+  const [selectedReagent, setSelectedReagent] = useState<string>('');
+  const [reagentQuantity, setReagentQuantity] = useState<number>(1);
+  const [reagentUsageLog, setReagentUsageLog] = useState<Array<{
+    reagentName: string;
+    quantity: number;
+    testName: string;
+  }>>([]);
   // Option 1: Native Digital Form Filling State
   const [formResultsMap, setFormResultsMap] = useState<Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>>({});
   const [isSubmittingResults, setIsSubmittingResults] = useState(false);
