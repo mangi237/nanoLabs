@@ -29,6 +29,12 @@ export interface BookingTestItem {
   validatedAt?: string;
   virtualRequested?: boolean;
   virtualRequestedAt?: string;
+  paid?: boolean;
+  sampleCollected?: boolean;
+  sampleCollectedAt?: string;
+  sampleCollectedBy?: string;
+  collectedSamples?: string[];
+  resultFileUrl?: string;
   subParameters?: Array<{
     id: string;
     name: string;
@@ -668,14 +674,16 @@ export const limsService = {
 
   /**
    * Phlebotomist selects sample matrices physically drawn & completes collection
+   * Supports decoupled single test collection or full batch collection
    */
   async completeSampleCollection(params: {
     labId: string;
     bookingId: string;
+    singleTestId?: string;
     collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine Container']
     collectorName: string;
   }): Promise<boolean> {
-    const { labId, bookingId, collectedSamples, collectorName } = params;
+    const { labId, bookingId, singleTestId, collectedSamples, collectorName } = params;
     const timestamp = new Date().toISOString();
 
     try {
@@ -685,16 +693,44 @@ export const limsService = {
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
-        const updatedTests = data.tests.map(t => ({
-          ...t,
-          status: 'In_Lab_Testing' as TestStatus
-        }));
+        let modifiedTestName = '';
+
+        const updatedTests = data.tests.map(t => {
+          if (singleTestId) {
+            if (t.id === singleTestId || t.testId === singleTestId || t.testName === singleTestId) {
+              modifiedTestName = t.testName;
+              return {
+                ...t,
+                status: 'In_Lab_Testing' as TestStatus,
+                sampleCollected: true,
+                sampleCollectedAt: timestamp,
+                collectedSamples
+              };
+            }
+            return t;
+          }
+
+          return {
+            ...t,
+            status: 'In_Lab_Testing' as TestStatus,
+            sampleCollected: true,
+            sampleCollectedAt: timestamp,
+            collectedSamples
+          };
+        });
+
+        // Determine if all tests in this booking are collected
+        const allCollectedOrDone = updatedTests.every(t => 
+          t.status === 'In_Lab_Testing' || t.status === 'Completed' || t.sampleCollected === true
+        );
+
+        const newOverallStatus = allCollectedOrDone ? 'In_Lab_Testing' : 'Pending_Collection';
 
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), {
           collectedSamples,
           sampleCollectedAtDate: timestamp,
           sampleCollectedBy: collectorName,
-          overallStatus: 'In_Lab_Testing',
+          overallStatus: newOverallStatus,
           tests: updatedTests,
           updatedAt: timestamp
         });
@@ -707,6 +743,20 @@ export const limsService = {
             if (patSnap.exists()) {
               const currentTests: any[] = patSnap.data().labTests || [];
               const updatedPatTests = currentTests.map(pt => {
+                if (singleTestId) {
+                  const isMatch = pt.id === singleTestId || pt.testId === singleTestId || (pt.testName || pt.name) === modifiedTestName || (pt.testName || pt.name) === singleTestId;
+                  if (isMatch) {
+                    return {
+                      ...pt,
+                      status: 'In_Lab_Testing',
+                      sampleCollected: true,
+                      sampleCollectedAt: timestamp,
+                      collectedSamples
+                    };
+                  }
+                  return pt;
+                }
+
                 const isMatch = data.tests?.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name));
                 if (isMatch || pt.bookingCode === data.bookingCode) {
                   return {
@@ -736,7 +786,9 @@ export const limsService = {
           patientName: data.patientName,
           action: 'COLLECT_SAMPLE',
           performedBy: { id: 'phleb-1', name: collectorName, role: 'analyzer' },
-          details: `Specimen matrices gathered for Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Hand-labeled tubes routed to Lab Testing.`
+          details: singleTestId 
+            ? `Specimen matrices gathered for single test [${modifiedTestName || singleTestId}] in Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Routed to Lab Testing.`
+            : `Specimen matrices gathered for Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Hand-labeled tubes routed to Lab Testing.`
         });
 
         return true;
