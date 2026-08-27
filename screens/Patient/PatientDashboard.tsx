@@ -7,7 +7,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
-import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import  LabReportPdfViewModal  from '../../components/common/LabReportPdfViewModal';
 import { 
   Calendar, 
   FileText, 

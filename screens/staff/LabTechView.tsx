@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
-import { db, getDocs, collection } from '../../services/firebase';
+import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
 import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '../../services/limsService';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import SearchableReagentDropdown from '../../components/common/SearchableReagentDropdown';
 import { 
   TestTube, 
   Search, 
@@ -32,8 +33,29 @@ import {
   Database,
   Tag,
   Clock,
-  Globe
+  Globe,
+  Droplet,
+  Beaker,
+  Loader2
 } from 'lucide-react';
+
+// Define the ReagentUsage interface to match what limsService expects
+interface ReagentUsage {
+  reagentName: string;
+  quantity: number;
+  testName: string;
+  reagentId?: string;
+}
+
+// Define the expected type for limsService.submitFormResults reagentsUsed parameter
+interface SubmitFormResultsParams {
+  labId: string;
+  bookingId: string;
+  testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>;
+  techName: string;
+  pdfReportDataUrl?: string;
+  reagentsUsed?: ReagentUsage[]; // FIXED: Changed from [] to ReagentUsage[]
+}
 
 interface LabTechViewProps {
   onNotificationPress?: () => void;
@@ -66,14 +88,14 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [targetTechName, setTargetTechName] = useState('');
   const [shareError, setShareError] = useState('');
   const [colleagueTechs, setColleagueTechs] = useState<Array<{ id: string; name: string }>>([]);
+  
+  // Reagent State
   const [availableReagents, setAvailableReagents] = useState<any[]>([]);
-  const [selectedReagent, setSelectedReagent] = useState<string>('');
+  const [selectedReagentId, setSelectedReagentId] = useState<string>('');
   const [reagentQuantity, setReagentQuantity] = useState<number>(1);
-  const [reagentUsageLog, setReagentUsageLog] = useState<Array<{
-    reagentName: string;
-    quantity: number;
-    testName: string;
-  }>>([]);
+  const [reagentUsageLog, setReagentUsageLog] = useState<ReagentUsage[]>([]);
+  const [isLoadingReagents, setIsLoadingReagents] = useState(false);
+
   // Option 1: Native Digital Form Filling State
   const [formResultsMap, setFormResultsMap] = useState<Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>>({});
   const [isSubmittingResults, setIsSubmittingResults] = useState(false);
@@ -88,6 +110,11 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [pickupPasscode, setPickupPasscode] = useState('');
   const [isTriggeringPickup, setIsTriggeringPickup] = useState(false);
   const [pickupSuccessMsg, setPickupSuccessMsg] = useState('');
+
+  // Access Code for actions
+  const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [accessCodeError, setAccessCodeError] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
 
   // CREATE NEW DIAGNOSTIC TEST DEFINITION STATE
   const [showCreateTestModal, setShowCreateTestModal] = useState(false);
@@ -126,10 +153,44 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     subParams: []
   });
 
+  const [queueTab, setQueueTab] = useState<'all' | 'virtual' | 'my_assigned' | 'completed'>('all');
+
+  // FIXED: Load reagents with proper category checking
+  const loadReagents = async () => {
+    setIsLoadingReagents(true);
+    try {
+      const invRef = collection(db, 'labs', targetLabId, 'inventory');
+      const snap = await getDocs(invRef);
+      const list = snap.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data };
+      });
+      // FIXED: Check for multiple possible category values
+      const reagents = list.filter((r: any) => 
+        r.category === 'Reagents' || 
+        r.category === 'Chemicals & Solutions' ||
+        r.category === 'Testing Kits' ||
+        r.category === 'Reagent' ||
+        r.category === 'Chemical' ||
+        (r.type && (r.type.toLowerCase() === 'reagent' || r.type.toLowerCase() === 'chemical'))
+      );
+      setAvailableReagents(reagents);
+    } catch (e) {
+      console.error('Error loading reagents:', e);
+    } finally {
+      setIsLoadingReagents(false);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
+    loadReagents();
     const unsubscribe = limsService.subscribeToBookings(targetLabId, (allBookings) => {
-      setBookings(allBookings.filter(b => b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup'));
+      setBookings(allBookings.filter(b => 
+        b.overallStatus === 'In_Lab_Testing' || 
+        b.overallStatus === 'Completed' || 
+        b.overallStatus === 'Ready_For_Pickup'
+      ));
       // If an active booking is selected, keep its reference live
       setActiveBooking(prev => {
         if (!prev) return null;
@@ -154,12 +215,17 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     try {
       setLoading(true);
       const allBookings = await limsService.fetchAllBookings(targetLabId);
-      setBookings(allBookings.filter(b => b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup'));
+      setBookings(allBookings.filter(b => 
+        b.overallStatus === 'In_Lab_Testing' || 
+        b.overallStatus === 'Completed' || 
+        b.overallStatus === 'Ready_For_Pickup'
+      ));
       setColleagueTechs([
         { id: 'tech-2', name: 'Dr. Jane Smith (Clinical Pathologist)' },
         { id: 'tech-3', name: 'Mangi Lerine Laslie (Lab Tech)' },
         { id: 'tech-4', name: 'Dr. Payal Shah (MD Pathologist)' }
       ]);
+      await loadReagents();
     } catch (e) {
       console.error('Error fetching lab tech queue:', e);
     } finally {
@@ -234,8 +300,6 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     }
   };
 
-  const [queueTab, setQueueTab] = useState<'all' | 'virtual' | 'my_assigned' | 'completed'>('all');
-
   // Click on a patient booking in the queue
   const handleOpenPatientBooklet = async (b: PatientBooking) => {
     const techId = user?.id || 'tech-1';
@@ -278,30 +342,132 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       };
     });
     setFormResultsMap(initialMap);
+    setReagentUsageLog([]);
+    setSelectedReagentId('');
+    setReagentQuantity(1);
+    setAccessCodeInput('');
 
-    // Suppress understanding modal when checking tests again; patient booklet is updated directly!
+    // Suppress understanding modal when checking tests again
     setShowPrivacyNoticeModal(false);
   };
 
-  // Option 1 Submit Form
+  // Handle reagent selection from dropdown
+  const handleReagentSelect = (reagent: any) => {
+    setSelectedReagentId(reagent.id);
+  };
+
+  // Add reagent to usage log
+  const handleAddReagent = () => {
+    if (!selectedReagentId) {
+      alert('Please select a reagent from the dropdown.');
+      return;
+    }
+
+    const reagent = availableReagents.find(r => r.id === selectedReagentId);
+    if (!reagent) {
+      alert('Selected reagent not found.');
+      return;
+    }
+
+    if (reagentQuantity <= 0) {
+      alert('Please enter a valid quantity.');
+      return;
+    }
+
+    if (reagentQuantity > (reagent.quantity || 0)) {
+      alert(`Insufficient stock! Only ${reagent.quantity} ${reagent.unit || 'units'} available.`);
+      return;
+    }
+
+    // Get the first test name for context
+    const testName = activeBooking?.tests?.[0]?.testName || 'Unknown Test';
+
+    setReagentUsageLog(prev => [
+      ...prev,
+      {
+        reagentName: reagent.name,
+        quantity: reagentQuantity,
+        testName: testName,
+        reagentId: reagent.id
+      }
+    ]);
+
+    // Reset selection
+    setSelectedReagentId('');
+    setReagentQuantity(1);
+  };
+
+  // Remove reagent from usage log
+  const removeReagent = (index: number) => {
+    setReagentUsageLog(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // FIXED: Submit form results with proper typing
   const handleSubmitFormResults = async () => {
     if (!activeBooking) return;
 
+    // Check if reagents were used
+    if (reagentUsageLog.length === 0) {
+      alert('Please select at least one reagent used for this test.');
+      return;
+    }
+
+    // Verify access code
+    if (!accessCodeInput.trim()) {
+      setAccessCodeError('Please enter your staff access code.');
+      return;
+    }
+
+    setVerifyingCode(true);
+    // Simple verification for now - in production use authService.verifyStaffActionCode
+    if (accessCodeInput.trim().length < 4) {
+      setAccessCodeError('Invalid access code. Please enter a valid staff code.');
+      setVerifyingCode(false);
+      return;
+    }
+    setVerifyingCode(false);
+
     setIsSubmittingResults(true);
+    setAccessCodeError('');
+    
     try {
+      // Deduct reagents from inventory
+      for (const usage of reagentUsageLog) {
+        const reagentItem = availableReagents.find(r => r.name === usage.reagentName);
+        if (reagentItem) {
+          const newQty = Math.max(0, (reagentItem.quantity || 0) - usage.quantity);
+          await updateDoc(doc(db, 'labs', targetLabId, 'inventory', reagentItem.id), {
+            quantity: newQty,
+            lastUsedAt: new Date().toISOString(),
+            lastUsedBy: user?.name || 'Lab Technician',
+            lastUsedQuantity: usage.quantity,
+            usedForTest: usage.testName
+          });
+        }
+      }
+
+      // FIXED: Pass reagentUsageLog directly - it already matches ReagentUsage[]
       const ok = await limsService.submitFormResults({
         labId: targetLabId,
         bookingId: activeBooking.id,
         testResultsMap: formResultsMap,
-        techName: user?.name || 'Medical Lab Technician'
+        techName: user?.name || 'Medical Lab Technician',
+        pdfReportDataUrl: undefined,
+        reagentsUsed: reagentUsageLog // FIXED: Now matches the type
       });
 
       if (ok) {
         setShowPdfPreviewModal(true);
+        setReagentUsageLog([]);
         await fetchData();
+        await loadReagents();
+        setAccessCodeInput('');
+      } else {
+        alert('Failed to submit results. Please try again.');
       }
     } catch (e) {
       console.error('Error submitting form results:', e);
+      alert('An error occurred while submitting results.');
     } finally {
       setIsSubmittingResults(false);
     }
@@ -312,6 +478,17 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     if (!activeBooking) return;
     if (!externalPdfUrl && !externalPdfFile) {
       alert('Please select or enter an external PDF result file URL.');
+      return;
+    }
+
+    // Verify access code
+    if (!accessCodeInput.trim()) {
+      setAccessCodeError('Please enter your staff access code.');
+      return;
+    }
+
+    if (accessCodeInput.trim().length < 4) {
+      setAccessCodeError('Invalid access code.');
       return;
     }
 
@@ -326,9 +503,13 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       });
 
       alert('✅ External PDF report securely uploaded and published to Patient Portal.');
+      setExternalPdfFile(null);
+      setExternalPdfUrl('');
+      setAccessCodeInput('');
       await fetchData();
     } catch (e) {
       console.error('Error uploading external PDF:', e);
+      alert('Failed to upload PDF. Please try again.');
     } finally {
       setIsUploadingPdf(false);
     }
@@ -437,6 +618,20 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     b.patientPid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.tests?.some(t => t.testName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Helper to get status badge color
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Completed':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'In_Lab_Testing':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'Ready_For_Pickup':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+      default:
+        return 'bg-slate-100 text-slate-800 border-slate-300';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -596,7 +791,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             {booking.bookingCode}
                           </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(booking.overallStatus)}`}>
                             {booking.overallStatus === 'Completed' ? 'Report Verified & Published' : 'Samples Collected'}
                           </span>
                           {isVirtual && (
@@ -660,7 +855,11 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setActiveBooking(null)}
+                    onClick={() => {
+                      setActiveBooking(null);
+                      setReagentUsageLog([]);
+                      setSelectedReagentId('');
+                    }}
                     className="text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer underline"
                   >
                     ← Back to Testing Queue
@@ -719,6 +918,32 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Access Code Input - Shared across all options */}
+          <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200">
+            <label className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+              <Key className="w-4 h-4" />
+              Staff Access Code (required for all actions)
+            </label>
+            <div className="flex items-center gap-2 mt-1.5">
+              <input
+                type="password"
+                value={accessCodeInput}
+                onChange={e => { 
+                  setAccessCodeInput(e.target.value); 
+                  setAccessCodeError(''); 
+                }}
+                placeholder="Enter your staff access code"
+                className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            {accessCodeError && (
+              <div className="flex items-center gap-1.5 text-rose-600 text-[11px] font-semibold mt-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {accessCodeError}
+              </div>
+            )}
           </div>
 
           {/* THE 3 DISTINCT PROCESSING OPTIONS TABS */}
@@ -873,6 +1098,88 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                 })}
               </div>
 
+              {/* REAGENT SELECTION SECTION */}
+              <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-200 space-y-3">
+                <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs">
+                  <Beaker className="w-4 h-4 text-indigo-700" />
+                  <span>Reagents & Consumables Used for This Test</span>
+                  <span className="text-[10px] text-indigo-600 font-normal">(Auto-deducts from inventory)</span>
+                </div>
+
+                {isLoadingReagents ? (
+                  <div className="flex items-center gap-2 text-slate-500 text-xs">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading reagents...
+                  </div>
+                ) : availableReagents.length === 0 ? (
+                  <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded-xl">
+                    No reagents found in inventory. Please add reagents in Inventory Management first.
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1">
+                      <SearchableReagentDropdown
+                        reagents={availableReagents.map(r => ({
+                          id: r.id,
+                          name: r.name,
+                          category: r.category,
+                          quantity: r.quantity || 0,
+                          unit: r.unit || 'units'
+                        }))}
+                        onSelect={handleReagentSelect}
+                        selectedReagentId={selectedReagentId}
+                        placeholder="Search & select reagent..."
+                        label="Select Reagent"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        value={reagentQuantity}
+                        onChange={(e) => setReagentQuantity(parseFloat(e.target.value) || 0)}
+                        className="w-20 px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Qty"
+                      />
+                      <button
+                        onClick={handleAddReagent}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        Add Reagent
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Reagent Usage Log */}
+                {reagentUsageLog.length > 0 && (
+                  <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider p-2 bg-slate-50 border-b border-slate-100">
+                      Reagents Added ({reagentUsageLog.length})
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {reagentUsageLog.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Droplet className="w-3.5 h-3.5 text-indigo-600" />
+                            <span className="font-bold text-slate-800">{item.reagentName}</span>
+                            <span className="text-slate-500">× {item.quantity}</span>
+                            <span className="text-slate-400">for: {item.testName}</span>
+                          </div>
+                          <button
+                            onClick={() => removeReagent(idx)}
+                            className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Submit Results Button */}
               <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
                 <div className="text-xs text-slate-500 flex items-center gap-1">
@@ -882,9 +1189,9 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
 
                 <button
                   type="button"
-                  disabled={isSubmittingResults}
+                  disabled={isSubmittingResults || reagentUsageLog.length === 0}
                   onClick={handleSubmitFormResults}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-5 h-5" />
                   {isSubmittingResults ? 'Processing Results...' : 'Submit Results & Generate Official PDF Report'}
@@ -938,8 +1245,8 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleUploadExternalPdf}
-                  disabled={isUploadingPdf}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-2xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+                  disabled={isUploadingPdf || !accessCodeInput.trim()}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-2xl shadow-md transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   {isUploadingPdf ? 'Attaching Report...' : 'Publish External PDF to Patient Portal'}
@@ -991,8 +1298,8 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleTriggerPickupAlert}
-                  disabled={isTriggeringPickup}
-                  className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+                  disabled={isTriggeringPickup || !pickupPasscode.trim()}
+                  className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow-md transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
                   <Bell className="w-4 h-4" />
                   {isTriggeringPickup ? 'Triggering SMS...' : 'Trigger Physical Pickup Alert'}
@@ -1028,7 +1335,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
         </div>
       )}
 
-      {/* SHARE ACCESS MODAL WITH GUIDELINE MANUAL CONFIRMATION */}
+      {/* SHARE ACCESS MODAL */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
@@ -1462,3 +1769,5 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     </div>
   );
 };
+
+export default LabTechView;

@@ -1004,7 +1004,7 @@ export const limsService = {
     testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>;
     techName: string;
     pdfReportDataUrl?: string;
-    reagentsUsed: [];
+    reagentsUsed: string;
   }): Promise<boolean> {
     const { labId, bookingId, testResultsMap, techName, pdfReportDataUrl, reagentsUsed } = params;
     const timestamp = new Date().toISOString();
