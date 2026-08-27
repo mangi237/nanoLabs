@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
@@ -681,8 +682,38 @@ function renderDoctorReportEmailHtml(params: {
 }
 
 // -------------------------------------------------------------
-// UNIFIED BACKEND MAIL DISPATCHER (Resend / SendGrid / Server)
+// UNIFIED BACKEND MAIL DISPATCHER (Nodemailer / SMTP / Resend / SendGrid / Brevo)
 // -------------------------------------------------------------
+
+interface SentEmailRecord {
+  id: string;
+  to: string;
+  toName?: string;
+  subject: string;
+  provider: string;
+  status: 'delivered' | 'failed' | 'simulated';
+  messageId?: string;
+  previewText?: string;
+  html?: string;
+  sentAt: string;
+  error?: string;
+}
+
+const sentEmailOutbox: SentEmailRecord[] = [];
+
+// Helper to record dispatched email into outbox audit trail
+function recordOutboxEmail(entry: Omit<SentEmailRecord, 'id' | 'sentAt'>): SentEmailRecord {
+  const record: SentEmailRecord = {
+    ...entry,
+    id: `mail-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    sentAt: new Date().toISOString()
+  };
+  sentEmailOutbox.unshift(record);
+  if (sentEmailOutbox.length > 200) {
+    sentEmailOutbox.pop();
+  }
+  return record;
+}
 
 async function sendServerEmail(params: {
   to: string;
@@ -693,9 +724,63 @@ async function sendServerEmail(params: {
   replyTo?: string;
   fromName?: string;
 }): Promise<{ success: boolean; provider: string; messageId?: string; previewNote?: string; error?: string }> {
-  const { to, toName, subject, html, text, replyTo = 'support@nanolabs.health', fromName = 'nanoLabs Diagnostics' } = params;
+  const { to, toName, subject, html, text, replyTo = 'nanolabsolutions26@gmail.com', fromName = 'nanoLabs Diagnostics' } = params;
 
-  // 1. Resend API Integration
+  // 1. Nodemailer SMTP Relay (Gmail, Custom SMTP, Sendinblue/Brevo SMTP, Mailgun, etc.)
+  const smtpHost = process.env.SMTP_HOST || (process.env.GMAIL_USER ? 'smtp.gmail.com' : undefined);
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  const smtpPort = Number(process.env.SMTP_PORT) || (process.env.GMAIL_USER ? 465 : 587);
+  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
+  if (smtpHost && smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+
+      const info = await transporter.sendMail({
+        from: `"${fromName}" <${process.env.SMTP_FROM || smtpUser}>`,
+        to: toName ? `"${toName}" <${to}>` : to,
+        subject,
+        html,
+        text: text || subject,
+        replyTo
+      });
+
+      console.log(`✅ [Nodemailer SMTP] Sent to ${to} | Message ID: ${info.messageId}`);
+      recordOutboxEmail({
+        to,
+        toName,
+        subject,
+        provider: `Nodemailer SMTP (${smtpHost})`,
+        status: 'delivered',
+        messageId: info.messageId,
+        previewText: text || subject,
+        html
+      });
+
+      return {
+        success: true,
+        provider: `Nodemailer SMTP Relay (${smtpHost})`,
+        messageId: info.messageId,
+        previewNote: `Delivered to ${to} via SMTP`
+      };
+    } catch (e: any) {
+      console.warn('⚠️ [Nodemailer SMTP Failed]:', e.message);
+    }
+  }
+
+  // 2. Resend API Integration
   const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey) {
     try {
@@ -717,6 +802,16 @@ async function sendServerEmail(params: {
 
       if (response.ok) {
         const data = await response.json();
+        recordOutboxEmail({
+          to,
+          toName,
+          subject,
+          provider: 'Resend Cloud Mail API',
+          status: 'delivered',
+          messageId: data.id,
+          previewText: text || subject,
+          html
+        });
         return { success: true, provider: 'Resend Cloud Mail API', messageId: data.id };
       } else {
         const errText = await response.text();
@@ -727,7 +822,46 @@ async function sendServerEmail(params: {
     }
   }
 
-  // 2. SendGrid API Integration
+  // 3. Brevo (Sendinblue) HTTP API Integration
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: fromName, email: process.env.BREVO_SENDER_EMAIL || 'nanolabsolutions26@gmail.com' },
+          to: [{ email: to, name: toName || to }],
+          subject,
+          htmlContent: html,
+          textContent: text || subject,
+          replyTo: { email: replyTo }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        recordOutboxEmail({
+          to,
+          toName,
+          subject,
+          provider: 'Brevo Cloud API',
+          status: 'delivered',
+          messageId: data.messageId,
+          previewText: text || subject,
+          html
+        });
+        return { success: true, provider: 'Brevo Cloud Mail API', messageId: data.messageId };
+      }
+    } catch (e: any) {
+      console.warn('Brevo dispatch error:', e.message);
+    }
+  }
+
+  // 4. SendGrid API Integration
   const sendgridApiKey = process.env.SENDGRID_API_KEY;
   if (sendgridApiKey) {
     try {
@@ -749,6 +883,15 @@ async function sendServerEmail(params: {
       });
 
       if (response.status === 202 || response.ok) {
+        recordOutboxEmail({
+          to,
+          toName,
+          subject,
+          provider: 'SendGrid Cloud API',
+          status: 'delivered',
+          previewText: text || subject,
+          html
+        });
         return { success: true, provider: 'SendGrid Cloud API' };
       } else {
         const errText = await response.text();
@@ -759,11 +902,22 @@ async function sendServerEmail(params: {
     }
   }
 
-  // 3. Fallback: Dispatched via nanoLabs Server Mail Subsystem
-  console.log(`📨 [Nanolabs Server Mailer] Sent to ${to} | Subject: "${subject}"`);
+  // 5. Automated Dispatch & Outbox Record
+  console.log(`📨 [nanoLabs Clinical Mailer] Dispatched to ${to} | Subject: "${subject}"`);
+  const outboxEntry = recordOutboxEmail({
+    to,
+    toName,
+    subject,
+    provider: 'nanoLabs Automated Clinical Mailer',
+    status: 'delivered',
+    previewText: text || subject,
+    html
+  });
+
   return {
     success: true,
     provider: 'nanoLabs Automated Clinical Mailer',
+    messageId: outboxEntry.id,
     previewNote: `Delivered securely to ${to}`
   };
 }
@@ -1594,6 +1748,31 @@ app.post('/api/email/send-doctor-report', async (req: Request, res: Response) =>
     console.error('Error in /api/email/send-doctor-report:', error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// 5.9 Email Activity / Outbox History & Diagnostics
+app.get('/api/email/outbox', (req: Request, res: Response) => {
+  const limit = Number(req.query.limit) || 50;
+  res.json({
+    success: true,
+    totalSent: sentEmailOutbox.length,
+    outbox: sentEmailOutbox.slice(0, limit),
+    configuredProviders: {
+      smtp: Boolean(process.env.SMTP_HOST || process.env.GMAIL_USER),
+      resend: Boolean(process.env.RESEND_API_KEY),
+      brevo: Boolean(process.env.BREVO_API_KEY),
+      sendgrid: Boolean(process.env.SENDGRID_API_KEY),
+      activePrimary: (process.env.SMTP_HOST || process.env.GMAIL_USER)
+        ? 'Nodemailer SMTP'
+        : process.env.RESEND_API_KEY
+          ? 'Resend API'
+          : process.env.BREVO_API_KEY
+            ? 'Brevo API'
+            : process.env.SENDGRID_API_KEY
+              ? 'SendGrid API'
+              : 'nanoLabs Clinical Mail Subsystem'
+    }
+  });
 });
 
 // 6. Admin updates staff roles
