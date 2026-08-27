@@ -332,6 +332,159 @@ function renderStaffInviteEmailHtml(params: {
   `;
 }
 
+function renderLabWelcomeEmailHtml(params: {
+  labName: string;
+  adminName: string;
+  adminEmail: string;
+  accessCode: string;
+  phone?: string;
+  address?: string;
+  location?: string;
+  website?: string;
+  licenseNumber?: string;
+  taxId?: string;
+  pricingModel?: string;
+  tier?: string;
+  loginUrl?: string;
+}): string {
+  const {
+    labName,
+    adminName,
+    adminEmail,
+    accessCode,
+    phone,
+    address,
+    location,
+    website,
+    licenseNumber,
+    taxId,
+    pricingModel = 'Subscription Growth',
+    loginUrl = 'https://nano-labs.vercel.app'
+  } = params;
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laboratory Provisioning Confirmed - ${labName}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f8fafc;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 650px; background-color: #111827; border: 1px solid #1f2937; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #042f2e 0%, #0d9488 100%); padding: 36px 32px; text-align: center; border-bottom: 3px solid #14b8a6;">
+              <div style="display: inline-block; background-color: rgba(20, 184, 166, 0.25); border: 1px solid rgba(20, 184, 166, 0.4); border-radius: 10px; padding: 5px 14px; margin-bottom: 12px;">
+                <span style="color: #5eead4; font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">Facility Registration Confirmed</span>
+              </div>
+              <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 900;">${labName}</h1>
+              <p style="color: #99f6e4; margin: 6px 0 0 0; font-size: 13px;">nanoLabs Clinical Intelligence & Diagnostics Network</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 36px 32px; background-color: #111827;">
+              <p style="margin: 0 0 16px 0; color: #94a3b8; font-size: 15px;">Dear <strong style="color: #ffffff;">${adminName}</strong>,</p>
+              
+              <p style="margin: 0 0 24px 0; color: #cbd5e1; font-size: 14px; line-height: 1.6;">
+                Congratulations! Your diagnostic facility <strong style="color: #2dd4bf;">${labName}</strong> has been successfully registered on the nanoLabs Health Care Network. Your laboratory workspace has been created with all custom configurations.
+              </p>
+
+              <!-- Facility Summary Card -->
+              <div style="background-color: #1f2937; border-radius: 16px; padding: 22px; margin-bottom: 24px; border: 1px solid #374151;">
+                <h3 style="margin: 0 0 14px 0; color: #5eead4; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+                  Registered Laboratory Profile
+                </h3>
+                <table width="100%" border="0" cellspacing="0" cellpadding="6" style="font-size: 13px;">
+                  <tr>
+                    <td width="40%" style="color: #9ca3af; font-weight: 600;">Facility Name:</td>
+                    <td style="color: #ffffff; font-weight: 700;">${labName}</td>
+                  </tr>
+                  ${phone ? `
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Official Phone:</td>
+                    <td style="color: #ffffff; font-family: monospace;">${phone}</td>
+                  </tr>` : ''}
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Official Support Email:</td>
+                    <td style="color: #ffffff;">${adminEmail}</td>
+                  </tr>
+                  ${address || location ? `
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Physical Address:</td>
+                    <td style="color: #e5e7eb;">${address ? `${address}, ` : ''}${location || ''}</td>
+                  </tr>` : ''}
+                  ${website ? `
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Website Portal:</td>
+                    <td style="color: #38bdf8;"><a href="${website.startsWith('http') ? website : `https://${website}`}" style="color: #38bdf8; text-decoration: none;" target="_blank">${website}</a></td>
+                  </tr>` : ''}
+                  ${licenseNumber ? `
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">License / Accreditation:</td>
+                    <td style="color: #a7f3d0; font-family: monospace; font-weight: 700;">${licenseNumber}</td>
+                  </tr>` : ''}
+                  ${taxId ? `
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Tax ID / Registration:</td>
+                    <td style="color: #cbd5e1; font-family: monospace;">${taxId}</td>
+                  </tr>` : ''}
+                  <tr>
+                    <td style="color: #9ca3af; font-weight: 600;">Billing Model:</td>
+                    <td style="color: #fde047; font-weight: 700;">${pricingModel}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Admin Credentials Box -->
+              <div style="background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); border: 2px solid #10b981; border-radius: 18px; padding: 24px; text-align: center; margin-bottom: 28px;">
+                <span style="display: block; color: #a7f3d0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px;">
+                  Laboratory Administrator Access Code
+                </span>
+                <div style="font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 900; color: #ffffff; letter-spacing: 6px; margin: 8px 0;">
+                  ${accessCode}
+                </div>
+                <p style="margin: 8px 0 0 0; color: #d1fae5; font-size: 12px;">
+                  Use this initial access code along with your email (<strong style="color: #ffffff;">${adminEmail}</strong>) to log into your administrator control center.
+                </p>
+              </div>
+
+              <!-- Action Button -->
+              <div style="text-align: center; margin: 32px 0 16px 0;">
+                <a href="${loginUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); color: #ffffff; font-weight: 800; font-size: 15px; text-decoration: none; padding: 16px 36px; border-radius: 14px; box-shadow: 0 10px 25px -5px rgba(13, 148, 136, 0.5);">
+                  Launch Laboratory Dashboard →
+                </a>
+              </div>
+
+              <div style="background-color: #1e293b; border-radius: 12px; padding: 16px; border-left: 4px solid #f59e0b; margin-top: 24px;">
+                <p style="margin: 0; color: #cbd5e1; font-size: 12px; line-height: 1.6;">
+                  <strong style="color: #fbbf24;">Next Steps & Compliance:</strong> To ensure patient medical records and diagnostic certificates are legally accredited, all invoices, patient receipts, and result PDFs will automatically display your registered address, phone, website, and license number.
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #0b0f19; padding: 24px 32px; border-top: 1px solid #1f2937; text-align: center;">
+              <p style="margin: 0 0 6px 0; color: #64748b; font-size: 12px; font-weight: 600;">${labName} • nanoLabs Clinical Diagnostics System</p>
+              <p style="margin: 0; color: #475569; font-size: 11px;">ISO 15189 Compliant • Cryptographic Medical Data Protection</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+}
+
 function renderDoctorReportEmailHtml(params: {
   doctorName?: string;
   doctorEmail: string;
@@ -1228,6 +1381,74 @@ app.post('/api/email/send-otp', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error in /api/email/send-otp:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5.6b Send Official Lab Provisioning Confirmation Email
+app.post('/api/email/send-lab-welcome', async (req: Request, res: Response) => {
+  try {
+    const {
+      labName,
+      adminName,
+      adminEmail,
+      accessCode,
+      phone,
+      address,
+      location,
+      website,
+      licenseNumber,
+      taxId,
+      pricingModel,
+      tier
+    } = req.body;
+
+    if (!adminEmail || !adminEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'A valid administrator email is required.' });
+    }
+
+    const cleanEmail = adminEmail.trim().toLowerCase();
+    const facilityName = labName || 'New Diagnostic Facility';
+
+    const html = renderLabWelcomeEmailHtml({
+      labName: facilityName,
+      adminName: adminName || 'Lab Administrator',
+      adminEmail: cleanEmail,
+      accessCode: accessCode || 'ADM-8800',
+      phone,
+      address,
+      location,
+      website,
+      licenseNumber,
+      taxId,
+      pricingModel: pricingModel || 'Growth Subscription',
+      tier
+    });
+
+    const subject = `Welcome to nanoLabs: ${facilityName} Provisioning & Credentials`;
+
+    const sendResult = await sendServerEmail({
+      to: cleanEmail,
+      toName: adminName || 'Lab Administrator',
+      subject,
+      html,
+      text: `Congratulations! ${facilityName} has been registered on nanoLabs.\nAdmin Access Code: ${accessCode}\nEmail: ${cleanEmail}\n\nLog in at https://nano-labs.vercel.app`
+    });
+
+    logAuditEvent(
+      'LAB_WELCOME_EMAIL_DISPATCHED',
+      'SECURITY',
+      { id: 'system', name: 'Lab Provisioning Subsystem', role: 'system' },
+      `Dispatched laboratory onboarding confirmation & administrator credentials for ${facilityName} to ${cleanEmail}. Provider: ${sendResult.provider}`
+    );
+
+    res.json({
+      success: true,
+      message: `Laboratory registration confirmation dispatched to ${cleanEmail}`,
+      provider: sendResult.provider
+    });
+  } catch (error: any) {
+    console.error('Error in /api/email/send-lab-welcome:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
