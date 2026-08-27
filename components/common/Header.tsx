@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../../context/authContext';
 import { useTheme } from '../../context/themeContext';
+import { useLanguage } from '../../context/languageContext';
 import { Bell, Activity, MapPin } from 'lucide-react';
-import LabLocationSearchModal from './LabLocationSearchModal';
+import LanguageSelector from './LanguageSelector';
 
 interface HeaderProps {
   title?: string;
@@ -16,11 +17,20 @@ export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
   onNotificationPress,
-  onProfilePress
+  onProfilePress,
+  onRoleSwitcherPress
 }) => {
   const { user, lab } = useAuth();
   const { colors } = useTheme();
-  const [showLocationModal, setShowLocationModal] = useState(false);
+  const { language, toggleLanguage } = useLanguage();
+
+  const handleProfileClick = () => {
+    if (onProfilePress) {
+      onProfilePress();
+    } else if (onRoleSwitcherPress) {
+      onRoleSwitcherPress();
+    }
+  };
 
   return (
     <>
@@ -28,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            {lab?.logoUrl ? (
+            {lab?.isCustomSelected && lab?.logoUrl ? (
               <img
                 src={lab.logoUrl}
                 alt={lab.name || 'Lab Logo'}
@@ -46,19 +56,25 @@ export const Header: React.FC<HeaderProps> = ({
                   nano<span className="text-teal-700">Labs</span>
                 </span>
                 <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
-                  Health Care
+                  Health Network
                 </span>
               </div>
               
               {/* Lab Name with City & Address right under */}
               <div className="text-xs text-slate-600 font-semibold truncate max-w-[200px] sm:max-w-xs">
-                {lab?.name || 'nanoLabs Central Diagnostics'}
+                {lab?.isCustomSelected ? lab.name : 'nanoLabs Central Network'}
               </div>
               <div className="text-[10px] text-teal-800 font-medium truncate max-w-[220px] sm:max-w-xs flex items-center gap-1">
                 <MapPin className="w-3 h-3 text-teal-600 shrink-0" />
                 <span className="truncate">
-                  {lab?.city ? `${lab.city} • ` : ''}
-                  {lab?.address || lab?.location || 'Central Diagnostic Hub'}
+                  {lab?.isCustomSelected ? (
+                    <>
+                      {lab.city ? `${lab.city} • ` : ''}
+                      {lab.address || lab.location || 'Diagnostic Facility'}
+                    </>
+                  ) : (
+                    'Central Diagnostic Hub'
+                  )}
                 </span>
               </div>
             </div>
@@ -66,30 +82,15 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Title, Lab Badge or User Info */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hospital / Location Switcher Badge */}
-            {/* <button
-              onClick={() => setShowLocationModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/90 rounded-2xl border border-slate-200 transition-all cursor-pointer"
-              title="Click to search labs around you"
-            >
-              <MapPin className="w-4 h-4 text-teal-700 shrink-0" />
-              <div className="text-left hidden sm:block">
-                <div className="text-[11px] font-bold text-slate-900 leading-tight truncate max-w-[130px] md:max-w-[170px]">
-                  {lab?.name || 'Find Labs Near You'}
-                </div>
-                <div className="text-[10px] text-teal-700 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 inline-block"></span>
-                  <span className="truncate">{lab?.city ? `${lab.city} Center` : 'Change Location'}</span>
-                </div>
-              </div>
-            </button> */}
-
             {title && (
               <div className="hidden lg:block text-right border-l border-slate-200 pl-3">
                 <h1 className="text-xs font-bold text-slate-800">{title}</h1>
                 {subtitle && <p className="text-[10px] text-slate-500 truncate max-w-[160px]">{subtitle}</p>}
               </div>
             )}
+
+            {/* Language Selector Dropdown */}
+            <LanguageSelector variant="dropdown" />
 
             {/* Notifications Button */}
             <button
@@ -103,15 +104,16 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* User Profile Pill */}
             <button
-              onClick={onProfilePress}
-              className="flex items-center gap-2.5 p-1.5 pl-3 rounded-xl border border-slate-200 hover:border-teal-400 hover:bg-teal-50/50 transition-all bg-white cursor-pointer"
+              onClick={handleProfileClick}
+              className="flex items-center gap-2.5 p-1.5 pl-3 rounded-xl border border-slate-200 hover:border-teal-400 hover:bg-teal-50/50 transition-all bg-white cursor-pointer shadow-2xs hover:shadow-xs"
+              title="Click to view profile & switch role"
             >
               <div className="text-right hidden sm:block">
                 <div className="text-xs font-semibold text-slate-900 leading-tight">
                   {user?.name || 'Authorized User'}
                 </div>
-                <div className="text-[11px] text-teal-700 font-medium capitalize">
-                  {user?.role?.replace('_', ' ') || 'User'}
+                <div className="text-[11px] text-teal-700 font-medium capitalize flex items-center justify-end gap-1">
+                  <span>{user?.role?.replace('_', ' ') || 'User'}</span>
                 </div>
               </div>
               {user?.avatarUrl ? (
@@ -130,12 +132,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </header>
-
-      {/* Location Search Modal */}
-      <LabLocationSearchModal
-        isOpen={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-      />
     </>
   );
 };
