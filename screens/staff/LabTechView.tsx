@@ -64,7 +64,7 @@ interface ReagentItem {
 }
 
 interface UsedReagentRecord {
-  reagentId?: string;
+  reagentId?: string ;
   reagentName: string;
   quantity: number;
   unit?: string;
@@ -1207,7 +1207,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveReagentFromTest(ru.reagentId)}
+                                      onClick={() => handleRemoveReagentFromTest(ru.reagentId ?? '')}
                                       className="text-slate-400 hover:text-rose-600 p-1"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
