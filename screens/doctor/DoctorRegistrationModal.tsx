@@ -172,7 +172,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Accredited Physician Self-Registration</h3>
-                <p className="text-xs text-slate-500">Join the nanoLabs Medical Network to track patient test results & earn 20% commission</p>
+                <p className="text-xs text-slate-500">Join the nanoLabs Medical Network to track patient test results easily</p>
               </div>
             </div>
 
@@ -181,6 +181,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                 {errorMessage}
               </div>
             )}
+
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
