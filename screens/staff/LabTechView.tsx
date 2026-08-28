@@ -1323,7 +1323,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
               You are now the primary assigned Medical Technologist for <strong>{activeBooking?.patientName}</strong> ({activeBooking?.bookingCode}). Diagnostic data is privacy-locked to your account.
             </p>
             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400 text-left">
-              🔒 Other technicians cannot view these findings unless you explicitly grant shared access after confirming clinical guidelines.
+              Other technicians cannot view these findings unless you explicitly grant shared access after confirming clinical guidelines.
             </div>
             <button
               onClick={() => setShowPrivacyNoticeModal(false)}
