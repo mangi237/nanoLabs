@@ -6,6 +6,7 @@ import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
+import { TestStatus } from '../../services/limsService';
 import { 
   DollarSign, 
   Search, 
