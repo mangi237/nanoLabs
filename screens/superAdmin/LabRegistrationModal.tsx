@@ -35,8 +35,9 @@ import {
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
-import { sendOtpVerification, verifyOtpCode, sendLabWelcomeEmail } from '../../services/emailService';
+import { sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
+import HumanVerificationModal from '../../components/security/HumanVerificationModal';
 import { PricingModelType, SubscriptionTierType } from '../../types';
 
 interface LabRegistrationModalProps {
@@ -60,15 +61,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   const [authorizedRepConfirmed, setAuthorizedRepConfirmed] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
-  // Human Verification OTP State
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSending, setOtpSending] = useState(false);
-  const [otpVerifying, setOtpVerifying] = useState(false);
-  const [otpError, setOtpError] = useState('');
-  const [otpDispatched, setOtpDispatched] = useState(false);
-  const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
-  const [verificationId, setVerificationId] = useState('');
+  // Human Verification State (Non-reCAPTCHA & No email OTP block)
+  const [showHumanVerificationModal, setShowHumanVerificationModal] = useState(false);
 
   const [formData, setFormData] = useState({
     // Step 1: Real Facility Information
@@ -238,8 +232,8 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     return formData.billingPeriod === 'annual' ? 450000 : 45000;
   };
 
-  // Trigger Human Verification OTP Flow
-  const handleInitiateHumanVerification = async () => {
+  // Trigger Human Verification Flow (Zero-Bot & accessible without reCAPTCHA/email OTP)
+  const handleInitiateHumanVerification = () => {
     if (!formData.adminName.trim() || !formData.adminEmail.trim()) {
       alert('Please fill in Lab Administrator name and email address.');
       return;
@@ -255,58 +249,12 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
       return;
     }
 
-    setOtpSending(true);
-    setOtpError('');
-    setShowOtpModal(true);
-
-    try {
-      const res = await sendOtpVerification(
-        formData.adminEmail.trim(),
-        'lab_creation',
-        formData.adminName.trim(),
-        formData.name.trim()
-      );
-
-      if (res.success) {
-        setOtpDispatched(true);
-        setVerificationId(res.verificationId || '');
-        setOtpSuccessMessage(res.message || `Verification code sent to ${formData.adminEmail}`);
-      } else {
-        setOtpError(res.error || 'Failed to dispatch verification code. Please check email address.');
-      }
-    } catch (e: any) {
-      console.error('Error sending OTP:', e);
-      setOtpError('Error connecting to verification service.');
-    } finally {
-      setOtpSending(false);
-    }
+    setShowHumanVerificationModal(true);
   };
 
-  const handleVerifyOtpAndProvision = async () => {
-    if (!otpCode.trim() || otpCode.trim().length !== 6) {
-      setOtpError('Please enter the complete 6-digit verification code.');
-      return;
-    }
-
-    setOtpVerifying(true);
-    setOtpError('');
-
-    try {
-      const verifyRes = await verifyOtpCode(formData.adminEmail.trim(), otpCode.trim(), verificationId);
-      if (!verifyRes.success || !verifyRes.verified) {
-        setOtpError(verifyRes.error || 'Invalid or expired verification code. Please re-enter.');
-        setOtpVerifying(false);
-        return;
-      }
-
-      // Verification passed! Commit lab creation
-      setShowOtpModal(false);
-      await commitLabCreation();
-    } catch (e: any) {
-      console.error('Error verifying OTP:', e);
-      setOtpError(e.message || 'Verification failed.');
-      setOtpVerifying(false);
-    }
+  const handleHumanVerificationSuccess = async () => {
+    setShowHumanVerificationModal(false);
+    await commitLabCreation();
   };
 
   const commitLabCreation = async () => {
@@ -1254,118 +1202,25 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
           ) : (
             <button
               onClick={handleInitiateHumanVerification}
-              disabled={loading || otpSending || !termsAccepted || !authorizedRepConfirmed}
+              disabled={loading || !termsAccepted || !authorizedRepConfirmed}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
-              {otpSending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Sending Verification Code...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  Verify Email & Provision Lab
-                </>
-              )}
+              <ShieldCheck className="w-4 h-4" />
+              <span>Verify & Provision Laboratory</span>
             </button>
           )}
         </div>
 
       </div>
 
-      {/* Human Verification OTP Modal */}
-      {showOtpModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
-            <button
-              onClick={() => {
-                setShowOtpModal(false);
-                setOtpError('');
-                setOtpCode('');
-              }}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center mx-auto shadow-sm">
-                <UserCheck className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900">
-                Human & Admin Verification
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                A 6-digit verification code has been dispatched to <strong className="text-slate-800">{formData.adminEmail}</strong> to confirm legitimate human administrator identity.
-              </p>
-            </div>
-
-            {otpSuccessMessage && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{otpSuccessMessage}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700 text-center uppercase tracking-wider">
-                Enter 6-Digit Code
-              </label>
-              <input
-                type="text"
-                maxLength={6}
-                value={otpCode}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '');
-                  setOtpCode(val);
-                  setOtpError('');
-                }}
-                placeholder="• • • • • •"
-                className="w-full text-center py-3.5 px-4 bg-slate-50 border-2 border-teal-500/40 rounded-2xl text-2xl font-mono font-black tracking-widest text-slate-900 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-500/20 transition-all shadow-inner"
-              />
-            </div>
-
-            {otpError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{otpError}</span>
-              </div>
-            )}
-
-            <div className="space-y-2.5 pt-2">
-              <button
-                type="button"
-                onClick={handleVerifyOtpAndProvision}
-                disabled={otpVerifying || otpCode.length !== 6}
-                className="w-full py-3.5 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-lg shadow-teal-700/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {otpVerifying ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Validating Security Credentials...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Confirm Code & Complete Registration
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleInitiateHumanVerification}
-                disabled={otpSending}
-                className="w-full py-2 text-xs text-slate-500 hover:text-teal-700 font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${otpSending ? 'animate-spin' : ''}`} />
-                Resend Code to {formData.adminEmail}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Human Verification Modal (No reCAPTCHA / Zero Email OTP lock) */}
+      <HumanVerificationModal
+        isOpen={showHumanVerificationModal}
+        onClose={() => setShowHumanVerificationModal(false)}
+        onVerified={handleHumanVerificationSuccess}
+        title="Human Administrator Verification"
+        subtitle={`Zero-Bot validation for ${formData.name || 'Laboratory Provisioning'}`}
+      />
 
       {/* Lab Terms Modal */}
       <LabTermsModal

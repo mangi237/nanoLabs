@@ -6,12 +6,11 @@ export interface ReferringDoctor {
   hospital?: string;
   phone?: string;
   email?: string;
-  commissionRate?: number; // e.g. 20 for 20%
+  licenseNumber?: string;
   notes?: string;
   totalReferrals?: number;
+  totalTestsDone?: number;
   totalRevenueGenerated?: number;
-  totalCommissionEarned?: number;
-  totalCommissionPaid?: number;
   status?: 'active' | 'inactive';
   createdAt?: string;
   updatedAt?: string;
@@ -87,7 +86,6 @@ export interface Lab {
   avatarUrl?: string;
   feePerTest?: number;
   feePerPatient?: number;
-  defaultDoctorCommissionRate?: number; // e.g. 20%
   pricingModel?: PricingModelType;
   subscriptionPlan?: PricingModelType;
   subscriptionTier?: SubscriptionTierType;
@@ -261,4 +259,51 @@ export interface AppNotification {
   read: boolean;
   patientId?: string;
   patientName?: string;
+}
+
+export interface PatientBooking {
+  id: string;
+  bookingCode?: string;
+  patientId: string;
+  patientName: string;
+  patientPhone?: string;
+  patientEmail?: string;
+  patientAge?: number;
+  patientGender?: string;
+  labId?: string;
+  labName?: string;
+  tests?: any[];
+  totalAmount?: number;
+  totalPrice?: number;
+  status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
+  sampleCollected?: boolean;
+  sampleCollectedAt?: string;
+  resultsReady?: boolean;
+  resultsReleased?: boolean;
+  biologistConfirmed?: boolean;
+  biologistConfirmedAt?: string;
+  biologistName?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Doctor {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  specialty?: string;
+  licenseNumber?: string;
+  hospitalAffiliation?: string;
+  hospital?: string;
+  patientCount?: number;
+  totalTestsDone?: number;
+  accessCode?: string;
+  status?: 'active' | 'pending' | 'suspended';
+  createdAt?: string;
+  updatedAt?: string;
 }

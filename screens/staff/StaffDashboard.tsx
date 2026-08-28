@@ -20,11 +20,15 @@ import { LabTechView } from './LabTechView';
 interface StaffDashboardProps {
   onNavigate?: (screen: string, params?: any) => void;
   onOpenRoleSwitcher?: () => void;
+  onNotificationPress?: () => void;
+  onProfilePress?: () => void ;
 }
 
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   onNavigate,
-  onOpenRoleSwitcher
+  onOpenRoleSwitcher,
+  onNotificationPress,
+  onProfilePress
 }) => {
   const { user, lab } = useAuth();
   const activeRole = user?.role || 'receptionist';

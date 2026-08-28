@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
+import DoctorRegistrationModal from '../doctor/DoctorRegistrationModal';
 import LanguageSelector from '../../components/common/LanguageSelector';
 // import founderPortraitImg from '../../assets/images/founder_portrait_1787272630258.jpg';
 
@@ -59,6 +60,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showRegisterLabModal, setShowRegisterLabModal] = useState(false);
+  const [showDoctorRegisterModal, setShowDoctorRegisterModal] = useState(false);
   const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
 
   // Dynamic Translated Carousel Slides
@@ -525,10 +527,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <PlusCircle className="w-4 h-4 text-teal-600" />
                 {t('register_lab_btn')}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDoctorRegisterModal(true)}
+                className="w-full py-2.5 px-4 bg-teal-50/80 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Stethoscope className="w-4 h-4 text-teal-600" />
+                <span>Physician & Doctor Accreditation (Join Network)</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Doctor Registration Modal */}
+      {showDoctorRegisterModal && (
+        <DoctorRegistrationModal
+          isOpen={showDoctorRegisterModal}
+          onClose={() => setShowDoctorRegisterModal(false)}
+          onSuccess={(doc) => {
+            if (doc.accessCode) {
+              setAccessCode(doc.accessCode);
+            }
+          }}
+        />
+      )}
 
       {/* Location Search Modal */}
       <LabLocationSearchModal

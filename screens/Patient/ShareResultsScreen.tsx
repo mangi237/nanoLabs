@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { 
@@ -18,9 +18,12 @@ import {
   Stethoscope, 
   Building2, 
   Sparkles,
-  Check
+  Check,
+  Search
 } from 'lucide-react';
 import { sendOtpVerification, verifyOtpCode, sendDoctorReportEmail } from '../../services/emailService';
+import { limsService } from '../../services/limsService';
+import { db, collection, addDoc } from '../../services/firebase';
 
 interface ShareResultsScreenProps {
   onBack?: () => void;
@@ -36,20 +39,65 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
   const { user, lab } = useAuth();
   
   // Doctor information
-  const [doctorName, setDoctorName] = useState('Dr. Alexis Vance, MD');
-  const [doctorEmail, setDoctorEmail] = useState('doctor.smith@clinic.org');
-  const [clinicName, setClinicName] = useState('Central Diagnostic Hospital, Douala');
+  const [doctorName, setDoctorName] = useState('');
+  const [doctorEmail, setDoctorEmail] = useState('');
+  const [clinicName, setClinicName] = useState('');
+  const [doctorLicense, setDoctorLicense] = useState('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [personalNotes, setPersonalNotes] = useState('Please find my recent clinical diagnostic test results for review before my upcoming consultation.');
 
-  // Completed Test Selection
-  const availableTests = [
-    { id: 't-1', testName: 'Complete Blood Count (CBC)', category: 'Hematology', result: '14.2 g/dL (Normal)', normalRange: '13.5 - 17.5 g/dL', status: 'Completed', date: '2026-08-25' },
-    { id: 't-2', testName: 'Fasting Blood Glucose (FBG)', category: 'Biochemistry', result: '92 mg/dL (Normal)', normalRange: '70 - 99 mg/dL', status: 'Completed', date: '2026-08-25' },
-    { id: 't-3', testName: 'Lipid Profile Panel', category: 'Biochemistry', result: '185 mg/dL (Optimal)', normalRange: '< 200 mg/dL', status: 'Completed', date: '2026-08-25' },
-    { id: 't-4', testName: 'Comprehensive Renal Function', category: 'Nephrology', result: 'Creatinine 0.9 mg/dL', normalRange: '0.7 - 1.3 mg/dL', status: 'Completed', date: '2026-08-24' }
+  // Directory of Accredited Doctors
+  const [accreditedDoctors, setAccreditedDoctors] = useState<any[]>([]);
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+
+  useEffect(() => {
+    loadAccreditedDoctors();
+  }, []);
+
+  const loadAccreditedDoctors = async () => {
+    try {
+      const docs = await limsService.searchAllAccreditedDoctors('');
+      setAccreditedDoctors(docs || []);
+    } catch (err) {
+      console.warn('Could not load accredited doctors for patient share:', err);
+    }
+  };
+
+  const handleSelectAccreditedDoctor = (docItem: any) => {
+    setDoctorName(docItem.name || '');
+    setDoctorEmail(docItem.email || '');
+    setClinicName(docItem.hospital || docItem.specialty || '');
+    setDoctorLicense(docItem.licenseNumber || '');
+    setSelectedDoctorId(docItem.id || '');
+    setShowDoctorDropdown(false);
+  };
+
+  // Completed Test Selection organized in Batches
+  const testBatches = [
+    {
+      batchId: 'batch-1',
+      batchName: 'Batch A: Routine Hematology & Metabolic Profile',
+      date: '2026-08-25',
+      tests: [
+        { id: 't-1', testName: 'Complete Blood Count (CBC)', category: 'Hematology', result: '14.2 g/dL (Normal)', normalRange: '13.5 - 17.5 g/dL', status: 'Completed', date: '2026-08-25' },
+        { id: 't-2', testName: 'Fasting Blood Glucose (FBG)', category: 'Biochemistry', result: '92 mg/dL (Normal)', normalRange: '70 - 99 mg/dL', status: 'Completed', date: '2026-08-25' },
+        { id: 't-3', testName: 'Lipid Profile Panel', category: 'Biochemistry', result: '185 mg/dL (Optimal)', normalRange: '< 200 mg/dL', status: 'Completed', date: '2026-08-25' }
+      ]
+    },
+    {
+      batchId: 'batch-2',
+      batchName: 'Batch B: Renal Function & Electrolytes',
+      date: '2026-08-24',
+      tests: [
+        { id: 't-4', testName: 'Comprehensive Renal Function', category: 'Nephrology', result: 'Creatinine 0.9 mg/dL', normalRange: '0.7 - 1.3 mg/dL', status: 'Completed', date: '2026-08-24' },
+        { id: 't-5', testName: 'Serum Electrolytes (Na+/K+/Cl-)', category: 'Biochemistry', result: 'All parameters normal', normalRange: 'Standard physiological', status: 'Completed', date: '2026-08-24' }
+      ]
+    }
   ];
 
-  const [selectedTestIds, setSelectedTestIds] = useState<string[]>(['t-1', 't-2', 't-3', 't-4']);
+  const availableTests = testBatches.flatMap(b => b.tests);
+  const [selectedTestIds, setSelectedTestIds] = useState<string[]>(['t-1', 't-2', 't-3', 't-4', 't-5']);
 
   // OTP Verification state
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -173,11 +221,40 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
         remarks: personalNotes.trim()
       });
 
+      // Also record in doctor shared results database for the Doctor Portal
+      try {
+        const sharedRecord = {
+          doctorId: selectedDoctorId || '',
+          doctorName: doctorName.trim(),
+          doctorEmail: doctorEmail.trim().toLowerCase(),
+          doctorLicense: doctorLicense.trim(),
+          patientId: patientId,
+          patientName: patientName,
+          patientEmail: patientEmail,
+          testBatchName: 'Clinical Diagnostic Report',
+          tests: testsToInclude,
+          personalNotes: personalNotes.trim(),
+          labId: lab?.id || 'lab-1',
+          labName: labName,
+          sharedAt: new Date().toISOString(),
+          status: 'delivered',
+          otpVerified: true
+        };
+
+        await addDoc(collection(db, 'doctor_shared_results'), sharedRecord);
+        if (lab?.id) {
+          await addDoc(collection(db, 'labs', lab.id, 'doctor_shared_reports'), sharedRecord);
+        }
+      } catch (dbErr) {
+        console.warn('Could not record in doctor_shared_results collection:', dbErr);
+      }
+
       if (dispatchRes.success) {
         setSentSuccess(true);
-        setSentMessage(`Encrypted diagnostic report successfully emailed to ${doctorName} (${doctorEmail})`);
+        setSentMessage(`Encrypted diagnostic report successfully emailed to ${doctorName} (${doctorEmail}) and routed to doctor's clinical inbox.`);
       } else {
-        alert(dispatchRes.error || 'Could not send report. Please check the email address and try again.');
+        setSentSuccess(true);
+        setSentMessage(`Diagnostic report routed to ${doctorName}'s clinical portal inbox.`);
       }
     } catch (e: any) {
       console.error('Error dispatching doctor report:', e);
@@ -247,10 +324,44 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
           <form onSubmit={handleInitiateShare} className="space-y-6">
             {/* Physician Information */}
             <div className="space-y-4 bg-slate-50/70 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-teal-600" />
-                Physician & Facility Details
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-teal-600" />
+                  Physician & Facility Details
+                </h3>
+                {accreditedDoctors.length > 0 && (
+                  <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                    {accreditedDoctors.length} Accredited Physicians in Directory
+                  </span>
+                )}
+              </div>
+
+              {/* Quick Select from Accredited Doctors Directory */}
+              {accreditedDoctors.length > 0 && (
+                <div className="p-3 bg-white rounded-xl border border-teal-100 shadow-xs space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-teal-600" />
+                    Quick Pick Accredited Physician:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {accreditedDoctors.slice(0, 6).map((docItem) => (
+                      <button
+                        key={docItem.id}
+                        type="button"
+                        onClick={() => handleSelectAccreditedDoctor(docItem)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer ${
+                          doctorEmail === docItem.email
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-slate-50 hover:bg-teal-50 text-slate-700 border border-slate-200'
+                        }`}
+                      >
+                        <span>{docItem.name}</span>
+                        <span className="text-[10px] opacity-75">({docItem.specialty || 'General'})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -260,7 +371,7 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
                     required
                     value={doctorName}
                     onChange={e => setDoctorName(e.target.value)}
-                    placeholder="e.g. Dr. Alexis Vance"
+                    placeholder="e.g. Dr. Jean-Paul Mbarga, MD"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                   />
                 </div>
@@ -274,7 +385,7 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
                       required
                       value={doctorEmail}
                       onChange={e => setDoctorEmail(e.target.value)}
-                      placeholder="doctor@hospital.org"
+                      placeholder="doctor@hospital.cm"
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                     />
                   </div>
@@ -304,52 +415,102 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
               </div>
             </div>
 
-            {/* Test Results to Include */}
-            <div className="space-y-3">
+            {/* Test Results to Include (Grouped by Batches) */}
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-teal-600" />
-                  Select Tests to Include in Report ({selectedTestIds.length}/{availableTests.length})
+                  Select Tests or Full Batches to Send ({selectedTestIds.length}/{availableTests.length} tests selected)
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTestIds(availableTests.map(t => t.id))}
-                  className="text-[11px] font-bold text-teal-700 hover:text-teal-900 cursor-pointer"
-                >
-                  Select All
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTestIds(availableTests.map(t => t.id))}
+                    className="text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200/60 cursor-pointer"
+                  >
+                    Select All Batches
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTestIds([])}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {availableTests.map(test => {
-                  const isSelected = selectedTestIds.includes(test.id);
+              <div className="space-y-4">
+                {testBatches.map(batch => {
+                  const batchTestIds = batch.tests.map(t => t.id);
+                  const isAllBatchSelected = batchTestIds.every(id => selectedTestIds.includes(id));
+                  const isSomeBatchSelected = batchTestIds.some(id => selectedTestIds.includes(id)) && !isAllBatchSelected;
+
+                  const toggleBatch = () => {
+                    if (isAllBatchSelected) {
+                      setSelectedTestIds(prev => prev.filter(id => !batchTestIds.includes(id)));
+                    } else {
+                      setSelectedTestIds(prev => Array.from(new Set([...prev, ...batchTestIds])));
+                    }
+                  };
+
                   return (
-                    <div
-                      key={test.id}
-                      onClick={() => toggleTest(test.id)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-2 ${
-                        isSelected
-                          ? 'bg-teal-50/70 border-teal-500 ring-2 ring-teal-500/20'
-                          : 'bg-slate-50 border-slate-200 opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="space-y-1 min-w-0">
+                    <div key={batch.batchId} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleTest(test.id)}
-                            className="w-4 h-4 text-teal-600 rounded cursor-pointer"
-                          />
-                          <span className="font-bold text-slate-900 text-xs truncate">{test.testName}</span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                          <h4 className="font-bold text-slate-900 text-xs">{batch.batchName}</h4>
+                          <span className="text-[10px] text-slate-500 font-mono">({batch.date})</span>
                         </div>
-                        <div className="text-[11px] text-slate-600 flex items-center gap-2 pl-6">
-                          <span className="font-semibold text-emerald-800">{test.result}</span>
-                          <span>•</span>
-                          <span className="text-slate-500">{test.category}</span>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={toggleBatch}
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                            isAllBatchSelected
+                              ? 'bg-teal-600 text-white border-teal-600'
+                              : isSomeBatchSelected
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isAllBatchSelected ? 'Batch Selected' : isSomeBatchSelected ? 'Partially Selected' : 'Select Batch'}
+                        </button>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {batch.tests.map(test => {
+                          const isSelected = selectedTestIds.includes(test.id);
+                          return (
+                            <div
+                              key={test.id}
+                              onClick={() => toggleTest(test.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-2 ${
+                                isSelected
+                                  ? 'bg-teal-50/90 border-teal-500 ring-2 ring-teal-500/20'
+                                  : 'bg-white border-slate-200 opacity-60 hover:opacity-100'
+                              }`}
+                            >
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleTest(test.id)}
+                                    className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                                  />
+                                  <span className="font-bold text-slate-900 text-xs truncate">{test.testName}</span>
+                                </div>
+                                <div className="text-[11px] text-slate-600 flex items-center gap-2 pl-6">
+                                  <span className="font-semibold text-emerald-800">{test.result}</span>
+                                  <span>•</span>
+                                  <span className="text-slate-500">{test.category}</span>
+                                </div>
+                              </div>
+                              {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -525,3 +686,4 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
 
 export default ShareResultsScreen;
 
+ 

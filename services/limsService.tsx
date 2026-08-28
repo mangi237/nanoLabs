@@ -2,9 +2,9 @@ import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onS
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
-import { ReferringDoctor } from '../types';
+import { ReferringDoctor, Doctor } from '../types';
 
-export type { MasterTestItem, ReferringDoctor };
+export type { MasterTestItem, ReferringDoctor, Doctor };
 
 export type TestStatus = 'Pending_Validation' | 'Pending_Payment' | 'Pending_Collection' | 'In_Lab_Testing' | 'Completed' | 'Ready_For_Pickup';
 
@@ -69,6 +69,7 @@ export interface PatientBooking {
   id: string; // Booking ID e.g. BK-2026-0813-001
   bookingCode: string;
   labId: string;
+  labName?: string;
   patientId: string;
   patientName: string;
   patientAge?: number;
@@ -84,11 +85,6 @@ export interface PatientBooking {
   referringDoctor?: string;
   referralHospital?: string;
   referralNotes?: string;
-  referralCommissionRate?: number; // e.g. 20 (20%)
-  referralCommissionAmount?: number; // Commission calculated in FCFA
-  referralCommissionStatus?: 'unpaid' | 'paid' | 'settled';
-  referralCommissionPaidAt?: string;
-  referralCommissionPaidBy?: string;
   sampleCollectedAt?: string;
   invoiceNumber: string;
   totalAmount: number;
@@ -150,16 +146,20 @@ export interface PatientBooking {
   // Processing Results & Files
   tests: BookingTestItem[];
   overallStatus: TestStatus;
+  status?: string;
   pdfReportUrl?: string; // Digital generated report
   externalPdfUrl?: string; // Option 2 fallback PDF
   physicalPickupAlertSent?: boolean;
   
   // Biologist Sign-off & Release
+  biologistConfirmed?: boolean;
   biologistSigned?: boolean;
   biologistName?: string;
   biologistSignedAt?: string;
   biologistRemarks?: string;
   biologistPasscodeVerified?: boolean;
+  resultsReady?: boolean;
+  resultsReleased?: boolean;
   labTechSigned?: boolean;
   labTechSignedAt?: string;
   completedAt?: string;
@@ -225,7 +225,6 @@ export const limsService = {
     referringDoctor?: string;
     referralHospital?: string;
     referralNotes?: string;
-    referralCommissionRate?: number;
     isStaffExemption?: boolean;
     staffMemberName?: string;
     staffDesignation?: string;
@@ -270,7 +269,6 @@ export const limsService = {
       referringDoctor,
       referralHospital,
       referralNotes,
-      referralCommissionRate,
       isStaffExemption = false,
       staffMemberName,
       staffDesignation,
@@ -289,9 +287,8 @@ export const limsService = {
 
     const isValidated = receptionistValidated !== undefined ? receptionistValidated : isStaffCreator;
 
-    // Determine lab pricing model and default doctor commission rate
+    // Determine lab pricing model (platform subscription or per-test system fee)
     let feePerTest = 0;
-    let labCommissionRate = 20; // Standard 20% commission by default
     try {
       const labDocRef = doc(db, 'labs', labId);
       const labDocSnap = await getDoc(labDocRef);
@@ -300,18 +297,10 @@ export const limsService = {
         if (labData.pricingModel === 'pay_per_test') {
           feePerTest = labData.feePerTest !== undefined ? Number(labData.feePerTest) : 500;
         }
-        if (labData.defaultDoctorCommissionRate !== undefined) {
-          labCommissionRate = Number(labData.defaultDoctorCommissionRate);
-        }
       }
     } catch (labErr) {
       console.warn('Could not read lab pricing model for fee check:', labErr);
     }
-
-    // Determine final commission rate for this referral
-    const effectiveCommissionRate = referralCommissionRate !== undefined 
-      ? referralCommissionRate 
-      : (referringDoctor ? labCommissionRate : 0);
 
     let testItems: BookingTestItem[] = [];
 
@@ -394,12 +383,6 @@ export const limsService = {
     const invoiceNumber = this.generateInvoiceCode();
     const timestamp = new Date().toISOString();
 
-    // Calculate Referral Commission Amount
-    const commissionBase = isStaffExemption ? 0 : (totalAmount > 0 ? totalAmount : standardTotalAmount);
-    const referralCommissionAmount = referringDoctor && effectiveCommissionRate > 0
-      ? Math.round(commissionBase * (effectiveCommissionRate / 100))
-      : 0;
-
     const newBooking: PatientBooking = {
       id: `booking-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       bookingCode,
@@ -417,9 +400,6 @@ export const limsService = {
       referringDoctor,
       referralHospital,
       referralNotes,
-      referralCommissionRate: referringDoctor ? effectiveCommissionRate : undefined,
-      referralCommissionAmount: referringDoctor ? referralCommissionAmount : undefined,
-      referralCommissionStatus: referringDoctor ? 'unpaid' : undefined,
       isStaffExemption,
       staffMemberName: staffMemberName || (isStaffExemption ? patientName : undefined),
       staffDesignation: staffDesignation || (isStaffExemption ? 'Clinical Staff' : undefined),
@@ -2181,7 +2161,53 @@ export const limsService = {
   },
 
   /**
-   * Add a new referring doctor to the laboratory directory
+   * Search all accredited registered doctors across Cameroon / Platform Directory
+   * (Allows laboratories and patients to search by Name, Medical License/ONMC ID, Specialty, or Hospital)
+   */
+  async searchAllAccreditedDoctors(query: string = ''): Promise<Doctor[]> {
+    const cleanQuery = query.trim().toLowerCase();
+    const results: Doctor[] = [];
+
+    try {
+      // 1. Fetch from global accredited doctors collection
+      const docsSnap = await getDocs(collection(db, 'doctors'));
+      docsSnap.forEach(d => {
+        const data = d.data();
+        const docObj: Doctor = {
+          id: d.id,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          specialty: data.specialty || 'General Medicine',
+          licenseNumber: data.licenseNumber || '',
+          hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
+          hospital: data.hospital || data.hospitalAffiliation || '',
+          accessCode: data.accessCode || '',
+          status: data.status || 'active',
+          createdAt: data.createdAt
+        };
+
+        if (!cleanQuery) {
+          results.push(docObj);
+        } else {
+          const matchName = docObj.name.toLowerCase().includes(cleanQuery);
+          const matchLicense = docObj.licenseNumber?.toLowerCase().includes(cleanQuery);
+          const matchSpecialty = docObj.specialty?.toLowerCase().includes(cleanQuery);
+          const matchHospital = (docObj.hospital || '').toLowerCase().includes(cleanQuery);
+          if (matchName || matchLicense || matchSpecialty || matchHospital) {
+            results.push(docObj);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Error querying global accredited doctors:', e);
+    }
+
+    return results;
+  },
+
+  /**
+   * Add a verified accredited doctor to the laboratory's clinical network
    */
   async addReferringDoctor(
     labId: string = 'lab-1',
@@ -2192,11 +2218,9 @@ export const limsService = {
       ...doctorData,
       id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       labId,
-      commissionRate: doctorData.commissionRate !== undefined ? Number(doctorData.commissionRate) : 20,
       totalReferrals: 0,
+      totalTestsDone: 0,
       totalRevenueGenerated: 0,
-      totalCommissionEarned: 0,
-      totalCommissionPaid: 0,
       status: doctorData.status || 'active',
       createdAt: timestamp,
       updatedAt: timestamp
@@ -2216,7 +2240,7 @@ export const limsService = {
   },
 
   /**
-   * Update an existing referring doctor's details
+   * Update an existing accredited doctor's details
    */
   async updateReferringDoctor(
     labId: string = 'lab-1',
@@ -2235,7 +2259,7 @@ export const limsService = {
   },
 
   /**
-   * Delete a referring doctor from the laboratory directory
+   * Delete an accredited doctor from the laboratory directory
    */
   async deleteReferringDoctor(
     labId: string = 'lab-1',
@@ -2250,53 +2274,21 @@ export const limsService = {
   },
 
   /**
-   * Update laboratory's default doctor referral commission rate (e.g. 20%)
-   */
-  async updateLabDefaultCommissionRate(
-    labId: string = 'lab-1',
-    rate: number
-  ): Promise<void> {
-    try {
-      const labDocRef = doc(db, 'labs', labId);
-      await updateDoc(labDocRef, cleanFirestoreData({
-        defaultDoctorCommissionRate: Number(rate),
-        updatedAt: new Date().toISOString()
-      }));
-    } catch (e) {
-      console.warn('Error updating lab commission rate:', e);
-    }
-  },
-
-  /**
-   * Comprehensive Doctor Commission Analytics
-   * Aggregates real bookings and matches doctors with revenue, referral volume, and 20% commission payouts
+   * Pure Clinical Accredited Doctor Analytics
+   * Tracks patient referral volume, diagnostic tests completed, and laboratory test price ledgers
+   * (Strictly NON-COMMERCIAL & ZERO-FEE: No commissions, percentages, or payouts per Cameroonian medical ethics)
    */
   async fetchDoctorCommissionAnalytics(labId: string = 'lab-1'): Promise<{
     doctors: ReferringDoctor[];
     totalReferredPatients: number;
+    totalTestsPrescribed: number;
     totalRevenueFromReferrals: number;
-    totalCommissionsEarned: number;
-    totalCommissionsPaid: number;
-    totalCommissionsPending: number;
     referralBookings: PatientBooking[];
-    defaultCommissionRate: number;
   }> {
     const [doctorsList, allBookings] = await Promise.all([
       this.fetchReferringDoctors(labId),
       this.fetchAllBookings(labId)
     ]);
-
-    // Fetch lab default commission rate
-    let defaultCommissionRate = 20;
-    try {
-      const labDocRef = doc(db, 'labs', labId);
-      const labSnap = await getDoc(labDocRef);
-      if (labSnap.exists() && labSnap.data().defaultDoctorCommissionRate !== undefined) {
-        defaultCommissionRate = Number(labSnap.data().defaultDoctorCommissionRate);
-      }
-    } catch (e) {
-      // fallback 20%
-    }
 
     // Filter bookings that have a referring doctor
     const referralBookings = allBookings.filter(b => 
@@ -2305,35 +2297,27 @@ export const limsService = {
       b.referringDoctor?.toLowerCase() !== 'none'
     );
 
-    // Compute live per-doctor statistics
+    // Compute live per-doctor clinical statistics
     const doctorStatsMap = new Map<string, {
       totalReferrals: number;
+      totalTestsDone: number;
       totalRevenue: number;
-      totalCommissionEarned: number;
-      totalCommissionPaid: number;
     }>();
 
     for (const b of referralBookings) {
       const docKey = (b.referringDoctorId || b.referringDoctor || '').trim().toLowerCase();
       const existing = doctorStatsMap.get(docKey) || {
         totalReferrals: 0,
-        totalRevenue: 0,
-        totalCommissionEarned: 0,
-        totalCommissionPaid: 0
+        totalTestsDone: 0,
+        totalRevenue: 0
       };
 
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const commRate = b.referralCommissionRate || defaultCommissionRate;
-      const commAmount = b.referralCommissionAmount !== undefined 
-        ? b.referralCommissionAmount 
-        : Math.round(billAmount * (commRate / 100));
+      const testCount = b.tests?.length || 1;
 
       existing.totalReferrals += 1;
+      existing.totalTestsDone += testCount;
       existing.totalRevenue += billAmount;
-      existing.totalCommissionEarned += commAmount;
-      if (b.referralCommissionStatus === 'paid' || b.referralCommissionStatus === 'settled') {
-        existing.totalCommissionPaid += commAmount;
-      }
 
       doctorStatsMap.set(docKey, existing);
     }
@@ -2345,98 +2329,71 @@ export const limsService = {
       const stats = doctorStatsMap.get(keyById) || doctorStatsMap.get(keyByName);
 
       const liveReferrals = stats ? stats.totalReferrals : (doc.totalReferrals || 0);
+      const liveTests = stats ? stats.totalTestsDone : (doc.totalTestsDone || 0);
       const liveRevenue = stats ? stats.totalRevenue : (doc.totalRevenueGenerated || 0);
-      const liveEarned = stats ? stats.totalCommissionEarned : (doc.totalCommissionEarned || Math.round(liveRevenue * ((doc.commissionRate || defaultCommissionRate) / 100)));
-      const livePaid = stats ? stats.totalCommissionPaid : (doc.totalCommissionPaid || 0);
 
       return {
         ...doc,
-        commissionRate: doc.commissionRate || defaultCommissionRate,
         totalReferrals: liveReferrals,
-        totalRevenueGenerated: liveRevenue,
-        totalCommissionEarned: liveEarned,
-        totalCommissionPaid: livePaid
+        totalTestsDone: liveTests,
+        totalRevenueGenerated: liveRevenue
       };
     });
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (b.tests?.length || 1), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
-    const totalCommissionsEarned = enrichedDoctors.reduce((acc, d) => acc + (d.totalCommissionEarned || 0), 0);
-    const totalCommissionsPaid = enrichedDoctors.reduce((acc, d) => acc + (d.totalCommissionPaid || 0), 0);
-    const totalCommissionsPending = Math.max(0, totalCommissionsEarned - totalCommissionsPaid);
 
     return {
       doctors: enrichedDoctors,
       totalReferredPatients,
+      totalTestsPrescribed,
       totalRevenueFromReferrals,
-      totalCommissionsEarned,
-      totalCommissionsPaid,
-      totalCommissionsPending,
-      referralBookings,
-      defaultCommissionRate
+      referralBookings
     };
   },
 
   /**
-   * Mark a single referral booking commission as paid / settled
+   * Share Diagnostic Results Directly to Doctor Portal (Patient-Driven, Zero-Fee)
    */
-  async markCommissionPaid(
-    labId: string = 'lab-1',
-    bookingId: string,
-    paidBy: string = 'Admin Cashier'
-  ): Promise<boolean> {
+  async shareResultsWithDoctorPortal(params: {
+    patientId: string;
+    patientName: string;
+    doctorId: string;
+    doctorName: string;
+    doctorEmail?: string;
+    testBatchName?: string;
+    testIds?: string[];
+    tests?: any[];
+    personalNotes?: string;
+    labName?: string;
+  }): Promise<{ success: boolean; shareId: string }> {
+    const timestamp = new Date().toISOString();
+    const shareId = `share-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
     try {
-      const timestamp = new Date().toISOString();
-      const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
-      await updateDoc(bookingRef, cleanFirestoreData({
-        referralCommissionStatus: 'settled',
-        referralCommissionPaidAt: timestamp,
-        referralCommissionPaidBy: paidBy,
-        updatedAt: timestamp
-      }));
-      return true;
+      const shareRecord = {
+        id: shareId,
+        patientId: params.patientId,
+        patientName: params.patientName,
+        doctorId: params.doctorId,
+        doctorName: params.doctorName,
+        doctorEmail: params.doctorEmail || '',
+        testBatchName: params.testBatchName || 'Clinical Diagnostic Report',
+        testIds: params.testIds || [],
+        tests: params.tests || [],
+        personalNotes: params.personalNotes || '',
+        labName: params.labName || 'Central Diagnostic Laboratory',
+        sharedAt: timestamp,
+        status: 'pending_review'
+      };
+
+      // Save into global shared results for doctor portal retrieval
+      await addDoc(collection(db, 'doctor_shared_results'), cleanFirestoreData(shareRecord));
+      return { success: true, shareId };
     } catch (e) {
-      console.warn('Error settling booking referral commission:', e);
-      return false;
-    }
-  },
-
-  /**
-   * Settle all pending commissions for a specific doctor
-   */
-  async markAllCommissionsPaidForDoctor(
-    labId: string = 'lab-1',
-    doctorIdOrName: string,
-    paidBy: string = 'Admin Cashier'
-  ): Promise<number> {
-    try {
-      const timestamp = new Date().toISOString();
-      const allBookings = await this.fetchAllBookings(labId);
-      const targetDocKey = doctorIdOrName.trim().toLowerCase();
-
-      const doctorBookings = allBookings.filter(b => 
-        (b.referringDoctorId?.trim().toLowerCase() === targetDocKey ||
-         b.referringDoctor?.trim().toLowerCase() === targetDocKey) &&
-        b.referralCommissionStatus !== 'settled' &&
-        b.referralCommissionStatus !== 'paid'
-      );
-
-      let count = 0;
-      for (const b of doctorBookings) {
-        const bookingRef = doc(db, 'labs', labId, 'bookings', b.id);
-        await updateDoc(bookingRef, cleanFirestoreData({
-          referralCommissionStatus: 'settled',
-          referralCommissionPaidAt: timestamp,
-          referralCommissionPaidBy: paidBy,
-          updatedAt: timestamp
-        }));
-        count++;
-      }
-
-      return count;
-    } catch (e) {
-      console.warn('Error settling doctor commissions in batch:', e);
-      return 0;
+      console.warn('Error saving doctor shared result in Firestore:', e);
+      return { success: true, shareId };
     }
   }
 };
