@@ -47,6 +47,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
       cashier: 'CSH',
       analyzer: 'LAB',
       labtech: 'TECH',
+      biologist: 'BIO',
       admin: 'ADM',
       inventory_manager: 'INV'
     };
@@ -88,6 +89,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
     { value: 'cashier', label: 'Cashier', icon: DollarSign, codePrefix: 'CSH' },
     { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope, codePrefix: 'LAB' },
     { value: 'labtech', label: 'Lab Technologist', icon: TestTube, codePrefix: 'TECH' },
+    { value: 'biologist', label: 'Biologist / Pathologist', icon: ShieldCheck, codePrefix: 'BIO' },
     { value: 'admin', label: 'Lab Administrator', icon: Shield, codePrefix: 'ADM' },
     { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, codePrefix: 'INV' }
   ];
