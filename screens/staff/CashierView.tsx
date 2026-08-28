@@ -4,7 +4,7 @@ import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
-import { CAMEROON_INSURANCE_COMPANIES, formatDOBDisplay, calculateAgeFromDOB } from '../../data/cameroonInsurances';
+import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { 
   DollarSign, 
@@ -35,7 +35,9 @@ import {
   Tag,
   Percent,
   Sparkles,
-  BadgePercent
+  BadgePercent,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface CashierViewProps {
@@ -57,13 +59,15 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<PatientBooking | null>(null);
   const [selectedGroupBookings, setSelectedGroupBookings] = useState<PatientBooking[] | null>(null);
-  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  
+  // FIXED: Track selected tests by test ID, not booking ID
+  const [selectedTestIds, setSelectedTestIds] = useState<Set<string>>(new Set());
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mobile_money' | 'card' | 'insurance'>('cash');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
 
-  // Flexible Pricing, Discount & Insurance State
+  // Discount State
   const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed' | 'coupon'>('none');
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [couponCode, setCouponCode] = useState('');
@@ -73,9 +77,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Insurance details
   const [insuranceProvider, setInsuranceProvider] = useState('');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
-  const [coPayPercent, setCoPayPercent] = useState<number>(20); // default 20% patient co-pay
+  const [coPayPercent, setCoPayPercent] = useState<number>(20);
 
-  // Security Access Code verification for Cashiers
+  // Security Access Code
   const [cashierAccessCode, setCashierAccessCode] = useState('');
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [accessCodeError, setAccessCodeError] = useState('');
@@ -107,10 +111,66 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // Calculate dynamic settlement total based on pricing adjustments
-  const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
-    const targetBookings = group && group.length > 0 ? group : booking ? [booking] : [];
-    const baseTotal = targetBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+  // FIXED: Get ONLY validated tests from a booking
+  const getValidatedTests = (booking: PatientBooking) => {
+    return (booking.tests || []).filter(t => t.receptionistValidated === true);
+  };
+
+  // FIXED: Get total amount for ONLY validated tests
+  const getValidatedTotal = (booking: PatientBooking) => {
+    return getValidatedTests(booking).reduce((sum, t) => sum + (t.price || 0), 0);
+  };
+
+  // FIXED: Check if a test is selected for payment
+  const isTestSelected = (testId: string) => {
+    return selectedTestIds.has(testId);
+  };
+
+  // FIXED: Toggle test selection
+  const toggleTestSelection = (testId: string) => {
+    const newSet = new Set(selectedTestIds);
+    if (newSet.has(testId)) {
+      newSet.delete(testId);
+    } else {
+      newSet.add(testId);
+    }
+    setSelectedTestIds(newSet);
+  };
+
+  // FIXED: Select all validated tests for a patient
+  const selectAllValidatedTests = (booking: PatientBooking) => {
+    const validatedTests = getValidatedTests(booking);
+    const newSet = new Set(selectedTestIds);
+    validatedTests.forEach(t => {
+      const testKey = t.id || t.testId;
+      if (testKey) newSet.add(testKey);
+    });
+    setSelectedTestIds(newSet);
+  };
+
+  // FIXED: Deselect all tests
+  const deselectAllTests = () => {
+    setSelectedTestIds(new Set());
+  };
+
+  // FIXED: Get selected tests from a booking
+  const getSelectedTests = (booking: PatientBooking) => {
+    return (booking.tests || []).filter(t => {
+      const testKey = t.id || t.testId;
+      return testKey && selectedTestIds.has(testKey);
+    });
+  };
+
+  // FIXED: Get total amount for selected tests
+  const getSelectedTotal = (booking: PatientBooking) => {
+    return getSelectedTests(booking).reduce((sum, t) => sum + (t.price || 0), 0);
+  };
+
+  const calculateSettlementDetails = (booking: PatientBooking | null) => {
+    if (!booking) return { baseTotal: 0, discountAmount: 0, finalTotal: 0, patientPortion: 0, insurancePortion: 0 };
+    
+    const selectedTests = getSelectedTests(booking);
+    const baseTotal = selectedTests.reduce((sum, t) => sum + (t.price || 0), 0);
 
     let discountAmount = 0;
     if (discountType === 'percent') {
@@ -118,7 +178,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
     } else if (discountType === 'fixed') {
       discountAmount = Math.min(baseTotal, discountValue || 0);
     } else if (discountType === 'coupon' && couponApplied) {
-      discountAmount = Math.round((baseTotal * 15) / 100); // 15% coupon discount
+      discountAmount = Math.round((baseTotal * 15) / 100);
     }
 
     let afterDiscount = Math.max(0, baseTotal - discountAmount);
@@ -136,13 +196,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       insurancePortion = Math.max(0, afterDiscount - patientPortion);
     }
 
-    return {
-      baseTotal,
-      discountAmount,
-      finalTotal: afterDiscount,
-      patientPortion,
-      insurancePortion
-    };
+    return { baseTotal, discountAmount, finalTotal: afterDiscount, patientPortion, insurancePortion };
   };
 
   const handleApplyCoupon = () => {
@@ -155,14 +209,20 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
+  // FIXED: Process payment for ONLY selected tests
   const handleCollectPayment = async () => {
-    if (!selectedBooking && (!selectedGroupBookings || selectedGroupBookings.length === 0)) return;
+    if (!selectedBooking) return;
 
-    // Security access code validation
+    const selectedTests = getSelectedTests(selectedBooking);
+    if (selectedTests.length === 0) {
+      alert('Please select at least one test to pay for.');
+      return;
+    }
+
     setAccessCodeError('');
     const enteredCode = cashierAccessCode.trim();
     if (!enteredCode) {
-      setAccessCodeError('Security Access Code is required to authorize and verify this financial transaction.');
+      setAccessCodeError('Security Access Code is required to authorize this financial transaction.');
       return;
     }
 
@@ -179,63 +239,59 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
     const isAuthorized = validCodes.includes(enteredCode.toUpperCase()) || enteredCode.length >= 4;
     if (!isAuthorized) {
-      setAccessCodeError('Invalid access code. Please enter your authorized staff Cashier PIN / Access Code (e.g. CSH123).');
+      setAccessCodeError('Invalid access code. Please enter your authorized staff Cashier PIN.');
       return;
     }
 
     setIsProcessing(true);
-    const targetBookings = selectedGroupBookings && selectedGroupBookings.length > 0 
-      ? selectedGroupBookings 
-      : selectedBooking 
-        ? [selectedBooking] 
-        : [];
-    const targetIds = targetBookings.map(b => b.id);
     const nowIso = new Date().toISOString();
-
-    const { baseTotal, discountAmount, finalTotal, patientPortion, insurancePortion } = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+    const { baseTotal, discountAmount, finalTotal, patientPortion, insurancePortion } = calculateSettlementDetails(selectedBooking);
 
     try {
-      for (const b of targetBookings) {
-        await limsService.processPayment({
-          labId: targetLabId,
-          bookingId: b.id,
-          paymentMethod,
-          processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`,
-          paymentDetails: {
-            originalPrice: baseTotal,
-            discountAmount,
-            discountType: discountType !== 'none' ? discountType : undefined,
-            couponCode: couponApplied ? couponCode : undefined,
-            actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
-            insuranceDetails: paymentMethod === 'insurance' ? {
-              provider: insuranceProvider || (b as any).insuranceProvider || 'HMO Insurance',
-              policyNumber: insurancePolicyNumber || (b as any).insurancePolicyNumber || 'N/A',
-              coPayPercent,
-              patientCoPayAmount: patientPortion,
-              insuranceClaimAmount: insurancePortion
-            } : undefined
-          }
-        });
-      }
-
-      // INSTANT REACTIVE LOCAL STATE UPDATE
-      const updatedFirstBooking = {
-        ...targetBookings[0],
-        paymentStatus: 'paid' as const,
-        paidAt: nowIso,
+      // Get the selected test IDs
+      const selectedTestIdsList = selectedTests.map(t => t.id || t.testId).filter(Boolean);
+      
+      // Process payment for the booking but only for selected tests
+      await limsService.processPayment({
+        labId: targetLabId,
+        bookingId: selectedBooking.id,
         paymentMethod,
-        totalAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
-        originalPrice: baseTotal,
-        discountAmount,
-        couponCode: couponApplied ? couponCode : undefined,
-        actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
-        insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
-        insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
-        overallStatus: 'Pending_Collection' as const
-      };
+        processedByName: `${user?.name || 'Head Cashier'} [Secured via Code]`,
+        paymentDetails: {
+          selectedTestIds: selectedTestIdsList,
+          originalPrice: baseTotal,
+          discountAmount,
+          discountType: discountType !== 'none' ? discountType : undefined,
+          couponCode: couponApplied ? couponCode : undefined,
+          actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
+          insuranceDetails: paymentMethod === 'insurance' ? {
+            provider: insuranceProvider || 'HMO Insurance',
+            policyNumber: insurancePolicyNumber || 'N/A',
+            coPayPercent,
+            patientCoPayAmount: patientPortion,
+            insuranceClaimAmount: insurancePortion
+          } : undefined
+        }
+      });
 
+      // Update local state - mark selected tests as paid
       setBookings(prev => prev.map(b => {
-        if (targetIds.includes(b.id)) {
+        if (b.id === selectedBooking.id) {
+          const updatedTests = (b.tests || []).map(t => {
+            const testKey = t.id || t.testId;
+            if (testKey && selectedTestIds.has(testKey)) {
+              return {
+                ...t,
+                paid: true,
+                paymentStatus: 'paid' as const,
+                paymentMethod,
+                paidAt: nowIso,
+                status: 'Pending_Collection' as TestStatus
+              };
+            }
+            return t;
+          });
+
           return {
             ...b,
             paymentStatus: 'paid',
@@ -245,33 +301,25 @@ export const CashierView: React.FC<CashierViewProps> = ({
             originalPrice: baseTotal,
             discountAmount,
             actualPaidAmount: paymentMethod === 'insurance' ? patientPortion : finalTotal,
-            overallStatus: 'Pending_Collection',
-            tests: (b.tests || []).map(t => ({
-              ...t,
-              status: t.status === 'Completed' || t.status === 'In_Lab_Testing' ? t.status : 'Pending_Collection',
-              paid: true
-            }))
+            overallStatus: 'Pending_Collection' as const,
+            tests: updatedTests
           };
         }
         return b;
       }));
 
-      // Remove paid ids from selection
-      setSelectedInvoiceIds(prev => prev.filter(id => !targetIds.includes(id)));
-
-      setShowReceipt(updatedFirstBooking);
-      setSelectedGroupBookings(null);
+      setShowReceipt(selectedBooking);
       setSelectedBooking(null);
       setCashierAccessCode('');
       setAccessCodeError('');
+      setSelectedTestIds(new Set());
       setDiscountType('none');
       setDiscountValue(0);
       setCouponCode('');
       setCouponApplied(false);
       setCustomPriceInput('');
 
-      // Background re-sync
-      fetchData();
+      await fetchData();
     } catch (e) {
       console.error('Payment collection error:', e);
     } finally {
@@ -279,11 +327,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // ONLY show bookings that have been validated/checked-in by Receptionist
+  // FIXED: Filter bookings - ONLY show bookings that have validated tests
   const unpaidBookings = bookings.filter(b => 
     b.paymentStatus === 'unpaid' && 
-    (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in')
+    getValidatedTests(b).length > 0
   );
+
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
 
   const now = new Date();
@@ -302,7 +351,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
     if (revenuePeriod === 'month') {
       return paidDate >= thirtyDaysAgo;
     }
-    return true; // 'all'
+    return true;
   });
 
   const periodRevenue = filteredPaidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
@@ -310,14 +359,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
     .filter(b => (b.paidAt || b.createdAt || '').startsWith(todayStr))
     .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
+  // FIXED: Filter unpaid bookings by search
   const filteredUnpaid = unpaidBookings.filter(b => 
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // FIXED: Group bookings by patient
   const patientGroups = React.useMemo(() => {
-    const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number } } = {};
+    const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number; validatedCount: number } } = {};
     
     filteredUnpaid.forEach(b => {
       const key = b.patientPid || b.patientId || b.patientName;
@@ -327,11 +378,15 @@ export const CashierView: React.FC<CashierViewProps> = ({
           patientName: b.patientName,
           patientPid: b.patientPid || b.patientId || 'N/A',
           bookings: [],
-          totalAmount: 0
+          totalAmount: 0,
+          validatedCount: 0
         };
       }
+      const validated = getValidatedTests(b);
+      const validatedTotal = validated.reduce((sum, t) => sum + (t.price || 0), 0);
       groups[key].bookings.push(b);
-      groups[key].totalAmount += b.totalAmount || 0;
+      groups[key].totalAmount += validatedTotal;
+      groups[key].validatedCount += validated.length;
     });
 
     return Object.values(groups);
@@ -341,17 +396,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
     <div className="space-y-6">
       <Header
         title="Cashier & Financial Gatekeeper Desk"
-        subtitle="Step 2: Collect payment, mark order as PAID & unlock patient for Phlebotomy queue"
+        subtitle="Step 2: Collect payment for validated tests only"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      {/* Staff Hero Banner */}
       <StaffHeroBanner
         workstationNumber="Workstation 02"
         workstationTitle="Head Cashier & Billing Gatekeeper"
-        description="Verify diagnostic test invoices, process multi-channel payments, and automatically unlock patient booklets for Phlebotomy sampling."
+        description="Collect payments for receptionist-validated tests. Only validated tests appear here."
         gradientFrom="from-emerald-950"
         gradientVia="from-slate-900"
         gradientTo="to-emerald-900"
@@ -365,7 +419,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="text-2xl font-black text-emerald-400 font-mono">
               {periodRevenue.toLocaleString()} XAF
             </div>
-            {/* Timeframe Filter Selector */}
             <div className="flex items-center justify-end gap-1 pt-1">
               {[
                 { id: 'today', label: 'Today' },
@@ -394,8 +447,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Unpaid Pending Orders</p>
-            <h3 className="text-2xl font-black text-amber-600 mt-1">{unpaidBookings.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Validated Tests Awaiting Payment</p>
+            <h3 className="text-2xl font-black text-amber-600 mt-1">
+              {unpaidBookings.reduce((sum, b) => sum + getValidatedTests(b).length, 0)}
+            </h3>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold">
             <Clock className="w-6 h-6" />
@@ -464,7 +519,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Search patient name, PID, Booking code (BK-...), or Invoice number..."
+            placeholder="Search patient name, PID, Booking code, or Invoice number..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -474,95 +529,82 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
       {/* CONTENT AREA BASED ON ACTIVE TAB */}
       {activeTab === 'unpaid' ? (
-        /* Unpaid Invoices Queue Table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={filteredUnpaid.length > 0 && selectedInvoiceIds.length === filteredUnpaid.length}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedInvoiceIds(filteredUnpaid.map(b => b.id));
-                  } else {
-                    setSelectedInvoiceIds([]);
+            <div>
+              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-emerald-600" />
+                Validated Tests Awaiting Payment ({filteredUnpaid.reduce((sum, b) => sum + getValidatedTests(b).length, 0)})
+              </h3>
+              <span className="text-xs text-slate-500">Only receptionist-validated tests appear here</span>
+            </div>
+
+            {selectedTestIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  // Find the booking containing selected tests
+                  const booking = filteredUnpaid.find(b => 
+                    (b.tests || []).some(t => {
+                      const key = t.id || t.testId;
+                      return key && selectedTestIds.has(key);
+                    })
+                  );
+                  if (booking) {
+                    setSelectedBooking(booking);
                   }
                 }}
-                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-              />
-              <div>
-                <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-emerald-600" />
-                  Unpaid Invoices Awaiting Settlement ({filteredUnpaid.length})
-                </h3>
-                <span className="text-xs text-slate-500">Gatekeeper Status: Blocked from Phlebotomy</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {selectedInvoiceIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selected = filteredUnpaid.filter(b => selectedInvoiceIds.includes(b.id));
-                    if (selected.length > 0) {
-                      setSelectedGroupBookings(selected);
-                      setSelectedBooking(selected[0]);
-                    }
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 animate-in fade-in"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  <span>Verify Selected ({selectedInvoiceIds.length}) - {filteredUnpaid.filter(b => selectedInvoiceIds.includes(b.id)).reduce((s, b) => s + (b.totalAmount || 0), 0).toLocaleString()} XAF</span>
-                </button>
-              )}
-
-              {filteredUnpaid.length > 1 && selectedInvoiceIds.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedGroupBookings(filteredUnpaid);
-                    setSelectedBooking(filteredUnpaid[0]);
-                  }}
-                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Verify All Invoices ({filteredUnpaid.reduce((s, b) => s + (b.totalAmount || 0), 0).toLocaleString()} XAF)</span>
-                </button>
-              )}
-            </div>
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Pay Selected ({selectedTestIds.size} tests)</span>
+              </button>
+            )}
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-xs text-slate-500">Loading invoices...</div>
           ) : filteredUnpaid.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 space-y-1">
-              <p className="font-bold text-emerald-800">All daily patient booklets are settled & paid!</p>
-              <p className="text-slate-500">Patients have been automatically unlocked and routed to the Phlebotomist queue.</p>
+              <p className="font-bold text-emerald-800">All validated tests have been paid!</p>
+              <p className="text-slate-500">Patients have been automatically unlocked for Phlebotomy.</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {patientGroups.map((group) => {
                 const isExpanded = expandedPatientKey === group.key;
-                const groupBookingIds = group.bookings.map(b => b.id);
-                const isGroupAllSelected = groupBookingIds.every(id => selectedInvoiceIds.includes(id));
+                const groupTestIds = new Set<string>();
+                group.bookings.forEach(b => {
+                  getValidatedTests(b).forEach(t => {
+                    const key = t.id || t.testId;
+                    if (key) groupTestIds.add(key);
+                  });
+                });
+                const allSelected = Array.from(groupTestIds).every(id => selectedTestIds.has(id));
+                const someSelected = Array.from(groupTestIds).some(id => selectedTestIds.has(id));
 
                 return (
                   <div key={group.key} className="p-4 hover:bg-slate-50/80 transition-colors space-y-3">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={isGroupAllSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedInvoiceIds(prev => Array.from(new Set([...prev, ...groupBookingIds])));
+                        <button
+                          onClick={() => {
+                            if (allSelected) {
+                              groupTestIds.forEach(id => selectedTestIds.delete(id));
+                              setSelectedTestIds(new Set(selectedTestIds));
                             } else {
-                              setSelectedInvoiceIds(prev => prev.filter(id => !groupBookingIds.includes(id)));
+                              groupTestIds.forEach(id => selectedTestIds.add(id));
+                              setSelectedTestIds(new Set(selectedTestIds));
                             }
                           }}
-                          className="w-4 h-4 mt-1 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-                        />
+                          className="mt-1"
+                        >
+                          {allSelected ? (
+                            <CheckSquare className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-400" />
+                          )}
+                        </button>
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-sm text-slate-900">
@@ -572,7 +614,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                               PID: {group.patientPid}
                             </span>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                              {group.bookings.length} Unpaid Order{group.bookings.length > 1 ? 's' : ''}
+                              {group.validatedCount} Validated Test{group.validatedCount !== 1 ? 's' : ''}
                             </span>
                           </div>
 
@@ -588,114 +630,127 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
                         >
                           <FlaskConical className="w-4 h-4 text-emerald-600" />
-                          <span>View Tests Dropdown</span>
+                          <span>View Validated Tests</span>
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-slate-600" />
                           ) : (
                             <ChevronDown className="w-4 h-4 text-slate-600" />
                           )}
                         </button>
-
-                        {group.bookings.length > 1 ? (
-                          <button
-                            onClick={() => {
-                              setSelectedGroupBookings(group.bookings);
-                              setSelectedBooking(group.bookings[0]);
-                            }}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                            <span>Collect All ({group.totalAmount.toLocaleString()} FCFA)</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setSelectedGroupBookings(null);
-                              setSelectedBooking(group.bookings[0]);
-                            }}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                            Collect Payment
-                          </button>
-                        )}
                       </div>
                     </div>
 
-                    {/* EXPANDED ACCORDION DROPDOWN SHOWING ALL REQUESTED TESTS */}
+                    {/* EXPANDED ACCORDION - Shows ONLY validated tests with checkboxes */}
                     {isExpanded && (
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-emerald-200 space-y-3">
+                      <div className="mt-4 pt-4 border-t border-slate-200 bg-slate-50/70 p-4 rounded-2xl space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                           <h4 className="font-bold text-xs text-slate-800 flex items-center gap-2">
                             <Receipt className="w-4 h-4 text-emerald-600" />
-                            Diagnostic Test Orders for {group.patientName}
+                            Validated Tests Ready for Payment
                           </h4>
-                          <span className="text-[10px] font-semibold text-slate-500">
-                            Verify payment to send to Phlebotomist
-                          </span>
+                          <div className="flex items-center gap-3 text-xs">
+                            <button
+                              onClick={() => {
+                                const allValidatedIds: string[] = [];
+                                group.bookings.forEach(b => {
+                                  getValidatedTests(b).forEach(t => {
+                                    const key = t.id || t.testId;
+                                    if (key) allValidatedIds.push(key);
+                                  });
+                                });
+                                const newSet = new Set(selectedTestIds);
+                                allValidatedIds.forEach(id => newSet.add(id));
+                                setSelectedTestIds(newSet);
+                              }}
+                              className="text-teal-700 font-bold hover:text-teal-900 cursor-pointer"
+                            >
+                              Select All
+                            </button>
+                            <button
+                              onClick={deselectAllTests}
+                              className="text-slate-500 font-bold hover:text-slate-700 cursor-pointer"
+                            >
+                              Deselect All
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {group.bookings.map((booking) => {
-                            const isBookingChecked = selectedInvoiceIds.includes(booking.id);
+                            const validatedTests = getValidatedTests(booking);
+                            if (validatedTests.length === 0) return null;
 
                             return (
-                              <div
-                                key={booking.id}
-                                className={`p-3.5 bg-white rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
-                                  isBookingChecked ? 'border-emerald-500 bg-emerald-50/40' : 'border-slate-200'
-                                }`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={isBookingChecked}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedInvoiceIds(prev => [...prev, booking.id]);
-                                      } else {
-                                        setSelectedInvoiceIds(prev => prev.filter(id => id !== booking.id));
-                                      }
-                                    }}
-                                    className="w-4 h-4 mt-1 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-                                  />
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-mono font-bold text-xs text-teal-800">
-                                        {booking.bookingCode}
-                                      </span>
-                                      <span className="text-xs text-slate-500">• Invoice: <strong className="font-mono">{booking.invoiceNumber}</strong></span>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-1.5 pt-1">
-                                      {booking.tests?.map((t) => (
-                                        <span
-                                          key={t.id}
-                                          className="px-2.5 py-1 bg-emerald-50 text-emerald-900 rounded-lg text-xs font-semibold border border-emerald-200"
-                                        >
-                                          {t.testName} ({(t.price || 5500).toLocaleString()} FCFA)
-                                        </span>
-                                      ))}
-                                    </div>
+                              <div key={booking.id} className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-teal-800">
+                                      {booking.bookingCode}
+                                    </span>
+                                    <span className="text-slate-500">• Invoice: <strong className="font-mono">{booking.invoiceNumber}</strong></span>
                                   </div>
+                                  <span className="text-[10px] text-emerald-700 font-bold">
+                                    {validatedTests.length} validated test{validatedTests.length !== 1 ? 's' : ''}
+                                  </span>
                                 </div>
 
-                                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                                  <div className="text-right">
-                                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Invoice Total</div>
-                                    <div className="text-sm font-black text-emerald-700 font-mono">
-                                      {(booking.totalAmount || 0).toLocaleString()} FCFA
-                                    </div>
-                                  </div>
+                                {/* Individual test checkboxes */}
+                                <div className="divide-y divide-slate-100">
+                                  {validatedTests.map((t) => {
+                                    const testKey = t.id || t.testId;
+                                    const isChecked = testKey ? selectedTestIds.has(testKey) : false;
 
-                                  <button
-                                    onClick={() => setSelectedBooking(booking)}
-                                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                                  >
-                                    <DollarSign className="w-3.5 h-3.5" />
-                                    Verify & Pay Order
-                                  </button>
+                                    return (
+                                      <div key={testKey || t.id} className="py-2 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <button
+                                            onClick={() => testKey && toggleTestSelection(testKey)}
+                                            className="flex items-center gap-2"
+                                          >
+                                            {isChecked ? (
+                                              <CheckSquare className="w-4 h-4 text-emerald-600" />
+                                            ) : (
+                                              <Square className="w-4 h-4 text-slate-400" />
+                                            )}
+                                            <span className="font-medium text-slate-800 text-xs">
+                                              {t.testName}
+                                            </span>
+                                            <span className="text-[10px] text-slate-500">
+                                              {t.category || 'General'}
+                                            </span>
+                                          </button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono font-bold text-slate-800 text-xs">
+                                            {(t.price || 0).toLocaleString()} FCFA
+                                          </span>
+                                          {isChecked && (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
+
+                                {validatedTests.length > 0 && (
+                                  <div className="pt-2 border-t border-slate-100 flex justify-end">
+                                    <button
+                                      onClick={() => {
+                                        validatedTests.forEach(t => {
+                                          const key = t.id || t.testId;
+                                          if (key) selectedTestIds.add(key);
+                                        });
+                                        setSelectedTestIds(new Set(selectedTestIds));
+                                        setSelectedBooking(booking);
+                                      }}
+                                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                    >
+                                      <DollarSign className="w-3.5 h-3.5" />
+                                      Pay All Validated ({validatedTests.reduce((sum, t) => sum + (t.price || 0), 0).toLocaleString()} FCFA)
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -709,13 +764,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
           )}
         </div>
       ) : (
-        /* SETTLED REVENUE HISTORY & BREAKDOWN TABLE */
+        /* REVENUE HISTORY */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-emerald-600" />
-                Settled Revenue History & Detailed Patient Breakdown
+                Settled Revenue History
               </h3>
               <p className="text-xs text-slate-500">
                 Detailed audit trail of all confirmed payments for {revenuePeriod.toUpperCase()}
@@ -737,11 +792,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                     <th className="py-3 px-4">Patient & PID</th>
                     <th className="py-3 px-4">Invoice / Code</th>
-                    <th className="py-3 px-4">Tests Performed</th>
+                    <th className="py-3 px-4">Tests Paid</th>
                     <th className="py-3 px-4">Payment Method</th>
                     <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4 text-right">Amount Paid</th>
-                    <th className="py-3 px-4 text-right">Receipt Action</th>
+                    <th className="py-3 px-4 text-right">Receipt</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -751,44 +806,38 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         <div>{b.patientName}</div>
                         <div className="text-[10px] font-mono font-bold text-teal-700">{b.patientPid || b.patientId}</div>
                       </td>
-
                       <td className="py-3.5 px-4 font-mono">
                         <div className="font-bold text-slate-800">{b.invoiceNumber}</div>
                         <div className="text-[10px] text-slate-400">{b.bookingCode}</div>
                       </td>
-
                       <td className="py-3.5 px-4">
                         <div className="flex flex-wrap gap-1">
-                          {b.tests?.map((t, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold">
+                          {(b.tests || []).filter(t => t.paid === true).map((t, idx) => (
+                            <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-semibold">
                               {t.testName}
                             </span>
                           ))}
                         </div>
                       </td>
-
                       <td className="py-3.5 px-4">
                         <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-extrabold uppercase">
                           {b.paymentMethod || 'Cash'}
                         </span>
                       </td>
-
                       <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                         {b.paidAt ? new Date(b.paidAt).toLocaleString() : new Date(b.createdAt || Date.now()).toLocaleString()}
                       </td>
-
                       <td className="py-3.5 px-4 text-right font-mono font-black text-emerald-700 text-sm">
                         {(b.totalAmount || 0).toLocaleString()} FCFA
                       </td>
-
                       <td className="py-3.5 px-4 text-right">
                         <button
                           type="button"
                           onClick={() => setShowReceipt(b)}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ml-auto cursor-pointer shadow-2xs"
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ml-auto cursor-pointer"
                         >
                           <Printer className="w-3.5 h-3.5 text-emerald-700" />
-                          <span>Print Receipt</span>
+                          <span>Print</span>
                         </button>
                       </td>
                     </tr>
@@ -800,7 +849,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* COLLECT PAYMENT MODAL */}
+      {/* PAYMENT MODAL - Shows ONLY selected tests */}
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
@@ -811,7 +860,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <DollarSign className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-white">Process Patient Order Payment</h3>
+                  <h3 className="font-extrabold text-base text-white">Process Payment</h3>
                   <p className="text-xs text-emerald-300">Invoice {selectedBooking.invoiceNumber} • {selectedBooking.bookingCode}</p>
                 </div>
               </div>
@@ -820,17 +869,20 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
             <div className="space-y-4 text-xs">
               <div className="p-3 bg-slate-800 rounded-2xl space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="text-slate-400">Patient Name</div>
-                  {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
-                      <Globe className="w-3 h-3" />
-                      Virtual Delivery Requested
-                    </span>
-                  )}
-                </div>
+                <div className="text-slate-400">Patient Name</div>
                 <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests ({selectedBooking.tests?.map(t => t.testName).join(', ')})</div>
+                <div className="text-slate-300">Selected Tests: {getSelectedTests(selectedBooking).length} of {getValidatedTests(selectedBooking).length} validated</div>
+              </div>
+
+              {/* Selected Tests Summary */}
+              <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-1">
+                <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Selected Tests</div>
+                {getSelectedTests(selectedBooking).map((t, idx) => (
+                  <div key={t.id || idx} className="flex justify-between text-xs py-0.5">
+                    <span className="text-white">{t.testName}</span>
+                    <span className="font-mono text-emerald-400">{(t.price || 0).toLocaleString()} FCFA</span>
+                  </div>
+                ))}
               </div>
 
               <div>
@@ -838,7 +890,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'cash', label: 'Cash Payment', icon: DollarSign },
-                    { id: 'mobile_money', label: 'Mobile Money (MoMo/OM)', icon: Smartphone },
+                    { id: 'mobile_money', label: 'Mobile Money', icon: Smartphone },
                     { id: 'card', label: 'Credit / Debit Card', icon: CreditCard },
                     { id: 'insurance', label: 'Insurance Co-Pay', icon: ShieldCheck }
                   ].map(m => {
@@ -861,103 +913,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
-              {/* FLEXIBLE PRICING, DISCOUNTS & COUPONS */}
-              <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-300 flex items-center gap-1.5">
-                    <BadgePercent className="w-4 h-4 text-amber-400" />
-                    Discounts, Coupons & Custom Pricing
-                  </span>
-                  {discountType !== 'none' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDiscountType('none');
-                        setDiscountValue(0);
-                        setCouponApplied(false);
-                        setCustomPriceInput('');
-                      }}
-                      className="text-[10px] text-amber-400 hover:underline cursor-pointer"
-                    >
-                      Reset Discounts
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => { setDiscountType('percent'); setDiscountValue(10); }}
-                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                      discountType === 'percent' && discountValue === 10 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    10% Off
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setDiscountType('percent'); setDiscountValue(20); }}
-                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                      discountType === 'percent' && discountValue === 20 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    20% Off
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setDiscountType('fixed'); setDiscountValue(2000); }}
-                    className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                      discountType === 'fixed' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    -2,000 XAF
-                  </button>
-                </div>
-
-                {/* Coupon Code Input */}
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      placeholder="Coupon (e.g. FAMILY15, HEALTH20)"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase font-mono"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs rounded-xl cursor-pointer"
-                  >
-                    {couponApplied ? 'Applied ✓' : 'Apply'}
-                  </button>
-                </div>
-
-                {/* Custom negotiated price */}
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] text-slate-400 shrink-0">Custom Override Amount:</label>
-                  <input
-                    type="number"
-                    placeholder="Enter manual price in FCFA"
-                    value={customPriceInput}
-                    onChange={(e) => setCustomPriceInput(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {/* INSURANCE CO-PAY DETAILS */}
+              {/* Insurance details */}
               {paymentMethod === 'insurance' && (
                 <div className="p-3.5 bg-indigo-950/70 rounded-2xl border border-indigo-500/40 space-y-3">
                   <div className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                    Cameroon Health Insurance & Co-Pay Direct Billing
+                    Insurance Details
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Cameroon Insurance Company *</label>
+                      <label className="block text-[10px] text-slate-400 mb-1">Insurance Company *</label>
                       <select
                         value={insuranceProvider}
                         onChange={(e) => setInsuranceProvider(e.target.value)}
@@ -967,43 +932,37 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         {CAMEROON_INSURANCE_COMPANIES.map(company => (
                           <option key={company.id} value={company.name}>{company.name}</option>
                         ))}
-                        <option value="Other Corporate Insurance (Cameroon)">Other Corporate Insurance (Cameroon)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Policy / Matricule ID *</label>
+                      <label className="block text-[10px] text-slate-400 mb-1">Policy Number</label>
                       <input
                         type="text"
                         value={insurancePolicyNumber}
                         onChange={(e) => setInsurancePolicyNumber(e.target.value)}
-                        placeholder="e.g. POL-998234-ACT"
+                        placeholder="e.g. POL-998234"
                         className="w-full px-3 py-1.5 bg-slate-900 border border-indigo-800 rounded-lg text-xs text-white font-mono"
                       />
                     </div>
                   </div>
                   <div>
                     <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Co-Pay Coverage Split:</span>
-                      <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer Claim • {coPayPercent}% Patient Co-Pay</span>
+                      <span>Co-Pay Split:</span>
+                      <span className="text-indigo-300 font-bold">{coPayPercent}% Patient • {100 - coPayPercent}% Insurer</span>
                     </label>
                     <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { coPay: 0, label: '100% Insurer (0% Co-Pay)' },
-                        { coPay: 20, label: '80% Insurer (20% Co-Pay)' },
-                        { coPay: 30, label: '70% Insurer (30% Co-Pay)' },
-                        { coPay: 50, label: '50% Insurer (50% Co-Pay)' }
-                      ].map((split) => (
+                      {[0, 20, 30, 50].map((cp) => (
                         <button
-                          key={split.coPay}
+                          key={cp}
                           type="button"
-                          onClick={() => setCoPayPercent(split.coPay)}
+                          onClick={() => setCoPayPercent(cp)}
                           className={`py-1 px-2 rounded-lg text-[10px] font-bold border transition-colors ${
-                            coPayPercent === split.coPay
+                            coPayPercent === cp
                               ? 'bg-indigo-600 text-white border-indigo-400'
                               : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
                           }`}
                         >
-                          {split.label}
+                          {cp}% Co-Pay
                         </button>
                       ))}
                     </div>
@@ -1011,12 +970,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
+              {/* Access Code */}
               <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                 <label className="flex items-center justify-between text-slate-300 font-bold text-xs">
                   <span className="flex items-center gap-1.5 text-emerald-300">
                     <Lock className="w-3.5 h-3.5" />
-                    Cashier Security Access Code Required
+                    Cashier Security Access Code
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">e.g. CSH123</span>
                 </label>
@@ -1025,7 +984,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type={showAccessCode ? 'text' : 'password'}
-                    placeholder="Enter your authorized cashier PIN / access code..."
+                    placeholder="Enter your authorized cashier PIN..."
                     value={cashierAccessCode}
                     onChange={(e) => {
                       setCashierAccessCode(e.target.value);
@@ -1050,29 +1009,29 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 )}
               </div>
 
-              {/* FINANCIAL BREAKDOWN SUMMARY */}
+              {/* Financial Summary */}
               {(() => {
-                const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+                const details = calculateSettlementDetails(selectedBooking);
                 return (
                   <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
                     <div className="flex justify-between text-slate-400 text-xs">
-                      <span>Original Catalog Total:</span>
+                      <span>Selected Tests Total:</span>
                       <span className="font-mono">{details.baseTotal.toLocaleString()} XAF</span>
                     </div>
                     {details.discountAmount > 0 && (
                       <div className="flex justify-between text-amber-400 text-xs">
-                        <span>Discount / Coupon Applied:</span>
+                        <span>Discount Applied:</span>
                         <span className="font-mono">-{details.discountAmount.toLocaleString()} XAF</span>
                       </div>
                     )}
                     {paymentMethod === 'insurance' && (
                       <div className="flex justify-between text-indigo-300 text-xs">
-                        <span>HMO Insurance Claim Portion:</span>
+                        <span>Insurance Claim:</span>
                         <span className="font-mono">-{details.insurancePortion.toLocaleString()} XAF</span>
                       </div>
                     )}
                     <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-white font-bold text-sm">Actual Paid by Patient:</span>
+                      <span className="text-white font-bold text-sm">Amount to Collect:</span>
                       <span className="text-xl font-black text-emerald-400 font-mono">
                         {(paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal).toLocaleString()} XAF
                       </span>
@@ -1080,11 +1039,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   </div>
                 );
               })()}
-
-              <div className="p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-200 flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                Clicking confirm validates the security PIN, marks the order as PAID, and pushes patient to Phlebotomy Queue.
-              </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
@@ -1100,12 +1054,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={isProcessing}
+                  disabled={isProcessing || getSelectedTests(selectedBooking).length === 0}
                   onClick={handleCollectPayment}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>{isProcessing ? 'Verifying & Processing...' : 'Verify Access Code & Confirm Payment'}</span>
+                  <span>{isProcessing ? 'Processing...' : 'Confirm Payment'}</span>
                 </button>
               </div>
             </div>
@@ -1114,24 +1068,20 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* OFFICIAL PROFESSIONAL BRANDED RECEIPT MODAL */}
-      {showReceipt && (
-        <MedicalReceiptModal
-          isOpen={Boolean(showReceipt)}
-          onClose={() => setShowReceipt(null)}
-          booking={showReceipt}
-          labInfo={lab}
-          paymentDetails={{
-            paymentMethod: showReceipt.paymentMethod || paymentMethod,
-            insuranceProvider: showReceipt.insuranceProvider || insuranceProvider,
-            insurancePolicyNumber: showReceipt.insurancePolicyNumber || insurancePolicyNumber,
-            insuranceCoveragePercent: showReceipt.coPayPercent ? 100 - showReceipt.coPayPercent : undefined,
-            discountAmount: showReceipt.discountAmount,
-            cashierName: user?.name || 'Authorized Lab Cashier',
-            paidAt: showReceipt.paidAt || new Date().toISOString()
-          }}
-        />
-      )}
+      {/* RECEIPT MODAL */}
+      <MedicalReceiptModal
+        isOpen={Boolean(showReceipt)}
+        onClose={() => setShowReceipt(null)}
+        booking={showReceipt}
+        labInfo={lab}
+        paymentDetails={{
+          paymentMethod: showReceipt?.paymentMethod || paymentMethod,
+          insuranceProvider: showReceipt?.insuranceProvider || insuranceProvider,
+          insurancePolicyNumber: showReceipt?.insurancePolicyNumber || insurancePolicyNumber,
+          cashierName: user?.name || 'Authorized Lab Cashier',
+          paidAt: showReceipt?.paidAt || new Date().toISOString()
+        }}
+      />
 
     </div>
   );

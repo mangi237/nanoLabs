@@ -433,12 +433,14 @@ const MainAppContent: React.FC = () => {
 
 export default function App() {
   return (
+    <LanguageProvider>
     <AuthProvider>
       <ThemeProvider>
-        <LanguageProvider>
+        
           <MainAppContent />
-        </LanguageProvider>
+   
       </ThemeProvider>
     </AuthProvider>
+    </LanguageProvider>
   );
 }

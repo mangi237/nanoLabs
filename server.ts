@@ -6,7 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
 const app = express();
-const PORT = 3000;
+const PORT: number = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json());
 
@@ -63,21 +63,25 @@ async function sendEmailWithGmail(params: {
 
   const gmailUser = process.env.GMAIL_USER;
   const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
-
+  console.log('📧 Email send attempt:', { to, subject, gmailUser: gmailUser ? 'Set' : 'Not set', hasPassword: gmailAppPassword ? 'Set' : 'Not set' });
   if (!gmailUser || !gmailAppPassword) {
     console.warn('Gmail credentials not configured. Email will not be sent.');
+    console.error(' Gmail credentials not configured. Email will not be sent.');
+    console.log(' Please set GMAIL_USER and GMAIL_APP_PASSWORD in .env file');
     return { success: false, provider: 'Gmail Not Configured', error: 'Gmail credentials missing' };
   }
 
   try {
+    const cleanPassword = gmailAppPassword.replace(/\s/g, '');
+    
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: gmailUser,
-        pass: gmailAppPassword,
+        pass:  cleanPassword,
       },
     });
-
+    console.log(' Sending email to:', to);
     const info = await transporter.sendMail({
       from: `"${fromName}" <${gmailUser}>`,
       to: toName ? `"${toName}" <${to}>` : to,
@@ -87,7 +91,7 @@ async function sendEmailWithGmail(params: {
       replyTo: replyTo || gmailUser,
     });
 
-    console.log(`✅ [Gmail SMTP] Sent to ${to} | Message ID: ${info.messageId}`);
+    console.log(` [Gmail SMTP] Sent to ${to} | Message ID: ${info.messageId}`);
     return {
       success: true,
       provider: 'Gmail SMTP',
