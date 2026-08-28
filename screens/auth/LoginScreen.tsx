@@ -199,7 +199,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <LanguageSelector variant="compact" />
+            <LanguageSelector variant="dropdown" />
             <button
               onClick={() => setShowAboutModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer"
