@@ -34,7 +34,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { sendOtpVerification, verifyOtpCode, sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import { PricingModelType, SubscriptionTierType } from '../../types';
@@ -63,7 +63,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   // Human Verification OTP State
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [devOtpCode, setDevOtpCode] = useState('');
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState('');
@@ -272,9 +271,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         setOtpDispatched(true);
         setVerificationId(res.verificationId || '');
         setOtpSuccessMessage(res.message || `Verification code sent to ${formData.adminEmail}`);
-        if (res.debugCode) {
-          setDevOtpCode(res.debugCode);
-        }
       } else {
         setOtpError(res.error || 'Failed to dispatch verification code. Please check email address.');
       }
@@ -1309,22 +1305,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{otpSuccessMessage}</span>
-              </div>
-            )}
-
-            {devOtpCode && (
-              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 font-medium text-[11px]">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span>Security Code: <strong className="font-mono font-bold">{devOtpCode}</strong></span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOtpCode(devOtpCode)}
-                  className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shrink-0"
-                >
-                  Auto-fill
-                </button>
               </div>
             )}
 
