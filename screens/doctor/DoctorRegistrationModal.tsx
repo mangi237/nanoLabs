@@ -172,7 +172,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Accredited Physician Self-Registration</h3>
-                <p className="text-xs text-slate-500">Join the nanoLabs Medical Network to track patient test results easily</p>
+                <p className="text-xs text-slate-500">Join the nanoLabs Medical Network to track referred patient test results & diagnostic findings</p>
               </div>
             </div>
 
@@ -181,7 +181,6 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                 {errorMessage}
               </div>
             )}
-
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -192,7 +191,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   placeholder="e.g. Dr. Jean-Paul Mbarga / Dr. Ngozi Emmanuel"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -204,7 +203,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   placeholder="e.g. ONMC-CMR-88491"
                   value={formData.licenseNumber}
                   onChange={e => setFormData({ ...formData, licenseNumber: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-semibold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -213,17 +212,17 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                 <select
                   value={formData.specialty}
                   onChange={e => setFormData({ ...formData, specialty: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 >
-                  <option value="Internal Medicine">Internal Medicine</option>
-                  <option value="Cardiology">Cardiology</option>
-                  <option value="Pediatrics">Pediatrics</option>
-                  <option value="Gynecology & Obstetrics">Gynecology & Obstetrics</option>
-                  <option value="General Practice">General Practice</option>
-                  <option value="Oncology">Oncology</option>
-                  <option value="Nephrology">Nephrology</option>
-                  <option value="Infectious Disease">Infectious Disease</option>
-                  <option value="Surgery">General Surgery</option>
+                  <option value="Internal Medicine" className="text-slate-900">Internal Medicine</option>
+                  <option value="Cardiology" className="text-slate-900">Cardiology</option>
+                  <option value="Pediatrics" className="text-slate-900">Pediatrics</option>
+                  <option value="Gynecology & Obstetrics" className="text-slate-900">Gynecology & Obstetrics</option>
+                  <option value="General Practice" className="text-slate-900">General Practice</option>
+                  <option value="Oncology" className="text-slate-900">Oncology</option>
+                  <option value="Nephrology" className="text-slate-900">Nephrology</option>
+                  <option value="Infectious Disease" className="text-slate-900">Infectious Disease</option>
+                  <option value="Surgery" className="text-slate-900">General Surgery</option>
                 </select>
               </div>
 
@@ -234,7 +233,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   placeholder="e.g. Douala General Hospital / Polyclinique Sainte-Anne"
                   value={formData.hospital}
                   onChange={e => setFormData({ ...formData, hospital: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -246,7 +245,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   placeholder="e.g. 671002233"
                   value={formData.phone}
                   onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -257,7 +256,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   placeholder="doctor@hospital.cm"
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -268,7 +267,7 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                   required
                   value={formData.accessCode}
                   onChange={e => setFormData({ ...formData, accessCode: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-teal-50 border border-teal-200 rounded-xl text-xs font-mono font-bold text-teal-900 focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-teal-50 border border-teal-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">
                   You will use this passcode to log into your Doctor Portal to view referred patient results.

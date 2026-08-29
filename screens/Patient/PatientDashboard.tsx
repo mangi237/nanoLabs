@@ -7,7 +7,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
-import  LabReportPdfViewModal  from '../../components/common/LabReportPdfViewModal';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
   Calendar, 
   FileText, 
@@ -385,110 +385,344 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: DIAGNOSTIC TESTS & LIVE TRACKING */}
+        {/* TAB 1: DIAGNOSTIC REQUISITIONS & TEST BATCHES */}
         {activeSegmentTab === 'tests' && (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm sm:text-base">Recent Test Requests</h3>
-                <p className="text-xs text-slate-500">Track status, price paid & virtual PDF availability</p>
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <TestTube className="w-5 h-5 text-teal-600" />
+                  <span>My Diagnostic Test Batches & Requisitions</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tests grouped into medical visit batches with consolidated booklets, physician sharing & digital PDF downloads
+                </p>
               </div>
-              {onNavigateTab && (
+
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => onNavigateTab('history')}
-                  className="text-xs font-semibold text-teal-600 hover:text-teal-800 cursor-pointer"
+                  type="button"
+                  onClick={() => setShowBookletModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                 >
-                  View Full History
+                  <FileText className="w-4 h-4 text-teal-400" />
+                  <span>View All Results Booklet</span>
                 </button>
-              )}
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('book')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Order New Tests</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {tests.map(test => {
-                const price = test.price || test.amount || 5000;
-                const hasPdf = Boolean(test.pdfUrl || test.fileUrl);
+            {/* List of Batches / Bookings */}
+            {bookings.length > 0 ? (
+              <div className="space-y-5">
+                {bookings.map((booking) => {
+                  const isPaid = booking.paymentStatus === 'paid';
+                  const allCompleted = booking.tests?.every(t => t.status === 'Completed') || booking.overallStatus === 'Completed';
+                  const completedCount = booking.tests?.filter(t => t.status === 'Completed').length || 0;
+                  const totalTests = booking.tests?.length || 0;
+                  const isExpanded = expandedBookingId === booking.id || bookings.length === 1;
 
-                return (
-                  <div
-                    key={test.id}
-                    onClick={() => onSelectTest && onSelectTest(test)}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-teal-50/30 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-start gap-3.5 min-w-0">
-                      <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 mt-0.5">
-                        <TestTube className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <h4 className="font-bold text-slate-900 text-sm truncate">
-                          {test.testName || test.name}
-                        </h4>
-                        
-                        <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                          <span>Category: {test.category || 'General'}</span>
-                          <span>•</span>
-                          {test.paid === true || test.paymentStatus === 'paid' ? (
-                            <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                              Paid: {price.toLocaleString()} FCFA
+                  return (
+                    <div
+                      key={booking.id}
+                      className="bg-white rounded-3xl border border-slate-200 shadow-md overflow-hidden transition-all"
+                    >
+                      {/* Batch Header Bar */}
+                      <div className="p-5 sm:p-6 bg-slate-900 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-teal-500 text-slate-950 shadow-xs">
+                              BATCH: {booking.bookingCode}
                             </span>
-                          ) : (
-                            <span className="font-bold text-amber-800 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                              <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              Unpaid: {price.toLocaleString()} FCFA
+                            <span className="text-xs text-slate-300 font-medium">
+                              📅 {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent Requisition'}
                             </span>
-                          )}
-                          <span>•</span>
-                          <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] uppercase ${
-                            test.status === 'completed' 
-                              ? 'bg-emerald-100 text-emerald-800' 
-                              : test.status === 'analyzing'
-                                ? 'bg-blue-100 text-blue-800'
-                                : test.paid
-                                  ? 'bg-teal-100 text-teal-800'
-                                  : 'bg-slate-100 text-slate-700'
+                            {booking.doctorName && (
+                              <span className="text-xs text-teal-300 font-semibold bg-slate-800 px-2.5 py-0.5 rounded-full border border-teal-500/30">
+                                👨‍⚕️ Prescribed by: {booking.doctorName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-300 flex items-center gap-3">
+                            <span>Diagnostic Facility: <strong className="text-white">{booking.labName || lab?.name || 'Regional Diagnostic Center'}</strong></span>
+                            <span>•</span>
+                            <span>{completedCount} of {totalTests} Tests Ready</span>
+                          </div>
+                        </div>
+
+                        {/* Batch Action Suite */}
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          {/* Payment status badge */}
+                          <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wide border ${
+                            isPaid
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                           }`}>
-                            {test.status === 'completed' ? 'Results Ready' : test.status === 'analyzing' ? 'In Analysis' : test.paid ? 'Awaiting Specimen' : 'Pending Payment'}
+                            {(booking.totalAmount || 0).toLocaleString()} FCFA ({isPaid ? 'PAID' : 'UNPAID'})
                           </span>
+
+                          {/* Download / Print Full Consolidated Result */}
+                          <button
+                            type="button"
+                            onClick={() => setShowBookletModal(true)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                            title="Download Full Result of all tests in this batch"
+                          >
+                            <Printer className="w-4 h-4" />
+                            <span>Download Full Results</span>
+                          </button>
+
+                          {/* Share with Physician */}
+                          {onNavigateTab && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateTab('share')}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                              title="Email encrypted results directly to your doctor"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              <span>Share with Doctor</span>
+                            </button>
+                          )}
+
+                          {/* Receipt */}
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModalBooking(booking)}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs border border-slate-700 transition-all cursor-pointer"
+                            title="View official medical receipt"
+                          >
+                            <Receipt className="w-4 h-4 text-teal-400" />
+                            <span>Receipt</span>
+                          </button>
+
+                          {/* Toggle Expand */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedBookingId(isExpanded ? null : booking.id)}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer"
+                          >
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                      {hasPdf ? (
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
-                          <FileText className="w-4 h-4 text-emerald-600" />
-                          PDF Virtual Result Ready
-                        </span>
-                      ) : test.virtualRequested ? (
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200">
-                          <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                          Virtual Requested
-                        </span>
-                      ) : (
-                        <button
-                          onClick={(e) => handleRequestVirtual(e, test)}
-                          disabled={requestingId === test.id}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          <Laptop className="w-3.5 h-3.5" />
-                          {requestingId === test.id ? 'Requesting...' : 'Request Virtual Result'}
-                        </button>
+                      {/* Full Batch PDF Alert if Available */}
+                      {booking.pdfReportUrl && (
+                        <div className="px-6 py-3 bg-teal-50 border-b border-teal-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs text-teal-900 font-bold">
+                            <FileText className="w-4 h-4 text-teal-600 shrink-0" />
+                            <span>Full Batch Consolidated PDF Report Available</span>
+                          </div>
+                          <a
+                            href={booking.pdfReportUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-extrabold transition-all shadow-2xs"
+                          >
+                            <span>Open Consolidated PDF</span>
+                          </a>
+                        </div>
                       )}
 
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </div>
-                  </div>
-                );
-              })}
+                      {/* Tests in Batch Table */}
+                      {isExpanded && (
+                        <div className="p-5 sm:p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                              Tests in this Requisition Batch ({booking.tests?.length || 0})
+                            </h4>
+                            <span className="text-xs text-slate-400 font-medium">
+                              Status: <strong className={allCompleted ? 'text-emerald-600' : 'text-amber-600'}>{allCompleted ? 'Completed & Validated' : 'In Lab Processing'}</strong>
+                            </span>
+                          </div>
 
-              {tests.length === 0 && (
-                <div className="p-10 text-center text-slate-400 space-y-2">
-                  <TestTube className="w-8 h-8 mx-auto text-slate-300" />
-                  <p className="text-sm font-semibold text-slate-600">No laboratory test records found</p>
-                  <p className="text-xs text-slate-400">Book an appointment to request tests</p>
+                          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                            <table className="w-full text-left text-xs text-slate-700">
+                              <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                                <tr>
+                                  <th className="py-3 px-4">Diagnostic Test Name</th>
+                                  <th className="py-3 px-4">Category & Specimen</th>
+                                  <th className="py-3 px-4">Result / Parameters</th>
+                                  <th className="py-3 px-4">Status</th>
+                                  <th className="py-3 px-4 text-right">Actions & PDF</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 font-medium">
+                                {booking.tests?.map((test) => {
+                                  const isCompleted = test.status === 'Completed' || test.status === 'Ready_For_Pickup';
+                                  const hasPerTestPdf = Boolean(test.pdfReportUrl || test.externalPdfUrl || test.pdfUrl || test.fileUrl);
+                                  const pdfUrl = test.pdfReportUrl || test.externalPdfUrl || test.pdfUrl || test.fileUrl;
+
+                                  return (
+                                    <tr
+                                      key={test.id}
+                                      onClick={() => onSelectTest && onSelectTest(test)}
+                                      className="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                                    >
+                                      <td className="py-3.5 px-4">
+                                        <div className="font-extrabold text-slate-900 text-sm">
+                                          {test.testName || test.name}
+                                        </div>
+                                        {test.testCode && (
+                                          <span className="text-[10px] text-slate-400 font-mono">Code: {test.testCode}</span>
+                                        )}
+                                      </td>
+
+                                      <td className="py-3.5 px-4 text-slate-600 text-xs">
+                                        <div>{test.category || 'General Laboratory'}</div>
+                                        <div className="text-[10px] text-slate-400">{test.sampleTypeRequired || 'Blood Specimen'}</div>
+                                      </td>
+
+                                      <td className="py-3.5 px-4">
+                                        {test.subParameters && test.subParameters.length > 0 ? (
+                                          <div className="space-y-1">
+                                            {test.subParameters.slice(0, 3).map((sp: any) => (
+                                              <div key={sp.id} className="text-[11px] flex items-center gap-1.5">
+                                                <span className="text-slate-500">{sp.name}:</span>
+                                                <span className="font-bold font-mono text-slate-900">{sp.value || 'Pending'} {sp.unit}</span>
+                                              </div>
+                                            ))}
+                                            {test.subParameters.length > 3 && (
+                                              <span className="text-[10px] text-teal-600 font-semibold">+ {test.subParameters.length - 3} more parameters</span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="font-mono font-bold text-slate-900">
+                                            {test.resultValue || (isCompleted ? 'Analyzed & Signed' : 'Processing in Analyzer')} {test.units || ''}
+                                          </div>
+                                        )}
+                                      </td>
+
+                                      <td className="py-3.5 px-4">
+                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                                          isCompleted
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                            : test.status === 'In_Lab_Testing'
+                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : isPaid
+                                            ? 'bg-teal-50 text-teal-700 border-teal-200'
+                                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                                        }`}>
+                                          {isCompleted ? (
+                                            <>
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                              Results Ready
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Clock className="w-3 h-3 text-amber-600" />
+                                              {test.status?.replace(/_/g, ' ') || (isPaid ? 'In Testing' : 'Pending Payment')}
+                                            </>
+                                          )}
+                                        </span>
+                                      </td>
+
+                                      <td className="py-3.5 px-4 text-right">
+                                        <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                                          {hasPerTestPdf ? (
+                                            <a
+                                              href={pdfUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 transition-all shadow-2xs"
+                                            >
+                                              <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                              <span>View Test PDF</span>
+                                            </a>
+                                          ) : test.virtualRequested ? (
+                                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200">
+                                              Virtual Requested
+                                            </span>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleRequestVirtual(e, test)}
+                                              disabled={requestingId === test.id}
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-[11px] border border-indigo-200 transition-all cursor-pointer disabled:opacity-50"
+                                            >
+                                              <Laptop className="w-3 h-3" />
+                                              <span>{requestingId === test.id ? 'Requesting...' : 'Request Virtual'}</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : tests.length > 0 ? (
+              /* Fallback direct test batch if bookings hasn't populated yet */
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                  <div>
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-teal-500 text-slate-950">
+                      CURRENT CLINICAL REQUISITION
+                    </span>
+                    <h3 className="text-base font-extrabold text-slate-900 mt-1">Consolidated Diagnostic Tests ({tests.length})</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowBookletModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Download Full Results</span>
+                    </button>
+                    {onNavigateTab && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateTab('share')}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span>Share with Doctor</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="divide-y divide-slate-100">
+                  {tests.map(test => (
+                    <div key={test.id} className="py-3 flex items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">{test.testName || test.name}</h4>
+                        <p className="text-xs text-slate-500">{test.category || 'General'} • {(test.price || 5000).toLocaleString()} FCFA</p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                        {test.status || 'Results Ready'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400 space-y-3">
+                <TestTube className="w-10 h-10 mx-auto text-slate-300" />
+                <h4 className="font-extrabold text-slate-700 text-sm">No diagnostic batches recorded yet</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  When you book laboratory diagnostic tests, your test orders will appear organized into requisition batches here.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
