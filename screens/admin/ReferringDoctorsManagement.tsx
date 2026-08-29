@@ -244,7 +244,7 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
     } else if (partnerFilter === 'pending') {
       matchesPartnerStatus = d.invitationStatus === 'pending' && d.origin !== 'patient_referral';
     } else if (partnerFilter === 'patient_referral') {
-      matchesPartnerStatus = d.origin === 'patient_referral' || (d.status === 'pending' && d.totalReferrals && d.totalReferrals > 0);
+      matchesPartnerStatus = d.origin === 'patient_referral' || (d.status === 'pending' && d.totalReferrals && d.totalReferrals > 0) || false;
     }
 
     return matchesSearch && matchesSpecialty && matchesPartnerStatus;
