@@ -79,42 +79,70 @@ export const authService = {
       }
 
       const upperCode = cleanCode.toUpperCase();
+      const lowerCode = cleanCode.toLowerCase();
+      const cleanDigits = cleanCode.replace(/\D/g, '');
 
-      // 2. Check logical default staff codes (SUPER123, TECH123, CASH123, ANALYZER123, REC123, etc.)
-      if (DEFAULT_STAFF_MAP[upperCode]) {
-        const staffInfo = DEFAULT_STAFF_MAP[upperCode];
-        console.log('✅ Default staff role matched:', staffInfo.name);
-
-        let labData: any = { id: targetLabId, name: 'nanoLabs Central Diagnostics', primaryColor: '#0D9488' };
-        try {
-          const labRef = doc(db, 'labs', targetLabId);
-          const labDoc = await getDoc(labRef);
-          if (labDoc.exists()) {
-            labData = { id: labDoc.id, ...labDoc.data() };
-          }
-        } catch (e) {
-          console.warn('Using default lab config:', e);
-        }
-
+      // 2. SuperAdmin System Codes (Platform Oversight - Not bound to single lab)
+      if (upperCode === 'SUPER123' || upperCode === 'SUPERADMIN' || upperCode === 'SUPERADMIN2025' || DEFAULT_STAFF_MAP[upperCode]?.role === 'superadmin') {
+        console.log('✅ Super Admin authenticated:', upperCode);
         return {
           success: true,
           user: {
-            id: upperCode.toLowerCase(),
-            name: staffInfo.name,
+            id: 'superadmin',
+            name: 'Super Administrator',
+            email: 'superadmin@nanolabs.cm',
             accessCode: upperCode,
-            role: staffInfo.role,
-            roles: staffInfo.roles,
-            labId: targetLabId,
-            labName: labData.name,
+            role: 'superadmin',
+            roles: ['superadmin'],
+            labId: 'global-network',
+            labName: 'nanoLabs Global Diagnostic Network',
             mustChangePassword: false
           },
-          lab: labData,
-          role: staffInfo.role,
+          lab: { id: 'global-network', name: 'nanoLabs Global Diagnostic Network', primaryColor: '#0D9488' },
+          role: 'superadmin',
           mustChangePassword: false
         };
       }
 
-      // Helper to check if a staff record matches the credentials
+      // 3. Accredited Physician / Doctor Authentication (Global Network Doctors)
+      try {
+        const doctorsSnap = await getDocs(collection(db, 'doctors')).catch(() => ({ docs: [] as any[] }));
+        const matchedDoc = doctorsSnap.docs.find(d => {
+          const docData = d.data();
+          const dCode = (docData.accessCode || docData.code || docData.passcode || '').trim().toUpperCase();
+          const dEmail = (docData.email || '').trim().toLowerCase();
+          const dLicense = (docData.licenseNumber || '').trim().toUpperCase();
+          const dPhoneDigits = (docData.phone || '').replace(/\D/g, '');
+
+          if (dCode && dCode === upperCode) return true;
+          if (dLicense && dLicense === upperCode) return true;
+          if (dEmail && dEmail === lowerCode) return true;
+          if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
+          return false;
+        });
+
+        if (matchedDoc) {
+          const doctorData = matchedDoc.data();
+          console.log('✅ Accredited Doctor matched:', doctorData.name);
+          return {
+            success: true,
+            user: {
+              id: matchedDoc.id,
+              ...doctorData,
+              role: 'doctor',
+              roles: ['doctor'],
+              mustChangePassword: false
+            },
+            lab: { id: targetLabId, name: 'nanoLabs Accredited Medical Network' },
+            role: 'doctor',
+            mustChangePassword: false
+          };
+        }
+      } catch (docAuthErr) {
+        console.warn('Doctor network verification check error:', docAuthErr);
+      }
+
+      // Helper to check if a staff record matches the credentials in the targeted laboratory
       const matchesStaff = (d: any, dData: any) => {
         const dCode = (dData.accessCode || dData.initialCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
         const dEmail = (dData.email || '').trim().toLowerCase();
@@ -132,7 +160,7 @@ export const authService = {
         return false;
       };
 
-      // Helper to check if a patient record matches the credentials
+      // Helper to check if a patient record matches the credentials in the targeted laboratory
       const matchesPatient = (d: any, dData: any) => {
         const dAccessCode = (dData.accessCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
         const dPatientId = (dData.patientId || dData.id || d.id || '').trim().toUpperCase();
@@ -152,12 +180,9 @@ export const authService = {
         return false;
       };
 
-      const lowerCode = cleanCode.toLowerCase();
-      const cleanDigits = cleanCode.replace(/\D/g, '');
-
-      // 3. Search Firestore Staff & Patient subcollections concurrently
+      // 4. Strictly search Firestore Staff & Patient subcollections within the SELECTED LAB ONLY
       try {
-        console.log('🔍 Checking Firestore credentials in target lab:', targetLabId);
+        console.log('🔍 Strictly validating credentials inside selected lab facility:', targetLabId);
         const staffRef = collection(db, 'labs', targetLabId, 'staff');
         const patientsRef = collection(db, 'labs', targetLabId, 'patients');
 
@@ -169,7 +194,7 @@ export const authService = {
         const foundStaffDoc = staffSnap.docs.find(d => matchesStaff(d, d.data()));
         if (foundStaffDoc) {
           const staffData = foundStaffDoc.data();
-          console.log('✅ Firestore Staff found:', staffData.name);
+          console.log('✅ Facility Staff verified:', staffData.name);
           const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
           const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
 
@@ -192,7 +217,7 @@ export const authService = {
         const foundPatientDoc = patientsSnap.docs.find(d => matchesPatient(d, d.data()));
         if (foundPatientDoc) {
           const patientData = foundPatientDoc.data();
-          console.log('✅ Firestore Patient found:', patientData.name);
+          console.log('✅ Facility Patient verified:', patientData.name);
 
           return {
             success: true,
@@ -208,96 +233,39 @@ export const authService = {
             mustChangePassword: false
           };
         }
-
-        // Global parallel check across other facilities if not in target lab
-        const allLabsSnap = await getDocs(collection(db, 'labs')).catch(() => ({ docs: [] as any[] }));
-        const otherLabIds = allLabsSnap.docs.map(d => d.id).filter(id => id !== targetLabId);
-
-        if (otherLabIds.length > 0) {
-          const allOtherFetches = otherLabIds.map(async (labId) => {
-            const [sSnap, pSnap] = await Promise.all([
-              getDocs(collection(db, 'labs', labId, 'staff')).catch(() => ({ docs: [] as any[] })),
-              getDocs(collection(db, 'labs', labId, 'patients')).catch(() => ({ docs: [] as any[] }))
-            ]);
-            return { labId, staffDocs: sSnap.docs, patientDocs: pSnap.docs };
-          });
-
-          const results = await Promise.all(allOtherFetches);
-          for (const res of results) {
-            const otherStaff = res.staffDocs.find(d => matchesStaff(d, d.data()));
-            if (otherStaff) {
-              const staffData = otherStaff.data();
-              const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
-              const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
-              return {
-                success: true,
-                user: {
-                  id: otherStaff.id,
-                  ...staffData,
-                  role,
-                  roles: staffData.roles || [role],
-                  mustChangePassword: mustChange,
-                  isTemporaryPassword: mustChange
-                },
-                lab: { id: res.labId, name: staffData.labName || 'Laboratory Center' },
-                role,
-                mustChangePassword: mustChange
-              };
-            }
-
-            const otherPatient = res.patientDocs.find(d => matchesPatient(d, d.data()));
-            if (otherPatient) {
-              const patientData = otherPatient.data();
-              return {
-                success: true,
-                user: {
-                  id: otherPatient.id,
-                  ...patientData,
-                  role: 'patient',
-                  roles: ['patient'],
-                  mustChangePassword: false
-                },
-                lab: { id: res.labId, name: patientData.labName || 'Laboratory Center' },
-                role: 'patient',
-                mustChangePassword: false
-              };
-            }
-          }
-        }
       } catch (authErr) {
-        console.warn('Error during concurrent credential verification:', authErr);
+        console.warn('Error during laboratory credential verification:', authErr);
       }
 
-      // 5. Check local client fallback cache (for instant login after local registration)
+      // 5. Check local client fallback cache (only if for the targeted laboratory)
       try {
         const localPatientRaw = localStorage.getItem('last_registered_patient');
         if (localPatientRaw) {
           const localPatient = JSON.parse(localPatientRaw);
-          if (matchesPatient({ id: localPatient.id }, localPatient)) {
+          if ((!localPatient.labId || localPatient.labId === targetLabId) && matchesPatient({ id: localPatient.id }, localPatient)) {
             console.log('✅ Patient matched from local registration cache:', localPatient.name);
             return {
               success: true,
               user: {
+                id: localPatient.id || localPatient.patientId,
                 ...localPatient,
                 role: 'patient',
                 roles: ['patient'],
                 mustChangePassword: false
               },
-              lab: { id: localPatient.labId || targetLabId, name: localPatient.labName || 'Laboratory Center' },
+              lab: { id: targetLabId, name: localPatient.labName || 'Laboratory Center' },
               role: 'patient',
               mustChangePassword: false
             };
           }
         }
-      } catch (locErr) {
-        // silent
+      } catch {
+        // ignore
       }
 
-      // No arbitrary string fallbacks. Only valid registered credentials are authorized!
-      console.log('❌ Invalid access code attempted:', cleanCode);
-      return { 
-        success: false, 
-        error: 'Invalid access code or passcode. Please check your credentials or one-time invite email.' 
+      return {
+        success: false,
+        error: 'Invalid access code for the selected laboratory. The code entered does not match any registered staff or patient record at this facility.'
       };
     } catch (error: any) {
       console.error('❌ Error in verifyAccessCode:', error);
