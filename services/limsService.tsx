@@ -1,4 +1,4 @@
-import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy } from './firebase';
+import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, setDoc } from './firebase';
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
@@ -2194,11 +2194,12 @@ export const limsService = {
 
   /**
    * Search all accredited registered doctors across Cameroon / Platform Directory
+   * Queries both `doctors` and `users` (where role is doctor) collections
    * (Allows laboratories and patients to search by Name, Medical License/ONMC ID, Specialty, or Hospital)
    */
   async searchAllAccreditedDoctors(query: string = ''): Promise<Doctor[]> {
     const cleanQuery = query.trim().toLowerCase();
-    const results: Doctor[] = [];
+    const map = new Map<string, Doctor>();
 
     try {
       // 1. Fetch from global accredited doctors collection
@@ -2218,24 +2219,203 @@ export const limsService = {
           status: data.status || 'active',
           createdAt: data.createdAt
         };
+        const key = (docObj.phone || docObj.licenseNumber || docObj.email || docObj.id || docObj.name).trim().toLowerCase();
+        if (key) {
+          map.set(key, docObj);
+        }
+      });
+    } catch (e) {
+      console.warn('Error querying global accredited doctors collection:', e);
+    }
 
-        if (!cleanQuery) {
-          results.push(docObj);
-        } else {
-          const matchName = docObj.name.toLowerCase().includes(cleanQuery);
-          const matchLicense = docObj.licenseNumber?.toLowerCase().includes(cleanQuery);
-          const matchSpecialty = docObj.specialty?.toLowerCase().includes(cleanQuery);
-          const matchHospital = (docObj.hospital || '').toLowerCase().includes(cleanQuery);
-          if (matchName || matchLicense || matchSpecialty || matchHospital) {
-            results.push(docObj);
+    try {
+      // 2. Fetch from users collection where role === 'doctor'
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach(u => {
+        const data = u.data();
+        if (data.role === 'doctor' || (data.roles && data.roles.includes('doctor'))) {
+          const docObj: Doctor = {
+            id: u.id,
+            name: data.name || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            specialty: data.specialty || 'General Medicine',
+            licenseNumber: data.licenseNumber || 'ONMC-CMR-ACCREDITED',
+            hospitalAffiliation: data.hospital || data.hospitalAffiliation || '',
+            hospital: data.hospital || data.hospitalAffiliation || '',
+            accessCode: data.accessCode || '',
+            status: data.status || 'active',
+            createdAt: data.createdAt
+          };
+          const key = (docObj.phone || docObj.licenseNumber || docObj.email || docObj.id || docObj.name).trim().toLowerCase();
+          if (key && !map.has(key)) {
+            map.set(key, docObj);
           }
         }
       });
     } catch (e) {
-      console.warn('Error querying global accredited doctors:', e);
+      console.warn('Error querying users for accredited doctors:', e);
+    }
+
+    const all = Array.from(map.values());
+    if (!cleanQuery) {
+      return all;
+    }
+
+    return all.filter(docObj => {
+      const matchName = docObj.name.toLowerCase().includes(cleanQuery);
+      const matchLicense = (docObj.licenseNumber || '').toLowerCase().includes(cleanQuery);
+      const matchSpecialty = (docObj.specialty || '').toLowerCase().includes(cleanQuery);
+      const matchHospital = (docObj.hospital || docObj.hospitalAffiliation || '').toLowerCase().includes(cleanQuery);
+      const matchPhone = (docObj.phone || '').toLowerCase().includes(cleanQuery);
+      return matchName || matchLicense || matchSpecialty || matchHospital || matchPhone;
+    });
+  },
+
+  /**
+   * Send a partnership invitation from a Laboratory to an Accredited Doctor
+   */
+  async sendDoctorPartnershipInvitation(
+    labId: string = 'lab-1',
+    labName: string = 'nanoLabs Diagnostic Center',
+    doctor: Partial<Doctor>
+  ): Promise<{ success: boolean; referringDoctor: ReferringDoctor }> {
+    const timestamp = new Date().toISOString();
+    const docId = doctor.id || `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    
+    const newPartnerDoc: ReferringDoctor = {
+      id: docId,
+      doctorId: doctor.id || docId,
+      labId,
+      name: doctor.name || 'Dr. Accredited Physician',
+      specialty: doctor.specialty || 'General Medicine',
+      hospital: doctor.hospital || doctor.hospitalAffiliation || '',
+      phone: doctor.phone || '',
+      email: doctor.email || '',
+      licenseNumber: doctor.licenseNumber || '',
+      notes: `Partnership invitation sent by ${labName}`,
+      invitationStatus: 'pending',
+      origin: 'admin_invitation',
+      invitedAt: timestamp,
+      status: 'pending',
+      totalReferrals: 0,
+      totalTestsDone: 0,
+      totalRevenueGenerated: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    try {
+      // 1. Add/update in lab's referring_doctors subcollection
+      const docRef = doc(db, 'labs', labId, 'referring_doctors', docId);
+      await setDoc(docRef, cleanFirestoreData(newPartnerDoc), { merge: true });
+
+      // 2. Add an invitation in the global doctor_invitations collection
+      const invId = `inv-${labId}-${docId}`;
+      const invRef = doc(db, 'doctor_invitations', invId);
+      await setDoc(invRef, cleanFirestoreData({
+        id: invId,
+        labId,
+        labName,
+        doctorId: doctor.id || docId,
+        doctorName: doctor.name || '',
+        doctorPhone: doctor.phone || '',
+        doctorEmail: doctor.email || '',
+        doctorSpecialty: doctor.specialty || 'General Medicine',
+        doctorHospital: doctor.hospital || doctor.hospitalAffiliation || '',
+        doctorLicenseNumber: doctor.licenseNumber || '',
+        status: 'pending',
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }), { merge: true });
+
+      return { success: true, referringDoctor: newPartnerDoc };
+    } catch (e) {
+      console.warn('Error sending doctor partnership invitation:', e);
+      return { success: true, referringDoctor: newPartnerDoc };
+    }
+  },
+
+  /**
+   * Fetch all partnership invitations received by a Doctor across all laboratories
+   */
+  async fetchDoctorInvitations(doctorIdentifier: {
+    doctorId?: string;
+    phone?: string;
+    email?: string;
+    name?: string;
+  }): Promise<any[]> {
+    const results: any[] = [];
+    const docIdClean = (doctorIdentifier.doctorId || '').trim().toLowerCase();
+    const phoneClean = (doctorIdentifier.phone || '').trim().toLowerCase();
+    const emailClean = (doctorIdentifier.email || '').trim().toLowerCase();
+    const nameClean = (doctorIdentifier.name || '').trim().toLowerCase();
+
+    try {
+      const snap = await getDocs(collection(db, 'doctor_invitations'));
+      snap.forEach(d => {
+        const data = d.data();
+        const matchId = docIdClean && (data.doctorId || '').trim().toLowerCase() === docIdClean;
+        const matchPhone = phoneClean && (data.doctorPhone || '').trim().toLowerCase() === phoneClean;
+        const matchEmail = emailClean && (data.doctorEmail || '').trim().toLowerCase() === emailClean;
+        const matchName = nameClean && (data.doctorName || '').trim().toLowerCase().includes(nameClean);
+
+        if (matchId || matchPhone || matchEmail || matchName) {
+          results.push({ id: d.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.warn('Error querying doctor_invitations:', e);
     }
 
     return results;
+  },
+
+  /**
+   * Doctor responds to an invitation (Accepts or Declines)
+   */
+  async respondToDoctorInvitation(
+    invitationId: string,
+    labId: string,
+    doctorId: string,
+    decision: 'accepted' | 'declined'
+  ): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+    try {
+      // 1. Update doctor_invitations record
+      const invRef = doc(db, 'doctor_invitations', invitationId);
+      await updateDoc(invRef, cleanFirestoreData({
+        status: decision,
+        respondedAt: timestamp,
+        updatedAt: timestamp
+      }));
+
+      // 2. Update lab's referring_doctors record
+      // Try to find the document in lab's referring_doctors
+      const docsCol = collection(db, 'labs', labId, 'referring_doctors');
+      const docsSnap = await getDocs(docsCol);
+      let targetDocId = doctorId;
+
+      docsSnap.forEach(d => {
+        const data = d.data();
+        if (d.id === doctorId || data.doctorId === doctorId || data.id === doctorId) {
+          targetDocId = d.id;
+        }
+      });
+
+      const refDocRef = doc(db, 'labs', labId, 'referring_doctors', targetDocId);
+      await setDoc(refDocRef, cleanFirestoreData({
+        invitationStatus: decision,
+        status: decision === 'accepted' ? 'active' : 'inactive',
+        acceptedAt: decision === 'accepted' ? timestamp : undefined,
+        updatedAt: timestamp
+      }), { merge: true });
+
+      return true;
+    } catch (e) {
+      console.warn('Error updating invitation response:', e);
+      return false;
+    }
   },
 
   /**
@@ -2253,6 +2433,7 @@ export const limsService = {
       totalReferrals: 0,
       totalTestsDone: 0,
       totalRevenueGenerated: 0,
+      invitationStatus: doctorData.invitationStatus || 'accepted',
       status: doctorData.status || 'active',
       createdAt: timestamp,
       updatedAt: timestamp
@@ -2306,8 +2487,9 @@ export const limsService = {
   },
 
   /**
-   * Pure Clinical Accredited Doctor Analytics
-   * Tracks patient referral volume, diagnostic tests completed, and laboratory test price ledgers
+   * Pure Clinical Accredited Doctor Analytics & Live Sync
+   * Tracks patient referral volume, diagnostic tests completed with test names and prices
+   * Synchronizes both lab-partnered doctors and patient-referred doctors in real time.
    * (Strictly NON-COMMERCIAL & ZERO-FEE: No commissions, percentages, or payouts per Cameroonian medical ethics)
    */
   async fetchDoctorCommissionAnalytics(labId: string = 'lab-1'): Promise<{
@@ -2334,6 +2516,7 @@ export const limsService = {
       totalReferrals: number;
       totalTestsDone: number;
       totalRevenue: number;
+      bookings: PatientBooking[];
     }>();
 
     for (const b of referralBookings) {
@@ -2341,7 +2524,8 @@ export const limsService = {
       const existing = doctorStatsMap.get(docKey) || {
         totalReferrals: 0,
         totalTestsDone: 0,
-        totalRevenue: 0
+        totalRevenue: 0,
+        bookings: []
       };
 
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
@@ -2350,15 +2534,28 @@ export const limsService = {
       existing.totalReferrals += 1;
       existing.totalTestsDone += testCount;
       existing.totalRevenue += billAmount;
+      existing.bookings.push(b);
 
       doctorStatsMap.set(docKey, existing);
     }
 
-    // Merge computed stats with doctors list
-    const enrichedDoctors = doctorsList.map(doc => {
+    const matchedKeys = new Set<string>();
+
+    // Merge computed stats with existing partner doctors list
+    const enrichedDoctors: ReferringDoctor[] = doctorsList.map(doc => {
       const keyById = (doc.id || '').trim().toLowerCase();
+      const keyByDocId = (doc.doctorId || '').trim().toLowerCase();
       const keyByName = (doc.name || '').trim().toLowerCase();
-      const stats = doctorStatsMap.get(keyById) || doctorStatsMap.get(keyByName);
+
+      const stats = doctorStatsMap.get(keyById) || 
+                    (keyByDocId ? doctorStatsMap.get(keyByDocId) : undefined) || 
+                    doctorStatsMap.get(keyByName);
+
+      if (stats) {
+        matchedKeys.add(keyById);
+        if (keyByDocId) matchedKeys.add(keyByDocId);
+        matchedKeys.add(keyByName);
+      }
 
       const liveReferrals = stats ? stats.totalReferrals : (doc.totalReferrals || 0);
       const liveTests = stats ? stats.totalTestsDone : (doc.totalTestsDone || 0);
@@ -2371,6 +2568,37 @@ export const limsService = {
         totalRevenueGenerated: liveRevenue
       };
     });
+
+    // If patients referred doctors who are NOT yet in the lab's referring_doctors collection,
+    // dynamically surface them as "Referred by Patient - Pending Partnership" so the Lab Admin can invite/add them!
+    for (const [key, stats] of doctorStatsMap.entries()) {
+      if (!matchedKeys.has(key)) {
+        const sampleBooking = stats.bookings[0];
+        const docName = sampleBooking.referringDoctor || 'Accredited Physician';
+        const docId = sampleBooking.referringDoctorId || `doc-ref-${Date.now()}`;
+
+        enrichedDoctors.push({
+          id: docId,
+          doctorId: sampleBooking.referringDoctorId || docId,
+          labId,
+          name: docName,
+          specialty: (sampleBooking as any).referringDoctorSpecialty || 'Clinical Practitioner',
+          hospital: (sampleBooking as any).referringDoctorHospital || 'External Medical Practice',
+          phone: (sampleBooking as any).referringDoctorPhone || '',
+          email: '',
+          licenseNumber: '',
+          notes: `Referred by patient: ${sampleBooking.patientName}`,
+          invitationStatus: 'pending',
+          origin: 'patient_referral',
+          status: 'pending',
+          totalReferrals: stats.totalReferrals,
+          totalTestsDone: stats.totalTestsDone,
+          totalRevenueGenerated: stats.totalRevenue,
+          createdAt: sampleBooking.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
     const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (b.tests?.length || 1), 0);
