@@ -27,7 +27,10 @@ import {
   Layers,
   Sparkles,
   ArrowUpRight,
-  AlertCircle
+  AlertCircle,
+  Check,
+  X,
+  Send
 } from 'lucide-react';
 
 interface DoctorPortalProps {
@@ -59,25 +62,95 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   });
 
   const [partneredLabs, setPartneredLabs] = useState<any[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<any[]>([]);
   const [referredBookings, setReferredBookings] = useState<PatientBooking[]>([]);
   const [sharedInboxReports, setSharedInboxReports] = useState<any[]>([]);
   const [selectedBookingForReport, setSelectedBookingForReport] = useState<PatientBooking | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDoctorEcosystemData();
   }, [user?.id, user?.email, user?.name]);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   const fetchDoctorEcosystemData = async () => {
     try {
       setLoading(true);
       const allLabs = await getAllLabs();
-      setPartneredLabs(allLabs || []);
 
       const doctorNameClean = (user?.name || '').toLowerCase();
       const doctorIdClean = user?.id || '';
       const doctorEmailClean = (user?.email || '').toLowerCase();
+      const doctorPhoneClean = (user?.phone || '').replace(/[^0-9]/g, '');
 
+      // 1. Fetch invitations across labs & global doctor_invitations
+      let invites: any[] = [];
+      try {
+        const directInvites = await limsService.fetchDoctorInvitations({
+          doctorId: doctorIdClean,
+          email: doctorEmailClean,
+          phone: doctorPhoneClean,
+          name: doctorNameClean
+        });
+        invites = directInvites || [];
+      } catch (invErr) {
+        console.warn('Error fetching doctor invitations:', invErr);
+      }
+
+      // Also check inside lab referring_doctors collections for pending records matching this doctor
+      let activeLabsList: any[] = [];
+      for (const currentLab of (allLabs || [{ id: 'lab-1', name: 'nanoLabs Central' }])) {
+        try {
+          const refDocsSnap = await getDocs(collection(db, 'labs', currentLab.id, 'referring_doctors'));
+          let isLinked = false;
+          refDocsSnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            const docName = (data.name || '').toLowerCase();
+            const docEmail = (data.email || '').toLowerCase();
+            const docPhone = (data.phone || '').replace(/[^0-9]/g, '');
+            const docMatch = 
+              (docName && (docName.includes(doctorNameClean) || doctorNameClean.includes(docName))) ||
+              (docEmail && docEmail === doctorEmailClean) ||
+              (docPhone && doctorPhoneClean && docPhone === doctorPhoneClean) ||
+              data.doctorId === doctorIdClean;
+
+            if (docMatch) {
+              if (data.invitationStatus === 'pending' || data.status === 'pending') {
+                // If not already in invites list, add it
+                if (!invites.some(inv => inv.labId === currentLab.id)) {
+                  invites.push({
+                    id: docSnap.id,
+                    labId: currentLab.id,
+                    labName: currentLab.name,
+                    status: 'pending',
+                    invitedAt: data.invitedAt || data.createdAt || new Date().toISOString()
+                  });
+                }
+              } else if (data.status === 'active' || data.invitationStatus === 'accepted' || !data.invitationStatus) {
+                isLinked = true;
+              }
+            }
+          });
+
+          if (isLinked) {
+            activeLabsList.push(currentLab);
+          }
+        } catch (e) {
+          // Lab query fallback
+        }
+      }
+
+      // If activeLabsList is empty, default to allLabs for demo visibility
+      setPartneredLabs(activeLabsList.length > 0 ? activeLabsList : (allLabs || []));
+      setPendingInvitations(invites.filter(inv => inv.status === 'pending'));
+
+      // 2. Fetch Doctor Bookings and Shared Inbox Reports
       let allDoctorBookings: PatientBooking[] = [];
       let allSharedInbox: any[] = [];
 
@@ -144,6 +217,31 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
     }
   };
 
+  const handleRespondToInvitation = async (invitation: any, response: 'accepted' | 'declined') => {
+    setRespondingInviteId(invitation.id);
+    try {
+      await limsService.respondToDoctorInvitation(
+        invitation.id,
+        invitation.labId,
+        invitation.doctorId || user?.id || '',
+        response
+      );
+
+      showToast(
+        response === 'accepted'
+          ? `Partnership confirmed with ${invitation.labName || 'Laboratory'}. You are now linked partners!`
+          : `Partnership invitation declined.`
+      );
+
+      await fetchDoctorEcosystemData();
+    } catch (e) {
+      console.error('Error responding to invitation:', e);
+      alert('Could not update partnership status. Please try again.');
+    } finally {
+      setRespondingInviteId(null);
+    }
+  };
+
   // Filter Bookings by Time Range
   const now = new Date();
   const getFilteredBookings = () => {
@@ -178,7 +276,6 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const totalReferredPatients = new Set(filteredBookings.map(b => b.patientId || b.patientName)).size;
   const totalTestsPrescribed = filteredBookings.reduce((sum, b) => sum + (b.tests?.length || 1), 0);
   const completedReports = filteredBookings.filter(b => b.status === 'completed' || b.biologistConfirmed).length;
-  const pendingValidationReports = filteredBookings.filter(b => b.status !== 'completed' && !b.biologistConfirmed).length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12">
@@ -188,6 +285,14 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
       />
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-950 text-teal-300 px-5 py-3 rounded-2xl shadow-2xl border border-teal-500/40 text-xs font-bold flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
@@ -285,6 +390,15 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4">
             <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
               <div className="text-teal-200/80 text-xs font-semibold flex items-center justify-between">
+                <span>Partnered Labs</span>
+                <Building2 className="w-4 h-4 text-teal-400" />
+              </div>
+              <div className="text-2xl font-black text-white mt-1">{partneredLabs.length}</div>
+              <div className="text-[11px] text-teal-200/60 mt-0.5">Accredited Testing Facilities</div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+              <div className="text-teal-200/80 text-xs font-semibold flex items-center justify-between">
                 <span>Referred Patients</span>
                 <Users className="w-4 h-4 text-teal-400" />
               </div>
@@ -307,19 +421,74 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="text-2xl font-black text-emerald-300 mt-1">{completedReports}</div>
-              <div className="text-[11px] text-teal-200/60 mt-0.5">Validated by Biologist</div>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-              <div className="text-teal-200/80 text-xs font-semibold flex items-center justify-between">
-                <span>Direct Inbox Shares</span>
-                <Inbox className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-2xl font-black text-cyan-300 mt-1">{sharedInboxReports.length}</div>
-              <div className="text-[11px] text-teal-200/60 mt-0.5">Patient Direct Shares</div>
+              <div className="text-[11px] text-teal-200/60 mt-0.5">Biologist Confirmed</div>
             </div>
           </div>
         </div>
+
+        {/* INCOMING LAB PARTNERSHIP INVITATIONS BANNER */}
+        {pendingInvitations.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4 animate-in fade-in">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>Incoming Diagnostic Laboratory Partnership Invitations</span>
+                    <span className="px-2 py-0.5 bg-amber-500 text-slate-950 rounded-full text-xs font-black">
+                      {pendingInvitations.length} Pending
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Laboratories have requested to add your accredited physician profile to their clinical collaboration network. Accept to automatically receive patient diagnostic reports and electronic validation.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pendingInvitations.map((inv) => (
+                <div key={inv.id} className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-sm text-slate-900">{inv.labName || 'nanoLabs Medical Facility'}</h4>
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        Lab Partnership Request
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Invited: {inv.invitedAt ? new Date(inv.invitedAt).toLocaleDateString() : 'Recent'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => handleRespondToInvitation(inv, 'accepted')}
+                      disabled={respondingInviteId === inv.id}
+                      className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      {respondingInviteId === inv.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Accept & Join Lab Network</span>
+                    </button>
+                    <button
+                      onClick={() => handleRespondToInvitation(inv, 'declined')}
+                      disabled={respondingInviteId === inv.id}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-slate-200 bg-white p-2 rounded-2xl shadow-sm">
@@ -390,7 +559,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                   </div>
                   <button
                     onClick={() => setActiveTab('patients')}
-                    className="text-xs font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+                    className="text-xs font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
                   >
                     <span>View All</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -404,7 +573,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {filteredBookings.slice(0, 5).map((booking) => (
+                    {filteredBookings.slice(0, 6).map((booking) => (
                       <div key={booking.id} className="py-3 flex items-center justify-between gap-4 hover:bg-slate-50/80 px-2 rounded-xl transition">
                         <div>
                           <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
@@ -430,7 +599,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
                           <button
                             onClick={() => setSelectedBookingForReport(booking)}
-                            className="p-2 text-teal-700 hover:bg-teal-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                            className="p-2 text-teal-700 hover:bg-teal-50 rounded-xl transition flex items-center gap-1 text-xs font-bold cursor-pointer"
                             title="View Official Lab Report"
                           >
                             <Eye className="w-4 h-4" />
@@ -443,7 +612,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 )}
               </div>
 
-              {/* Partnered Diagnostic Laboratories */}
+              {/* Partnered Diagnostic Laboratories Summary */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
@@ -518,7 +687,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                         <th className="py-3.5 px-4">Booking / Date</th>
                         <th className="py-3.5 px-4">Patient Name & PID</th>
                         <th className="py-3.5 px-4">Laboratory</th>
-                        <th className="py-3.5 px-4">Tests Ordered</th>
+                        <th className="py-3.5 px-4">Prescribed Tests & Prices</th>
                         <th className="py-3.5 px-4">Diagnostic Status</th>
                         <th className="py-3.5 px-4 text-right">Actions</th>
                       </tr>
@@ -530,7 +699,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                           const q = searchQuery.toLowerCase();
                           return (
                             b.patientName.toLowerCase().includes(q) ||
-                            (b.patientPid && b.patientPid.toLowerCase().includes(q)) ||
+                            ((b as any).patientPid && (b as any).patientPid.toLowerCase().includes(q)) ||
                             (b.bookingCode && b.bookingCode.toLowerCase().includes(q))
                           );
                         })
@@ -542,15 +711,26 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                             </td>
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-slate-900">{b.patientName}</div>
-                              <div className="text-[11px] text-slate-500">PID: {b.patientPid || 'PID-GEN'} • {b.patientGender || 'Adult'}</div>
+                              <div className="text-[11px] text-slate-500">PID: {b.patientId || (b as any).patientPid || 'PID-GEN'} • {b.patientGender || 'Adult'}</div>
                             </td>
                             <td className="py-3.5 px-4">
-                              <div className="font-semibold text-slate-800">{b.labName || 'Central Lab'}</div>
+                              <div className="font-semibold text-slate-800">{b.labName || 'nanoLabs Facility'}</div>
                             </td>
                             <td className="py-3.5 px-4">
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700">
-                                {b.tests?.length || 1} Tests
-                              </span>
+                              <div className="space-y-1">
+                                {b.tests && b.tests.length > 0 ? (
+                                  b.tests.map((t: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                      <span className="font-semibold text-slate-800">{t.name || t.testName}</span>
+                                      <span className="font-mono text-slate-500">{Number(t.price || t.cost || 0).toLocaleString()} FCFA</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700">
+                                    General Diagnostic Panel
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4">
                               <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider inline-flex items-center gap-1 ${
@@ -567,7 +747,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                             <td className="py-3.5 px-4 text-right">
                               <button
                                 onClick={() => setSelectedBookingForReport(b)}
-                                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto shadow-sm"
+                                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto shadow-sm cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 <span>View Report</span>
@@ -599,7 +779,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 </div>
                 <button
                   onClick={fetchDoctorEcosystemData}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Refresh Inbox</span>
@@ -662,7 +842,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                           };
                           setSelectedBookingForReport(mockBooking);
                         }}
-                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Review Report</span>
@@ -677,44 +857,91 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
         {/* TAB 4: PARTNERED LABS */}
         {activeTab === 'labs' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-teal-600" />
                 Accredited Diagnostic Laboratories Network
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Directory of diagnostic medical laboratories operating on the nanoLabs clinical platform in Cameroon.
+                Directory of diagnostic medical laboratories connected to your accredited physician portal in Cameroon.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {partneredLabs.map((labItem) => (
-                <div key={labItem.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
-                      <Building2 className="w-5 h-5" />
+            {/* Pending Invitations Sub-Section if any */}
+            {pendingInvitations.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-600" />
+                  <span>Pending Partnership Invitations ({pendingInvitations.length})</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pendingInvitations.map((inv) => (
+                    <div key={inv.id} className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex flex-col justify-between gap-3">
+                      <div>
+                        <h5 className="text-sm font-extrabold text-slate-900">{inv.labName || 'Diagnostic Facility'}</h5>
+                        <p className="text-xs text-amber-800 mt-0.5">
+                          Invited you to connect for direct digital results routing and prescribed test tracking.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-amber-200/60">
+                        <button
+                          onClick={() => handleRespondToInvitation(inv, 'accepted')}
+                          disabled={respondingInviteId === inv.id}
+                          className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Accept Invitation</span>
+                        </button>
+                        <button
+                          onClick={() => handleRespondToInvitation(inv, 'declined')}
+                          disabled={respondingInviteId === inv.id}
+                          className="px-3 py-2 bg-white text-slate-600 rounded-xl text-xs font-semibold transition hover:bg-slate-100 cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                      </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      Accredited Facility
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900">{labItem.name}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      <span>{labItem.location || labItem.city || 'Cameroon'}</span>
-                    </p>
-                  </div>
-
-                  <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div><strong>Director:</strong> {labItem.directorName || 'Lead Clinical Biologist'}</div>
-                    <div><strong>Phone:</strong> {labItem.phone || labItem.contactNumber || '+237 600 000 000'}</div>
-                    <div><strong>Turnaround:</strong> 2 - 4 Hours Fast-Track</div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Active Connected Laboratories */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Connected Partner Laboratories ({partneredLabs.length})</span>
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {partneredLabs.map((labItem) => (
+                  <div key={labItem.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        Accredited Partner
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{labItem.name}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        <span>{labItem.location || labItem.city || 'Cameroon'}</span>
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <div><strong>Director:</strong> {labItem.directorName || 'Lead Clinical Biologist'}</div>
+                      <div><strong>Phone:</strong> {labItem.phone || labItem.contactNumber || '+237 600 000 000'}</div>
+                      <div><strong>Turnaround:</strong> 2 - 4 Hours Fast-Track</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
