@@ -28,10 +28,12 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
     { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, desc: 'Stock level monitoring & reorder orders' }
   ];
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || (user?.roles && (user.roles.includes('admin') || user.roles.includes('superadmin')));
-  const userRoles = user?.roles || [user?.role || 'admin'];
+  const isSuperAdmin = user?.role === 'superadmin' || (Array.isArray(user?.roles) && user.roles.includes('superadmin'));
+  const isLabAdmin = user?.role === 'admin' || (Array.isArray(user?.roles) && user.roles.includes('admin'));
+  const userRoles = user?.roles || (user?.role ? [user.role] : []);
 
   const handleSelectRole = (roleValue: string) => {
+    if (isSuperAdmin) return;
     if (user) {
       setUser({
         ...user,
@@ -41,6 +43,39 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
       else if (onBack) onBack();
     }
   };
+
+  if (isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <Header
+          title="Role Switcher"
+          subtitle="System Access & Permissions"
+          onNotificationPress={onNotificationPress}
+          onProfilePress={onProfilePress}
+        />
+        <main className="flex-1 max-w-xl w-full mx-auto px-4 sm:px-6 py-12">
+          <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-md text-center space-y-5">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <Shield className="w-7 h-7" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-slate-900">Super Administrator Role Locked</h2>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+                Super Administrator accounts have global network oversight and cannot be reassigned to individual facility operational roles.
+              </p>
+            </div>
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Return to Super Admin Dashboard
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -72,7 +107,7 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
             {availableRoles.map(role => {
               const Icon = role.icon;
               const isActive = user?.role === role.value;
-              const isAssigned = userRoles.includes(role.value as any) || user?.role === 'admin' || user?.role === 'superadmin' || (user?.role && user.role !== 'patient');
+              const isAssigned = isLabAdmin || userRoles.includes(role.value);
 
               return (
                 <button
