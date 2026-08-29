@@ -1,6 +1,7 @@
 export interface ReferringDoctor {
   id: string;
   labId: string;
+  doctorId?: string;
   name: string;
   specialty?: string;
   hospital?: string;
@@ -8,10 +9,14 @@ export interface ReferringDoctor {
   email?: string;
   licenseNumber?: string;
   notes?: string;
+  invitationStatus?: 'accepted' | 'pending' | 'declined';
+  origin?: 'admin_invitation' | 'patient_referral' | 'manual';
+  invitedAt?: string;
+  acceptedAt?: string;
   totalReferrals?: number;
   totalTestsDone?: number;
   totalRevenueGenerated?: number;
-  status?: 'active' | 'inactive';
+  status?: 'active' | 'inactive' | 'pending';
   createdAt?: string;
   updatedAt?: string;
 }
