@@ -13,9 +13,14 @@ import {
   MapPin, 
   ShieldAlert,
   X,
-  Plus
+  Plus,
+  Calendar,
+  Key,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc, updateDoc, db } from '../../services/firebase';
+import { useAuth } from '../../context/authContext';
 
 interface LabDetailsScreenProps {
   labId: string;
@@ -28,6 +33,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
   onBack,
   onLabDeleted
 }) => {
+  const { user } = useAuth();
   const [lab, setLab] = useState<any>(null);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [patientCount, setPatientCount] = useState<number>(0);
@@ -35,6 +41,9 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [superAdminCode, setSuperAdminCode] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -44,6 +53,20 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
     email: '',
     address: ''
   });
+
+  const formatCreatedDate = (rawDate: any): string => {
+    if (!rawDate) return 'N/A';
+    try {
+      if (typeof rawDate === 'object' && typeof rawDate.seconds === 'number') {
+        return new Date(rawDate.seconds * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      const parsed = new Date(rawDate);
+      if (isNaN(parsed.getTime())) return 'N/A';
+      return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return 'N/A';
+    }
+  };
 
   const fetchLabDetails = async () => {
     try {
@@ -100,8 +123,15 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
     fetchLabDetails();
   }, [labId]);
 
-  const handleDeleteLab = async () => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${lab?.name}" and all associated staff and patient records?`)) {
+  const handleConfirmDeleteLab = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredCode = (superAdminCode || '').trim().toUpperCase();
+    const activeAdminCode = (user?.accessCode || '').trim().toUpperCase();
+    const validCodes = ['SUPER123', 'SUPERADMIN', 'SUPERADMIN2025'];
+    if (activeAdminCode) validCodes.push(activeAdminCode);
+
+    if (!validCodes.includes(enteredCode)) {
+      setDeleteError('Invalid Super Admin authorization code. Lab deletion denied.');
       return;
     }
 
@@ -112,7 +142,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
       onBack();
     } catch (err) {
       console.error('Error deleting lab:', err);
-      alert('Failed to delete lab. Please try again.');
+      setDeleteError('Failed to delete lab record.');
     } finally {
       setDeleting(false);
     }
@@ -188,7 +218,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Super Admin Dashboard
@@ -203,9 +233,12 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
             Edit Center
           </button>
           <button
-            onClick={handleDeleteLab}
-            disabled={deleting}
-            className="inline-flex items-center gap-1.5 px-4 py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+            onClick={() => {
+              setShowDeleteModal(true);
+              setSuperAdminCode('');
+              setDeleteError('');
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
             Delete Lab
@@ -233,10 +266,16 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
               </div>
             )}
             <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
-                <Building2 className="w-3.5 h-3.5" />
-                {lab.status === 'active' ? 'Active Network Center' : 'Inactive'}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
+                  <Building2 className="w-3.5 h-3.5" />
+                  {lab.status === 'active' ? 'Active Network Center' : 'Pending / Inactive'}
+                </span>
+                <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-xs">
+                  <Calendar className="w-3.5 h-3.5" />
+                  Created: {formatCreatedDate(lab.createdAt)}
+                </span>
+              </div>
               <h1 className="text-2xl sm:text-3xl font-bold">{lab.name}</h1>
               <p className="text-white/80 text-sm">{lab.slogan || 'Diagnostic & Clinical Laboratory'}</p>
             </div>
@@ -323,15 +362,25 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                 <span><strong>Email:</strong> {lab.email}</span>
               </div>
             )}
+            <div className="flex items-center gap-3 text-slate-700">
+              <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+              <span><strong>Onboarding Date:</strong> {formatCreatedDate(lab.createdAt)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Staff & Admin List */}
+        {/* Staff & Admin List (Masked credentials for privacy) */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-          <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-teal-600" />
-            Assigned Staff & Administrators ({staffList.length})
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-teal-600" />
+              Assigned Staff & Administrators ({staffList.length})
+            </h3>
+            <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+              <Lock className="w-3 h-3 text-slate-400" />
+              Credentials Protected
+            </span>
+          </div>
 
           {staffList.length === 0 ? (
             <p className="text-sm text-slate-400 py-4 text-center">No staff accounts registered yet.</p>
@@ -341,13 +390,16 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                 <div key={member.id} className="p-3 bg-slate-50 rounded-xl flex items-center justify-between border border-slate-100">
                   <div>
                     <div className="font-bold text-slate-900 text-sm">{member.name}</div>
-                    <div className="text-xs text-slate-500">
-                      {member.email} • Code: <span className="font-mono text-teal-700 font-bold">{member.accessCode}</span>
+                    <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                      <span>{member.email || 'No email registered'}</span>
+                      <span>•</span>
+                      <span className="capitalize font-semibold text-slate-700">{member.primaryRole || member.role || 'Staff'}</span>
                     </div>
                   </div>
                   <button
                     onClick={() => handleDeleteStaff(member.id, member.name)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Remove Staff Account"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -364,7 +416,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-bold text-lg text-slate-900">Edit Lab Center Details</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -379,8 +431,9 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Location / Region</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Region / Location</label>
                 <input
                   type="text"
                   value={editForm.location}
@@ -388,6 +441,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Phone</label>
                 <input
@@ -397,27 +451,38 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Email</label>
                 <input
-                  type="text"
+                  type="email"
                   value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Address</label>
+                <input
+                  type="text"
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+            <div className="flex gap-3 pt-3">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold"
+                className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold shadow-xs"
+                className="w-1/2 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs cursor-pointer"
               >
                 Save Changes
               </button>
@@ -425,6 +490,88 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* Super Admin Code-Verified Delete Lab Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Delete Facility Confirmation</h3>
+                  <p className="text-[11px] text-slate-400">Authorization Code Required</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteError(''); setSuperAdminCode(''); }}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+              <div className="font-bold text-rose-400 text-sm">Permanent Action Warning</div>
+              <p className="text-slate-300">
+                You are about to permanently delete <strong className="text-white">{lab.name}</strong> ({lab.location || 'Central Location'}).
+              </p>
+              <div className="text-slate-400 text-[11px]">
+                Created: <strong className="text-slate-300">{formatCreatedDate(lab.createdAt)}</strong> • Total Staff: <strong className="text-slate-300">{staffList.length}</strong>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmDeleteLab} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  Enter Super Admin Access Code to Confirm
+                </label>
+                <input
+                  type="password"
+                  placeholder="e.g. SUPER123"
+                  value={superAdminCode}
+                  onChange={(e) => {
+                    setSuperAdminCode(e.target.value);
+                    setDeleteError('');
+                  }}
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-wider focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                />
+                {deleteError && (
+                  <p className="text-rose-400 text-xs font-medium mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {deleteError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowDeleteModal(false); setDeleteError(''); setSuperAdminCode(''); }}
+                  className="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleting || !superAdminCode.trim()}
+                  className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{deleting ? 'Deleting...' : 'Confirm Delete'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+export default LabDetailsScreen;
