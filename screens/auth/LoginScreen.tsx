@@ -29,7 +29,13 @@ import {
   Stethoscope,
   Globe2,
   Users,
-  TestTube
+  TestTube,
+  Phone,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  ArrowLeft,
+  UserPlus
 } from 'lucide-react';
 import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
@@ -49,13 +55,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onNavigateSelectLab
 }) => {
   const { t } = useLanguage();
-  const { login, isLoading, getAllLabs, lab: currentLab } = useAuth();
+  const { login, loginDoctor, isLoading, getAllLabs, lab: currentLab } = useAuth();
+  
+  // Auth Screen Mode: 'standard' (Lab staff & Patients) vs 'doctor' (Accredited Physicians)
+  const [loginMode, setLoginMode] = useState<'standard' | 'doctor'>('standard');
+
+  // Standard Login State
   const [accessCode, setAccessCode] = useState('');
   const [labId, setLabId] = useState(currentLab?.id || '');
   const [labName, setLabName] = useState(currentLab?.name || '');
   const [showLabSelector, setShowLabSelector] = useState(false);
   const [labs, setLabs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Doctor Login State
+  const [doctorPhone, setDoctorPhone] = useState('');
+  const [doctorPassword, setDoctorPassword] = useState('');
+  const [showDoctorPassword, setShowDoctorPassword] = useState(false);
+
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
@@ -166,6 +183,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       }
     } catch (error: any) {
       setErrorMessage(error?.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDoctorLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!doctorPhone.trim()) {
+      setErrorMessage('Please enter your registered doctor phone number or email.');
+      return;
+    }
+    if (!doctorPassword.trim()) {
+      setErrorMessage('Please enter your doctor password or access passcode.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await loginDoctor(doctorPhone.trim(), doctorPassword.trim());
+      if (result.success && result.user) {
+        if (onLoginSuccess) {
+          onLoginSuccess(result.user);
+        }
+      } else {
+        setErrorMessage(result.error || 'The phone number and password do not match our registered doctor records.');
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'The phone number and password do not match our registered doctor records. If you do not have an account, please click "New Doctor? Create your account" below.');
     } finally {
       setIsSubmitting(false);
     }
@@ -362,181 +410,311 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
             {errorMessage && (
               <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-2xl flex items-center gap-2 animate-in fade-in duration-150">
-                <Shield className="w-4 h-4 text-rose-600 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span className="font-medium">{errorMessage}</span>
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-5">
-              {/* Optional Laboratory Search / Selector */}
-              <div className="relative">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    {t('assigned_lab_label')}
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-medium">{t('search_to_select')}</span>
+            {loginMode === 'doctor' ? (
+              /* DOCTOR PORTAL LOGIN VIEW */
+              <div className="space-y-5 animate-in fade-in-50 duration-200">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                      <Stethoscope className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Doctor Portal Sign In</h3>
+                      <p className="text-[11px] text-slate-500">Sign in with phone number & password</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-teal-50 text-teal-700 border border-teal-200 rounded-full text-[10px] font-bold">
+                    Physician Access
+                  </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowLabSelector(!showLabSelector)}
-                  className="w-full flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-left text-sm text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    {selectedLab?.logoUrl ? (
-                      <img
-                        src={selectedLab.logoUrl}
-                        alt={selectedLab.name}
-                        referrerPolicy="no-referrer"
-                        className="w-6 h-6 rounded-lg object-cover border border-slate-300 shrink-0 bg-white"
-                      />
-                    ) : (
-                      <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
-                    )}
-                    <span className="truncate font-semibold">
-                      {labName || t('search_or_select_placeholder')}
-                    </span>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                </button>
-
-                {/* Lab Selector Dropdown */}
-                {showLabSelector && (
-                  <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 z-50 space-y-2">
+                <form onSubmit={handleDoctorLogin} className="space-y-4">
+                  {/* Doctor Phone Number */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Doctor Phone Number / ID *
+                    </label>
                     <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                      <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
-                        type="text"
+                        type="tel"
+                        required
                         autoFocus
-                        placeholder={t('search_input_placeholder')}
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        placeholder="e.g. 671234567 or email"
+                        value={doctorPhone}
+                        onChange={e => setDoctorPhone(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
                       />
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Enter the mobile phone number registered with your doctor account
+                    </p>
+                  </div>
 
-                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                      {filteredLabs.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-slate-400">
-                          {searchQuery ? t('no_lab_found') : t('type_lab_to_search')}
-                        </div>
-                      ) : (
-                        filteredLabs.map((l: any) => (
-                          <button
-                            key={l.id}
-                            type="button"
-                            onClick={() => {
-                              setLabId(l.id);
-                              setLabName(l.name);
-                              setShowLabSelector(false);
-                              setSearchQuery('');
-                            }}
-                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs text-left transition-colors cursor-pointer ${
-                              labId === l.id ? 'bg-teal-50 text-teal-900 font-bold border border-teal-200' : 'text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              {l.logoUrl ? (
-                                <img
-                                  src={l.logoUrl}
-                                  alt={l.name}
-                                  referrerPolicy="no-referrer"
-                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
-                                />
-                              ) : (
-                                <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 font-bold">
-                                  <Building2 className="w-4 h-4 text-teal-700" />
-                                </div>
-                              )}
-                              <div className="truncate">
-                                <div className="truncate font-bold text-slate-900">{l.name}</div>
-                                <div className="text-[10px] text-slate-500 truncate">
-                                  {l.city ? `${l.city} • ` : ''}
-                                  {l.address || l.location || 'Accredited Center'}
-                                </div>
-                              </div>
-                            </div>
-                            {labId === l.id && <CheckCircle className="w-4 h-4 text-teal-600 shrink-0" />}
-                          </button>
-                        ))
-                      )}
+                  {/* Doctor Password */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Doctor Password / Passcode *
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                      <input
+                        type={showDoctorPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Enter your doctor password"
+                        value={doctorPassword}
+                        onChange={e => setDoctorPassword(e.target.value)}
+                        className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDoctorPassword(!showDoctorPassword)}
+                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showDoctorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* Access Code Input */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    {t('access_code_label')}
-                  </label>
-                  <span className="text-[10px] text-teal-700 font-semibold">{t('staff_and_patients')}</span>
+                  {/* Doctor Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isLoading || isSubmitting}
+                    className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    {isLoading || isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying Credentials...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Sign In to Doctor Portal</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Doctor Portal Actions */}
+                <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDoctorRegisterModal(true)}
+                    className="w-full py-2.5 px-4 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4 text-teal-600" />
+                    <span>New Doctor? Create your account</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMode('standard');
+                      setErrorMessage('');
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-900 font-semibold transition-colors flex items-center gap-1.5 cursor-pointer py-1"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Are you a Laboratory Staff or Patient? Click here</span>
+                  </button>
                 </div>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                  <input
-                    type="password"
-                    placeholder={t('access_code_placeholder')}
-                    value={accessCode}
-                    onChange={e => setAccessCode(e.target.value)}
-                    required
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500 mt-1.5">
-                  {t('access_code_hint')}
-                </p>
               </div>
+            ) : (
+              /* STANDARD LABORATORY & PATIENT LOGIN VIEW */
+              <div className="space-y-5">
+                <form onSubmit={handleLogin} className="space-y-5">
+                  {/* Optional Laboratory Search / Selector */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        {t('assigned_lab_label')}
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-medium">{t('search_to_select')}</span>
+                    </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || isSubmitting}
-                className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
-              >
-                {isLoading || isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('authenticating')}
-                  </>
-                ) : (
-                  <>
-                    {t('sign_in_btn')}
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
+                    <button
+                      type="button"
+                      onClick={() => setShowLabSelector(!showLabSelector)}
+                      className="w-full flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-left text-sm text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        {selectedLab?.logoUrl ? (
+                          <img
+                            src={selectedLab.logoUrl}
+                            alt={selectedLab.name}
+                            referrerPolicy="no-referrer"
+                            className="w-6 h-6 rounded-lg object-cover border border-slate-300 shrink-0 bg-white"
+                          />
+                        ) : (
+                          <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                        )}
+                        <span className="truncate font-semibold">
+                          {labName || t('search_or_select_placeholder')}
+                        </span>
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                    </button>
 
-            {/* Bottom Actions */}
-            <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={onNavigateRegister}
-                className="text-xs text-teal-700 hover:text-teal-900 font-bold transition-colors hover:underline cursor-pointer"
-              >
-                {t('new_patient_prompt')}
-              </button>
+                    {/* Lab Selector Dropdown */}
+                    {showLabSelector && (
+                      <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 z-50 space-y-2">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder={t('search_input_placeholder')}
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
 
-              <button
-                type="button"
-                onClick={() => setShowRegisterLabModal(true)}
-                className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4 text-teal-600" />
-                {t('register_lab_btn')}
-              </button>
+                        <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                          {filteredLabs.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-slate-400">
+                              {searchQuery ? t('no_lab_found') : t('type_lab_to_search')}
+                            </div>
+                          ) : (
+                            filteredLabs.map((l: any) => (
+                              <button
+                                key={l.id}
+                                type="button"
+                                onClick={() => {
+                                  setLabId(l.id);
+                                  setLabName(l.name);
+                                  setShowLabSelector(false);
+                                  setSearchQuery('');
+                                }}
+                                className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs text-left transition-colors cursor-pointer ${
+                                  labId === l.id ? 'bg-teal-50 text-teal-900 font-bold border border-teal-200' : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 truncate">
+                                  {l.logoUrl ? (
+                                    <img
+                                      src={l.logoUrl}
+                                      alt={l.name}
+                                      referrerPolicy="no-referrer"
+                                      className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                                    />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 font-bold">
+                                      <Building2 className="w-4 h-4 text-teal-700" />
+                                    </div>
+                                  )}
+                                  <div className="truncate">
+                                    <div className="truncate font-bold text-slate-900">{l.name}</div>
+                                    <div className="text-[10px] text-slate-500 truncate">
+                                      {l.city ? `${l.city} • ` : ''}
+                                      {l.address || l.location || 'Accredited Center'}
+                                    </div>
+                                  </div>
+                                </div>
+                                {labId === l.id && <CheckCircle className="w-4 h-4 text-teal-600 shrink-0" />}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => setShowDoctorRegisterModal(true)}
-                className="w-full py-2.5 px-4 bg-teal-50/80 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Stethoscope className="w-4 h-4 text-teal-600" />
-                <span>Physician & Doctor Accreditation (Join Network)</span>
-              </button>
-            </div>
+                  {/* Access Code Input */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        {t('access_code_label')}
+                      </label>
+                      <span className="text-[10px] text-teal-700 font-semibold">{t('staff_and_patients')}</span>
+                    </div>
+                    <div className="relative">
+                      <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                      <input
+                        type="password"
+                        placeholder={t('access_code_placeholder')}
+                        value={accessCode}
+                        onChange={e => setAccessCode(e.target.value)}
+                        required
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      {t('access_code_hint')}
+                    </p>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isLoading || isSubmitting}
+                    className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    {isLoading || isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {t('authenticating')}
+                      </>
+                    ) : (
+                      <>
+                        {t('sign_in_btn')}
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* DOCTOR DEDICATED CALLOUT BANNER: "Are you a Doctor? Click here" */}
+                <div className="p-3.5 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border-2 border-teal-200/90 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Stethoscope className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-teal-950 truncate">Are you a Doctor?</h4>
+                      <p className="text-[11px] text-teal-700 truncate">Access your Physician Portal & results</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMode('doctor');
+                      setErrorMessage('');
+                    }}
+                    className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Click Here</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Bottom Actions for Patients & Labs */}
+                <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={onNavigateRegister}
+                    className="text-xs text-teal-700 hover:text-teal-900 font-bold transition-colors hover:underline cursor-pointer"
+                  >
+                    {t('new_patient_prompt')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterLabModal(true)}
+                    className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4 text-teal-600" />
+                    {t('register_lab_btn')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -547,9 +725,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           isOpen={showDoctorRegisterModal}
           onClose={() => setShowDoctorRegisterModal(false)}
           onSuccess={(doc) => {
-            if (doc.accessCode) {
-              setAccessCode(doc.accessCode);
+            if (doc.phone) {
+              setDoctorPhone(doc.phone);
             }
+            if (doc.password) {
+              setDoctorPassword(doc.password);
+            }
+            setLoginMode('doctor');
+            setErrorMessage('');
           }}
         />
       )}
