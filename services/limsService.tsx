@@ -63,6 +63,11 @@ export interface BookingTestItem {
   labNotes?: string;
   completedAt?: string;
   completedBy?: string;
+  pdfReportUrl?: string;
+  externalPdfUrl?: string;
+  pdfUrl?: string;
+  fileUrl?: string;
+  name?: string;
 }
 
 export interface PatientBooking {
@@ -1259,16 +1264,18 @@ export const limsService = {
   },
 
   /**
-   * Option 2: Upload External PDF / Image Fallback File
+   * Option 2: Upload External PDF / Image Fallback File (Per-Test or Full Batch)
    */
   async uploadExternalPdfResult(params: {
     labId: string;
     bookingId: string;
     externalPdfUrl: string;
     techName: string;
+    targetTestId?: string; // Optional: specific test ID in batch, or 'all' for full batch
   }): Promise<boolean> {
-    const { labId, bookingId, externalPdfUrl, techName } = params;
+    const { labId, bookingId, externalPdfUrl, techName, targetTestId } = params;
     const timestamp = new Date().toISOString();
+    const isPerTest = Boolean(targetTestId && targetTestId !== 'all');
 
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
@@ -1277,22 +1284,42 @@ export const limsService = {
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
-        const updatedTests = data.tests.map(t => ({
-          ...t,
-          status: 'Completed' as TestStatus,
-          completedAt: timestamp,
-          completedBy: techName
-        }));
+        
+        let targetTestName = '';
+        const updatedTests = data.tests.map(t => {
+          const isTarget = !isPerTest || t.id === targetTestId || t.testId === targetTestId;
+          if (isTarget) {
+            if (isPerTest) targetTestName = t.testName;
+            return {
+              ...t,
+              status: 'Completed' as TestStatus,
+              completedAt: timestamp,
+              completedBy: techName,
+              externalPdfUrl,
+              pdfReportUrl: externalPdfUrl
+            };
+          }
+          return t;
+        });
 
-        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
-          externalPdfUrl,
-          pdfReportUrl: externalPdfUrl,
+        const allCompleted = updatedTests.every(t => t.status === 'Completed');
+        const overallStatus = allCompleted ? 'Completed' : 'In_Progress';
+
+        const bookingUpdate: any = {
           tests: updatedTests,
-          overallStatus: 'Completed',
-          labTechSigned: true,
-          labTechSignedAt: timestamp,
+          overallStatus,
+          labTechSigned: allCompleted,
+          labTechSignedAt: allCompleted ? timestamp : data.labTechSignedAt,
           updatedAt: timestamp
-        }));
+        };
+
+        // If batch upload, set on the booking header
+        if (!isPerTest) {
+          bookingUpdate.externalPdfUrl = externalPdfUrl;
+          bookingUpdate.pdfReportUrl = externalPdfUrl;
+        }
+
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(bookingUpdate));
 
         // Sync to patient record
         if (data.patientId) {
@@ -1302,8 +1329,11 @@ export const limsService = {
             if (patSnap.exists()) {
               const currentTests: any[] = patSnap.data().labTests || [];
               const updatedPatTests = currentTests.map(pt => {
-                const isMatch = data.tests.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name));
-                if (isMatch || pt.bookingCode === data.bookingCode) {
+                const isMatch = isPerTest 
+                  ? (pt.id === targetTestId || pt.testId === targetTestId || (targetTestName && (pt.testName === targetTestName || pt.name === targetTestName)))
+                  : (data.tests.some(bt => bt.id === pt.id || bt.testId === pt.testId || bt.testName === (pt.testName || pt.name)) || pt.bookingCode === data.bookingCode);
+                
+                if (isMatch) {
                   return {
                     ...pt,
                     status: 'Completed',
@@ -1332,7 +1362,9 @@ export const limsService = {
           patientName: data.patientName,
           action: 'UPLOAD_RESULTS',
           performedBy: { id: 'tech-1', name: techName, role: 'lab_tech' },
-          details: `Uploaded external diagnostic result sheet for Booking ${data.bookingCode}. Attached securely to Patient Portal.`
+          details: isPerTest
+            ? `Uploaded external test result sheet for test "${targetTestName}" in Booking ${data.bookingCode}.`
+            : `Uploaded consolidated diagnostic report sheet for Booking ${data.bookingCode}. Attached securely to Patient Portal.`
         });
 
         return true;
