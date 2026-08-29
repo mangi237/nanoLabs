@@ -4,7 +4,7 @@ import { db, addDoc, collection } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 import { limsService } from '../../services/limsService';
-import { ReferringDoctor } from '../../types';
+import { ReferringDoctor, Doctor } from '../../types';
 import { 
   Activity, User, Mail, Phone, MapPin, ArrowLeft, ArrowRight, Loader2, 
   CheckCircle2, Building2, Key, RefreshCw, Search, Check, 
@@ -57,12 +57,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
   // Referring Doctor State (Step 4 - Optional)
   const [accreditedDoctors, setAccreditedDoctors] = useState<ReferringDoctor[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
-  const [referralSelectionType, setReferralSelectionType] = useState<'none' | 'accredited' | 'other'>('none');
+  const [referralSelectionType, setReferralSelectionType] = useState<'none' | 'accredited' | 'network' | 'other'>('none');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [customDoctorName, setCustomDoctorName] = useState<string>('');
   const [customDoctorHospital, setCustomDoctorHospital] = useState<string>('');
   const [customDoctorSpecialty, setCustomDoctorSpecialty] = useState<string>('');
   const [customDoctorPhone, setCustomDoctorPhone] = useState<string>('');
+
+  // National network doctor search
+  const [networkDoctors, setNetworkDoctors] = useState<Doctor[]>([]);
+  const [loadingNetworkDoctors, setLoadingNetworkDoctors] = useState(false);
+  const [networkSearchQuery, setNetworkSearchQuery] = useState('');
+  const [selectedNetworkDoctor, setSelectedNetworkDoctor] = useState<Doctor | null>(null);
 
   // Insurance Card upload state
   const [uploadingCard, setUploadingCard] = useState(false);
@@ -110,6 +116,19 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       console.error('Error fetching accredited doctors:', e);
     } finally {
       setLoadingDoctors(false);
+    }
+  };
+
+  const handleSearchNetworkDoctors = async (term: string) => {
+    setNetworkSearchQuery(term);
+    setLoadingNetworkDoctors(true);
+    try {
+      const docs = await limsService.searchAllAccreditedDoctors(term);
+      setNetworkDoctors(docs || []);
+    } catch (e) {
+      console.error('Error searching network doctors:', e);
+    } finally {
+      setLoadingNetworkDoctors(false);
     }
   };
 
@@ -202,7 +221,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       const doc = accreditedDoctors.find(d => d.id === selectedDoctorId);
       if (doc) {
         return {
-          name: `Dr. ${doc.name}`,
+          name: doc.name.toLowerCase().startsWith('dr') ? doc.name : `Dr. ${doc.name}`,
           id: doc.id,
           hospital: doc.hospital || 'Accredited Partner Hospital',
           specialty: doc.specialty || 'Specialist',
@@ -210,6 +229,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
           display: `Dr. ${doc.name} (${doc.specialty || 'Specialist'} - ${doc.hospital || 'Accredited'})`
         };
       }
+    } else if (referralSelectionType === 'network' && selectedNetworkDoctor) {
+      const docName = selectedNetworkDoctor.name.toLowerCase().startsWith('dr') 
+        ? selectedNetworkDoctor.name 
+        : `Dr. ${selectedNetworkDoctor.name}`;
+      return {
+        name: docName,
+        id: selectedNetworkDoctor.id,
+        hospital: selectedNetworkDoctor.hospitalAffiliation || selectedNetworkDoctor.hospital || 'Accredited Medical Center',
+        specialty: selectedNetworkDoctor.specialty || 'General Practitioner',
+        phone: selectedNetworkDoctor.phone || '',
+        display: `${docName} (${selectedNetworkDoctor.specialty || 'Specialist'})`
+      };
     } else if (referralSelectionType === 'other') {
       const formattedName = customDoctorName.trim()
         ? (customDoctorName.trim().toLowerCase().startsWith('dr') ? customDoctorName.trim() : `Dr. ${customDoctorName.trim()}`)
@@ -374,6 +405,41 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
 
       // Save to Firestore under the selected lab's patients subcollection
       const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
+
+      // If patient selected a network doctor or provided other doctor details, register in lab's referring doctors
+      if (referralSelectionType === 'network' && selectedNetworkDoctor) {
+        try {
+          await limsService.addReferringDoctor(targetLabId, {
+            name: selectedNetworkDoctor.name,
+            specialty: selectedNetworkDoctor.specialty || 'General Practitioner',
+            hospital: selectedNetworkDoctor.hospitalAffiliation || selectedNetworkDoctor.hospital || '',
+            phone: selectedNetworkDoctor.phone || '',
+            email: selectedNetworkDoctor.email || '',
+            licenseNumber: selectedNetworkDoctor.licenseNumber || '',
+            notes: `Referred by patient ${cleanedPatient.name} upon self-registration`,
+            status: 'pending',
+            invitationStatus: 'pending',
+            origin: 'patient_referral'
+          });
+        } catch (err) {
+          console.warn('Could not register pending referral doctor in lab:', err);
+        }
+      } else if (referralSelectionType === 'other' && customDoctorName.trim()) {
+        try {
+          await limsService.addReferringDoctor(targetLabId, {
+            name: customDoctorName.trim(),
+            specialty: customDoctorSpecialty.trim() || 'General Practitioner',
+            hospital: customDoctorHospital.trim() || '',
+            phone: customDoctorPhone.trim() || '',
+            notes: `Referred by patient ${cleanedPatient.name} upon self-registration`,
+            status: 'pending',
+            invitationStatus: 'pending',
+            origin: 'patient_referral'
+          });
+        } catch (err) {
+          console.warn('Could not register custom referral doctor in lab:', err);
+        }
+      }
 
       const fullPatientRecord = { id: docRef.id, ...cleanedPatient };
       try {
@@ -963,7 +1029,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                 </div>
 
                 {/* Referral Type Quick Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -979,9 +1045,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-teal-400" />
-                        Accredited Doctor
+                      <span className="text-xs font-bold flex items-center gap-1.5 truncate">
+                        <UserCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                        Lab Partner
                       </span>
                       <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
                         accreditedDoctors.length > 0 ? 'bg-teal-500/20 text-teal-300' : 'bg-slate-800 text-slate-400'
@@ -990,7 +1056,34 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-tight">
-                      {accreditedDoctors.length > 0 ? 'Select from lab directory' : '0 registered in database'}
+                      This lab's partners
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReferralSelectionType('network');
+                      setSelectedDoctorId('');
+                      if (networkDoctors.length === 0) {
+                        handleSearchNetworkDoctors('');
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      referralSelectionType === 'network'
+                        ? 'bg-teal-500/20 border-teal-400 text-white ring-2 ring-teal-400/40'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5 text-teal-300 truncate">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        All nanoLabs
+                      </span>
+                      {referralSelectionType === 'network' && <Check className="w-3.5 h-3.5 text-teal-400" />}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Search all doctors
                     </p>
                   </button>
 
@@ -999,6 +1092,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                     onClick={() => {
                       setReferralSelectionType('none');
                       setSelectedDoctorId('');
+                      setSelectedNetworkDoctor(null);
                     }}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                       referralSelectionType === 'none'
@@ -1007,14 +1101,14 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        None / Self-Referred
+                      <span className="text-xs font-bold flex items-center gap-1.5 truncate">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        Self-Referred
                       </span>
                       {referralSelectionType === 'none' && <Check className="w-3.5 h-3.5 text-teal-400" />}
                     </div>
                     <p className="text-[10px] text-slate-400 leading-tight">
-                      Direct patient walk-in without a prescription
+                      Direct patient walk-in
                     </p>
                   </button>
 
@@ -1023,6 +1117,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                     onClick={() => {
                       setReferralSelectionType('other');
                       setSelectedDoctorId('');
+                      setSelectedNetworkDoctor(null);
                     }}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                       referralSelectionType === 'other'
@@ -1031,19 +1126,19 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <Stethoscope className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-xs font-bold flex items-center gap-1.5 truncate">
+                        <Stethoscope className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                         Other Doctor
                       </span>
                       {referralSelectionType === 'other' && <Check className="w-3.5 h-3.5 text-teal-400" />}
                     </div>
                     <p className="text-[10px] text-slate-400 leading-tight">
-                      Doctor not in list? Type details
+                      Enter details manually
                     </p>
                   </button>
                 </div>
 
-                {/* 1. Accredited Doctor Selection */}
+                {/* 1. Accredited Lab Partner Doctor Selection */}
                 {referralSelectionType === 'accredited' && (
                   <div className="bg-slate-900/80 border border-teal-500/30 rounded-2xl p-4 space-y-3.5 animate-in fade-in">
                     {loadingDoctors ? (
@@ -1057,10 +1152,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                           <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                           <div className="space-y-1">
                             <h4 className="text-xs font-bold text-white">
-                              No Accredited Doctors Registered in Database
+                              No Accredited Doctors Registered Yet in {selectedLab?.name || 'this laboratory'}
                             </h4>
                             <p className="text-[11px] text-slate-300 leading-relaxed">
-                              There are currently <strong className="text-amber-300">0 accredited partner physicians</strong> recorded in the database for <strong>{selectedLab?.name || 'this laboratory'}</strong>. Laboratory administrators register accredited doctors through the Admin Control Panel.
+                              You can search from the <strong className="text-teal-300">All nanoLabs National Directory</strong> to find and select your doctor, or type their name manually.
                             </p>
                           </div>
                         </div>
@@ -1068,19 +1163,22 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                         <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-2">
                           <button
                             type="button"
+                            onClick={() => {
+                              setReferralSelectionType('network');
+                              handleSearchNetworkDoctors('');
+                            }}
+                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Search All nanoLabs Doctors
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setReferralSelectionType('other')}
                             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                           >
                             <Stethoscope className="w-3.5 h-3.5" />
-                            Enter Doctor Manually ("Other")
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReferralSelectionType('none')}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <User className="w-3.5 h-3.5 text-teal-400" />
-                            Proceed as Self-Referred
+                            Enter Doctor Manually
                           </button>
                         </div>
                       </div>
@@ -1088,9 +1186,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center justify-between">
-                            <span>Select Accredited Doctor / Clinic *</span>
+                            <span>Select Accredited Lab Partner Doctor *</span>
                             <span className="text-[11px] text-teal-300 font-normal">
-                              {accreditedDoctors.length} accredited doctor{accreditedDoctors.length > 1 ? 's' : ''} found in database
+                              {accreditedDoctors.length} partner doctor{accreditedDoctors.length > 1 ? 's' : ''} active
                             </span>
                           </label>
 
@@ -1099,7 +1197,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                               value={selectedDoctorId}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                if (val === 'other') {
+                                if (val === 'network') {
+                                  setReferralSelectionType('network');
+                                  handleSearchNetworkDoctors('');
+                                } else if (val === 'other') {
                                   setReferralSelectionType('other');
                                   setSelectedDoctorId('');
                                 } else if (val === 'none') {
@@ -1112,14 +1213,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                               className="w-full px-4 py-3 bg-slate-900 border border-teal-500/50 rounded-xl text-white text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-400 cursor-pointer"
                             >
                               <option value="none">-- Select Doctor or choose Self-Referred --</option>
-                              <optgroup label="Accredited Partner Doctors">
+                              <optgroup label="Accredited Lab Partners">
                                 {accreditedDoctors.map((doc) => (
                                   <option key={doc.id} value={doc.id}>
                                     Dr. {doc.name} — {doc.specialty || 'Specialist'} ({doc.hospital || 'Accredited Hospital'})
                                   </option>
                                 ))}
                               </optgroup>
-                              <option value="other">✍️ Other Doctor / Clinic (Not in list...)</option>
+                              <option value="network">✨ Search All nanoLabs Partner Doctors...</option>
+                              <option value="other">✍️ Other Doctor / Clinic (Manual entry...)</option>
                             </select>
                           </div>
                         </div>
@@ -1150,6 +1252,115 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. All nanoLabs Network Doctor Search */}
+                {referralSelectionType === 'network' && (
+                  <div className="bg-slate-900/80 border border-teal-500/30 rounded-2xl p-4 space-y-3.5 animate-in fade-in">
+                    <div className="flex items-center justify-between pb-2 border-b border-teal-500/20">
+                      <div>
+                        <span className="text-xs font-bold text-teal-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                          National nanoLabs Accredited Doctor Directory
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Search by doctor name, specialty, or hospital affiliation across Cameroon
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={networkSearchQuery}
+                        onChange={(e) => handleSearchNetworkDoctors(e.target.value)}
+                        placeholder="Search doctor name (e.g. Dr. Kamga, Dr. Ndongo, Cardiologist)..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder:text-slate-500"
+                      />
+                    </div>
+
+                    {loadingNetworkDoctors ? (
+                      <div className="py-6 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
+                        <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
+                        Searching accredited doctor registry...
+                      </div>
+                    ) : networkDoctors.length === 0 ? (
+                      <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-center space-y-2">
+                        <p className="text-xs text-slate-300">
+                          No registered doctors found matching "{networkSearchQuery}".
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setReferralSelectionType('other')}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Stethoscope className="w-3.5 h-3.5" />
+                          Enter Doctor Details Manually
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {networkDoctors.map((doc) => {
+                          const isSelected = selectedNetworkDoctor?.id === doc.id;
+                          return (
+                            <button
+                              key={doc.id}
+                              type="button"
+                              onClick={() => setSelectedNetworkDoctor(doc)}
+                              className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-teal-500/20 border-teal-400 ring-2 ring-teal-400/40 text-white'
+                                  : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isSelected ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-teal-300'
+                                }`}>
+                                  <Stethoscope className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                                    {doc.name.toLowerCase().startsWith('dr') ? doc.name : `Dr. ${doc.name}`}
+                                    {doc.licenseNumber && (
+                                      <span className="text-[9px] font-mono px-1.5 py-0.2 bg-teal-500/20 text-teal-300 rounded border border-teal-400/30">
+                                        ONMC
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 truncate">
+                                    {doc.specialty || 'Specialist'} • {doc.hospitalAffiliation || doc.hospital || 'Medical Center'}
+                                  </div>
+                                </div>
+                              </div>
+                              {isSelected ? (
+                                <CheckCircle2 className="w-5 h-5 text-teal-400 shrink-0" />
+                              ) : (
+                                <span className="text-[10px] text-teal-400 font-semibold shrink-0">
+                                  Select
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedNetworkDoctor && (
+                      <div className="p-3 bg-teal-500/10 border border-teal-400/30 rounded-xl flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-teal-400" />
+                          <span className="text-white font-bold">
+                            Selected: {selectedNetworkDoctor.name.toLowerCase().startsWith('dr') ? selectedNetworkDoctor.name : `Dr. ${selectedNetworkDoctor.name}`}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-teal-300 bg-teal-500/20 px-2 py-0.5 rounded">
+                          Will link to {selectedLab?.name}
+                        </span>
                       </div>
                     )}
                   </div>
