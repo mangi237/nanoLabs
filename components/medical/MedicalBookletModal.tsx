@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { db, getDocs, collection } from '../../services/firebase';
-
 interface MedicalBookletModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -487,6 +486,18 @@ export const MedicalBookletModal: React.FC<MedicalBookletModalProps> = ({
                                   </td>
 
                                   <td className="py-3 px-3 text-right text-[11px]">
+                                    {t.externalPdfUrl || t.pdfReportUrl ? (
+                                      <a
+                                        href={t.externalPdfUrl || t.pdfReportUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-lg border border-teal-200 text-[10px] transition-all cursor-pointer mb-1 shadow-2xs"
+                                      >
+                                        <FileCheck className="w-3 h-3 text-teal-600" />
+                                        <span>Test PDF</span>
+                                      </a>
+                                    ) : null}
                                     {t.completedBy ? (
                                       <div className="font-bold text-slate-800 flex items-center justify-end gap-1">
                                         <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
