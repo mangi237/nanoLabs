@@ -31,6 +31,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (accessCode: string, labId: string) => Promise<any>;
+  loginDoctor: (phoneOrIdentifier: string, passwordOrCode: string) => Promise<any>;
   logout: () => void;
   registerPatient: (labId: string, data: any) => Promise<any>;
   getAllLabs: () => Promise<any[]>;
@@ -128,6 +129,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginDoctor = async (phoneOrIdentifier: string, passwordOrCode: string) => {
+    try {
+      const result = await authService.loginDoctor(phoneOrIdentifier, passwordOrCode);
+      
+      if (result.success && result.user) {
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
+        
+        // Store session data
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', passwordOrCode);
+        await AsyncStorage.setItem('labId', 'network-doctors');
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Doctor authentication failed');
+      }
+    } catch (error: any) {
+      errorHandler.handleError(error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     await clearSession();
   };
@@ -182,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated,
       isLoading,
       login,
+      loginDoctor,
       logout,
       registerPatient,
       getAllLabs,
