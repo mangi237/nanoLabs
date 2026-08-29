@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NanoLabs Healthcare Network | Clinical Diagnostics & Laboratory Management</title>
+    <title>nanoLabs Healthcare Network | Clinical Diagnostics & Laboratory Management</title>
     
     <!-- High-Resolution SVG Favicon for Tab Bar in all Browsers -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Cpath d='M16 6v20M6 16h20' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='9' cy='9' r='1.5' fill='%232dd4bf'/%3E%3Ccircle cx='23' cy='23' r='1.5' fill='%232dd4bf'/%3E%3C/svg%3E" />
@@ -53,6 +53,104 @@
         "availableLanguage": ["en", "fr"]
       }
     }
+    </script>
+    <!-- Google Translate & React DOM Reconciliation Monkey-Patch -->
+    <script>
+      (function() {
+        if (typeof Node === 'function' && Node.prototype) {
+          // Intercept removeChild
+          var origRemoveChild = Node.prototype.removeChild;
+          Node.prototype.removeChild = function(child) {
+            if (!child) return child;
+            if (child.parentNode !== this) {
+              if (child.parentNode) {
+                try {
+                  return child.parentNode.removeChild(child);
+                } catch (e) {
+                  return child;
+                }
+              }
+              return child;
+            }
+            try {
+              return origRemoveChild.apply(this, arguments);
+            } catch (err) {
+              if (child.parentNode) {
+                try {
+                  return child.parentNode.removeChild(child);
+                } catch (e) {
+                  return child;
+                }
+              }
+              return child;
+            }
+          };
+
+          // Intercept insertBefore
+          var origInsertBefore = Node.prototype.insertBefore;
+          Node.prototype.insertBefore = function(newNode, refNode) {
+            if (!newNode) return newNode;
+            if (refNode && refNode.parentNode !== this) {
+              if (refNode.parentNode) {
+                try {
+                  return refNode.parentNode.insertBefore(newNode, refNode);
+                } catch (e) {}
+              }
+              try {
+                return this.appendChild(newNode);
+              } catch (e) {
+                return newNode;
+              }
+            }
+            try {
+              return origInsertBefore.apply(this, arguments);
+            } catch (err) {
+              if (refNode && refNode.parentNode) {
+                try {
+                  return refNode.parentNode.insertBefore(newNode, refNode);
+                } catch (e) {}
+              }
+              try {
+                return this.appendChild(newNode);
+              } catch (e) {
+                return newNode;
+              }
+            }
+          };
+
+          // Intercept replaceChild
+          var origReplaceChild = Node.prototype.replaceChild;
+          Node.prototype.replaceChild = function(newChild, oldChild) {
+            if (!newChild || !oldChild) return oldChild;
+            if (oldChild.parentNode !== this) {
+              if (oldChild.parentNode) {
+                try {
+                  return oldChild.parentNode.replaceChild(newChild, oldChild);
+                } catch (e) {}
+              }
+              try {
+                return this.appendChild(newChild);
+              } catch (e) {
+                return oldChild;
+              }
+            }
+            try {
+              return origReplaceChild.apply(this, arguments);
+            } catch (err) {
+              if (oldChild.parentNode) {
+                try {
+                  return oldChild.parentNode.replaceChild(newChild, oldChild);
+                } catch (e) {}
+              }
+              try {
+                return this.appendChild(newChild);
+              } catch (e) {
+                return oldChild;
+              }
+            }
+          };
+        }
+      })();
     </script>
     <style>
       /* Clean hidden styling for Google Translate widget */
