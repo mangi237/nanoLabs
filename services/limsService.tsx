@@ -2655,5 +2655,104 @@ export const limsService = {
       console.warn('Error saving doctor shared result in Firestore:', e);
       return { success: true, shareId };
     }
+  },
+
+  /**
+   * Request Virtual Result delivery for a patient booking / test
+   */
+  async requestVirtualResult(
+    labId: string = 'lab-1',
+    bookingId?: string,
+    testId?: string,
+    patientIdentifier?: { id?: string; email?: string; name?: string; accessCode?: string }
+  ): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+    try {
+      // 1. Update Booking if bookingId provided or find matching booking
+      if (bookingId) {
+        const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
+        const bSnap = await getDoc(bookingRef);
+        if (bSnap.exists()) {
+          const bData = bSnap.data();
+          const updatedTests = (bData.tests || []).map((t: any) => {
+            if (!testId || t.id === testId || t.testId === testId) {
+              return { ...t, virtualRequested: true, virtualRequestedAt: timestamp };
+            }
+            return t;
+          });
+          await updateDoc(bookingRef, cleanFirestoreData({
+            virtualRequested: true,
+            virtualRequestedAt: timestamp,
+            deliveryMethod: 'Virtual',
+            tests: updatedTests,
+            updatedAt: timestamp
+          }));
+        }
+      } else if (patientIdentifier) {
+        const bookingsCol = collection(db, 'labs', labId, 'bookings');
+        const bSnap = await getDocs(bookingsCol);
+        for (const d of bSnap.docs) {
+          const bData = d.data();
+          const matchPid = patientIdentifier.id && (bData.patientId === patientIdentifier.id || bData.patientPid === patientIdentifier.id);
+          const matchEmail = patientIdentifier.email && bData.patientEmail === patientIdentifier.email;
+          const matchName = patientIdentifier.name && bData.patientName?.toLowerCase() === patientIdentifier.name?.toLowerCase();
+          if (matchPid || matchEmail || matchName) {
+            const updatedTests = (bData.tests || []).map((t: any) => {
+              if (!testId || t.id === testId || t.testId === testId) {
+                return { ...t, virtualRequested: true, virtualRequestedAt: timestamp };
+              }
+              return t;
+            });
+            await updateDoc(doc(db, 'labs', labId, 'bookings', d.id), cleanFirestoreData({
+              virtualRequested: true,
+              virtualRequestedAt: timestamp,
+              deliveryMethod: 'Virtual',
+              tests: updatedTests,
+              updatedAt: timestamp
+            }));
+          }
+        }
+      }
+
+      // 2. Also update in patients subcollection
+      const patientsCol = collection(db, 'labs', labId, 'patients');
+      const pSnap = await getDocs(patientsCol);
+      for (const pDoc of pSnap.docs) {
+        const pData = pDoc.data();
+        const matchPid = patientIdentifier?.id && (pDoc.id === patientIdentifier.id || pData.patientId === patientIdentifier.id || pData.id === patientIdentifier.id);
+        const matchEmail = patientIdentifier?.email && pData.email === patientIdentifier.email;
+        const matchCode = patientIdentifier?.accessCode && pData.accessCode === patientIdentifier.accessCode;
+        const matchName = patientIdentifier?.name && pData.name?.toLowerCase() === patientIdentifier.name?.toLowerCase();
+        if (matchPid || matchEmail || matchCode || matchName) {
+          const updatedTests = (pData.labTests || []).map((t: any) => {
+            if (!testId || t.id === testId || t.testId === testId) {
+              return { ...t, virtualRequested: true, virtualRequestedAt: timestamp };
+            }
+            return t;
+          });
+          await updateDoc(doc(db, 'labs', labId, 'patients', pDoc.id), cleanFirestoreData({
+            labTests: updatedTests,
+            virtualRequested: true,
+            virtualRequestedAt: timestamp,
+            updatedAt: timestamp
+          }));
+        }
+      }
+
+      // 3. Create lab tech notification
+      const notifCol = collection(db, 'labs', labId, 'notifications');
+      await addDoc(notifCol, cleanFirestoreData({
+        title: 'Virtual Result Dispatch Requested',
+        message: `Patient requested virtual digital report upload/delivery.`,
+        type: 'virtual_dispatch',
+        read: false,
+        createdAt: timestamp
+      }));
+
+      return true;
+    } catch (e) {
+      console.warn('Error in requestVirtualResult:', e);
+      return true;
+    }
   }
 };
