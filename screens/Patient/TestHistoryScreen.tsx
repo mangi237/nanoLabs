@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase';
+import { limsService } from '../../services/limsService';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { 
@@ -78,32 +79,17 @@ export const TestHistoryScreen: React.FC<TestHistoryScreenProps> = ({
     setRequestingId(testItem.id);
     try {
       const targetLabId = lab?.id || 'lab-1';
-      const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
-      const foundDoc = snap.docs.find(d => 
-        d.id === user?.id ||
-        d.data().email === user?.email || 
-        d.data().accessCode === user?.accessCode ||
-        d.data().name === user?.name
+      await limsService.requestVirtualResult(
+        targetLabId,
+        testItem?.bookingId,
+        testItem?.id,
+        {
+          id: user?.id,
+          email: user?.email,
+          accessCode: user?.accessCode,
+          name: user?.name
+        }
       );
-
-      if (foundDoc) {
-        const patientData = foundDoc.data();
-        const updatedTests = (patientData.labTests || []).map((t: any) => {
-          if (t.id === testItem.id) {
-            return {
-              ...t,
-              virtualRequested: true,
-              virtualRequestedAt: new Date().toISOString()
-            };
-          }
-          return t;
-        });
-
-        await updateDoc(doc(db, 'labs', targetLabId, 'patients', foundDoc.id), {
-          labTests: updatedTests,
-          updatedAt: new Date().toISOString()
-        });
-      }
 
       fetchTests();
     } catch (err) {
