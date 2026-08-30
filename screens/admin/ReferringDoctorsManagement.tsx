@@ -250,7 +250,7 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
     return matchesSearch && matchesSpecialty && matchesPartnerStatus;
   });
 
-  // Filtered referral bookings list
+
   const filteredBookings = referralBookings.filter(b => {
     if (selectedDoctorFilter === 'all') return true;
     const docKey = (b.referringDoctorId || b.referringDoctor || '').toLowerCase();
