@@ -582,14 +582,15 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Filter Bookings Queue
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
-      // Exclude orders that haven't had phlebotomy / sample collection verified yet
-      const sampleReady = b.sampleCollected || b.adminSampleVerified || b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Completed';
+      // Exclude orders that haven't had phlebotomy / sample collection verified yet (unless virtual result requested)
+      const isVirtualOrder = Boolean(b.virtualRequested || b.deliveryMethod === 'Virtual' || b.deliveryMethod === 'Email' || b.deliveryMethod === 'virtual' || b.tests?.some(t => t.virtualRequested));
+      const sampleReady = b.sampleCollected || b.adminSampleVerified || b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Completed' || isVirtualOrder;
       if (!sampleReady) return false;
 
       // Filter Tabs
       if (activeFilterTab === 'in_testing' && b.overallStatus === 'Completed') return false;
       if (activeFilterTab === 'completed' && b.overallStatus !== 'Completed') return false;
-      if (activeFilterTab === 'virtual' && !(b.virtualRequested || b.deliveryMethod === 'Virtual' || b.deliveryMethod === 'Email')) return false;
+      if (activeFilterTab === 'virtual' && !isVirtualOrder) return false;
 
       // Search Query
       if (searchQuery.trim()) {
@@ -645,7 +646,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           {[
             { id: 'all', label: 'All Orders', count: bookings.length },
             { id: 'in_testing', label: 'In Lab Testing', count: bookings.filter(b => b.overallStatus === 'In_Lab_Testing').length },
-            { id: 'virtual', label: '📱 Virtual Dispatch', count: bookings.filter(b => b.virtualRequested || b.deliveryMethod === 'Virtual').length },
+            { id: 'virtual', label: '📱 Virtual Dispatch', count: bookings.filter(b => b.virtualRequested || b.deliveryMethod === 'Virtual' || b.deliveryMethod === 'Email' || b.deliveryMethod === 'virtual' || b.tests?.some(t => t.virtualRequested)).length },
             { id: 'completed', label: 'Completed', count: bookings.filter(b => b.overallStatus === 'Completed').length }
           ].map(tab => (
             <button
