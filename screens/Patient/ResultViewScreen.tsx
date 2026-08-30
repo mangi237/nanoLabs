@@ -3,6 +3,7 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { db } from '../../services/firebase';
+import { limsService } from '../../services/limsService';
 import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { auditService } from '../../services/auditService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
@@ -174,34 +175,17 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
     setRequestingVirtual(true);
     try {
       const targetLabId = lab?.id || 'lab-1';
-      const patientsSnap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
-      
-      let foundPatientDoc = patientsSnap.docs.find(d => 
-        d.id === (currentTest.patientId || user?.id) || 
-        d.data().patientId === (currentTest.patientCode || user?.patientId) ||
-        d.data().email === user?.email || 
-        d.data().accessCode === user?.accessCode ||
-        d.data().name === (currentTest.patientName || user?.name)
+      await limsService.requestVirtualResult(
+        targetLabId,
+        currentTest?.bookingId,
+        currentTest?.id,
+        {
+          id: currentTest?.patientId || user?.id,
+          email: user?.email,
+          accessCode: user?.accessCode,
+          name: currentTest?.patientName || user?.name
+        }
       );
-
-      if (foundPatientDoc) {
-        const patientData = foundPatientDoc.data();
-        const updatedTests = (patientData.labTests || []).map((t: any) => {
-          if (t.id === currentTest.id || t.testName === currentTest.testName) {
-            return {
-              ...t,
-              virtualRequested: true,
-              virtualRequestedAt: new Date().toISOString()
-            };
-          }
-          return t;
-        });
-
-        await updateDoc(doc(db, 'labs', targetLabId, 'patients', foundPatientDoc.id), {
-          labTests: updatedTests,
-          updatedAt: new Date().toISOString()
-        });
-      }
 
       setVirtualRequested(true);
       setCurrentTest((prev: any) => ({ ...prev, virtualRequested: true }));
