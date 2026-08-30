@@ -259,7 +259,7 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
                         {hasSubParams ? (
-                          test.subParameters.map((param: any, pIdx: number) => {
+                          test.subParameters?.map((param: any, pIdx: number) => {
                             const range = patientGender === 'Female' && param.refRangeFemale 
                               ? param.refRangeFemale 
                               : param.refRangeMale || param.referenceRange || 'Standard Range';
