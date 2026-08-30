@@ -6,6 +6,7 @@ import { db, getDocs, collection, updateDoc, doc } from '../../services/firebase
 import { limsService, PatientBooking } from '../../services/limsService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
+import BatchConsolidatedReportModal from '../../components/patient/BatchConsolidatedReportModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
@@ -55,6 +56,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [patientFullName, setPatientFullName] = useState<string>(user?.name || 'Patient Record');
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showBookletModal, setShowBookletModal] = useState(false);
+  const [batchReportBooking, setBatchReportBooking] = useState<PatientBooking | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [receiptModalBooking, setReceiptModalBooking] = useState<PatientBooking | null>(null);
   const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
@@ -127,34 +129,19 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     setRequestingId(testItem.id);
     try {
       const targetLabId = lab?.id || 'lab-1';
-      const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
-      const foundDoc = snap.docs.find(d => 
-        d.id === user?.id ||
-        d.data().email === user?.email || 
-        d.data().accessCode === user?.accessCode ||
-        d.data().name === user?.name
+      await limsService.requestVirtualResult(
+        targetLabId,
+        undefined,
+        testItem.id,
+        {
+          id: user?.id || patientRecordId,
+          email: user?.email,
+          accessCode: user?.accessCode,
+          name: user?.name || patientFullName
+        }
       );
 
-      if (foundDoc) {
-        const patientData = foundDoc.data();
-        const updatedTests = (patientData.labTests || []).map((t: any) => {
-          if (t.id === testItem.id) {
-            return {
-              ...t,
-              virtualRequested: true,
-              virtualRequestedAt: new Date().toISOString()
-            };
-          }
-          return t;
-        });
-
-        await updateDoc(doc(db, 'labs', targetLabId, 'patients', foundDoc.id), {
-          labTests: updatedTests,
-          updatedAt: new Date().toISOString()
-        });
-      }
-
-      fetchPatientData();
+      await fetchPatientData();
     } catch (err) {
       console.error('Error requesting virtual result:', err);
     } finally {
@@ -473,12 +460,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                           {/* Download / Print Full Consolidated Result */}
                           <button
                             type="button"
-                            onClick={() => setShowBookletModal(true)}
+                            onClick={() => setBatchReportBooking(booking)}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-                            title="Download Full Result of all tests in this batch"
+                            title="Download Full Signed PDF Report of all tests in this batch"
                           >
                             <Printer className="w-4 h-4" />
-                            <span>Download Full Results</span>
+                            <span>Download Full Results (Signed PDF)</span>
                           </button>
 
                           {/* Share with Physician */}
@@ -884,6 +871,26 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         )}
       </main>
+
+      {/* Official Consolidated Batch Diagnostic Report Modal (Signed PDF) */}
+      <BatchConsolidatedReportModal
+        isOpen={Boolean(batchReportBooking)}
+        onClose={() => setBatchReportBooking(null)}
+        booking={batchReportBooking}
+        labInfo={lab}
+        patientInfo={{
+          id: patientRecordId,
+          patientId: patientRecordId,
+          name: patientFullName,
+          fullName: patientFullName,
+          email: user?.email,
+          phone: user?.phone
+        }}
+        onShareToDoctor={() => {
+          setBatchReportBooking(null);
+          if (onNavigateTab) onNavigateTab('share');
+        }}
+      />
 
       {/* Medical Booklet Modal */}
       <MedicalBookletModal
