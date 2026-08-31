@@ -43,18 +43,27 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 // Initialize Firestore with Offline Persistence (multi-tab IndexedDB cache)
 // Specifically optimized for unstable/slow connectivity (e.g. Cameroon 2G/3G/power drops)
 let db: Firestore;
-try {
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-      cacheSizeBytes: CACHE_SIZE_UNLIMITED
-    })
-  });
-  console.log('[nanoLabs LIMS] Offline Firestore persistence initialized (IndexedDB multi-tab cache active).');
-} catch (err: any) {
-  // If Firestore was already initialized or persistence fallback is triggered
-  console.warn('[nanoLabs LIMS] Persistent local cache initialization fallback:', err?.message || err);
-  db = getFirestore(app);
+const existingDb = (app as any)._firestoreDb || (app as any).firestore;
+
+if (existingDb) {
+  // If it exists (due to HMR, hot reloading, or dual imports), reuse it
+  db = existingDb;
+  console.log('[nanoLabs LIMS] Reusing existing Firestore instance.');
+} else {
+  try {
+    // 2. Initialize fresh if it's the very first time the module runs
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+        cacheSizeBytes: CACHE_SIZE_UNLIMITED
+      })
+    });
+    console.log('[nanoLabs LIMS] Offline Firestore persistence initialized (IndexedDB multi-tab cache active).');
+  } catch (err: any) {
+    console.warn('[nanoLabs LIMS] Persistent local cache initialization fallback:', err?.message || err);
+    // 3. Absolute fallback to generic initialization
+    db = getFirestore(app);
+  }
 }
 
 const storage = getStorage(app);

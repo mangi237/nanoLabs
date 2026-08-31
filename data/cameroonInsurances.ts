@@ -1,3 +1,4 @@
+
 export interface CameroonInsuranceCompany {
   id: string;
   name: string;
@@ -110,6 +111,30 @@ export const CAMEROON_INSURANCE_COMPANIES: CameroonInsuranceCompany[] = [
     supportEmail: 'info@zenitheinsurance.com',
     logoColor: '#059669'
   }
+];
+
+export interface CameroonCommercialBank {
+  id: string;
+  name: string;
+  shortName: string;
+  code: string;
+  swiftCode?: string;
+  color?: string;
+}
+
+export const CAMEROON_COMMERCIAL_BANKS: CameroonCommercialBank[] = [
+  { id: 'afriland', name: 'Afriland First Bank', shortName: 'Afriland First Bank', code: 'AFR-CMR', swiftCode: 'AFRICMCA', color: '#166534' },
+  { id: 'uba', name: 'United Bank for Africa (UBA Cameroun)', shortName: 'UBA Cameroon', code: 'UBA-CMR', swiftCode: 'UNAFCMCX', color: '#DC2626' },
+  { id: 'sgc', name: 'Société Générale Cameroun (SGC)', shortName: 'Société Générale', code: 'SGC-CMR', swiftCode: 'SOGECMCX', color: '#E11D48' },
+  { id: 'bicec', name: 'Banque Internationale du Cameroun (BICEC)', shortName: 'BICEC', code: 'BICEC-CMR', swiftCode: 'BCECCMCX', color: '#2563EB' },
+  { id: 'cbc', name: 'Commercial Bank of Cameroon (CBC)', shortName: 'CBC Bank', code: 'CBC-CMR', swiftCode: 'CBCCCMAA', color: '#D97706' },
+  { id: 'ecobank', name: 'Ecobank Cameroun', shortName: 'Ecobank', code: 'ECO-CMR', swiftCode: 'ECOCCMCX', color: '#0284C7' },
+  { id: 'scb', name: 'SCB Cameroun (Attijariwafa Bank)', shortName: 'SCB Cameroun', code: 'SCB-CMR', swiftCode: 'SCBLCMCX', color: '#7C3AED' },
+  { id: 'cca', name: 'CCA-Bank (Crédit Communautaire d\'Afrique)', shortName: 'CCA-Bank', code: 'CCA-CMR', swiftCode: 'CCABCMCX', color: '#0D9488' },
+  { id: 'nfc', name: 'National Financial Credit Bank (NFC Bank)', shortName: 'NFC Bank', code: 'NFC-CMR', swiftCode: 'NFCBCMCX', color: '#4F46E5' },
+  { id: 'bgfibank', name: 'BGFIBank Cameroun', shortName: 'BGFIBank', code: 'BGFI-CMR', swiftCode: 'BGFICMCX', color: '#059669' },
+  { id: 'standard_chartered', name: 'Standard Chartered Bank Cameroon', shortName: 'Standard Chartered', code: 'SCB-INT', swiftCode: 'SCBLCM2X', color: '#0284C7' },
+  { id: 'bacm', name: 'Banque Atlantique Cameroun (BACM)', shortName: 'Banque Atlantique', code: 'BACM-CMR', swiftCode: 'BCATCMCX', color: '#EA580C' }
 ];
 
 /**
