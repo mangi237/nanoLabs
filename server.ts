@@ -1904,12 +1904,25 @@ app.post('/api/audit/log-access', (req: Request, res: Response) => {
 
 // 7c. Get Patient-Specific Access Logs
 app.get('/api/audit/patient-logs/:patientId', (req: Request, res: Response) => {
-  const patientId = String(req.params.patientId || '');
-  const patientLogs = auditLogs.filter(l => 
-    (l as any).patientId === patientId ||
-    (l as any).patientCode === patientId ||
-    (typeof l.details === 'string' && l.details.includes(patientId))
-  );
+  const patientId = String(req.params.patientId || '').toLowerCase();
+  const patientName = String(req.query.patientName || '').toLowerCase();
+  const patientEmail = String(req.query.patientEmail || '').toLowerCase();
+  const patientCode = String(req.query.patientCode || '').toLowerCase();
+
+  const patientLogs = auditLogs.filter(l => {
+    const lPid = String((l as any).patientId || '').toLowerCase();
+    const lPCode = String((l as any).patientCode || '').toLowerCase();
+    const lPName = String((l as any).patientName || '').toLowerCase();
+    const lPEmail = String((l as any).patientEmail || '').toLowerCase();
+    const lDetails = String(l.details || '').toLowerCase();
+
+    const matchId = patientId && patientId !== 'patient' && (lPid === patientId || lPCode === patientId || lDetails.includes(patientId));
+    const matchCode = patientCode && (lPid === patientCode || lPCode === patientCode || lDetails.includes(patientCode));
+    const matchName = patientName && (lPName === patientName || (patientName.length >= 4 && lDetails.includes(patientName)));
+    const matchEmail = patientEmail && (lPEmail === patientEmail || lDetails.includes(patientEmail));
+
+    return matchId || matchCode || matchName || matchEmail;
+  });
 
   res.json({
     success: true,
