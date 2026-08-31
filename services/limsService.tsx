@@ -1752,7 +1752,7 @@ export const limsService = {
         console.warn('Appointments fetch sync in fetchAllBookings:', apptErr);
       }
 
-      // Also ensure any validated tests stored directly on patient documents are represented for Cashier
+      // Also ensure any validated tests stored directly on patient documents are represented for Cashier & Referral Analytics
       try {
         const patientsCol = collection(db, 'labs', labId, 'patients');
         const patientsSnap = await getDocs(patientsCol);
@@ -1762,51 +1762,56 @@ export const limsService = {
           const pId = pDoc.id;
           const labTests: any[] = pData.labTests || [];
           
-          // Group unpaid validated tests that aren't already represented in bookings
-          const validatedUnpaidTests = labTests.filter(t => 
-            (t.receptionistValidated === true || t.validatedBy || t.status === 'Pending_Payment') && 
-            !t.paid && 
-            t.paymentStatus !== 'paid' &&
-            !bookings.some(b => b.tests?.some(bt => bt.id === t.id || (bt.testName?.toLowerCase() === (t.testName || t.name)?.toLowerCase() && b.patientId === pId)))
-          );
+          if (labTests.length > 0) {
+            // Find tests not already represented in bookings
+            const unrepresentedTests = labTests.filter(t => 
+              !bookings.some(b => b.tests?.some(bt => (bt.id && bt.id === t.id) || (bt.testName?.toLowerCase() === (t.testName || t.name)?.toLowerCase() && b.patientId === pId)))
+            );
 
-          if (validatedUnpaidTests.length > 0) {
-            const totalAmount = validatedUnpaidTests.reduce((sum, t) => sum + (t.price || 5000), 0);
-            bookings.push({
-              id: `pat-booking-${pId}-${Date.now().toString().slice(-4)}`,
-              bookingCode: `BK-${(pData.patientId || pId).slice(0, 6).toUpperCase()}`,
-              labId,
-              patientId: pId,
-              patientName: pData.name || 'Patient',
-              patientAge: pData.age || 30,
-              patientGender: pData.gender || 'Male',
-              patientPhone: pData.phone || '',
-              patientEmail: pData.email || '',
-              patientPid: pData.patientId || pId,
-              doctorName: 'Attending Physician',
-              sampleCollectedAt: 'Central Diagnostics Facility',
-              invoiceNumber: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
-              totalAmount,
-              paymentStatus: 'unpaid',
-              receptionistValidated: true,
-              validatedBy: validatedUnpaidTests[0]?.validatedBy || 'Receptionist',
-              validatedAt: validatedUnpaidTests[0]?.validatedAt || new Date().toISOString(),
-              collectedSamples: [],
-              tests: validatedUnpaidTests.map((t, idx) => ({
-                id: t.id || `bt-${idx}`,
-                testId: t.testId || `t-${idx}`,
-                testCode: 'TST',
-                testName: t.testName || t.name || 'Diagnostic Test',
-                category: t.category || 'General',
-                sampleTypeRequired: t.sampleType || 'Venous Blood',
-                price: t.price || 5000,
-                status: 'Pending_Payment',
-                receptionistValidated: true
-              })),
-              overallStatus: 'Pending_Payment',
-              createdAt: pData.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
+            if (unrepresentedTests.length > 0) {
+              const isPaid = unrepresentedTests.every(t => t.paid === true || t.paymentStatus === 'paid');
+              const totalAmount = unrepresentedTests.reduce((sum, t) => sum + (t.price || 5000), 0);
+              bookings.push({
+                id: `pat-booking-${pId}-${Date.now().toString().slice(-4)}`,
+                bookingCode: `BK-${(pData.patientId || pId).slice(0, 6).toUpperCase()}`,
+                labId,
+                patientId: pId,
+                patientName: pData.name || 'Patient',
+                patientAge: pData.age || 30,
+                patientGender: pData.gender || 'Male',
+                patientPhone: pData.phone || '',
+                patientEmail: pData.email || '',
+                patientPid: pData.patientId || pId,
+                doctorName: pData.referringDoctor || pData.doctorName || 'Attending Physician',
+                referringDoctor: pData.referringDoctor,
+                referringDoctorId: pData.referringDoctorId,
+                referralHospital: pData.referralHospital,
+                referralNotes: pData.referralNotes,
+                sampleCollectedAt: 'Central Diagnostics Facility',
+                invoiceNumber: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
+                totalAmount,
+                actualPaidAmount: isPaid ? totalAmount : (pData.actualPaidAmount || 0),
+                paymentStatus: isPaid ? 'paid' : (pData.paymentStatus || 'unpaid'),
+                receptionistValidated: true,
+                validatedBy: unrepresentedTests[0]?.validatedBy || 'Receptionist',
+                validatedAt: unrepresentedTests[0]?.validatedAt || new Date().toISOString(),
+                collectedSamples: [],
+                tests: unrepresentedTests.map((t, idx) => ({
+                  id: t.id || `bt-${idx}`,
+                  testId: t.testId || `t-${idx}`,
+                  testCode: 'TST',
+                  testName: t.testName || t.name || 'Diagnostic Test',
+                  category: t.category || 'General',
+                  sampleTypeRequired: t.sampleType || 'Venous Blood',
+                  price: t.price || 5000,
+                  status: t.status || (isPaid ? 'Completed' : 'Pending_Payment'),
+                  receptionistValidated: true
+                })),
+                overallStatus: isPaid ? 'Completed' : 'Pending_Payment',
+                createdAt: pData.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              });
+            }
           }
         });
       } catch (patSyncErr) {
@@ -2393,6 +2398,7 @@ export const limsService = {
 
   /**
    * Doctor responds to an invitation (Accepts or Declines)
+   * Safely updates doctor_invitations and lab's referring_doctors records without crashing
    */
   async respondToDoctorInvitation(
     invitationId: string,
@@ -2402,34 +2408,92 @@ export const limsService = {
   ): Promise<boolean> {
     const timestamp = new Date().toISOString();
     try {
-      // 1. Update doctor_invitations record
-      const invRef = doc(db, 'doctor_invitations', invitationId);
-      await updateDoc(invRef, cleanFirestoreData({
-        status: decision,
-        respondedAt: timestamp,
-        updatedAt: timestamp
-      }));
+      // 1. Update doctor_invitations record if exists
+      if (invitationId) {
+        try {
+          const invRef = doc(db, 'doctor_invitations', invitationId);
+          await setDoc(invRef, cleanFirestoreData({
+            id: invitationId,
+            labId: labId || undefined,
+            doctorId: doctorId || undefined,
+            status: decision,
+            respondedAt: timestamp,
+            updatedAt: timestamp
+          }), { merge: true });
+        } catch (invErr) {
+          console.warn('doctor_invitations doc setDoc warning:', invErr);
+        }
+      }
+
+      // Also query doctor_invitations for any matching invitation records
+      try {
+        const invSnap = await getDocs(collection(db, 'doctor_invitations'));
+        invSnap.forEach(async (d) => {
+          const data = d.data();
+          if (
+            d.id === invitationId || 
+            data.id === invitationId || 
+            (doctorId && (data.doctorId === doctorId || data.id === doctorId)) ||
+            (labId && data.labId === labId && (data.doctorId === doctorId || data.doctorEmail === doctorId))
+          ) {
+            await setDoc(d.ref, cleanFirestoreData({
+              status: decision,
+              respondedAt: timestamp,
+              updatedAt: timestamp
+            }), { merge: true });
+          }
+        });
+      } catch (qErr) {
+        console.warn('doctor_invitations query warning:', qErr);
+      }
 
       // 2. Update lab's referring_doctors record
-      // Try to find the document in lab's referring_doctors
-      const docsCol = collection(db, 'labs', labId, 'referring_doctors');
-      const docsSnap = await getDocs(docsCol);
-      let targetDocId = doctorId;
+      if (labId) {
+        try {
+          const docsCol = collection(db, 'labs', labId, 'referring_doctors');
+          const docsSnap = await getDocs(docsCol);
+          let matched = false;
 
-      docsSnap.forEach(d => {
-        const data = d.data();
-        if (d.id === doctorId || data.doctorId === doctorId || data.id === doctorId) {
-          targetDocId = d.id;
+          for (const d of docsSnap.docs) {
+            const data = d.data();
+            const isMatch = 
+              d.id === invitationId || 
+              d.id === doctorId || 
+              data.doctorId === doctorId || 
+              data.id === doctorId ||
+              (invitationId && data.invitationId === invitationId);
+
+            if (isMatch) {
+              matched = true;
+              await setDoc(d.ref, cleanFirestoreData({
+                invitationStatus: decision,
+                status: decision === 'accepted' ? 'active' : 'inactive',
+                origin: decision === 'accepted' ? 'accredited_network' : data.origin,
+                acceptedAt: decision === 'accepted' ? timestamp : undefined,
+                updatedAt: timestamp
+              }), { merge: true });
+            }
+          }
+
+          // If no doc in referring_doctors matched yet, use the provided invitationId or doctorId as document ID
+          if (!matched && (invitationId || doctorId)) {
+            const targetId = invitationId || doctorId;
+            const refDocRef = doc(db, 'labs', labId, 'referring_doctors', targetId);
+            await setDoc(refDocRef, cleanFirestoreData({
+              id: targetId,
+              labId,
+              doctorId: doctorId || targetId,
+              invitationStatus: decision,
+              status: decision === 'accepted' ? 'active' : 'inactive',
+              origin: decision === 'accepted' ? 'accredited_network' : undefined,
+              acceptedAt: decision === 'accepted' ? timestamp : undefined,
+              updatedAt: timestamp
+            }), { merge: true });
+          }
+        } catch (labErr) {
+          console.warn('referring_doctors update warning:', labErr);
         }
-      });
-
-      const refDocRef = doc(db, 'labs', labId, 'referring_doctors', targetDocId);
-      await setDoc(refDocRef, cleanFirestoreData({
-        invitationStatus: decision,
-        status: decision === 'accepted' ? 'active' : 'inactive',
-        acceptedAt: decision === 'accepted' ? timestamp : undefined,
-        updatedAt: timestamp
-      }), { merge: true });
+      }
 
       return true;
     } catch (e) {
@@ -2440,12 +2504,66 @@ export const limsService = {
 
   /**
    * Add a verified accredited doctor to the laboratory's clinical network
+   * Performs deduplication check to prevent duplicate pending entries for existing partners
    */
   async addReferringDoctor(
     labId: string = 'lab-1',
     doctorData: Omit<ReferringDoctor, 'id' | 'createdAt' | 'updatedAt' | 'labId'>
   ): Promise<ReferringDoctor> {
     const timestamp = new Date().toISOString();
+    const docNameClean = (doctorData.name || '').trim();
+    const docNameNorm = docNameClean.toLowerCase().replace(/^(dr|prof|doctor|md|m\.d\.)\.?\s*/i, '').replace(/[^a-z0-9]/g, '');
+    const docPhoneClean = (doctorData.phone || '').replace(/[^0-9]/g, '');
+    const docEmailClean = (doctorData.email || '').trim().toLowerCase();
+    const docLicenseClean = (doctorData.licenseNumber || '').trim().toLowerCase();
+    const explicitDocId = doctorData.doctorId || '';
+
+    // 1. Check if doctor already exists in this lab's directory
+    try {
+      const docsCol = collection(db, 'labs', labId, 'referring_doctors');
+      const snap = await getDocs(docsCol);
+
+      for (const d of snap.docs) {
+        const existingData = d.data() as ReferringDoctor;
+        const exNameNorm = (existingData.name || '').toLowerCase().replace(/^(dr|prof|doctor|md|m\.d\.)\.?\s*/i, '').replace(/[^a-z0-9]/g, '');
+        const exPhoneClean = (existingData.phone || '').replace(/[^0-9]/g, '');
+        const exEmailClean = (existingData.email || '').trim().toLowerCase();
+        const exLicenseClean = (existingData.licenseNumber || '').trim().toLowerCase();
+        const exDocId = existingData.doctorId || existingData.id || d.id;
+
+        const isExactMatch = 
+          (explicitDocId && (exDocId === explicitDocId || d.id === explicitDocId)) ||
+          (docLicenseClean && docLicenseClean === exLicenseClean) ||
+          (docPhoneClean && docPhoneClean === exPhoneClean) ||
+          (docEmailClean && docEmailClean === exEmailClean) ||
+          (docNameNorm && docNameNorm === exNameNorm);
+
+        if (isExactMatch) {
+          // If already active or accepted, do not downgrade to pending!
+          if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
+            return { id: d.id, ...existingData };
+          }
+          // If pending, merge new details and return existing
+          const merged: ReferringDoctor = {
+            ...existingData,
+            id: d.id,
+            labId,
+            name: doctorData.name || existingData.name,
+            specialty: doctorData.specialty || existingData.specialty,
+            hospital: doctorData.hospital || existingData.hospital,
+            phone: doctorData.phone || existingData.phone,
+            email: doctorData.email || existingData.email,
+            licenseNumber: doctorData.licenseNumber || existingData.licenseNumber,
+            updatedAt: timestamp
+          };
+          await setDoc(d.ref, cleanFirestoreData(merged), { merge: true });
+          return merged;
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Error checking existing referring doctor:', checkErr);
+    }
+
     const newDoc: ReferringDoctor = {
       ...doctorData,
       id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2519,109 +2637,212 @@ export const limsService = {
     totalRevenueFromReferrals: number;
     referralBookings: PatientBooking[];
   }> {
-    const [doctorsList, allBookings] = await Promise.all([
+    const [doctorsList, allBookings, accreditedRegistry] = await Promise.all([
       this.fetchReferringDoctors(labId),
-      this.fetchAllBookings(labId)
+      this.fetchAllBookings(labId),
+      this.searchAllAccreditedDoctors()
     ]);
 
-    // Filter bookings that have a referring doctor
-    const referralBookings = allBookings.filter(b => 
-      Boolean(b.referringDoctor || b.referringDoctorId) && 
-      b.referringDoctor?.toLowerCase() !== 'self-referred' &&
-      b.referringDoctor?.toLowerCase() !== 'none'
-    );
+    // Helper for robust matching
+    const normalizeName = (name?: string) => {
+      if (!name) return '';
+      return name
+        .toLowerCase()
+        .replace(/^(dr|prof|doctor|md|m\.d\.)\.?\s*/i, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+    };
 
-    // Compute live per-doctor clinical statistics
+    // Filter bookings that have a referring doctor
+    const referralBookings = allBookings.filter(b => {
+      const refDoc = (b.referringDoctor || '').trim().toLowerCase();
+      const hasDoc = Boolean(b.referringDoctor || b.referringDoctorId);
+      const isNotSelf = refDoc !== 'self-referred' && refDoc !== 'none' && refDoc !== 'self';
+      return hasDoc && isNotSelf;
+    });
+
+    // Map each booking to a specific partner doctor or unique cited doctor
     const doctorStatsMap = new Map<string, {
+      doctorProfile?: ReferringDoctor;
+      accreditedDoc?: Doctor;
+      customName?: string;
+      customHospital?: string;
+      customSpecialty?: string;
+      customPhone?: string;
       totalReferrals: number;
       totalTestsDone: number;
       totalRevenue: number;
       bookings: PatientBooking[];
     }>();
 
-    for (const b of referralBookings) {
-      const docKey = (b.referringDoctorId || b.referringDoctor || '').trim().toLowerCase();
-      const existing = doctorStatsMap.get(docKey) || {
+    // Initialize map with all existing partner doctors from lab directory
+    for (const doc of doctorsList) {
+      const docKey = `partner-${doc.id}`;
+      doctorStatsMap.set(docKey, {
+        doctorProfile: doc,
         totalReferrals: 0,
         totalTestsDone: 0,
         totalRevenue: 0,
         bookings: []
-      };
-
-      const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = b.tests?.length || 1;
-
-      existing.totalReferrals += 1;
-      existing.totalTestsDone += testCount;
-      existing.totalRevenue += billAmount;
-      existing.bookings.push(b);
-
-      doctorStatsMap.set(docKey, existing);
+      });
     }
 
-    const matchedKeys = new Set<string>();
+    // Process all referral bookings and allocate to the correct doctor
+    for (const b of referralBookings) {
+      const bDocId = (b.referringDoctorId || '').trim();
+      const bRefNameNorm = normalizeName(b.referringDoctor);
+      const bDocNameNorm = normalizeName(b.doctorName);
+      const bPhoneClean = ((b as any).referringDoctorPhone || '').replace(/[^0-9]/g, '');
+      const bEmailClean = ((b as any).referringDoctorEmail || '').trim().toLowerCase();
 
-    // Merge computed stats with existing partner doctors list
-    const enrichedDoctors: ReferringDoctor[] = doctorsList.map(doc => {
-      const keyById = (doc.id || '').trim().toLowerCase();
-      const keyByDocId = (doc.doctorId || '').trim().toLowerCase();
-      const keyByName = (doc.name || '').trim().toLowerCase();
+      // 1. Check if booking matches any existing partner doctor in doctorsList
+      let matchedPartnerDoc: ReferringDoctor | undefined;
 
-      const stats = doctorStatsMap.get(keyById) || 
-                    (keyByDocId ? doctorStatsMap.get(keyByDocId) : undefined) || 
-                    doctorStatsMap.get(keyByName);
+      for (const pDoc of doctorsList) {
+        const pId = pDoc.id || '';
+        const pDoctorId = pDoc.doctorId || '';
+        const pNameNorm = normalizeName(pDoc.name);
+        const pPhoneClean = (pDoc.phone || '').replace(/[^0-9]/g, '');
+        const pEmailClean = (pDoc.email || '').trim().toLowerCase();
 
-      if (stats) {
-        matchedKeys.add(keyById);
-        if (keyByDocId) matchedKeys.add(keyByDocId);
-        matchedKeys.add(keyByName);
+        const matchId = (pId && (bDocId === pId || b.referringDoctor === pId)) || 
+                        (pDoctorId && (bDocId === pDoctorId || b.referringDoctor === pDoctorId));
+        const matchName = (pNameNorm && (bRefNameNorm === pNameNorm || bDocNameNorm === pNameNorm)) ||
+                          (pNameNorm && bRefNameNorm && (pNameNorm.includes(bRefNameNorm) || bRefNameNorm.includes(pNameNorm)));
+        const matchPhone = pPhoneClean && bPhoneClean && pPhoneClean === bPhoneClean;
+        const matchEmail = pEmailClean && bEmailClean && pEmailClean === bEmailClean;
+
+        if (matchId || matchName || matchPhone || matchEmail) {
+          matchedPartnerDoc = pDoc;
+          break;
+        }
       }
 
-      const liveReferrals = stats ? stats.totalReferrals : (doc.totalReferrals || 0);
-      const liveTests = stats ? stats.totalTestsDone : (doc.totalTestsDone || 0);
-      const liveRevenue = stats ? stats.totalRevenue : (doc.totalRevenueGenerated || 0);
+      let bucketKey = '';
+      if (matchedPartnerDoc) {
+        bucketKey = `partner-${matchedPartnerDoc.id}`;
+      } else {
+        // 2. Check if matches accredited doctor directory
+        const matchedAccredited = accreditedRegistry.find(aDoc => {
+          const aId = aDoc.id || '';
+          const aNameNorm = normalizeName(aDoc.name);
+          const aPhoneClean = (aDoc.phone || '').replace(/[^0-9]/g, '');
+          const aEmailClean = (aDoc.email || '').trim().toLowerCase();
+          const aLicense = (aDoc.licenseNumber || '').trim().toLowerCase();
 
-      return {
-        ...doc,
-        totalReferrals: liveReferrals,
-        totalTestsDone: liveTests,
-        totalRevenueGenerated: liveRevenue
-      };
-    });
+          return (aId && (bDocId === aId || b.referringDoctor === aId)) ||
+                 (aNameNorm && (bRefNameNorm === aNameNorm || bDocNameNorm === aNameNorm)) ||
+                 (aPhoneClean && bPhoneClean && aPhoneClean === bPhoneClean) ||
+                 (aEmailClean && bEmailClean && aEmailClean === bEmailClean) ||
+                 (aLicense && (b as any).referringDoctorLicense && aLicense === (b as any).referringDoctorLicense.trim().toLowerCase());
+        });
 
-    // If patients referred doctors who are NOT yet in the lab's referring_doctors collection,
-    // dynamically surface them as "Referred by Patient - Pending Partnership" so the Lab Admin can invite/add them!
+        if (matchedAccredited) {
+          bucketKey = `accredited-${matchedAccredited.id}`;
+          if (!doctorStatsMap.has(bucketKey)) {
+            doctorStatsMap.set(bucketKey, {
+              accreditedDoc: matchedAccredited,
+              totalReferrals: 0,
+              totalTestsDone: 0,
+              totalRevenue: 0,
+              bookings: []
+            });
+          }
+        } else {
+          // 3. Custom patient referral
+          const rawKey = bDocId || bRefNameNorm || b.referringDoctor || 'unknown-doctor';
+          bucketKey = `cited-${rawKey}`;
+          if (!doctorStatsMap.has(bucketKey)) {
+            doctorStatsMap.set(bucketKey, {
+              customName: b.referringDoctor || b.doctorName || 'Accredited Physician',
+              customHospital: (b as any).referralHospital || (b as any).referringDoctorHospital || 'External Medical Center',
+              customSpecialty: (b as any).referringDoctorSpecialty || 'Clinical Practitioner',
+              customPhone: (b as any).referringDoctorPhone || '',
+              totalReferrals: 0,
+              totalTestsDone: 0,
+              totalRevenue: 0,
+              bookings: []
+            });
+          }
+        }
+      }
+
+      const existingBucket = doctorStatsMap.get(bucketKey)!;
+      const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
+
+      existingBucket.totalReferrals += 1;
+      existingBucket.totalTestsDone += testCount;
+      existingBucket.totalRevenue += billAmount;
+      existingBucket.bookings.push(b);
+    }
+
+    // Build the final list of enriched doctors
+    const enrichedDoctors: ReferringDoctor[] = [];
+
     for (const [key, stats] of doctorStatsMap.entries()) {
-      if (!matchedKeys.has(key)) {
-        const sampleBooking = stats.bookings[0];
-        const docName = sampleBooking.referringDoctor || 'Accredited Physician';
-        const docId = sampleBooking.referringDoctorId || `doc-ref-${Date.now()}`;
-
+      if (stats.doctorProfile) {
+        // Partner Doctor from lab directory
+        const pDoc = stats.doctorProfile;
         enrichedDoctors.push({
-          id: docId,
-          doctorId: sampleBooking.referringDoctorId || docId,
+          ...pDoc,
+          totalReferrals: stats.totalReferrals > 0 ? stats.totalReferrals : (pDoc.totalReferrals || 0),
+          totalTestsDone: stats.totalTestsDone > 0 ? stats.totalTestsDone : (pDoc.totalTestsDone || pDoc.totalReferrals || 0),
+          totalRevenueGenerated: stats.totalRevenue > 0 ? stats.totalRevenue : (pDoc.totalRevenueGenerated || 0)
+        });
+      } else if (stats.accreditedDoc) {
+        // Doctor found in Accredited National Directory cited by patient
+        const aDoc = stats.accreditedDoc;
+        const sampleB = stats.bookings[0];
+        enrichedDoctors.push({
+          id: aDoc.id,
+          doctorId: aDoc.id,
           labId,
-          name: docName,
-          specialty: (sampleBooking as any).referringDoctorSpecialty || 'Clinical Practitioner',
-          hospital: (sampleBooking as any).referringDoctorHospital || 'External Medical Practice',
-          phone: (sampleBooking as any).referringDoctorPhone || '',
-          email: '',
-          licenseNumber: '',
-          notes: `Referred by patient: ${sampleBooking.patientName}`,
+          name: aDoc.name.toLowerCase().startsWith('dr') ? aDoc.name : `Dr. ${aDoc.name}`,
+          specialty: aDoc.specialty || 'General Practitioner',
+          hospital: aDoc.hospitalAffiliation || aDoc.hospital || 'Accredited Medical Center',
+          phone: aDoc.phone || '',
+          email: aDoc.email || '',
+          licenseNumber: aDoc.licenseNumber || 'ONMC-CMR-ACCREDITED',
+          notes: sampleB ? `Cited by patient ${sampleB.patientName}` : 'Accredited Registry Doctor',
           invitationStatus: 'pending',
           origin: 'patient_referral',
           status: 'pending',
           totalReferrals: stats.totalReferrals,
           totalTestsDone: stats.totalTestsDone,
           totalRevenueGenerated: stats.totalRevenue,
-          createdAt: sampleBooking.createdAt || new Date().toISOString(),
+          createdAt: sampleB?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      } else if (stats.customName && stats.totalReferrals > 0) {
+        // Custom cited doctor
+        const sampleB = stats.bookings[0];
+        const docId = sampleB?.referringDoctorId || `doc-ref-${Date.now()}`;
+        enrichedDoctors.push({
+          id: docId,
+          doctorId: docId,
+          labId,
+          name: stats.customName.toLowerCase().startsWith('dr') ? stats.customName : `Dr. ${stats.customName}`,
+          specialty: stats.customSpecialty || 'Clinical Practitioner',
+          hospital: stats.customHospital || 'External Medical Center',
+          phone: stats.customPhone || '',
+          email: '',
+          licenseNumber: '',
+          notes: sampleB ? `Referred by patient ${sampleB.patientName}` : 'Patient Referred',
+          invitationStatus: 'pending',
+          origin: 'patient_referral',
+          status: 'pending',
+          totalReferrals: stats.totalReferrals,
+          totalTestsDone: stats.totalTestsDone,
+          totalRevenueGenerated: stats.totalRevenue,
+          createdAt: sampleB?.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
       }
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (b.tests?.length || 1), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {

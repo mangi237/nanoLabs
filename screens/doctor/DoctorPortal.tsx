@@ -84,6 +84,12 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       setLoading(true);
       const allLabs = await getAllLabs();
 
+      const normalizeDocStr = (str?: string) => {
+        if (!str) return '';
+        return str.toLowerCase().replace(/^(dr|prof|doctor|md|m\.d\.)\.?\s*/i, '').replace(/[^a-z0-9]/g, '');
+      };
+
+      const doctorNameNorm = normalizeDocStr(user?.name);
       const doctorNameClean = (user?.name || '').toLowerCase();
       const doctorIdClean = user?.id || '';
       const doctorEmailClean = (user?.email || '').toLowerCase();
@@ -111,11 +117,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           let isLinked = false;
           refDocsSnap.docs.forEach(docSnap => {
             const data = docSnap.data();
-            const docName = (data.name || '').toLowerCase();
+            const docNameNorm = normalizeDocStr(data.name);
             const docEmail = (data.email || '').toLowerCase();
             const docPhone = (data.phone || '').replace(/[^0-9]/g, '');
             const docMatch = 
-              (docName && (docName.includes(doctorNameClean) || doctorNameClean.includes(docName))) ||
+              (docNameNorm && doctorNameNorm && (docNameNorm === doctorNameNorm || docNameNorm.includes(doctorNameNorm) || doctorNameNorm.includes(docNameNorm))) ||
               (docEmail && docEmail === doctorEmailClean) ||
               (docPhone && doctorPhoneClean && docPhone === doctorPhoneClean) ||
               data.doctorId === doctorIdClean;
@@ -128,6 +134,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                     id: docSnap.id,
                     labId: currentLab.id,
                     labName: currentLab.name,
+                    doctorId: doctorIdClean || data.doctorId || docSnap.id,
                     status: 'pending',
                     invitedAt: data.invitedAt || data.createdAt || new Date().toISOString()
                   });
@@ -158,11 +165,14 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         try {
           const labBookings = await limsService.fetchAllBookings(currentLab.id);
           const matches = labBookings.filter(b => {
-            const refName = (b.doctorName || b.referringDoctor || '').toLowerCase();
-            const refId = b.referringDoctorId || '';
+            const refNameNorm = normalizeDocStr(b.referringDoctor || b.doctorName);
+            const refId = (b.referringDoctorId || '').trim();
+            const refPhone = ((b as any).referringDoctorPhone || '').replace(/[^0-9]/g, '');
+
             return (
-              (refName && (refName.includes(doctorNameClean) || doctorNameClean.includes(refName))) ||
-              (refId && refId === doctorIdClean)
+              (refNameNorm && doctorNameNorm && (refNameNorm === doctorNameNorm || refNameNorm.includes(doctorNameNorm) || doctorNameNorm.includes(refNameNorm))) ||
+              (refId && (refId === doctorIdClean || (user?.doctorId && refId === user.doctorId))) ||
+              (refPhone && doctorPhoneClean && refPhone === doctorPhoneClean)
             );
           });
           allDoctorBookings = [...allDoctorBookings, ...matches];
@@ -172,11 +182,10 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           inboxSnap.docs.forEach(docSnap => {
             const data = docSnap.data();
             const recipientEmail = (data.doctorEmail || '').toLowerCase();
-            const recipientDocName = (data.doctorName || '').toLowerCase();
+            const recipientDocNorm = normalizeDocStr(data.doctorName);
             if (
               recipientEmail === doctorEmailClean ||
-              recipientDocName.includes(doctorNameClean) ||
-              doctorNameClean.includes(recipientDocName) ||
+              (recipientDocNorm && doctorNameNorm && (recipientDocNorm === doctorNameNorm || recipientDocNorm.includes(doctorNameNorm) || doctorNameNorm.includes(recipientDocNorm))) ||
               data.doctorId === doctorIdClean
             ) {
               allSharedInbox.push({ id: docSnap.id, labId: currentLab.id, labName: currentLab.name, ...data });

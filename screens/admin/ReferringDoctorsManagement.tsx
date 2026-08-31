@@ -228,6 +228,39 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
     }
   };
 
+  // Helper function to normalize doctor name for comparison
+  const normalizeDocName = (name?: string) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .replace(/^(dr|prof|doctor|md|m\.d\.)\.?\s*/i, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  };
+
+  const doesBookingMatchDoctor = (b: PatientBooking, doctor: ReferringDoctor) => {
+    const docId = (doctor.id || '').trim().toLowerCase();
+    const docDoctorId = (doctor.doctorId || '').trim().toLowerCase();
+    const docNameNorm = normalizeDocName(doctor.name);
+    const docPhoneClean = (doctor.phone || '').replace(/[^0-9]/g, '');
+    const docEmailClean = (doctor.email || '').trim().toLowerCase();
+
+    const bDocId = (b.referringDoctorId || '').trim().toLowerCase();
+    const bRefDocNorm = normalizeDocName(b.referringDoctor);
+    const bDoctorNameNorm = normalizeDocName(b.doctorName);
+    const bPhoneClean = ((b as any).referringDoctorPhone || '').replace(/[^0-9]/g, '');
+    const bEmailClean = ((b as any).referringDoctorEmail || '').trim().toLowerCase();
+
+    if (docId && (bDocId === docId || (b.referringDoctor && b.referringDoctor.toLowerCase() === docId))) return true;
+    if (docDoctorId && (bDocId === docDoctorId || (b.referringDoctor && b.referringDoctor.toLowerCase() === docDoctorId))) return true;
+    if (docNameNorm && (bRefDocNorm === docNameNorm || bDoctorNameNorm === docNameNorm)) return true;
+    if (docNameNorm && bRefDocNorm && (bRefDocNorm.includes(docNameNorm) || docNameNorm.includes(bRefDocNorm))) return true;
+    if (docPhoneClean && bPhoneClean && docPhoneClean === bPhoneClean) return true;
+    if (docEmailClean && bEmailClean && docEmailClean === bEmailClean) return true;
+
+    return false;
+  };
+
   // Filtered doctor list
   const filteredDoctors = doctors.filter(d => {
     const matchesSearch = 
@@ -244,15 +277,19 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
     } else if (partnerFilter === 'pending') {
       matchesPartnerStatus = d.invitationStatus === 'pending' && d.origin !== 'patient_referral';
     } else if (partnerFilter === 'patient_referral') {
-      matchesPartnerStatus = d.origin === 'patient_referral' || (d.status === 'pending' && d.totalReferrals && d.totalReferrals > 0) || false;
+      matchesPartnerStatus = d.origin === 'patient_referral' || (d.status === 'pending' && d.totalReferrals && d.totalReferrals > 0);
     }
 
     return matchesSearch && matchesSpecialty && matchesPartnerStatus;
   });
 
-
+  // Filtered referral bookings list
   const filteredBookings = referralBookings.filter(b => {
     if (selectedDoctorFilter === 'all') return true;
+    const targetDoc = doctors.find(d => d.id === selectedDoctorFilter || d.doctorId === selectedDoctorFilter || d.name === selectedDoctorFilter);
+    if (targetDoc) {
+      return doesBookingMatchDoctor(b, targetDoc);
+    }
     const docKey = (b.referringDoctorId || b.referringDoctor || '').toLowerCase();
     return docKey === selectedDoctorFilter.toLowerCase() || b.referringDoctor?.toLowerCase() === selectedDoctorFilter.toLowerCase();
   });
@@ -713,14 +750,27 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
           {globalSearchResults.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {globalSearchResults.map(doc => {
-                const partnerRecord = doctors.find(d => 
-                  d.name.toLowerCase() === doc.name.toLowerCase() || 
-                  (d.doctorId && d.doctorId === doc.id) ||
-                  (d.phone && doc.phone && d.phone === doc.phone) ||
-                  (d.licenseNumber && doc.licenseNumber && d.licenseNumber.toLowerCase() === doc.licenseNumber.toLowerCase())
-                );
+                const partnerRecord = doctors.find(d => {
+                  const dNameNorm = normalizeDocName(d.name);
+                  const docNameNorm = normalizeDocName(doc.name);
+                  const dPhoneClean = (d.phone || '').replace(/[^0-9]/g, '');
+                  const docPhoneClean = (doc.phone || '').replace(/[^0-9]/g, '');
+                  const dEmail = (d.email || '').trim().toLowerCase();
+                  const docEmail = (doc.email || '').trim().toLowerCase();
+                  const dLicense = (d.licenseNumber || '').trim().toLowerCase();
+                  const docLicense = (doc.licenseNumber || '').trim().toLowerCase();
 
-                const isAlreadyActive = partnerRecord && partnerRecord.status === 'active' && partnerRecord.invitationStatus === 'accepted';
+                  return (
+                    (dNameNorm && docNameNorm && (dNameNorm === docNameNorm || dNameNorm.includes(docNameNorm) || docNameNorm.includes(dNameNorm))) ||
+                    (d.doctorId && (d.doctorId === doc.id || d.id === doc.id)) ||
+                    (d.id === doc.id) ||
+                    (dPhoneClean && docPhoneClean && dPhoneClean === docPhoneClean) ||
+                    (dEmail && docEmail && dEmail === docEmail) ||
+                    (dLicense && docLicense && dLicense === docLicense)
+                  );
+                });
+
+                const isAlreadyActive = partnerRecord && (partnerRecord.status === 'active' || partnerRecord.invitationStatus === 'accepted');
                 const isInvitePending = partnerRecord && (partnerRecord.invitationStatus === 'pending' || partnerRecord.status === 'pending');
 
                 return (
@@ -969,23 +1019,13 @@ export const ReferringDoctorsManagement: React.FC<ReferringDoctorsManagementProp
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   Patients Brought & Tests Conducted
                 </h4>
-                {referralBookings.filter(b => {
-                  const docKey = (b.referringDoctorId || b.referringDoctor || '').toLowerCase();
-                  return docKey === selectedDoctorForDetails.id.toLowerCase() || 
-                         docKey === selectedDoctorForDetails.name.toLowerCase() ||
-                         (selectedDoctorForDetails.doctorId && docKey === selectedDoctorForDetails.doctorId.toLowerCase());
-                }).length === 0 ? (
+                {referralBookings.filter(b => doesBookingMatchDoctor(b, selectedDoctorForDetails)).length === 0 ? (
                   <div className="p-6 text-center bg-slate-50 rounded-xl text-slate-400 text-xs">
                     No orders registered yet under this physician.
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {referralBookings.filter(b => {
-                      const docKey = (b.referringDoctorId || b.referringDoctor || '').toLowerCase();
-                      return docKey === selectedDoctorForDetails.id.toLowerCase() || 
-                             docKey === selectedDoctorForDetails.name.toLowerCase() ||
-                             (selectedDoctorForDetails.doctorId && docKey === selectedDoctorForDetails.doctorId.toLowerCase());
-                    }).map((b) => (
+                    {referralBookings.filter(b => doesBookingMatchDoctor(b, selectedDoctorForDetails)).map((b) => (
                       <div key={b.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 hover:border-teal-300 transition">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-xs text-slate-900">{b.patientName}</span>
