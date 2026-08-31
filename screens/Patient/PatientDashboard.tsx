@@ -54,6 +54,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [patientRecordId, setPatientRecordId] = useState<string>(user?.id || 'pat-1');
   const [patientFullName, setPatientFullName] = useState<string>(user?.name || 'Patient Record');
+  const [patientDocData, setPatientDocData] = useState<any>(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showBookletModal, setShowBookletModal] = useState(false);
   const [batchReportBooking, setBatchReportBooking] = useState<PatientBooking | null>(null);
@@ -95,9 +96,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       );
       if (found) {
         setPatientRecordId(found.id);
-        setPatientFullName(found.data().name || user?.name || 'Patient Record');
-        if (found.data().labTests) {
-          setTests(found.data().labTests);
+        const data = found.data();
+        setPatientDocData(data);
+        setPatientFullName(data.name || user?.name || 'Patient Record');
+        if (data.labTests) {
+          setTests(data.labTests);
         } else {
           setTests([]);
         }
@@ -898,11 +901,19 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         onClose={() => setShowBookletModal(false)}
         patient={{
           id: patientRecordId,
-          patientId: patientRecordId,
+          patientId: patientDocData?.patientId || patientRecordId,
+          patientPid: patientDocData?.patientId || patientRecordId,
           name: patientFullName,
           fullName: patientFullName,
-          email: user?.email,
-          phone: user?.phone
+          email: patientDocData?.email || user?.email,
+          phone: patientDocData?.phone || user?.phone,
+          accessCode: patientDocData?.accessCode || user?.accessCode,
+          gender: patientDocData?.gender || user?.gender || 'Male',
+          age: patientDocData?.age || user?.age || 32,
+          bloodType: patientDocData?.bloodType || patientDocData?.bloodGroup || user?.bloodGroup || 'O+',
+          insuranceProvider: patientDocData?.insuranceProvider || 'Self-Pay / Cash',
+          allergies: patientDocData?.allergies || 'None reported',
+          labTests: tests
         }}
         lab={lab}
       />
@@ -913,11 +924,14 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         onClose={() => setShowAuditModal(false)}
         patient={{
           id: patientRecordId,
-          patientId: patientRecordId,
+          patientId: patientDocData?.patientId || patientRecordId,
+          patientPid: patientDocData?.patientId || patientRecordId,
+          patientCode: patientDocData?.patientId || patientRecordId,
           name: patientFullName,
           fullName: patientFullName,
-          email: user?.email,
-          phone: user?.phone
+          email: patientDocData?.email || user?.email,
+          phone: patientDocData?.phone || user?.phone,
+          accessCode: patientDocData?.accessCode || user?.accessCode
         }}
         labId={lab?.id || 'lab-1'}
         labName={lab?.name || 'nanoLabs Diagnostic Facility'}
