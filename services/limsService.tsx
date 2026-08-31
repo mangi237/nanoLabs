@@ -106,12 +106,12 @@ export interface PatientBooking {
   coPayPercent?: number; // Patient direct co-payment percentage
   insuranceCoveredAmount?: number; // Amount covered by insurance
   patientCoPayAmount?: number; // Patient direct co-payment balance
-  discountType?: 'percentage' | 'fixed' | 'coupon' | 'staff_exemption';
+  discountType?: 'percentage' | 'percent' | 'fixed' | 'coupon' | 'staff_exemption' | 'workers_benefit' | string;
   discountValue?: number;
   discountAmount?: number;
   couponCode?: string;
   paymentStatus: 'unpaid' | 'paid';
-  paymentMethod?: 'cash' | 'mobile_money' | 'card' | 'insurance';
+  paymentMethod?: 'cash' | 'mobile_money' | 'bank_transfer' | 'card' | 'insurance' | 'workers_benefit' | 'gift_coupon' | string;
   paymentDate?: string;
   paidAt?: string;
   paymentProcessedBy?: string;
@@ -529,15 +529,36 @@ export const limsService = {
   async processPayment(params: {
     labId: string;
     bookingId: string;
-    paymentMethod: 'cash' | 'mobile_money' | 'card' | 'insurance';
+    paymentMethod: 'cash' | 'mobile_money' | 'bank_transfer' | 'card' | 'insurance' | 'workers_benefit' | 'gift_coupon' | string;
     processedByName: string;
     paymentDetails?: {
       momoNumber?: string;
       momoProvider?: string;
+      momoSenderPhone?: string;
+      momoSenderName?: string;
+      momoTxId?: string;
       cardType?: string;
+      cardScheme?: string;
       cardLast4?: string;
+      cardAuthCode?: string;
       bankName?: string;
+      bankAccountName?: string;
+      bankReference?: string;
+      bankBranch?: string;
+      bankTransferDate?: string;
+      workerStaffName?: string;
+      workerStaffId?: string;
+      workerDepartment?: string;
+      workerBenefitType?: string;
+      workerAuthNote?: string;
+      couponCode?: string;
+      couponDiscountPercent?: number;
+      couponDiscountAmount?: number;
+      couponSponsorName?: string;
+      couponNotes?: string;
       insuranceName?: string;
+      insuranceProvider?: string;
+      insurancePolicyNumber?: string;
       insurancePercentage?: number;
       insuranceCopay?: number;
       cashGiven?: number;
@@ -546,7 +567,6 @@ export const limsService = {
       originalPrice?: number;
       discountAmount?: number;
       discountType?: string;
-      couponCode?: string;
       actualPaidAmount?: number;
       insuranceDetails?: any;
       [key: string]: any;
