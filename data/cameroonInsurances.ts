@@ -1,4 +1,3 @@
-
 export interface CameroonInsuranceCompany {
   id: string;
   name: string;
