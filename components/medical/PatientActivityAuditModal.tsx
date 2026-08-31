@@ -1,4 +1,3 @@
-// components/medical/PatientActivityAuditModal.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
@@ -23,15 +22,9 @@ import {
   Building2,
   FileSpreadsheet,
   Layers,
-  ChevronRight,
-  TestTube,
-  CreditCard,
-  ClipboardCheck,
-  UserPlus,
-  Edit3
+  ChevronRight
 } from 'lucide-react';
 import { auditService, AuditLogItem } from '../../services/auditService';
-import { useLanguage } from '../../context/languageContext';
 
 interface PatientActivityAuditModalProps {
   isOpen: boolean;
@@ -39,7 +32,9 @@ interface PatientActivityAuditModalProps {
   patient: {
     id: string;
     patientId?: string;
+    patientPid?: string;
     patientCode?: string;
+    accessCode?: string;
     name?: string;
     fullName?: string;
     phone?: string;
@@ -57,11 +52,11 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
   labId = 'lab-1',
   labName = 'nanoLabs Diagnostic Facility'
 }) => {
-  const { t } = useLanguage();
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'STAFF_ONLY' | 'LAB_CLINICAL' | 'RECEPTION_BILLING' | 'PATIENT_ONLY'>('ALL');
 
   const patientId = patient?.id || patient?.patientId || patient?.patientCode || '';
   const patientDisplayName = patient?.name || patient?.fullName || 'Patient Record';
@@ -75,64 +70,17 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
   const loadLogs = async () => {
     setLoading(true);
     try {
-      // Get logs from the audit service - this now fetches ALL actions
-      const accessLogs = await auditService.getPatientAccessLogs(labId, patientId);
-      
-      // If no logs exist yet, seed with comprehensive initial entries
-      if (accessLogs.length === 0) {
-        const now = new Date();
-        const initialLogs: AuditLogItem[] = [
-          {
-            id: `audit-intake-${patientId}-${Date.now()}`,
-            action: 'VIEW_PATIENT_PROFILE',
-            actionLabel: 'Patient Intake & Medical Record Creation',
-            category: 'ACCOUNT_MANAGEMENT',
-            facilityId: labId,
-            facilityName: labName,
-            patientId: patientId,
-            patientName: patientDisplayName,
-            performedBy: {
-              id: 'staff-rec-1',
-              name: 'Claire Tanyi',
-              role: 'receptionist',
-              email: 'reception@nanolabs.com'
-            },
-            details: 'Patient demographic profile registered into secure zero-knowledge directory with AES-GCM field-level encryption.',
-            cryptographicSeal: `NL-SEAL-INTAKE-${Date.now().toString().slice(-8)}`,
-            zeroKnowledgeStatus: 'AES-GCM-256 Sealed (E2EE Integrity Verified)',
-            timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            id: `audit-test-${patientId}-${Date.now()}`,
-            action: 'VIEW_DIAGNOSTIC_REPORT',
-            actionLabel: 'Initial Diagnostic Panel Registered',
-            category: 'CLINICAL_ACCESS',
-            facilityId: labId,
-            facilityName: labName,
-            patientId: patientId,
-            patientName: patientDisplayName,
-            testId: 'panel-1',
-            testName: 'Complete Blood Count (CBC)',
-            performedBy: {
-              id: 'staff-lab-1',
-              name: 'Dr. Alexis Vance',
-              role: 'labtech',
-              email: 'alexis.vance@nanolabs.com'
-            },
-            details: 'Initial diagnostic panel ordered and registered in the laboratory information system.',
-            cryptographicSeal: `NL-SEAL-PANEL-${Date.now().toString().slice(-8)}`,
-            zeroKnowledgeStatus: 'AES-GCM-256 Sealed (E2EE Integrity Verified)',
-            timestamp: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString()
-          }
-        ];
-        setLogs(initialLogs);
-      } else {
-        setLogs(accessLogs);
-      }
+      const accessLogs = await auditService.getPatientAccessLogs({
+        labId,
+        patientId,
+        patientName: patientDisplayName,
+        patientEmail: patient?.email,
+        patientPhone: patient?.phone,
+        patientCode: patient?.patientCode || patient?.patientId || patientId
+      });
+      setLogs(accessLogs);
     } catch (e) {
       console.error('Failed to load patient audit logs:', e);
-      // Use fallback logs if fetch fails
-      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -140,17 +88,42 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
 
   if (!isOpen) return null;
 
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = 
-      (log.performedBy?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.performedBy?.role || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.actionLabel || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.details || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.testName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.action || '').toLowerCase().includes(searchQuery.toLowerCase());
+  const staffLogsCount = logs.filter(l => {
+    const r = (l.performedBy?.role || '').toLowerCase();
+    return !r.includes('patient');
+  }).length;
 
-    if (selectedCategory === 'ALL') return matchesSearch;
-    return matchesSearch && log.category === selectedCategory;
+  const patientLogsCount = logs.filter(l => {
+    const r = (l.performedBy?.role || '').toLowerCase();
+    return r.includes('patient');
+  }).length;
+
+  const filteredLogs = logs.filter(log => {
+    const roleLower = (log.performedBy?.role || '').toLowerCase();
+    const isPatient = roleLower.includes('patient');
+
+    // Role filter
+    if (roleFilter === 'STAFF_ONLY' && isPatient) return false;
+    if (roleFilter === 'PATIENT_ONLY' && !isPatient) return false;
+    if (roleFilter === 'LAB_CLINICAL' && !roleLower.includes('tech') && !roleLower.includes('bio') && !roleLower.includes('doctor') && !roleLower.includes('phleb') && !roleLower.includes('analyzer')) return false;
+    if (roleFilter === 'RECEPTION_BILLING' && !roleLower.includes('rec') && !roleLower.includes('cashier') && !roleLower.includes('admin')) return false;
+
+    // Category filter
+    if (selectedCategory !== 'ALL' && log.category !== selectedCategory) return false;
+
+    // Search query
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+
+    return (
+      (log.performedBy?.name || '').toLowerCase().includes(query) ||
+      (log.performedBy?.role || '').toLowerCase().includes(query) ||
+      (log.actionLabel || '').toLowerCase().includes(query) ||
+      (log.details || '').toLowerCase().includes(query) ||
+      (log.testName || '').toLowerCase().includes(query) ||
+      (log.bookingCode || '').toLowerCase().includes(query) ||
+      (log.cryptographicSeal || '').toLowerCase().includes(query)
+    );
   });
 
   const getActionIcon = (action: string) => {
@@ -169,29 +142,12 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
         return <Syringe className="w-4 h-4 text-purple-600" />;
       case 'UPLOAD_RESULTS':
       case 'VALIDATE_FINDINGS':
-        return <ClipboardCheck className="w-4 h-4 text-emerald-600" />;
+        return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
       case 'PROCESS_PAYMENT':
         return <DollarSign className="w-4 h-4 text-emerald-700" />;
-      case 'CHECKIN_VERIFICATION':
-        return <UserCheck className="w-4 h-4 text-blue-600" />;
-      case 'EDIT_PATIENT_RECORD':
-        return <Edit3 className="w-4 h-4 text-amber-600" />;
-      case 'RELEASE_RESULTS':
-        return <FileText className="w-4 h-4 text-emerald-600" />;
       default:
         return <Activity className="w-4 h-4 text-slate-600" />;
     }
-  };
-
-  const getActionCategoryLabel = (category: string) => {
-    const labels: Record<string, string> = {
-      'CLINICAL_ACCESS': 'Clinical Access',
-      'DIAGNOSTIC_MODIFICATION': 'Diagnostic Modification',
-      'SAMPLE_CHAIN_OF_CUSTODY': 'Sample Chain of Custody',
-      'FINANCIAL_TRANSACTION': 'Financial Transaction',
-      'ACCOUNT_MANAGEMENT': 'Account Management'
-    };
-    return labels[category] || category;
   };
 
   const getRoleBadge = (role: string) => {
@@ -199,11 +155,11 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
     if (r.includes('admin') || r.includes('superadmin')) {
       return <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-bold uppercase">Administrator</span>;
     }
-    if (r.includes('labtech') || r.includes('technologist') || r.includes('doctor') || r.includes('pathologist')) {
+    if (r.includes('labtech') || r.includes('technologist') || r.includes('doctor')) {
       return <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[9px] font-bold uppercase">Doctor / Lab Tech</span>;
     }
     if (r.includes('analyzer') || r.includes('phlebotomist')) {
-      return <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-bold uppercase">Phlebotomist</span>;
+      return <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-bold uppercase">Phlebotomist / Collector</span>;
     }
     if (r.includes('cashier')) {
       return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold uppercase">Financial Cashier</span>;
@@ -214,10 +170,7 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
     if (r.includes('patient')) {
       return <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase">Patient (Self)</span>;
     }
-    if (r.includes('biologist')) {
-      return <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-bold uppercase">Clinical Biologist</span>;
-    }
-    return <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-bold uppercase">{role || 'Staff'}</span>;
+    return <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-bold uppercase">{role}</span>;
   };
 
   const formatTimestamp = (iso: string) => {
@@ -251,7 +204,7 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
             </div>
 
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              {t('patient_id')} Access & Audit Ledger
+              Patient Data Access & Audit Ledger
             </h2>
             
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
@@ -260,8 +213,6 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
               <span className="font-mono text-teal-300">{patient?.patientId || patient?.patientCode || patientId}</span>
               <span>•</span>
               <span>{labName}</span>
-              <span>•</span>
-              <span className="text-teal-400 font-semibold">{logs.length} {t('actions')}</span>
             </div>
           </div>
 
@@ -279,7 +230,7 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
           <div className="flex items-center gap-2">
             <BadgeCheck className="w-4 h-4 text-teal-700 shrink-0" />
             <p className="leading-tight">
-              <strong>Complete Transparency:</strong> Every single time a doctor, technician, cashier, receptionist, or admin opens or manipulates your diagnostic file, an unalterable timestamped mark is sealed in this ledger.
+              <strong>Transparent Patient Oversight:</strong> Every single time a doctor, technician, cashier, or admin opens or manipulates your diagnostic file, an unalterable timestamped mark is sealed in this ledger.
             </p>
           </div>
           <button
@@ -298,79 +249,130 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 type="text"
-                placeholder="Search by staff name, role, action, or diagnostic test..."
+                placeholder="Search by staff name, role, action, booking code, or test..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-2xs"
               />
             </div>
 
-            <div className="text-xs text-slate-500 font-semibold shrink-0">
-              {filteredLogs.length} Total Audit Records
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-teal-100 text-teal-900 font-bold border border-teal-200">
+                👨‍⚕️ {staffLogsCount} Staff Actions
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                👤 {patientLogsCount} Patient Self
+              </span>
             </div>
+          </div>
+
+          {/* Actor Role Filter Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px] font-bold pb-1">
+            <span className="text-slate-400 uppercase text-[10px] tracking-wider pr-1">Filter Actor:</span>
+            <button
+              onClick={() => setRoleFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                roleFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              All Actors ({logs.length})
+            </button>
+            <button
+              onClick={() => setRoleFilter('STAFF_ONLY')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                roleFilter === 'STAFF_ONLY'
+                  ? 'bg-indigo-700 text-white shadow-xs'
+                  : 'bg-white text-indigo-700 hover:bg-indigo-50 border border-indigo-200'
+              }`}
+            >
+              Staff Personnel Only ({staffLogsCount})
+            </button>
+            <button
+              onClick={() => setRoleFilter('LAB_CLINICAL')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                roleFilter === 'LAB_CLINICAL'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'bg-white text-teal-700 hover:bg-teal-50 border border-teal-200'
+              }`}
+            >
+              Lab Techs & Biologists
+            </button>
+            <button
+              onClick={() => setRoleFilter('RECEPTION_BILLING')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                roleFilter === 'RECEPTION_BILLING'
+                  ? 'bg-blue-700 text-white shadow-xs'
+                  : 'bg-white text-blue-700 hover:bg-blue-50 border border-blue-200'
+              }`}
+            >
+              Reception & Billing
+            </button>
+            <button
+              onClick={() => setRoleFilter('PATIENT_ONLY')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                roleFilter === 'PATIENT_ONLY'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
+              }`}
+            >
+              Patient Portal ({patientLogsCount})
+            </button>
           </div>
 
           {/* Category Filter Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-[11px] font-bold">
+            <span className="text-slate-400 uppercase text-[10px] tracking-wider pr-1">Category:</span>
             <button
               onClick={() => setSelectedCategory('ALL')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedCategory === 'ALL'
-                  ? 'bg-slate-900 text-white'
+                  ? 'bg-slate-800 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
               }`}
             >
-              All Access Events ({logs.length})
+              All Types
             </button>
             <button
               onClick={() => setSelectedCategory('CLINICAL_ACCESS')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedCategory === 'CLINICAL_ACCESS'
                   ? 'bg-blue-700 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
               }`}
             >
-              Clinical Access
+              Reports Viewed & Released
             </button>
             <button
               onClick={() => setSelectedCategory('DIAGNOSTIC_MODIFICATION')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedCategory === 'DIAGNOSTIC_MODIFICATION'
                   ? 'bg-teal-700 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
               }`}
             >
-              Diagnostic Modifications
+              Findings & Validation
             </button>
             <button
               onClick={() => setSelectedCategory('SAMPLE_CHAIN_OF_CUSTODY')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedCategory === 'SAMPLE_CHAIN_OF_CUSTODY'
                   ? 'bg-purple-700 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
               }`}
             >
-              Sample Collections
+              Specimen Collections
             </button>
             <button
               onClick={() => setSelectedCategory('FINANCIAL_TRANSACTION')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedCategory === 'FINANCIAL_TRANSACTION'
                   ? 'bg-emerald-700 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
               }`}
             >
-              Financial Transactions
-            </button>
-            <button
-              onClick={() => setSelectedCategory('ACCOUNT_MANAGEMENT')}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                selectedCategory === 'ACCOUNT_MANAGEMENT'
-                  ? 'bg-amber-700 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
-              }`}
-            >
-              Account Management
+              Billing & Receipts
             </button>
           </div>
         </div>
@@ -393,28 +395,14 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
           ) : (
             filteredLogs.map((log, index) => {
               const { date, time } = formatTimestamp(log.timestamp);
-              const isClinical = log.category === 'CLINICAL_ACCESS';
-              const isFinancial = log.category === 'FINANCIAL_TRANSACTION';
-              const isCollection = log.category === 'SAMPLE_CHAIN_OF_CUSTODY';
-              
               return (
                 <div
                   key={log.id || index}
-                  className={`p-4 bg-white hover:bg-slate-50/80 border rounded-2xl shadow-2xs transition-all space-y-2.5 ${
-                    isClinical ? 'border-blue-200/80' : 
-                    isFinancial ? 'border-emerald-200/80' : 
-                    isCollection ? 'border-purple-200/80' : 
-                    'border-slate-200/90'
-                  }`}
+                  className="p-4 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl shadow-2xs transition-all space-y-2.5"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <div className={`p-2 rounded-xl ${
-                        isClinical ? 'bg-blue-50' : 
-                        isFinancial ? 'bg-emerald-50' : 
-                        isCollection ? 'bg-purple-50' : 
-                        'bg-slate-100'
-                      }`}>
+                      <div className="p-2 bg-slate-100 rounded-xl">
                         {getActionIcon(log.action)}
                       </div>
                       <span className="font-bold text-slate-900 text-xs sm:text-sm">
@@ -425,14 +413,6 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
                           {log.testName}
                         </span>
                       )}
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                        isClinical ? 'bg-blue-100 text-blue-800' : 
-                        isFinancial ? 'bg-emerald-100 text-emerald-800' : 
-                        isCollection ? 'bg-purple-100 text-purple-800' : 
-                        'bg-slate-100 text-slate-800'
-                      }`}>
-                        {getActionCategoryLabel(log.category)}
-                      </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono self-start sm:self-auto">
@@ -458,7 +438,7 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
                       </div>
                     </div>
 
-                    <div className="text-slate-600 text-xs sm:text-right max-w-md">
+                    <div className="text-slate-600 text-xs sm:text-right">
                       {log.details}
                     </div>
                   </div>
@@ -467,11 +447,11 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[10px] text-slate-400 font-mono">
                     <div className="flex items-center gap-1 text-emerald-700 font-medium">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      <span>SHA-256 Seal: {log.cryptographicSeal || `NL-SEAL-${Date.now().toString().slice(-8)}`}</span>
+                      <span>SHA-256 Seal: {log.cryptographicSeal || 'NL-SIG-9402'}</span>
                     </div>
 
                     <span className="text-slate-400">
-                      {log.zeroKnowledgeStatus || 'AES-GCM-256 Sealed'}
+                      Facility: {log.facilityName || labName}
                     </span>
                   </div>
                 </div>
