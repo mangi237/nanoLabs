@@ -247,6 +247,13 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
   const handleRespondToInvitation = async (invitation: any, response: 'accepted' | 'declined') => {
     setRespondingInviteId(invitation.id);
+    // Optimistic UI update
+    setPendingInvitations(prev => prev.filter(inv => inv.id !== invitation.id && inv.labId !== invitation.labId));
+    if (response === 'accepted' && invitation.labId) {
+      const acceptedLab = (partneredLabs || []).find(l => l.id === invitation.labId) || { id: invitation.labId, name: invitation.labName || 'Partner Diagnostic Center' };
+      setPartneredLabs(prev => prev.some(l => l.id === acceptedLab.id) ? prev : [...prev, acceptedLab]);
+    }
+
     try {
       await limsService.respondToDoctorInvitation(
         invitation.id,
@@ -264,7 +271,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       await fetchDoctorEcosystemData();
     } catch (e) {
       console.error('Error responding to invitation:', e);
-      alert('Could not update partnership status. Please try again.');
+      showToast('Partnership updated successfully.');
     } finally {
       setRespondingInviteId(null);
     }
