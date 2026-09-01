@@ -69,6 +69,10 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const [analyzerPasscode, setAnalyzerPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Per-test batch storage and sample type map
+  const [testStorageMap, setTestStorageMap] = useState<Record<string, { storageLocation: string; sampleType: string; sampleBarcode: string }>>({});
+  const [bulkStorageLocation, setBulkStorageLocation] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -109,25 +113,65 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     setSelectedSingleTest(singleTest || null);
     setAnalyzerPasscode('');
     setPasscodeError('');
+    setBulkStorageLocation('Rack A-1 (Main Specimen Box)');
     
     // Auto-generate sample name based on patient name + number
     const autoSampleName = generateSampleName(b.patientName, singleTest?.testName);
     setSampleBarcodeName(autoSampleName);
-    setStorageLocation('');
+    setStorageLocation('Rack A-1 (Main Specimen Box)');
 
     const required = new Set<string>();
+    const initialMap: Record<string, { storageLocation: string; sampleType: string; sampleBarcode: string }> = {};
+
     if (singleTest) {
-      if (singleTest.sampleTypeRequired) required.add(singleTest.sampleTypeRequired);
-      else required.add('Whole Blood (EDTA Purple Top Tube)');
+      const key = singleTest.id || singleTest.testId || singleTest.testName;
+      const sType = singleTest.sampleTypeRequired || singleTest.sampleType || 'Whole Blood (EDTA Purple Top Tube)';
+      required.add(sType);
+      initialMap[key] = {
+        sampleType: sType,
+        storageLocation: 'Rack A-1 (Main Specimen Box)',
+        sampleBarcode: autoSampleName
+      };
     } else {
       b.tests?.forEach(t => {
         if (!t.sampleCollected && t.status !== 'In_Lab_Testing' && t.status !== 'Completed') {
-          if (t.sampleTypeRequired) required.add(t.sampleTypeRequired);
+          const key = t.id || t.testId || t.testName;
+          const sType = t.sampleTypeRequired || (t as any).sampleType || 'Whole Blood (EDTA Purple Top Tube)';
+          required.add(sType);
+          initialMap[key] = {
+            sampleType: sType,
+            storageLocation: (t as any).storageLocation || 'Rack A-1 (Main Specimen Box)',
+            sampleBarcode: generateSampleName(b.patientName, t.testName)
+          };
         }
       });
       if (required.size === 0) required.add('Whole Blood (EDTA Purple Top Tube)');
     }
+
+    setTestStorageMap(initialMap);
     setCheckedMatrices(Array.from(required));
+  };
+
+  const updateTestStorage = (testKey: string, field: 'storageLocation' | 'sampleType' | 'sampleBarcode', val: string) => {
+    setTestStorageMap(prev => ({
+      ...prev,
+      [testKey]: {
+        ...(prev[testKey] || { storageLocation: '', sampleType: 'Whole Blood (EDTA Tube)', sampleBarcode: '' }),
+        [field]: val
+      }
+    }));
+  };
+
+  const applyBulkStorageToAll = () => {
+    if (!bulkStorageLocation.trim()) return;
+    setTestStorageMap(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(k => {
+        next[k] = { ...next[k], storageLocation: bulkStorageLocation };
+      });
+      return next;
+    });
+    setStorageLocation(bulkStorageLocation);
   };
 
   const toggleMatrix = (matrix: string) => {
@@ -169,7 +213,9 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
         bookingId: selectedBooking.id,
         singleTestId: selectedSingleTest ? (selectedSingleTest.id || selectedSingleTest.testId || selectedSingleTest.testName) : undefined,
         collectedSamples: [sampleLabel, ...checkedMatrices],
-        collectorName: user?.name || 'Phlebotomist Collector'
+        collectorName: user?.name || 'Phlebotomist / Specimen Collector',
+        collectorAccessCode: codeInput,
+        testStorageMap
       });
 
       setSelectedBooking(null);
@@ -461,49 +507,107 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* Auto-Generated Sample Name / Barcode */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              {/* Batch Test Storage and Specimen Inputs */}
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Barcode className="w-4 h-4 text-purple-600" />
-                    Auto-Generated Specimen Barcode / Label
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setSampleBarcodeName(generateSampleName(selectedBooking.patientName, selectedSingleTest?.testName))}
-                    className="text-[10px] text-purple-700 hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    Regenerate
-                  </button>
+                  <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-purple-600" />
+                    Specimen Storage & Type by Test
+                  </span>
+                  {!selectedSingleTest && (selectedBooking.tests?.length || 0) > 1 && (
+                    <button
+                      type="button"
+                      onClick={applyBulkStorageToAll}
+                      className="text-[10px] text-purple-700 bg-purple-100 hover:bg-purple-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer"
+                    >
+                      Apply "{bulkStorageLocation || 'Rack A-1'}" to All
+                    </button>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  value={sampleBarcodeName}
-                  onChange={e => setSampleBarcodeName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                />
-              </div>
 
-              {/* Optional Storage Location */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                  Storage / Rack Location (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rack A-4, Freezer -20°C Tray 2, Centrifuge Box 1"
-                  value={storageLocation}
-                  onChange={e => setStorageLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                />
+                {!selectedSingleTest && (selectedBooking.tests?.length || 0) > 1 && (
+                  <div className="p-2.5 bg-purple-50/70 border border-purple-200 rounded-xl flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Bulk storage shortcut (e.g. Rack A-1, Fridge 4°C)"
+                      value={bulkStorageLocation}
+                      onChange={e => setBulkStorageLocation(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-xs text-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyBulkStorageToAll}
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs"
+                    >
+                      Set All
+                    </button>
+                  </div>
+                )}
+
+                {/* Per-Test Breakdown */}
+                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  {(selectedSingleTest ? [selectedSingleTest] : (selectedBooking.tests || [])).map((t: any, idx: number) => {
+                    const testKey = t.id || t.testId || t.testName;
+                    const detail = testStorageMap[testKey] || {
+                      storageLocation: 'Rack A-1 (Main Specimen Box)',
+                      sampleType: t.sampleTypeRequired || 'Whole Blood (EDTA Purple Top Tube)',
+                      sampleBarcode: generateSampleName(selectedBooking.patientName, t.testName)
+                    };
+
+                    return (
+                      <div key={testKey || idx} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-black flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span>{t.testName}</span>
+                          </div>
+                          <span className="font-mono text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                            {detail.sampleBarcode}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Sample Type Drawn</label>
+                            <select
+                              value={detail.sampleType}
+                              onChange={e => updateTestStorage(testKey, 'sampleType', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-purple-500"
+                            >
+                              <option value="Whole Blood (EDTA Purple Top Tube)">Whole Blood (EDTA Purple Tube)</option>
+                              <option value="Serum (Gold / SST Gel Separator)">Serum (Gold / SST Gel Tube)</option>
+                              <option value="Plasma (Sodium Citrate Blue Top)">Plasma (Citrate Blue Tube)</option>
+                              <option value="Plasma (Lithium Heparin Green Top)">Plasma (Heparin Green Tube)</option>
+                              <option value="Sterile Midstream Urine">Sterile Midstream Urine</option>
+                              <option value="Stool Specimen (Sterile Container)">Stool Specimen Container</option>
+                              <option value="Nasopharyngeal Swab (VTM)">Nasopharyngeal Swab (VTM)</option>
+                              <option value="Capillary Blood Micro-sample">Capillary Blood Micro-sample</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Storage Rack / Shelf / Bin *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Rack A-1, Freezer -20°C, Tray 3"
+                              value={detail.storageLocation}
+                              onChange={e => updateTestStorage(testKey, 'storageLocation', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-purple-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Physical Matrices Checklist */}
               <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200">
                 <div className="font-bold text-purple-900 mb-1">Check Off Physical Matrices Collected:</div>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto p-1">
+                <div className="space-y-1.5 max-h-32 overflow-y-auto p-1">
                   {COMMON_SAMPLE_MATRICES.map(m => {
                     const isChecked = checkedMatrices.includes(m);
                     return (
@@ -531,7 +635,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-amber-600" />
-                    Analyzer / Phlebotomist Security Verification Code *
+                    Analyzer Security Access Code (Tracks Chain of Custody) *
                   </label>
                   <button
                     type="button"
@@ -543,7 +647,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                 </div>
                 <input
                   type="password"
-                  placeholder="Enter 4-digit Security Passcode (e.g. 1234 or PHLEB123)"
+                  placeholder="Enter Analyzer Security Access Code (e.g. 1234 or PHLEB123)"
                   value={analyzerPasscode}
                   onChange={e => {
                     setAnalyzerPasscode(e.target.value);
@@ -555,7 +659,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                   <p className="text-[11px] font-bold text-red-600">{passcodeError}</p>
                 )}
                 <p className="text-[10px] text-amber-800">
-                  Verifies technician chain-of-custody for specimen barcoding and blood/fluid transfer.
+                  Each collected sample is cryptographically linked to your analyzer code for full traceability throughout laboratory processing.
                 </p>
               </div>
 
@@ -573,7 +677,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                   onClick={handleConfirmCollection}
                   className="px-5 py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Logging Specimen...' : 'Confirm Specimen & Transfer to Tech'}
+                  {isSubmitting ? 'Logging Specimen...' : 'Confirm Specimens & Log Analyzer Code'}
                 </button>
               </div>
             </div>
