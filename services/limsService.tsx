@@ -33,6 +33,9 @@ export interface BookingTestItem {
   sampleCollected?: boolean;
   sampleCollectedAt?: string;
   sampleCollectedBy?: string;
+  collectorAccessCode?: string;
+  storageLocation?: string;
+  sampleBarcode?: string;
   collectedSamples?: string[];
   sampleType?: string;
   reagentsUsed?: Array<{
@@ -707,8 +710,8 @@ export const limsService = {
   },
 
   /**
-   * Phlebotomist selects sample matrices physically drawn & completes collection
-   * Supports decoupled single test collection or full batch collection
+   * Phlebotomist / Analyzer selects sample matrices physically drawn & completes collection
+   * Supports per-test storage location, specimen sample type, barcode label, and analyzer access code tracking
    */
   async completeSampleCollection(params: {
     labId: string;
@@ -716,8 +719,10 @@ export const limsService = {
     singleTestId?: string;
     collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine Container']
     collectorName: string;
+    collectorAccessCode?: string;
+    testStorageMap?: Record<string, { storageLocation: string; sampleType: string; sampleBarcode?: string }>;
   }): Promise<boolean> {
-    const { labId, bookingId, singleTestId, collectedSamples, collectorName } = params;
+    const { labId, bookingId, singleTestId, collectedSamples, collectorName, collectorAccessCode, testStorageMap } = params;
     const timestamp = new Date().toISOString();
 
     try {
@@ -730,6 +735,9 @@ export const limsService = {
         let modifiedTestName = '';
 
         const updatedTests = data.tests.map(t => {
+          const testKey = t.id || t.testId || t.testName;
+          const specificStorage = testStorageMap?.[testKey] || testStorageMap?.[t.testName] || testStorageMap?.[t.id];
+
           if (singleTestId) {
             if (t.id === singleTestId || t.testId === singleTestId || t.testName === singleTestId) {
               modifiedTestName = t.testName;
@@ -738,6 +746,11 @@ export const limsService = {
                 status: 'In_Lab_Testing' as TestStatus,
                 sampleCollected: true,
                 sampleCollectedAt: timestamp,
+                sampleCollectedBy: collectorName,
+                collectorAccessCode: collectorAccessCode || t.collectorAccessCode,
+                storageLocation: specificStorage?.storageLocation || (t as any).storageLocation,
+                sampleType: specificStorage?.sampleType || t.sampleTypeRequired || t.sampleType,
+                sampleBarcode: specificStorage?.sampleBarcode || (t as any).sampleBarcode,
                 collectedSamples
               };
             }
@@ -749,6 +762,11 @@ export const limsService = {
             status: 'In_Lab_Testing' as TestStatus,
             sampleCollected: true,
             sampleCollectedAt: timestamp,
+            sampleCollectedBy: collectorName,
+            collectorAccessCode: collectorAccessCode || t.collectorAccessCode,
+            storageLocation: specificStorage?.storageLocation || (t as any).storageLocation,
+            sampleType: specificStorage?.sampleType || t.sampleTypeRequired || t.sampleType,
+            sampleBarcode: specificStorage?.sampleBarcode || (t as any).sampleBarcode,
             collectedSamples
           };
         });
@@ -764,6 +782,7 @@ export const limsService = {
           collectedSamples,
           sampleCollectedAtDate: timestamp,
           sampleCollectedBy: collectorName,
+          collectorAccessCode: collectorAccessCode || undefined,
           overallStatus: newOverallStatus,
           tests: updatedTests,
           updatedAt: timestamp
@@ -777,6 +796,7 @@ export const limsService = {
             if (patSnap.exists()) {
               const currentTests: any[] = patSnap.data().labTests || [];
               const updatedPatTests = currentTests.map(pt => {
+                const specificStorage = testStorageMap?.[pt.id || pt.testId || pt.testName];
                 if (singleTestId) {
                   const isMatch = pt.id === singleTestId || pt.testId === singleTestId || (pt.testName || pt.name) === modifiedTestName || (pt.testName || pt.name) === singleTestId;
                   if (isMatch) {
@@ -785,6 +805,10 @@ export const limsService = {
                       status: 'In_Lab_Testing',
                       sampleCollected: true,
                       sampleCollectedAt: timestamp,
+                      sampleCollectedBy: collectorName,
+                      collectorAccessCode: collectorAccessCode || pt.collectorAccessCode,
+                      storageLocation: specificStorage?.storageLocation || pt.storageLocation,
+                      sampleType: specificStorage?.sampleType || pt.sampleTypeRequired || pt.sampleType,
                       collectedSamples
                     };
                   }
@@ -798,6 +822,10 @@ export const limsService = {
                     status: 'In_Lab_Testing',
                     sampleCollected: true,
                     sampleCollectedAt: timestamp,
+                    sampleCollectedBy: collectorName,
+                    collectorAccessCode: collectorAccessCode || pt.collectorAccessCode,
+                    storageLocation: specificStorage?.storageLocation || pt.storageLocation,
+                    sampleType: specificStorage?.sampleType || pt.sampleTypeRequired || pt.sampleType,
                     collectedSamples
                   };
                 }
@@ -819,10 +847,10 @@ export const limsService = {
           patientId: data.patientId,
           patientName: data.patientName,
           action: 'COLLECT_SAMPLE',
-          performedBy: { id: 'phleb-1', name: collectorName, role: 'analyzer' },
+          performedBy: { id: collectorAccessCode || 'phleb-1', name: collectorName, role: 'analyzer' },
           details: singleTestId 
-            ? `Specimen matrices gathered for single test [${modifiedTestName || singleTestId}] in Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Routed to Lab Testing.`
-            : `Specimen matrices gathered for Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Hand-labeled tubes routed to Lab Testing.`
+            ? `Specimen matrices gathered for single test [${modifiedTestName || singleTestId}] in Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Access Code [${collectorAccessCode || 'N/A'}]. Routed to Lab Testing.`
+            : `Specimen matrices gathered for Booking ${data.bookingCode}: [${collectedSamples.join(', ')}]. Access Code [${collectorAccessCode || 'N/A'}]. Hand-labeled tubes routed to Lab Testing.`
         });
 
         return true;
@@ -2578,8 +2606,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { ...existingData, id: d.id };
-
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2697,7 +2724,6 @@ export const limsService = {
       const hasDoc = Boolean(b.referringDoctor || b.referringDoctorId);
       const isNotSelf = refDoc !== 'self-referred' && refDoc !== 'none' && refDoc !== 'self';
       return hasDoc && isNotSelf;
-
     });
 
     // Map each booking to a specific partner doctor or unique cited doctor
@@ -2808,7 +2834,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -2881,7 +2907,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
@@ -3033,6 +3059,220 @@ export const limsService = {
     } catch (e) {
       console.warn('Error in requestVirtualResult:', e);
       return true;
+    }
+  },
+
+  /**
+   * Create an authorized Patient Record Transfer Request
+   * Routes demographic data and specified batch/test summaries to the destination hospital's receptionist queue
+   */
+  async createPatientTransferRequest(params: {
+    patientId: string;
+    patientPid?: string;
+    patientName: string;
+    patientAge?: number;
+    patientDob?: string;
+    patientGender?: string;
+    patientPhone?: string;
+    patientEmail?: string;
+    patientAddress?: string;
+    bloodGroup?: string;
+    hasInsurance?: boolean;
+    insuranceProvider?: string;
+    insurancePolicyNumber?: string;
+    allergies?: string[];
+    chronicConditions?: string[];
+    sourceLabId: string;
+    sourceLabName: string;
+    destinationLabId: string;
+    destinationLabName: string;
+    transferScope: 'all' | 'specific_batches' | 'specific_tests';
+    selectedBatchIds?: string[];
+    selectedTestIds?: string[];
+    transferredBatchesSummary?: Array<{
+      batchCode: string;
+      bookingDate: string;
+      testNames: string[];
+    }>;
+    reason?: string;
+    medicalNotes?: string;
+    diagnosticHistory?: any[];
+    fhirPayload?: any;
+    patientAccessCodeUsed: string;
+  }): Promise<{ success: boolean; transferId: string; message?: string }> {
+    const timestamp = new Date().toISOString();
+    const transferId = `TRF-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const transferPayload = cleanFirestoreData({
+      id: transferId,
+      ...params,
+      status: 'pending_receptionist_confirmation',
+      transferredAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    try {
+      // 1. Save in destination lab transferred_patients subcollection
+      if (params.destinationLabId) {
+        const destCol = collection(db, 'labs', params.destinationLabId, 'transferred_patients');
+        await setDoc(doc(destCol, transferId), transferPayload);
+
+        // Create receptionist notification at destination lab
+        const destNotifCol = collection(db, 'labs', params.destinationLabId, 'notifications');
+        await addDoc(destNotifCol, cleanFirestoreData({
+          title: 'Incoming Transferred Patient',
+          message: `Patient ${params.patientName} transferred from ${params.sourceLabName}. Review demographics & confirm admission.`,
+          type: 'patient_transfer',
+          read: false,
+          createdAt: timestamp
+        }));
+      }
+
+      // 2. Save in global transferred_patients collection
+      const globalCol = collection(db, 'transferred_patients');
+      await setDoc(doc(globalCol, transferId), transferPayload);
+
+      // 3. Log audit event
+      await auditService.logPatientAccess({
+        labId: params.sourceLabId,
+        patientId: params.patientId,
+        patientName: params.patientName,
+        action: 'PATIENT_TRANSFER_REQUESTED',
+        performedBy: { id: params.patientId, name: params.patientName, role: 'patient' },
+        details: `Authorized record transfer from ${params.sourceLabName} to ${params.destinationLabName}. Scope: ${params.transferScope}. Verified with patient access code.`
+      });
+
+      return { success: true, transferId, message: `Transfer request successfully dispatched to ${params.destinationLabName} Reception.` };
+    } catch (e: any) {
+      console.error('Error creating patient transfer request:', e);
+      return { success: false, transferId, message: e.message || 'Failed to dispatch transfer request' };
+    }
+  },
+
+  /**
+   * Fetch all incoming transferred patients for a specific laboratory's receptionist
+   */
+  async fetchTransferredPatientsForLab(labId: string): Promise<any[]> {
+    const results: any[] = [];
+    try {
+      if (labId) {
+        const snap = await getDocs(collection(db, 'labs', labId, 'transferred_patients'));
+        snap.forEach(d => results.push({ id: d.id, ...d.data() }));
+      }
+      // Also query global collection
+      const gSnap = await getDocs(collection(db, 'transferred_patients'));
+      gSnap.forEach(d => {
+        const data = d.data();
+        if (data.destinationLabId === labId && !results.some(r => r.id === d.id || r.id === data.id)) {
+          results.push({ id: d.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.warn('Error fetching transferred patients for lab:', e);
+    }
+    return results.sort((a, b) => new Date(b.transferredAt || 0).getTime() - new Date(a.transferredAt || 0).getTime());
+  },
+
+  /**
+   * Receptionist confirms and admits transferred patient
+   * Auto-enters demographics into the destination lab's patient registry
+   */
+  async confirmPatientTransferByReceptionist(params: {
+    transferId: string;
+    destinationLabId: string;
+    receptionistName: string;
+  }): Promise<{ success: boolean; registeredPatient?: any; message?: string }> {
+    const { transferId, destinationLabId, receptionistName } = params;
+    const timestamp = new Date().toISOString();
+
+    try {
+      // Find transfer record
+      let transferData: any = null;
+      try {
+        const tDoc = await getDoc(doc(db, 'labs', destinationLabId, 'transferred_patients', transferId));
+        if (tDoc.exists()) transferData = tDoc.data();
+      } catch (err) {}
+
+      if (!transferData) {
+        try {
+          const gDoc = await getDoc(doc(db, 'transferred_patients', transferId));
+          if (gDoc.exists()) transferData = gDoc.data();
+        } catch (err) {}
+      }
+
+      if (!transferData) {
+        return { success: false, message: 'Transfer record not found.' };
+      }
+
+      // Update transfer status
+      const updatePayload = {
+        status: 'accepted',
+        confirmedAt: timestamp,
+        confirmedByReceptionistName: receptionistName,
+        updatedAt: timestamp
+      };
+
+      try {
+        await updateDoc(doc(db, 'labs', destinationLabId, 'transferred_patients', transferId), cleanFirestoreData(updatePayload));
+      } catch (e) {}
+
+      try {
+        await updateDoc(doc(db, 'transferred_patients', transferId), cleanFirestoreData(updatePayload));
+      } catch (e) {}
+
+      // Auto-enter patient into destination lab's patients subcollection
+      const patientPid = transferData.patientPid || `PID-${Math.floor(10000 + Math.random() * 90000)}`;
+      const patientId = transferData.patientId || `pat-${Date.now()}`;
+
+      const newPatientDoc = cleanFirestoreData({
+        id: patientId,
+        patientId,
+        patientPid,
+        name: transferData.patientName,
+        fullName: transferData.patientName,
+        age: transferData.patientAge || 30,
+        dateOfBirth: transferData.patientDob || '1995-01-01',
+        dob: transferData.patientDob || '1995-01-01',
+        gender: transferData.patientGender || 'Adult',
+        phone: transferData.patientPhone || '',
+        email: transferData.patientEmail || '',
+        address: transferData.patientAddress || '',
+        bloodGroup: transferData.bloodGroup || 'Unknown',
+        hasInsurance: transferData.hasInsurance || false,
+        insuranceProvider: transferData.insuranceProvider || '',
+        insurancePolicyNumber: transferData.insurancePolicyNumber || '',
+        allergies: transferData.allergies || [],
+        chronicConditions: transferData.chronicConditions || [],
+        labId: destinationLabId,
+        transferredFromLabId: transferData.sourceLabId,
+        transferredFromLabName: transferData.sourceLabName,
+        registrationType: 'transferred',
+        admissionConfirmedBy: receptionistName,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
+
+      const patCol = collection(db, 'labs', destinationLabId, 'patients');
+      await setDoc(doc(patCol, patientId), newPatientDoc);
+
+      // Also log audit event
+      await auditService.logPatientAccess({
+        labId: destinationLabId,
+        patientId,
+        patientName: transferData.patientName,
+        action: 'CONFIRM_PATIENT_TRANSFER',
+        performedBy: { id: 'rec-1', name: receptionistName, role: 'receptionist' },
+        details: `Receptionist ${receptionistName} confirmed and registered transferred patient ${transferData.patientName} (from ${transferData.sourceLabName}). Demographics auto-populated into system.`
+      });
+
+      return {
+        success: true,
+        registeredPatient: newPatientDoc,
+        message: `Patient ${transferData.patientName} successfully admitted and registered into system.`
+      };
+    } catch (e: any) {
+      console.error('Error confirming patient transfer:', e);
+      return { success: false, message: e.message || 'Failed to confirm transfer' };
     }
   }
 };

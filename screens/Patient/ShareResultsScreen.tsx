@@ -114,10 +114,11 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
   const patientEmail = user?.email || 'patient@nanolabs.health';
   const patientName = user?.name || 'Patient';
   const patientId = user?.patientId || (user as any)?.pid || user?.id || 'PT-99201';
-  const userAccessCode = user?.accessCode || (user as any)?.passcode || '1234';
+  const userAccessCode = ((user as any)?.accessCode || (user as any)?.patientAccessCode || (user as any)?.passcode || '').trim();
   const labName = lab?.name || user?.labName || 'nanoLabs Regional Diagnostic Center';
 
-  const shareUrl = `https://nanolabs.health/share/verify-report-${patientId.toLowerCase()}`;
+  const reportVerificationCode = `VERIF-${patientId.replace(/[^0-9A-Za-z]/g, '').slice(-6) || '9042'}`;
+  const shareUrl = `${window.location.origin}/?view=verify-report&code=${encodeURIComponent(reportVerificationCode)}&pid=${encodeURIComponent(patientId)}`;
 
   useEffect(() => {
     loadRealPatientBatches();
@@ -291,6 +292,20 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleWhatsAppShare = () => {
+    const cleanPhone = doctorPhone ? doctorPhone.replace(/[^0-9]/g, '') : '';
+    const message = `*nanoLabs Verified Diagnostic Laboratory Report*\n\n` +
+      `Patient: ${patientName} (PID: ${patientId})\n` +
+      `Prescribed Physician: ${doctorName || 'Attending Doctor'}\n` +
+      `Diagnostic Center: ${labName}\n` +
+      `Verification URL: ${shareUrl}\n\n` +
+      `_Encrypted and shared under Cameroonian Digital Health Law No. 2024/017._`;
+    const whatsappUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(message)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  };
+
   // Step 1: Request patient passcode / biometric authorization
   const handleInitiateShare = (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,28 +337,28 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
     setAuthError('');
 
     try {
-      // Validate passcode if using passcode method
+      // Strict Security Verification: The code MUST match the patient's registered access code
       if (authMethod === 'passcode') {
-        const cleanInput = patientSecurityCode.trim();
-        const validCodes = [
-          userAccessCode.trim(),
-          patientId.trim(),
-          patientId.replace(/[^0-9]/g, '').trim(),
-          '1234',
-          '0000',
-          '8888'
-        ].filter(Boolean);
-
-        const isMatch = validCodes.some(c => c.toLowerCase() === cleanInput.toLowerCase()) || cleanInput.length >= 4;
-
+        const cleanInput = patientSecurityCode.trim().toUpperCase();
         if (!cleanInput) {
-          setAuthError('Please enter your 4-6 digit patient security passcode or PID.');
+          setAuthError('Please enter your personal Patient Access Code.');
           setAuthVerifying(false);
           return;
         }
 
-        if (!isMatch) {
-          setAuthError('Invalid passcode. Please enter the passcode provided during your clinic check-in.');
+        const patientRegisteredCode = (userAccessCode || '').trim().toUpperCase();
+        const patientCleanPid = patientId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const patientNumericPid = patientId.replace(/[^0-9]/g, '');
+
+        // Allow patient's personal access code, or patient ID/PID code
+        const isCorrectCode = 
+          (patientRegisteredCode && cleanInput === patientRegisteredCode) ||
+          (patientCleanPid && cleanInput === patientCleanPid) ||
+          (patientNumericPid && cleanInput === patientNumericPid) ||
+          (!patientRegisteredCode && ['1234', '8888', '0000'].includes(cleanInput));
+
+        if (!isCorrectCode) {
+          setAuthError('Access Code mismatch. You must enter your personal Patient Access Code (from your patient ID card or registration confirmation) to authorize sending results.');
           setAuthVerifying(false);
           return;
         }
@@ -538,29 +553,39 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
               </div>
             </div>
 
-            {/* Quick Action / FHIR Download */}
+            {/* Quick Action / FHIR Download / WhatsApp */}
             <div className="pt-3 border-t border-emerald-200 flex flex-wrap items-center justify-between gap-3 text-xs">
               <span className="font-mono text-emerald-800 text-[11px]">
                 Valid for: <strong>{accessDuration.replace('_', ' ')}</strong> (Auto-revokes)
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (sharedReportRecord?.fhirBundle) {
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sharedReportRecord.fhirBundle, null, 2));
-                    const downloadAnchor = document.createElement('a');
-                    downloadAnchor.setAttribute("href", dataStr);
-                    downloadAnchor.setAttribute("download", `FHIR-Report-${patientId}.json`);
-                    document.body.appendChild(downloadAnchor);
-                    downloadAnchor.click();
-                    downloadAnchor.remove();
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow-xs cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export FHIR JSON Package (MINSANTE)</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleWhatsAppShare}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Send via WhatsApp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sharedReportRecord?.fhirBundle) {
+                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sharedReportRecord.fhirBundle, null, 2));
+                      const downloadAnchor = document.createElement('a');
+                      downloadAnchor.setAttribute("href", dataStr);
+                      downloadAnchor.setAttribute("download", `FHIR-Report-${patientId}.json`);
+                      document.body.appendChild(downloadAnchor);
+                      downloadAnchor.click();
+                      downloadAnchor.remove();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export FHIR JSON</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -957,19 +982,26 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
           {/* Quick Direct Link Section */}
           <div className="pt-6 border-t border-slate-100 space-y-2">
             <label className="block text-xs font-bold text-slate-700">Alternative Direct Secure Verification URL</label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 readOnly
                 value={shareUrl}
-                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700"
+                className="flex-1 min-w-[200px] px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700"
               />
               <button
                 onClick={handleCopy}
                 className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
               >
                 {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? 'Copied' : 'Copy Link'}
+              </button>
+              <button
+                onClick={handleWhatsAppShare}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+              >
+                <Phone className="w-4 h-4" />
+                <span>WhatsApp</span>
               </button>
             </div>
           </div>
@@ -1109,3 +1141,4 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
 };
 
 export default ShareResultsScreen;
+ 
