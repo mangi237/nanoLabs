@@ -17,7 +17,9 @@ export type AuditActionType =
   | 'EDIT_PATIENT_RECORD'
   | 'STAFF_SELF_PROFILE_UPDATE'
   | 'SYSTEM_SECURITY_CHECK'
-  | 'CHECKIN_VERIFICATION';
+  | 'CHECKIN_VERIFICATION'
+  | 'PATIENT_TRANSFER_REQUESTED'
+  | 'CONFIRM_PATIENT_TRANSFER';
 
 export interface AuditLogItem {
   id: string;
@@ -112,6 +114,14 @@ const ACTION_METADATA: Record<AuditActionType, { label: string; category: AuditL
   },
   CHECKIN_VERIFICATION: {
     label: 'Receptionist Check-In Verification & Order Activation',
+    category: 'CLINICAL_ACCESS'
+  },
+  PATIENT_TRANSFER_REQUESTED: {
+    label: 'Inter-Hospital Patient Record Transfer Requested',
+    category: 'CLINICAL_ACCESS'
+  },
+  CONFIRM_PATIENT_TRANSFER: {
+    label: 'Transferred Patient Record Accepted by Facility Reception',
     category: 'CLINICAL_ACCESS'
   }
 };

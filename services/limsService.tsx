@@ -2606,7 +2606,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { id: d.id, ...existingData };
+            return {  ...existingData ,id: d.id};
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2834,7 +2834,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -2907,7 +2907,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
