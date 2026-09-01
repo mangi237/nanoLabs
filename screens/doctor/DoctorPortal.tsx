@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
-import { db, collection, getDocs } from '../../services/firebase';
+import { db, collection, getDocs, doc, setDoc, updateDoc } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
@@ -30,7 +30,12 @@ import {
   AlertCircle,
   Check,
   X,
-  Send
+  Send,
+  Camera,
+  Upload,
+  Edit3,
+  UserCheck,
+  Loader2
 } from 'lucide-react';
 
 interface DoctorPortalProps {
@@ -58,8 +63,22 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
     hospital: (user as any)?.hospital || (user as any)?.hospitalAffiliation || 'Central Referral Hospital',
     phone: user?.phone || '+237 600 000 000',
     email: user?.email || 'physician@health.cm',
-    licenseNumber: (user as any)?.licenseNumber || 'ONMC-CMR-ACCREDITED'
+    licenseNumber: (user as any)?.licenseNumber || 'ONMC-CMR-ACCREDITED',
+    avatarUrl: (user as any)?.avatarUrl || (user as any)?.profilePicture || ''
   });
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: user?.name || 'Dr. Attending Physician, MD',
+    specialty: (user as any)?.specialty || 'General Medicine & Specialist',
+    hospital: (user as any)?.hospital || (user as any)?.hospitalAffiliation || 'Central Referral Hospital',
+    phone: user?.phone || '+237 600 000 000',
+    email: user?.email || 'physician@health.cm',
+    licenseNumber: (user as any)?.licenseNumber || 'ONMC-CMR-ACCREDITED',
+    avatarUrl: (user as any)?.avatarUrl || (user as any)?.profilePicture || ''
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [partneredLabs, setPartneredLabs] = useState<any[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<any[]>([]);
@@ -251,6 +270,92 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
     }
   };
 
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Photo size exceeds 3MB. Please select a smaller photo.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      if (base64) {
+        setEditForm(prev => ({ ...prev, avatarUrl: base64 }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveDoctorProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.name.trim()) {
+      alert('Please enter your full name.');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const updatedProfile = {
+        name: editForm.name.trim(),
+        specialty: editForm.specialty.trim() || 'General Medicine',
+        hospital: editForm.hospital.trim() || 'Referral Hospital',
+        hospitalAffiliation: editForm.hospital.trim() || 'Referral Hospital',
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        licenseNumber: editForm.licenseNumber.trim() || 'ONMC-CMR-ACCREDITED',
+        avatarUrl: editForm.avatarUrl.trim(),
+        profilePicture: editForm.avatarUrl.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Update in users collection
+      if (user?.id) {
+        try {
+          await setDoc(doc(db, 'users', user.id), updatedProfile, { merge: true });
+        } catch (uErr) {
+          console.warn('Could not update user doc:', uErr);
+        }
+      }
+
+      // 2. Update in global doctors collection
+      try {
+        const docId = user?.id || (user as any)?.doctorId || `doc-${Date.now()}`;
+        await setDoc(doc(db, 'doctors', docId), {
+          id: docId,
+          ...updatedProfile
+        }, { merge: true });
+      } catch (dErr) {
+        console.warn('Could not update global doctors doc:', dErr);
+      }
+
+      // 3. Update in lab referring_doctors if lab is connected
+      if (lab?.id && user?.id) {
+        try {
+          await setDoc(doc(db, 'labs', lab.id, 'referring_doctors', user.id), {
+            id: user.id,
+            doctorId: user.id,
+            labId: lab.id,
+            ...updatedProfile
+          }, { merge: true });
+        } catch (refErr) {
+          console.warn('Could not update referring_doctors for lab:', refErr);
+        }
+      }
+
+      setDoctorProfile(updatedProfile);
+      setIsEditProfileOpen(false);
+      showToast('Profile & picture updated successfully! Patients and labs will see your verified photo.');
+    } catch (err: any) {
+      console.error('Error saving doctor profile:', err);
+      alert('Failed to save profile updates. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   // Filter Bookings by Time Range
   const now = new Date();
   const getFilteredBookings = () => {
@@ -311,9 +416,41 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             <div className="flex items-start gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg border-2 border-white/30 shrink-0">
-                <Stethoscope className="w-8 h-8" />
-              </div>
+              {doctorProfile.avatarUrl ? (
+                <div className="relative group shrink-0">
+                  <img
+                    src={doctorProfile.avatarUrl}
+                    alt={doctorProfile.name}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-lg border-2 border-white/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm(doctorProfile);
+                      setIsEditProfileOpen(true);
+                    }}
+                    className="absolute inset-0 bg-slate-950/60 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] font-bold text-white cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4 mb-0.5" />
+                    <span>Change</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg border-2 border-white/30 shrink-0 relative group">
+                  <Stethoscope className="w-8 h-8" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm(doctorProfile);
+                      setIsEditProfileOpen(true);
+                    }}
+                    className="absolute inset-0 bg-slate-950/60 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] font-bold text-white cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4 mb-0.5" />
+                    <span>Add Photo</span>
+                  </button>
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-teal-400/20 text-teal-300 border border-teal-400/30 flex items-center gap-1.5">
@@ -323,6 +460,17 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
                     Lic: {doctorProfile.licenseNumber}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm(doctorProfile);
+                      setIsEditProfileOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 hover:bg-white/20 text-teal-200 border border-white/20 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit Profile & Photo</span>
+                  </button>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                   {doctorProfile.name}
@@ -963,6 +1111,187 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           booking={selectedBookingForReport}
           onClose={() => setSelectedBookingForReport(null)}
         />
+      )}
+
+      {/* EDIT PROFILE & PHOTO MODAL */}
+      {isEditProfileOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 text-slate-900 relative max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setIsEditProfileOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                <Edit3 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Edit Physician Profile & Photo</h3>
+                <p className="text-xs text-slate-500">Update your clinical credentials, photo, and hospital affiliation</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDoctorProfile} className="space-y-4">
+              {/* Profile Photo Upload / URL */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <label className="block text-xs font-bold text-slate-700">Physician Profile Photo</label>
+                <div className="flex items-center gap-4">
+                  {editForm.avatarUrl ? (
+                    <img
+                      src={editForm.avatarUrl}
+                      alt="Doctor Preview"
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-teal-500 shadow-md shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xl shrink-0">
+                      <Stethoscope className="w-8 h-8" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleAvatarFileChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Photo from Device</span>
+                    </button>
+                    <p className="text-[10px] text-slate-500">JPG, PNG, WebP up to 3MB</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <label className="block text-[11px] font-semibold text-slate-600">Or Paste Direct Image URL</label>
+                  <input
+                    type="url"
+                    value={editForm.avatarUrl}
+                    onChange={e => setEditForm(prev => ({ ...prev, avatarUrl: e.target.value }))}
+                    placeholder="https://example.com/doctor-photo.jpg"
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Full Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Doctor Full Name (with Title) *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Dr. Christian Ngu, MD"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Specialty */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Medical Specialty *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.specialty}
+                    onChange={e => setEditForm(prev => ({ ...prev, specialty: e.target.value }))}
+                    placeholder="e.g. Cardiology, Pediatrics, General Medicine"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Hospital / Clinic */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Hospital / Clinic Affiliation *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.hospital}
+                    onChange={e => setEditForm(prev => ({ ...prev, hospital: e.target.value }))}
+                    placeholder="e.g. Laquintinie Hospital Douala"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Contact Phone Number *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editForm.phone}
+                    onChange={e => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+237 600 000 000"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* License Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ONMC Accreditation / License ID</label>
+                  <input
+                    type="text"
+                    value={editForm.licenseNumber}
+                    onChange={e => setEditForm(prev => ({ ...prev, licenseNumber: e.target.value }))}
+                    placeholder="ONMC-CMR-12345"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Official Clinical Email</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="physician@hospital.cm"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-md shadow-teal-600/20 transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingProfile ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving Profile...
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      Save & Update Profile
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

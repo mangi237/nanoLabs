@@ -2222,7 +2222,7 @@ export const limsService = {
    * Queries both `doctors` and `users` (where role is doctor) collections
    * (Allows laboratories and patients to search by Name, Medical License/ONMC ID, Specialty, or Hospital)
    */
-  async searchAllAccreditedDoctors(query: string = ''): Promise<Doctor[]> {
+  async searchAllAccreditedDoctors(query: string = '', labId?: string): Promise<Doctor[]> {
     const cleanQuery = query.trim().toLowerCase();
     const map = new Map<string, Doctor>();
 
@@ -2240,6 +2240,8 @@ export const limsService = {
           licenseNumber: data.licenseNumber || '',
           hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
           hospital: data.hospital || data.hospitalAffiliation || '',
+          avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+          profilePicture: data.profilePicture || data.avatarUrl || data.photoUrl || '',
           accessCode: data.accessCode || '',
           status: data.status || 'active',
           createdAt: data.createdAt
@@ -2268,6 +2270,8 @@ export const limsService = {
             licenseNumber: data.licenseNumber || 'ONMC-CMR-ACCREDITED',
             hospitalAffiliation: data.hospital || data.hospitalAffiliation || '',
             hospital: data.hospital || data.hospitalAffiliation || '',
+            avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+            profilePicture: data.profilePicture || data.avatarUrl || data.photoUrl || '',
             accessCode: data.accessCode || '',
             status: data.status || 'active',
             createdAt: data.createdAt
@@ -2275,11 +2279,44 @@ export const limsService = {
           const key = (docObj.phone || docObj.licenseNumber || docObj.email || docObj.id || docObj.name).trim().toLowerCase();
           if (key && !map.has(key)) {
             map.set(key, docObj);
+          } else if (key && map.has(key) && docObj.avatarUrl) {
+            // Keep the avatar if available
+            map.set(key, { ...map.get(key)!, avatarUrl: docObj.avatarUrl, profilePicture: docObj.avatarUrl });
           }
         }
       });
     } catch (e) {
       console.warn('Error querying users for accredited doctors:', e);
+    }
+
+    // 3. If labId is provided, also check the lab's referring_doctors
+    if (labId) {
+      try {
+        const refDocsSnap = await getDocs(collection(db, 'labs', labId, 'referring_doctors'));
+        refDocsSnap.forEach(rd => {
+          const data = rd.data();
+          const docObj: Doctor = {
+            id: data.doctorId || rd.id,
+            name: data.name || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            specialty: data.specialty || 'General Medicine',
+            licenseNumber: data.licenseNumber || 'ONMC-CMR-ACCREDITED',
+            hospitalAffiliation: data.hospital || '',
+            hospital: data.hospital || '',
+            avatarUrl: data.avatarUrl || data.profilePicture || '',
+            profilePicture: data.profilePicture || data.avatarUrl || '',
+            status: data.status === 'active' || data.invitationStatus === 'accepted' ? 'active' : 'pending',
+            createdAt: data.createdAt
+          };
+          const key = (docObj.phone || docObj.licenseNumber || docObj.email || docObj.id || docObj.name).trim().toLowerCase();
+          if (key && !map.has(key)) {
+            map.set(key, docObj);
+          }
+        });
+      } catch (refErr) {
+        console.warn('Error querying referring_doctors for lab:', refErr);
+      }
     }
 
     const all = Array.from(map.values());
@@ -2540,13 +2577,10 @@ export const limsService = {
 
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
-          if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') { 
-            return { 
-                ...existingData, 
-                id: d.id // This correctly overwrites existingData.id if they differ
-            }; 
-        }
-        
+          if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
+            return { ...existingData, id: d.id };
+
+          }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
             ...existingData,
@@ -2663,6 +2697,7 @@ export const limsService = {
       const hasDoc = Boolean(b.referringDoctor || b.referringDoctorId);
       const isNotSelf = refDoc !== 'self-referred' && refDoc !== 'none' && refDoc !== 'self';
       return hasDoc && isNotSelf;
+
     });
 
     // Map each booking to a specific partner doctor or unique cited doctor

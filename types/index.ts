@@ -7,10 +7,12 @@ export interface ReferringDoctor {
   hospital?: string;
   phone?: string;
   email?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
   licenseNumber?: string;
   notes?: string;
   invitationStatus?: 'accepted' | 'pending' | 'declined';
-  origin?: 'admin_invitation' | 'patient_referral' | 'manual';
+  origin?: 'admin_invitation' | 'patient_referral' | 'accredited_network' | 'manual';
   invitedAt?: string;
   acceptedAt?: string;
   totalReferrals?: number;
@@ -305,6 +307,8 @@ export interface Doctor {
   licenseNumber?: string;
   hospitalAffiliation?: string;
   hospital?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
   patientCount?: number;
   totalTestsDone?: number;
   accessCode?: string;
