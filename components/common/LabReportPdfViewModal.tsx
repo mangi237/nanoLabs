@@ -41,7 +41,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   const labEmail = labInfo?.email || labInfo?.contactEmail || booking.labEmail || booking.labDetails?.email || 'lab@facility.com';
   const labWebsite = labInfo?.website || labInfo?.websiteUrl || booking.labWebsite || booking.labDetails?.website || '';
   const labLicenseNumber = labInfo?.licenseNumber || booking.labDetails?.licenseNumber || '';
-  const labDirectorName = labInfo?.directorName || booking.labDetails?.directorName || 'Dr. Arthur M. Vance';
+  const labDirectorName = labInfo?.directorName || booking.labDetails?.directorName || 'Laboratory Director / Chief Biologist';
   const labDirectorPhone = labInfo?.directorPhone || booking.labDetails?.directorPhone || '';
   const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || booking.labLogo || booking.labDetails?.logoUrl || '';
 
@@ -258,7 +258,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section (Matching medicalreport.webp) */}
-            {booking.tests.map((testItem : any, tIdx: number) => (
+            {booking.tests.map((testItem, tIdx) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -294,7 +294,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-800">
                       {testItem.subParameters && testItem.subParameters.length > 0 ? (
-                        testItem.subParameters.map((sp:any) => {
+                        testItem.subParameters.map((sp) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
                           const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
