@@ -4,6 +4,7 @@ import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection, getDocs, updateDoc, doc } from '../../services/firebase';
 import { sendEmail } from '../../services/emailService';
 import { limsService } from '../../services/limsService';
+import { authService } from '../../services/authService';
 import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { 
   OFFICIAL_MASTER_TEST_CATALOG, 
@@ -111,17 +112,19 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         setSelectedTests([tests[0]]);
       }
 
-      // 2. Fetch Lab Techs & Doctors
+      // 2. Fetch Lab Techs & Doctors from real lab staff
       const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
       let staff: any[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (staff.length === 0) {
-        staff = [
-          { id: 'st-1', name: 'Dr. Alexis Vance', role: 'Lab Specialist & Medical Director', phone: '+237 671002233', email: 'alexis.vance@nanolabs.cm' },
-          { id: 'st-2', name: 'Sarah Chen, MLS', role: 'Senior Clinical Lab Technologist', phone: '+237 672113344', email: 'sarah.chen@nanolabs.cm' },
-          { id: 'st-3', name: 'Dr. Marcus Thorne', role: 'Consultant Hematopathologist', phone: '+237 673224455', email: 'marcus.t@nanolabs.cm' },
-          { id: 'st-4', name: 'Elena Rostova, BSc', role: 'Biochemist & Accessioning Specialist', phone: '+237 674335566', email: 'elena.r@nanolabs.cm' }
-        ];
+        try {
+          const serverStaff = await authService.getServerStaffList();
+          if (serverStaff && serverStaff.length > 0) {
+            staff = serverStaff;
+          }
+        } catch (e) {
+          console.warn('Server staff fetch note:', e);
+        }
       }
       setStaffList(staff);
       if (staff.length > 0) {
