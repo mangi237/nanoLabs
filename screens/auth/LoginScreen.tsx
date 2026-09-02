@@ -41,7 +41,6 @@ import LabRegistrationModal from '../superAdmin/LabRegistrationModal';
 import LabLocationSearchModal from '../../components/common/LabLocationSearchModal';
 import DoctorRegistrationModal from '../doctor/DoctorRegistrationModal';
 import LanguageSelector from '../../components/common/LanguageSelector';
-// import founderPortraitImg from '../../assets/images/founder portrait 1787272630258.jpg';
 
 interface LoginScreenProps {
   onLoginSuccess?: (user: any) => void;
@@ -54,7 +53,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onNavigateRegister,
   onNavigateSelectLab
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { login, loginDoctor, isLoading, getAllLabs, lab: currentLab } = useAuth();
   
   // Auth Screen Mode: 'standard' (Lab staff & Patients) vs 'doctor' (Accredited Physicians)
@@ -80,58 +79,76 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [showDoctorRegisterModal, setShowDoctorRegisterModal] = useState(false);
   const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
 
-  // Dynamic Translated Carousel Slides
+  const isFrench = language === 'fr';
+
+  // Dynamic Translated Carousel Slides with Real Clinical & Laboratory Data
   const carouselSlides = [
     {
-      id: 'mission',
-      tag: t('slide mission tag'),
-      title: t('slide mission title'),
-      subtitle: t('slide mission subtitle'),
-      description: t('slide mission desc'),
+      id: 'network',
+      tag: isFrench ? 'Réseau Médical Clinique' : 'Clinical Diagnostic Network',
+      title: isFrench ? 'Réseau Médical de Diagnostic de Haute Précision' : 'Precision Diagnostic & Decentralized LIMS Network',
+      subtitle: isFrench 
+        ? 'Connecter les patients, les médecins prescripteurs et les laboratoires accrédités au Cameroun et en Afrique centrale.' 
+        : 'Connecting patients, medical clinicians, and accredited laboratories across Cameroon & Central Africa.',
+      description: isFrench 
+        ? 'nanoLabs assure l\'orchestration diagnostique de haute précision avec livrets numériques unifiés, flux d\'automates et confidentialité absolue du patient.' 
+        : 'nanoLabs provides high-accuracy diagnostic orchestration with unified digital booklets, automated analyzer feeds, and zero-leakage patient confidentiality.',
       icon: Activity,
       stats: [
-        { label: t('stat network facilities'), value: '100+' },
-        { label: t('stat diagnostic tests'), value: '1,200+' },
-        { label: t('stat uptime sla'), value: '99.9%' }
+        { label: isFrench ? 'Établissements Réseau' : 'Network Facilities', value: '100+' },
+        { label: isFrench ? 'Analyses au Catalogue' : 'Diagnostic Tests', value: '1,200+' },
+        { label: isFrench ? 'Disponibilité Système' : 'Uptime SLA', value: '99.9%' }
       ]
     },
     {
-      id: 'founder',
-      tag: t('slide founder tag'),
-      title: t('slide founder title'),
-      subtitle: t('slide founder subtitle'),
-      description: t('slide founder desc'),
-      icon: Award,
+      id: 'automation',
+      tag: isFrench ? 'Automatisation & Automates' : 'Analyzer Integration & Quality',
+      title: isFrench ? 'Interfaçage Direct Automates & Traçabilité Échantillons' : 'Bi-Directional Analyzer Sync & Specimen Tracking',
+      subtitle: isFrench 
+        ? 'Du prélèvement à la validation biologique : élimination des erreurs de saisie manuelle.' 
+        : 'From barcode accessioning to automated ASTM/HL7 analyzer feeds and biologist validation.',
+      description: isFrench 
+        ? 'Connexion temps réel aux automates d\'hématologie, biochimie et sérologie. Alertes delta-check automatiques et vérification multi-niveaux des résultats.' 
+        : 'Direct connectivity with hematology, clinical chemistry, and serology analyzers. Automated delta-check warnings and multi-tier biologist sign-offs.',
+      icon: Microscope,
       stats: [
-        { label: t('stat founded'), value: '2024' },
-        { label: t('stat founder age'), value: '16 Yrs' },
-        { label: t('stat patient trust'), value: '100%' }
+        { label: isFrench ? 'Délai Moyen' : 'Avg Turnaround', value: '< 2 hrs' },
+        { label: isFrench ? 'Traçabilité Code-barres' : 'Barcode Tracing', value: '100%' },
+        { label: isFrench ? 'Erreurs de Saisie' : 'Data Entry Errors', value: '0.0%' }
       ]
     },
     {
       id: 'security',
-      tag: t('slide security tag'),
-      title: t('slide security title'),
-      subtitle: t('slide security subtitle'),
-      description: t('slide security desc'),
+      tag: isFrench ? 'Sécurité Zéro-Connaissance' : 'Zero-Knowledge Security',
+      title: isFrench ? 'Registre Médical Cryptographique de Niveau Bancaire' : 'Bank-Grade Cryptographic Medical Ledger',
+      subtitle: isFrench 
+        ? 'Chaque dossier patient, facture et résultat d\'analyse est protégé par un chiffrement AES-256.' 
+        : 'Every patient record, invoice, and diagnostic result is protected with AES-256 field-level encryption.',
+      description: isFrench 
+        ? 'Le contrôle d\'accès strict par rôle (RBAC) garantit que le personnel financier n\'accède jamais aux analyses cliniques, et les techniciens uniquement à leurs dossiers assignés.' 
+        : 'Strict Role-Based Access Control (RBAC) ensures financial staff never see clinical test data, and lab technicians only access their assigned clinical tests.',
       icon: ShieldCheck,
       stats: [
-        { label: t('stat encryption'), value: 'AES-256' },
-        { label: t('stat rbac roles'), value: '8 Layers' },
-        { label: t('stat compliance'), value: 'HIPAA & GDPR' }
+        { label: isFrench ? 'Chiffrement' : 'Encryption', value: 'AES-256' },
+        { label: isFrench ? 'Niveaux RBAC' : 'RBAC Roles', value: '8 Layers' },
+        { label: isFrench ? 'Conformité' : 'HIPAA & GDPR', value: '100%' }
       ]
     },
     {
-      id: 'speed',
-      tag: t('slide speed tag'),
-      title: t('slide speed title'),
-      subtitle: t('slide speed subtitle'),
-      description: t('slide speed desc'),
-      icon: Microscope,
+      id: 'portal',
+      tag: isFrench ? 'Portail & Livret Numérique' : 'Digital Health Booklets',
+      title: isFrench ? 'Livrets Médicaux Sécurisés & Résultats Authentifiés QR' : 'Instant Digital Health Booklets & QR Verification',
+      subtitle: isFrench 
+        ? 'Accès sécurisé pour les patients et partage instantané avec les médecins spécialistes.' 
+        : 'Secure 24/7 patient access, verified lab reports, and cryptographic doctor referrals.',
+      description: isFrench 
+        ? 'Téléchargement de rapports infalsifiables avec signatures cryptographiques et codes QR de vérification d\'authenticité pour les visas et dossiers médicaux.' 
+        : 'Download tamper-proof diagnostic booklets with digital signatures and QR verification codes for medical referrals and travel clearance.',
+      icon: TestTube,
       stats: [
-        { label: t('stat avg turnaround'), value: '< 2 hrs' },
-        { label: t('stat barcode sync'), value: 'Instant' },
-        { label: t('stat digital booklets'), value: 'PDF & Web' }
+        { label: isFrench ? 'Accès Patient' : 'Patient Access', value: '24/7' },
+        { label: isFrench ? 'Format Rapport' : 'Report Output', value: 'PDF & QR' },
+        { label: isFrench ? 'Validation Biologiste' : 'Sign-Off Proof', value: 'Instant' }
       ]
     }
   ];
@@ -249,75 +266,35 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <LanguageSelector variant="dropdown" />
+            <LanguageSelector variant= "dropdown" />
             <button
               onClick={() => setShowAboutModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              {t('founder story')}
+              <Activity className="w-3.5 h-3.5" />
+              {isFrench ? 'Architecture LIMS' : 'Platform Specs'}
             </button>
           </div>
         </div>
 
         {/* Active Carousel Slide Content */}
-        <div className="my-10 lg:my-auto z-10 space-y-6">
+        <div key={currentSlide.id} className="my-10 lg:my-auto z-10 space-y-6 animate-in fade-in slide-in-from-right-3 duration-300">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-400/10 border border-teal-400/30 rounded-full text-xs font-bold text-teal-300">
-            <Sparkles className="w-3.5 h-3.5" />
+            <currentSlide.icon className="w-3.5 h-3.5" />
             {currentSlide.tag}
           </div>
 
-          {currentSlide.id === 'founder' ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="relative shrink-0">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-teal-400/80 shadow-lg shadow-teal-500/20 bg-slate-800">
-                    {/* <img
-                      src={founderPortraitImg}
-                      alt="Mangi Lerine Laslie Jr"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover object-top"
-                    /> */}
-                  </div>
-                  <span className="absolute -bottom-2 -right-1 px-2 py-0.5 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-[10px] rounded-full shadow-sm">
-                    {t('founder age badge')}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                    {t('founder name')}
-                  </h3>
-                  <p className="text-xs sm:text-sm font-semibold text-teal-300">
-                    {t('founder role sub')}
-                  </p>
-                  <span className="inline-block text-[11px] text-slate-400 font-medium">
-                    {t('founder system tag')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white leading-snug">
-                  {currentSlide.title}
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
-                  {currentSlide.description}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <h2 className="text-2xl sm:text-4xl font-black text-white leading-tight tracking-tight">
-                {currentSlide.title}
-              </h2>
-              <p className="text-sm sm:text-base font-semibold text-teal-200/90">
-                {currentSlide.subtitle}
-              </p>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
-                {currentSlide.description}
-              </p>
-            </div>
-          )}
+          <div className="space-y-3">
+            <h2 className="text-2xl sm:text-4xl font-black text-white leading-tight tracking-tight">
+              {currentSlide.title}
+            </h2>
+            <p className="text-sm sm:text-base font-semibold text-teal-200/90">
+              {currentSlide.subtitle}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
+              {currentSlide.description}
+            </p>
+          </div>
 
           {/* Slide Stats Grid */}
           <div className="grid grid-cols-3 gap-3 pt-4 border-t border-teal-900/50">
@@ -381,7 +358,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               nano<span className="text-teal-600">Labs</span> Portal
             </h1>
             <p className="text-xs sm:text-sm text-slate-500">
-              {t('portal subtitle')}
+              {t('portal_subtitle')}
             </p>
           </div>
 
@@ -392,8 +369,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Navigation className="w-4 h-4 text-teal-700" />
               </div>
               <div className="min-w-0">
-                <h4 className="text-xs font-bold text-slate-900 truncate">{t('looking for lab')}</h4>
-                <p className="text-[11px] text-slate-500 truncate">{t('browse accredited')}</p>
+                <h4 className="text-xs font-bold text-slate-900 truncate">{t('looking_for_lab')}</h4>
+                <p className="text-[11px] text-slate-500 truncate">{t('browse_accredited')}</p>
               </div>
             </div>
             <button
@@ -402,7 +379,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer"
             >
               <MapPin className="w-3.5 h-3.5" />
-              {t('search lab btn')}
+              {t('search_lab_btn')}
             </button>
           </div>
 
@@ -533,9 +510,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <div className="relative">
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        {t('assigned lab label')}
+                        {t('assigned_lab_label')}
                       </label>
-                      <span className="text-[10px] text-slate-400 font-medium">{t('search to select')}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{t('search_to_select')}</span>
                     </div>
 
                     <button
@@ -555,7 +532,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
                         )}
                         <span className="truncate font-semibold">
-                          {labName || t('search or select placeholder')}
+                          {labName || t('search_or_select_placeholder')}
                         </span>
                       </div>
                       <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -569,7 +546,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           <input
                             type="text"
                             autoFocus
-                            placeholder={t('search input placeholder')}
+                            placeholder={t('search_input_placeholder')}
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -579,7 +556,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                         <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
                           {filteredLabs.length === 0 ? (
                             <div className="p-3 text-center text-xs text-slate-400">
-                              {searchQuery ? t('no lab found') : t('type lab to search')}
+                              {searchQuery ? t('no_lab_found') : t('type_lab_to_search')}
                             </div>
                           ) : (
                             filteredLabs.map((l: any) => (
@@ -630,15 +607,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        {t('access code label')}
+                        {t('access_code_label')}
                       </label>
-                      <span className="text-[10px] text-teal-700 font-semibold">{t('staff and patients')}</span>
+                      <span className="text-[10px] text-teal-700 font-semibold">{t('staff_and_patients')}</span>
                     </div>
                     <div className="relative">
                       <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
                         type="password"
-                        placeholder={t('access code placeholder')}
+                        placeholder={t('access_code_placeholder')}
                         value={accessCode}
                         onChange={e => setAccessCode(e.target.value)}
                         required
@@ -646,7 +623,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       />
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1.5">
-                      {t('access code hint')}
+                      {t('access_code_hint')}
                     </p>
                   </div>
 
@@ -663,7 +640,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       </>
                     ) : (
                       <>
-                        {t('sign in btn')}
+                        {t('sign_in_btn')}
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -701,7 +678,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     onClick={onNavigateRegister}
                     className="text-xs text-teal-700 hover:text-teal-900 font-bold transition-colors hover:underline cursor-pointer"
                   >
-                    {t('new patient prompt')}
+                    {t('new_patient_prompt')}
                   </button>
 
                   <button
@@ -710,7 +687,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <PlusCircle className="w-4 h-4 text-teal-600" />
-                    {t('register lab btn')}
+                    {t('register_lab_btn')}
                   </button>
                 </div>
               </div>
@@ -772,90 +749,85 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Activity className="w-7 h-7 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-xl font-extrabold text-white">{t('about nanolabs title')}</h3>
-                <p className="text-xs text-teal-300 font-medium">{t('about nanolabs subtitle')}</p>
+                <h3 className="text-xl font-extrabold text-white">{t('about_nanolabs_title')}</h3>
+                <p className="text-xs text-teal-300 font-medium">{t('about_nanolabs_subtitle')}</p>
               </div>
             </div>
 
             <div className="p-5 sm:p-6 rounded-2xl bg-slate-800 border border-slate-700 space-y-4">
               <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
-                <Award className="w-4 h-4 text-amber-400" />
-                {t('slide founder tag')}
+                <Activity className="w-4 h-4 text-teal-400" />
+                {isFrench ? 'Architecture & Spécifications Cliniques' : 'Clinical Architecture & LIMS Core'}
               </div>
-              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5">
-                <div className="relative shrink-0">
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-teal-400 shadow-xl shadow-teal-500/20 bg-slate-900">
-                    {/* <img
-                      src={founderPortraitImg}
-                      alt="Mangi Lerine Laslie Jr - Founder of nanoLabs"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover object-top"
-                    /> */}
+              <div className="space-y-3">
+                <h4 className="text-lg font-bold text-white">
+                  {isFrench ? 'Système d\'Information de Laboratoire Médical Décentralisé' : 'Decentralized Clinical Laboratory Management System'}
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {isFrench 
+                    ? 'nanoLabs est conçu pour unifier les flux de travail pré-analytiques, analytiques et post-analytiques au sein des laboratoires de diagnostic médical et centres hospitaliers. Il assure une interopérabilité directe avec les automates cliniques (ASTM / HL7), une traçabilité par code-barres 100% sécurisée et une génération instantanée de livrets de santé cryptographiques.'
+                    : 'nanoLabs is engineered to unify pre-analytical, analytical, and post-analytical workflows across medical diagnostic laboratories and hospital centers. It provides direct clinical analyzer interoperability (ASTM / HL7), 100% barcode-tracked chain of custody, and instant cryptographic digital health booklet publishing.'}
+                </p>
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                    <div className="text-xs font-black text-teal-400 font-mono">ASTM / HL7</div>
+                    <div className="text-[10px] text-slate-400">{isFrench ? 'Automates' : 'Analyzer Sync'}</div>
                   </div>
-                  <span className="absolute -bottom-2 -right-1 px-2.5 py-0.5 bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 font-black text-[10px] rounded-full shadow-md">
-                    {t('founder age badge')}
-                  </span>
-                </div>
-                <div className="space-y-2 text-center sm:text-left flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <div>
-                      <h4 className="text-xl font-black text-white">{t('founder name')}</h4>
-                      <p className="text-xs text-teal-200 font-semibold">{t('founder role sub')}</p>
-                    </div>
-                    <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-400/30 rounded-full text-[11px] font-bold self-center sm:self-auto">
-                      {t('founder age badge')}
-                    </span>
+                  <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                    <div className="text-xs font-black text-teal-400 font-mono">AES-256</div>
+                    <div className="text-[10px] text-slate-400">{isFrench ? 'Chiffrement' : 'Encryption'}</div>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed pt-1">
-                    {t('founder bio full')}
-                  </p>
+                  <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                    <div className="text-xs font-black text-teal-400 font-mono">ISO 15189</div>
+                    <div className="text-[10px] text-slate-400">{isFrench ? 'Conformité' : 'Readiness'}</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                {t('guarantees title')}
+                {t('guarantees_title')}
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-400 font-bold text-xs">
                     <Lock className="w-4 h-4" />
-                    {t('zk title')}
+                    {t('zk_title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('zk desc')}
+                    {t('zk_desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Shield className="w-4 h-4" />
-                    {t('isolation title')}
+                    {t('isolation_title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('isolation desc')}
+                    {t('isolation_desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Cpu className="w-4 h-4" />
-                    {t('ai title')}
+                    {t('ai_title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('ai desc')}
+                    {t('ai_desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                     <HeartHandshake className="w-4 h-4" />
-                    {t('billing title')}
+                    {t('billing_title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('billing desc')}
+                    {t('billing_desc')}
                   </p>
                 </div>
               </div>
@@ -869,7 +841,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 onClick={() => setShowAboutModal(false)}
                 className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                {t('close return')}
+                {t('close_return')}
               </button>
             </div>
           </div>
