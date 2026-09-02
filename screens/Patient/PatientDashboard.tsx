@@ -574,7 +574,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                                       </td>
 
                                       <td className="py-3.5 px-4">
-                                        {test.subParameters && test.subParameters.length > 0 ? (
+                                        {((test as any).hasPdf || (test as any).pdfUrl || (test as any).fileUrl || (booking as any).pdfReportUrl || (booking as any).pdfUrl) ? (
+                                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-800 rounded-lg text-xs font-bold">
+                                            <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                            <span>See results in PDF file</span>
+                                          </div>
+                                        ) : test.subParameters && test.subParameters.length > 0 ? (
                                           <div className="space-y-1">
                                             {test.subParameters.slice(0, 3).map((sp: any) => (
                                               <div key={sp.id} className="text-[11px] flex items-center gap-1.5">
