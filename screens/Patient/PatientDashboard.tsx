@@ -66,15 +66,18 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     fetchPatientData();
 
     const targetLabId = lab?.id || 'lab-1';
-    const unsubBookings = limsService.subscribeToBookings(targetLabId, (allBookings) => {
-      const myBookings = allBookings.filter(b => 
-        b.patientId === user?.id ||
-        (b.patientEmail && user?.email && b.patientEmail.toLowerCase() === user.email.toLowerCase()) ||
-        (b.patientPhone && user?.phone && b.patientPhone === user.phone) ||
-        (b.patientName && user?.name && b.patientName.toLowerCase() === user.name.toLowerCase())
-      );
-      setBookings(myBookings);
-    });
+    const patientId = user?.id || user?.patientId;
+    
+    // FIXED: Pass patientId to subscription to only get this patient's bookings
+    const unsubBookings = limsService.subscribeToBookings(
+      targetLabId, 
+      (allBookings) => {
+        // Now only returns bookings for this patient
+        setBookings(allBookings);
+      },
+      undefined,
+      patientId // <-- FIXED: Pass patientId
+    );
 
     return () => {
       unsubBookings();
@@ -85,11 +88,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     try {
       setLoading(true);
       const targetLabId = lab?.id || 'lab-1';
+      const patientId = user?.id || user?.patientId;
 
       // 1. Fetch Patient Document
       const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
       const found = snap.docs.find(d => 
-        d.id === user?.id ||
+        d.id === patientId ||
         d.data().email === user?.email || 
         d.data().accessCode === user?.accessCode ||
         d.data().name === user?.name
@@ -108,18 +112,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         setTests([]);
       }
 
-      // 2. Fetch Central LIMS Bookings for this Patient
-      const allBookings = await limsService.fetchAllBookings(targetLabId);
-      const patientPid = found?.data()?.patientId || user?.id;
-      const myBookings = allBookings.filter(b => 
-        b.patientId === user?.id ||
-        b.patientPid === patientPid ||
-        b.patientId === found?.id ||
-        (b.patientEmail && user?.email && b.patientEmail.toLowerCase() === user.email.toLowerCase()) ||
-        (b.patientPhone && user?.phone && b.patientPhone === user.phone) ||
-        (b.patientName && user?.name && b.patientName.toLowerCase() === user.name.toLowerCase())
-      );
-      setBookings(myBookings);
+      // 2. FIXED: Fetch ONLY this patient's bookings
+      if (patientId) {
+        const myBookings = await limsService.getPatientBookings(targetLabId, patientId);
+        setBookings(myBookings);
+      } else {
+        setBookings([]);
+      }
     } catch (e) {
       console.error('Error fetching patient data:', e);
     } finally {
@@ -152,7 +151,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
-  // Calculate total spending
+  // Calculate total spending - only on patient's own bookings
   const totalSpentPaid = bookings
     .filter(b => b.paymentStatus === 'paid')
     .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
@@ -180,7 +179,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Welcome Banner */}
+        {/* Welcome Banner - (unchanged) */}
         <div 
           style={{
             background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
@@ -217,7 +216,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </div>
           </div>
 
-          {/* Big Circled Logo at Right Side */}
           <div className="shrink-0 self-center sm:self-auto">
             {lab?.logoUrl ? (
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
@@ -375,7 +373,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: DIAGNOSTIC REQUISITIONS & TEST BATCHES */}
+        {/* TAB 1: DIAGNOSTIC TESTS & LIVE TRACKING */}
         {activeSegmentTab === 'tests' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -385,7 +383,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   <span>My Diagnostic Test Batches & Requisitions</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tests grouped into medical visit batches with consolidated booklets, physician sharing & digital PDF downloads
+                  Tests grouped into medical visit batches with consolidated booklets
                 </p>
               </div>
 
@@ -411,7 +409,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
             </div>
 
-            {/* List of Batches / Bookings */}
+            {/* List of Batches / Bookings - Only patient's own bookings */}
             {bookings.length > 0 ? (
               <div className="space-y-5">
                 {bookings.map((booking) => {
@@ -449,9 +447,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                           </div>
                         </div>
 
-                        {/* Batch Action Suite */}
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          {/* Payment status badge */}
                           <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wide border ${
                             isPaid
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
@@ -460,42 +456,35 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                             {(booking.totalAmount || 0).toLocaleString()} FCFA ({isPaid ? 'PAID' : 'UNPAID'})
                           </span>
 
-                          {/* Download / Print Full Consolidated Result */}
                           <button
                             type="button"
                             onClick={() => setBatchReportBooking(booking)}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-                            title="Download Full Signed PDF Report of all tests in this batch"
                           >
                             <Printer className="w-4 h-4" />
-                            <span>Download Full Results (Signed PDF)</span>
+                            <span>Download Full Results</span>
                           </button>
 
-                          {/* Share with Physician */}
                           {onNavigateTab && (
                             <button
                               type="button"
                               onClick={() => onNavigateTab('share')}
                               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-                              title="Email encrypted results directly to your doctor"
                             >
                               <Share2 className="w-4 h-4" />
                               <span>Share with Doctor</span>
                             </button>
                           )}
 
-                          {/* Receipt */}
                           <button
                             type="button"
                             onClick={() => setReceiptModalBooking(booking)}
                             className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs border border-slate-700 transition-all cursor-pointer"
-                            title="View official medical receipt"
                           >
                             <Receipt className="w-4 h-4 text-teal-400" />
                             <span>Receipt</span>
                           </button>
 
-                          {/* Toggle Expand */}
                           <button
                             type="button"
                             onClick={() => setExpandedBookingId(isExpanded ? null : booking.id)}
@@ -506,7 +495,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* Full Batch PDF Alert if Available */}
+                      {/* Full Batch PDF Alert */}
                       {booking.pdfReportUrl && (
                         <div className="px-6 py-3 bg-teal-50 border-b border-teal-100 flex items-center justify-between">
                           <div className="flex items-center gap-2 text-xs text-teal-900 font-bold">
@@ -574,7 +563,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                                       </td>
 
                                       <td className="py-3.5 px-4">
-                                        {((test as any).hasPdf || (test as any).pdfUrl || (test as any).fileUrl || (booking as any).pdfReportUrl || (booking as any).pdfUrl) ? (
+                                        {hasPerTestPdf ? (
                                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-800 rounded-lg text-xs font-bold">
                                             <FileText className="w-3.5 h-3.5 text-teal-600" />
                                             <span>See results in PDF file</span>
@@ -721,7 +710,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: MULTI-TEST BOOKING RECEIPTS & ITEMIZATION */}
+        {/* TAB 2: RECEIPTS */}
         {activeSegmentTab === 'receipts' && (
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -880,7 +869,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         )}
       </main>
 
-      {/* Official Consolidated Batch Diagnostic Report Modal (Signed PDF) */}
+      {/* Modals - unchanged */}
       <BatchConsolidatedReportModal
         isOpen={Boolean(batchReportBooking)}
         onClose={() => setBatchReportBooking(null)}
@@ -900,7 +889,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         }}
       />
 
-      {/* Medical Booklet Modal */}
       <MedicalBookletModal
         isOpen={showBookletModal}
         onClose={() => setShowBookletModal(false)}
@@ -923,7 +911,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         lab={lab}
       />
 
-      {/* Patient Access Audit Trail Modal */}
       <PatientActivityAuditModal
         isOpen={showAuditModal}
         onClose={() => setShowAuditModal(false)}
@@ -942,7 +929,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         labName={lab?.name || 'nanoLabs Diagnostic Facility'}
       />
 
-      {/* Official Itemized Medical Receipt Modal */}
       <MedicalReceiptModal
         isOpen={Boolean(receiptModalBooking)}
         onClose={() => setReceiptModalBooking(null)}
