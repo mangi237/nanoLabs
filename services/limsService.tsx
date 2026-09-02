@@ -2606,7 +2606,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData ,id: d.id};
+            return {...existingData , id: d.id, };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2702,6 +2702,12 @@ export const limsService = {
     totalRevenueFromReferrals: number;
     referralBookings: PatientBooking[];
   }> {
+    let patientsList: any[] = [];
+    try {
+      const snap = await getDocs(collection(db, 'labs', labId, 'patients'));
+      patientsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch {}
+
     const [doctorsList, allBookings, accreditedRegistry] = await Promise.all([
       this.fetchReferringDoctors(labId),
       this.fetchAllBookings(labId),
@@ -2724,6 +2730,44 @@ export const limsService = {
       const hasDoc = Boolean(b.referringDoctor || b.referringDoctorId);
       const isNotSelf = refDoc !== 'self-referred' && refDoc !== 'none' && refDoc !== 'self';
       return hasDoc && isNotSelf;
+    });
+
+    // Also include direct patients with referring doctors who might not have a booking document yet
+    patientsList.forEach(p => {
+      const pRef = (p.referringDoctor || p.doctorName || '').trim().toLowerCase();
+      const hasDoc = Boolean(p.referringDoctor || p.referringDoctorId || p.doctorName);
+      const isNotSelf = pRef !== 'self-referred' && pRef !== 'none' && pRef !== 'self' && pRef !== '';
+      if (hasDoc && isNotSelf) {
+        const alreadyInBookings = referralBookings.some(b => b.patientId === p.id || b.patientPid === p.patientId || b.id === p.id);
+        if (!alreadyInBookings) {
+          const ptTests = Array.isArray(p.labTests) ? p.labTests : [];
+          const totalPtPrice = ptTests.reduce((acc: number, t: any) => acc + (t.price || 0), 0) || (p.totalAmount || 0);
+          referralBookings.push({
+            id: `pt-booking-${p.id}`,
+            patientId: p.id,
+            patientName: p.name,
+            patientPid: p.patientId || p.id,
+            patientEmail: p.email || '',
+            patientPhone: p.phone || '',
+            labId: labId,
+            tests: ptTests.map((t: any) => ({
+              testId: t.id || t.testId || 't-1',
+              testName: t.testName || t.name || 'Prescribed Diagnostic Test',
+              price: t.price || 5000,
+              status: t.status || 'Completed'
+            })),
+            totalAmount: totalPtPrice,
+            referringDoctor: p.referringDoctor || p.doctorName,
+            referringDoctorId: p.referringDoctorId || '',
+            referringDoctorHospital: p.referringDoctorHospital || p.hospital || '',
+            referringDoctorPhone: p.referringDoctorPhone || p.doctorPhone || '',
+            createdAt: p.createdAt || new Date().toISOString(),
+            status: 'Completed',
+            overallStatus: 'Completed',
+            paymentStatus: p.paymentStatus || 'Paid'
+          } as any);
+        }
+      }
     });
 
     // Map each booking to a specific partner doctor or unique cited doctor
@@ -2917,6 +2961,14 @@ export const limsService = {
       totalRevenueFromReferrals,
       referralBookings
     };
+  },
+
+  /**
+   * Helper alias to fetch referring doctors with real-time stats
+   */
+  async fetchDoctorReferralStats(labId: string = 'lab-1'): Promise<ReferringDoctor[]> {
+    const res = await this.fetchDoctorCommissionAnalytics(labId);
+    return res.doctors;
   },
 
   /**
