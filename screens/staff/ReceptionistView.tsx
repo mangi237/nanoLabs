@@ -8,7 +8,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
 import { 
   Search, 
@@ -102,8 +102,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   // Add Test Order Modal for Existing Patient State
   const [selectedPatientForTest, setSelectedPatientForTest] = useState<any | null>(null);
   const [selectedMasterTestIds, setSelectedMasterTestIds] = useState<string[]>([]);
-  const [attendingDoctor, setAttendingDoctor] = useState('Dr. Alexis Vance');
+  const [attendingDoctor, setAttendingDoctor] = useState('Self-Referred / General Outpatient');
   const [customDoctorName, setCustomDoctorName] = useState('');
+  const [registeredStaffList, setRegisteredStaffList] = useState<any[]>([]);
+  const [referringDoctorsList, setReferringDoctorsList] = useState<any[]>([]);
+  const [selectedRegisteredStaffMember, setSelectedRegisteredStaffMember] = useState<any | null>(null);
   const [testOrderCategory, setTestOrderCategory] = useState<string>('All');
   const [testOrderSearch, setTestOrderSearch] = useState('');
   const [testOrderNotes, setTestOrderNotes] = useState('');
@@ -190,14 +193,24 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   };
 
   const getPatientTests = (patient: any) => {
-    const patientId = patient.id || patient.patientId;
-    const matchedBookings = bookings.filter(b => 
-      b.patientId === patientId ||
-      b.patientPid === patient.patientId ||
-      b.patientPid === patientId ||
-      (b.patientEmail && patient.email && b.patientEmail.toLowerCase() === patient.email.toLowerCase()) ||
-      (b.patientPhone && patient.phone && b.patientPhone === patient.phone)
-    );
+    const patientId = (patient.id || '').trim();
+    const patientPid = (patient.patientId || '').trim();
+    const patientEmail = (patient.email || '').trim().toLowerCase();
+    const patientPhone = (patient.phone || '').trim();
+
+    const matchedBookings = bookings.filter(b => {
+      const bPid = (b.patientId || '').trim();
+      const bPatientPid = (b.patientPid || '').trim();
+      const bEmail = (b.patientEmail || '').trim().toLowerCase();
+      const bPhone = (b.patientPhone || '').trim();
+
+      const matchId = (patientId && (bPid === patientId || bPatientPid === patientId)) ||
+                      (patientPid && (bPid === patientPid || bPatientPid === patientPid));
+      const matchEmail = Boolean(patientEmail && bEmail && patientEmail === bEmail);
+      const matchPhone = Boolean(patientPhone && bPhone && patientPhone === bPhone);
+
+      return matchId || matchEmail || matchPhone;
+    });
 
     const allTestsFromBookings = matchedBookings.flatMap(b => (b.tests || []).map((t, idx) => {
       const isThisTestValidated = (t as any).receptionistValidated === true || t.status === 'Completed' || t.status === 'In_Lab_Testing' || b.paymentStatus === 'paid';
@@ -229,7 +242,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt : any) => {
+    directLabTests.forEach(dt => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -339,6 +352,27 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       setLoading(false);
     });
 
+    // 3. Load Registered Staff & Doctors
+    const loadStaffAndDoctors = async () => {
+      try {
+        const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+        let sList = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (sList.length === 0) {
+          try {
+            const serverStaff = await authService.getServerStaffList();
+            if (serverStaff && serverStaff.length > 0) sList = serverStaff;
+          } catch {}
+        }
+        setRegisteredStaffList(sList);
+
+        const docStats = await limsService.fetchDoctorReferralStats(targetLabId);
+        setReferringDoctorsList(docStats || []);
+      } catch (err) {
+        console.warn('Error loading staff/doctors in receptionist:', err);
+      }
+    };
+    loadStaffAndDoctors();
+
     return () => {
       unsubBookings();
       unsubPatients();
@@ -354,6 +388,16 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
       const allBookings = await limsService.fetchAllBookings(targetLabId);
       setBookings(allBookings);
+
+      const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+      let sList = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (sList.length === 0) {
+        try {
+          const serverStaff = await authService.getServerStaffList();
+          if (serverStaff && serverStaff.length > 0) sList = serverStaff;
+        } catch {}
+      }
+      setRegisteredStaffList(sList);
     } catch (e) {
       console.error('Error fetching receptionist data:', e);
     } finally {
@@ -988,12 +1032,17 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                     onChange={e => setAttendingDoctor(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                   >
-                    <option value="Dr. Alexis Vance">Dr. Alexis Vance (Lab Specialist & Director)</option>
-                    <option value="Dr. Hiren Shah">Dr. Hiren Shah (Chief Medical Officer)</option>
-                    <option value="Lab Tech Jean">Lab Tech Jean (Senior Phlebotomist)</option>
-                    <option value="Lab Tech Claire">Lab Tech Claire (Microbiology Analyst)</option>
-                    <option value="Dr. Paul Biya Medical Clinic">Dr. Paul Biya Medical Center (Referring)</option>
-                    <option value="General OPD Consultation">General OPD Walk-in Doctor</option>
+                    <option value="Self-Referred / General Outpatient">Self-Referred / General Outpatient</option>
+                    {referringDoctorsList.map((doc: any) => (
+                      <option key={doc.id || doc.doctorName} value={doc.doctorName}>
+                        {doc.doctorName} {doc.specialty ? `(${doc.specialty})` : ''} {doc.hospital ? `- ${doc.hospital}` : ''}
+                      </option>
+                    ))}
+                    {registeredStaffList.map((st: any) => (
+                      <option key={st.id || st.email} value={st.name}>
+                        {st.name} ({st.role || 'Laboratory Staff'})
+                      </option>
+                    ))}
                     <option value="Other">Other / External Referring Doctor...</option>
                   </select>
 
@@ -1357,7 +1406,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                         type="text"
                         value={referringDoctor}
                         onChange={e => setReferringDoctor(e.target.value)}
-                        placeholder="e.g. Dr. Alexis Vance"
+                        placeholder="e.g. Dr. Samuel M., Consultant Physician"
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                       />
                     </div>
@@ -1390,8 +1439,8 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                     <div className="flex items-center gap-2.5">
                       <ShieldCheck className="w-4 h-4 text-amber-700" />
                       <div>
-                        <div className="text-xs font-bold text-slate-900">Internal Staff Member Exemption</div>
-                        <div className="text-[11px] text-amber-800 font-medium">Free test rule: 0 FCFA diagnostic charge with instant Admin Dashboard alert</div>
+                        <div className="text-xs font-bold text-slate-900">Registered Staff Member Benefit</div>
+                        <div className="text-[11px] text-amber-800 font-medium">100% staff welfare exemption: 0 FCFA diagnostic charge for lab personnel</div>
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -1406,16 +1455,39 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   </div>
 
                   {isStaffMember && (
-                    <div className="p-3 bg-amber-100/50 border border-amber-300 rounded-xl">
-                      <label className="block text-[11px] font-bold text-amber-950 mb-1">Staff Designation / Department *</label>
-                      <input
-                        type="text"
-                        value={staffDesignation}
-                        onChange={e => setStaffDesignation(e.target.value)}
-                        placeholder="e.g. Senior Phlebotomist / Night Shift Nurse"
-                        required={isStaffMember}
-                        className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
+                    <div className="p-3 bg-amber-100/50 border border-amber-300 rounded-xl space-y-2">
+                      <label className="block text-[11px] font-bold text-amber-950 mb-1">Select Registered Staff Member *</label>
+                      {registeredStaffList.length > 0 ? (
+                        <select
+                          value={selectedRegisteredStaffMember?.id || ''}
+                          onChange={e => {
+                            const found = registeredStaffList.find(s => s.id === e.target.value);
+                            setSelectedRegisteredStaffMember(found || null);
+                            if (found) {
+                              setStaffDesignation(`${found.role || 'Staff'} (${found.name})`);
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                        >
+                          <option value="">-- Choose from Registered Staff Directory --</option>
+                          {registeredStaffList.map((st: any) => (
+                            <option key={st.id || st.email} value={st.id}>
+                              {st.name} • {st.role || 'Laboratory Staff'} ({st.email || st.phone || 'Active'})
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 mb-0.5">Staff Role / Designation Detail</label>
+                        <input
+                          type="text"
+                          value={staffDesignation}
+                          onChange={e => setStaffDesignation(e.target.value)}
+                          placeholder="e.g. Senior Phlebotomist / Night Shift Tech"
+                          required={isStaffMember}
+                          className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

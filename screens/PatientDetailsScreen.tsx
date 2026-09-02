@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/common/Header';
 import { useAuth } from '../context/authContext';
+import { authService } from '../services/authService';
 import { db, updateDoc, doc, collection, getDocs } from '../services/firebase';
 import { 
   ArrowLeft, 
@@ -119,15 +120,14 @@ export const PatientDetailsScreen: React.FC<PatientDetailsScreenProps> = ({
       setCatalog(tests);
       if (tests.length > 0) setSelectedTest(tests[0]);
 
-      // 2. Fetch Staff
+      // 2. Fetch Staff from real lab staff
       const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
       let staff: any[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (staff.length === 0) {
-        staff = [
-          { id: 'st-1', name: 'Dr. Alexis Vance', role: 'Lab Specialist & Medical Director' },
-          { id: 'st-2', name: 'Sarah Chen, MLS', role: 'Senior Clinical Lab Technologist' },
-          { id: 'st-3', name: 'Dr. Marcus Thorne', role: 'Consultant Hematopathologist' }
-        ];
+        try {
+          const serverStaff = await authService.getServerStaffList();
+          if (serverStaff && serverStaff.length > 0) staff = serverStaff;
+        } catch {}
       }
       setStaffList(staff);
       if (staff.length > 0) setSelectedStaff(staff[0]);
