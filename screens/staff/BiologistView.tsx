@@ -11,7 +11,7 @@ import {
   Search, 
   CheckCircle2, 
   ShieldCheck, 
-  FileText, 
+  FileText,  
   AlertCircle, 
   Clock, 
   UserCheck, 
@@ -139,7 +139,7 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
       const res = await limsService.signAndReleaseByBiologist({
         labId: targetLabId,
         bookingId: selectedBooking.id,
-        biologistName: authResult.staffName || user?.name || 'Dr. Alexis Vance, Lead Pathologist',
+        biologistName: authResult.staffName || user?.name || 'Verified Clinical Biologist',
         biologistAccessCode: cleanCode,
         biologistRemarks: biologistRemarks.trim() || 'Clinical findings reviewed and authorized for official release.'
       });
