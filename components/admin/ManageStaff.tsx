@@ -37,7 +37,13 @@ export const ManageStaff: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'directory' | 'audit_logs'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'benefits_ledger' | 'audit_logs'>('directory');
+  const [benefitsLogs, setBenefitsLogs] = useState<any[]>([]);
+  const [loadingBenefits, setLoadingBenefits] = useState(false);
+  const [benefitDateFilter, setBenefitDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [benefitStaffSearch, setBenefitStaffSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
@@ -51,6 +57,8 @@ export const ManageStaff: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'audit_logs') {
       fetchAuditLogs();
+    } else if (activeTab === 'benefits_ledger') {
+      fetchBenefitsLogs();
     }
   }, [activeTab]);
 
@@ -102,6 +110,67 @@ export const ManageStaff: React.FC = () => {
     }
   };
 
+  const fetchBenefitsLogs = async () => {
+    try {
+      setLoadingBenefits(true);
+      const bookingsSnap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'bookings'));
+      const allBookings = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Also get patients to match staff exemptions
+      const patientsSnap = await getDocs(collection(db, 'labs', lab?.id || 'lab-1', 'patients'));
+      const allPatients = patientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const records: any[] = [];
+
+      allBookings.forEach((b: any) => {
+        const isStaff = b.isStaffMember || b.isStaffExemption || b.paymentMethod === 'workers_benefit' || b.discountType === 'workers_benefit' || Boolean(b.workerStaffName);
+        if (isStaff) {
+          records.push({
+            id: b.id,
+            bookingCode: b.bookingCode || 'BK-BENEFIT',
+            beneficiaryName: b.patientName || 'Laboratory Staff Beneficiary',
+            beneficiaryPid: b.patientPid || b.patientId || '-',
+            staffMemberName: b.workerStaffName || b.staffName || b.patientName,
+            staffRole: b.workerDepartment || b.staffDesignation || 'Registered Laboratory Personnel',
+            tests: b.tests || [],
+            waivedAmount: b.originalPrice || b.totalAmount || (b.tests || []).reduce((acc: number, t: any) => acc + (t.price || 5000), 0),
+            date: b.createdAt || b.paidAt || new Date().toISOString(),
+            authorizedBy: b.receptionistName || b.cashierName || 'Reception Desk (Staff Welfare Rule)',
+            status: b.overallStatus || 'Active'
+          });
+        }
+      });
+
+      allPatients.forEach((p: any) => {
+        if (p.isStaffMember && Array.isArray(p.labTests)) {
+          p.labTests.forEach((t: any, idx: number) => {
+            records.push({
+              id: `pt-${p.id}-${idx}`,
+              bookingCode: t.bookingCode || 'WALKIN-BENEFIT',
+              beneficiaryName: p.name,
+              beneficiaryPid: p.patientId || p.id,
+              staffMemberName: p.name,
+              staffRole: p.staffDesignation || 'Internal Staff',
+              tests: [t],
+              waivedAmount: t.price || 5000,
+              date: t.requestedDate || p.createdAt || new Date().toISOString(),
+              authorizedBy: 'Receptionist Intake Check',
+              status: 'Approved'
+            });
+          });
+        }
+      });
+
+      // Sort descending by date
+      records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setBenefitsLogs(records);
+    } catch (e) {
+      console.error('Error fetching staff benefits logs:', e);
+    } finally {
+      setLoadingBenefits(false);
+    }
+  };
+
   const handleDeleteStaff = async (staffId: string) => {
     try {
       await deleteDoc(doc(db, 'labs', lab?.id || 'lab-1', 'staff', staffId));
@@ -146,6 +215,17 @@ export const ManageStaff: React.FC = () => {
               }`}
             >
               Personnel List
+            </button>
+            <button
+              onClick={() => setActiveTab('benefits_ledger')}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'benefits_ledger'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5 text-teal-600" />
+              Staff Benefits Ledger
             </button>
             <button
               onClick={() => setActiveTab('audit_logs')}
@@ -327,6 +407,175 @@ export const ManageStaff: React.FC = () => {
             })}
           </div>
         </>
+      ) : activeTab === 'benefits_ledger' ? (
+        /* Staff Benefits Ledger View with Date Filtering */
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-teal-50 text-teal-700 rounded-xl">
+                <DollarSign className="w-5 h-5 text-teal-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Staff Diagnostic Benefits Ledger</h3>
+                <p className="text-xs text-slate-500">
+                  Audit trail of diagnostic tests provided under registered staff welfare & employment benefits
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchBenefitsLogs}
+              disabled={loadingBenefits}
+              className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer self-start sm:self-auto"
+              title="Refresh Benefits"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingBenefits ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {/* Date & Search Filters */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+            {/* Quick Date Range Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-500 mr-1">Filter by Date:</span>
+              {(['all', 'today', 'week', 'month', 'custom'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setBenefitDateFilter(f)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                    benefitDateFilter === f
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {f === 'all' ? 'All Time' : f === 'today' ? 'Today' : f === 'week' ? 'This Week' : f === 'month' ? 'This Month' : 'Custom Range'}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Date Inputs if 'custom' is active */}
+            {benefitDateFilter === 'custom' && (
+              <div className="flex items-center gap-2 text-xs">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-slate-800"
+                />
+                <span className="text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-slate-800"
+                />
+              </div>
+            )}
+
+            {/* Staff Search input */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search staff or test name..."
+                value={benefitStaffSearch}
+                onChange={(e) => setBenefitStaffSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:border-teal-500"
+              />
+            </div>
+          </div>
+
+          {/* Table of Benefits */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Staff Member (Registered)</th>
+                  <th className="py-3 px-4">Patient / Beneficiary</th>
+                  <th className="py-3 px-4">Diagnostic Tests Conducted</th>
+                  <th className="py-3 px-4 text-right">Benefit Value Waived</th>
+                  <th className="py-3 px-4">Authorized By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                {(() => {
+                  const now = new Date();
+                  const filtered = benefitsLogs.filter((rec: any) => {
+                    const recDate = new Date(rec.date);
+                    // Date range filter
+                    if (benefitDateFilter === 'today') {
+                      if (recDate.toDateString() !== now.toDateString()) return false;
+                    } else if (benefitDateFilter === 'week') {
+                      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                      if (recDate < oneWeekAgo) return false;
+                    } else if (benefitDateFilter === 'month') {
+                      if (recDate.getMonth() !== now.getMonth() || recDate.getFullYear() !== now.getFullYear()) return false;
+                    } else if (benefitDateFilter === 'custom') {
+                      if (customStartDate && new Date(rec.date) < new Date(customStartDate)) return false;
+                      if (customEndDate && new Date(rec.date) > new Date(customEndDate + 'T23:59:59')) return false;
+                    }
+
+                    // Search filter
+                    if (benefitStaffSearch.trim()) {
+                      const q = benefitStaffSearch.toLowerCase();
+                      const matchStaff = rec.staffMemberName?.toLowerCase().includes(q);
+                      const matchPatient = rec.beneficiaryName?.toLowerCase().includes(q);
+                      const matchTest = rec.tests?.some((t: any) => (t.testName || t.name || '').toLowerCase().includes(q));
+                      if (!matchStaff && !matchPatient && !matchTest) return false;
+                    }
+
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400">
+                          No staff benefit records found matching the selected date range.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map((rec: any) => (
+                    <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                        {new Date(rec.date).toLocaleDateString()} {new Date(rec.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-teal-900">{rec.staffMemberName}</div>
+                        <div className="text-[10px] text-teal-600 font-semibold">{rec.staffRole}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-900">{rec.beneficiaryName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">PID: {rec.beneficiaryPid}</div>
+                      </td>
+                      <td className="py-3 px-4 max-w-xs">
+                        <div className="space-y-0.5">
+                          {rec.tests?.map((t: any, idx: number) => (
+                            <span key={idx} className="inline-block bg-slate-100 text-slate-800 text-[10px] px-2 py-0.5 rounded-md mr-1 mb-1 font-semibold">
+                              {t.testName || t.name || 'Clinical Test'}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        {Number(rec.waivedAmount).toLocaleString()} FCFA
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-teal-200">
+                          <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                          {rec.authorizedBy}
+                        </span>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         /* Immutable Security Audit Logs View */
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
