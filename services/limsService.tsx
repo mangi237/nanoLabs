@@ -2606,7 +2606,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {...existingData , id: d.id, };
+            return {  ...existingData, id: d.id, };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2926,7 +2926,7 @@ export const limsService = {
       } else if (stats.customName && stats.totalReferrals > 0) {
         // Custom cited doctor
         const sampleB = stats.bookings[0];
-        const docId = sampleB?.referringDoctorId || `doc-ref-${Date.now()}`;
+        const docId = sampleB?.referringDoctorId || `doc-ref-${normalizeName(stats.customName) || 'custom'}`;
         enrichedDoctors.push({
           id: docId,
           doctorId: docId,
