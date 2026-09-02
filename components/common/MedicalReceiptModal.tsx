@@ -79,7 +79,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const labWebsite = labInfo?.website || labInfo?.websiteUrl || booking.labWebsite || '';
   const labLicense = labInfo?.licenseNumber || '';
   const labTaxId = labInfo?.taxId || '';
-  const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || '';
+  const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || labInfo?.logo || booking.labLogo || booking.labDetails?.logoUrl || booking.logoUrl || '';
 
   // Consolidate payment attributes from booking and paymentDetails object
   const pDetails = paymentDetails || booking.paymentDetails || {};
@@ -133,10 +133,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   // Identify any requested tests that are pending confirmation/payment
   const otherUnpaidTests = allOrderedTests.filter(
-    ot => !confirmedAndPaidTests.some((ct : any ) => ct.id === ot.id || ct.testName === ot.testName)
+    ot => !confirmedAndPaidTests.some((ct:any) => ct.id === ot.id || ct.testName === ot.testName)
   );
 
-  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum : number , t: any  ) => sum + (t.price || 5000), 0);
+  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum:number, t:any ) => sum + (t.price || 5000), 0);
   const isWorkerBenefit = paymentMethod === 'workers_benefit' || discountType === 'workers_benefit' || Boolean(workerStaffName);
   const isGiftCoupon = paymentMethod === 'gift_coupon' || discountType === 'coupon' || Boolean(couponCode);
   const isInsurance = paymentMethod === 'insurance' || Boolean(insuranceProvider);
@@ -335,7 +335,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {allOrderedTests.map((t, idx) => {
-                      const isPaidThisInvoice = confirmedAndPaidTests.some((ct : any ) => ct.id === t.id || ct.testName === t.testName);
+                      const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any ) => ct.id === t.id || ct.testName === t.testName);
                       return (
                         <span 
                           key={idx} 
@@ -373,7 +373,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-                      {confirmedAndPaidTests.map((testItem : any , idx: number) => {
+                      {confirmedAndPaidTests.map((testItem : any, idx: number) => {
                         const unitPrice = testItem.price || 5000;
                         const qty = 1;
                         const lineTotal = unitPrice * qty;
