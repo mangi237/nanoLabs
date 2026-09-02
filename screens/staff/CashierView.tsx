@@ -96,6 +96,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [workerStaffId, setWorkerStaffId] = useState('');
   const [workerDepartment, setWorkerDepartment] = useState('Clinical Laboratory / Pathology');
   const [workerAuthNote, setWorkerAuthNote] = useState('Authorized by Medical Administration');
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [selectedStaffMemberId, setSelectedStaffMemberId] = useState<string>('');
 
   // Card (POS) details
   const [cardScheme, setCardScheme] = useState('Visa');
@@ -128,6 +130,20 @@ export const CashierView: React.FC<CashierViewProps> = ({
     return () => {
       unsubscribe();
     };
+  }, [targetLabId]);
+
+  // Load registered staff directory for benefit and gift allocation
+  useEffect(() => {
+    const fetchStaffMembers = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setStaffList(list);
+      } catch (e) {
+        console.warn('Failed to load staff list for cashier:', e);
+      }
+    };
+    fetchStaffMembers();
   }, [targetLabId]);
 
   const fetchData = async () => {
@@ -163,8 +179,22 @@ export const CashierView: React.FC<CashierViewProps> = ({
       if (!insurancePolicyNumber && (selectedBooking as any).insurancePolicyNumber) {
         setInsurancePolicyNumber((selectedBooking as any).insurancePolicyNumber);
       }
+
+      // Check if patient is a registered staff member and auto-select
+      if (staffList.length > 0) {
+        const matchedStaff = staffList.find(s => 
+          (s.name && selectedBooking.patientName && s.name.trim().toLowerCase() === selectedBooking.patientName.trim().toLowerCase()) ||
+          (s.staffId && (selectedBooking.patientId === s.staffId || (selectedBooking as any).patientPid === s.staffId))
+        );
+        if (matchedStaff) {
+          setSelectedStaffMemberId(matchedStaff.id);
+          setWorkerStaffName(matchedStaff.name || selectedBooking.patientName);
+          setWorkerStaffId(matchedStaff.staffId || matchedStaff.id || 'STF-001');
+          setWorkerDepartment(matchedStaff.department || matchedStaff.role || 'Clinical Laboratory / Pathology');
+        }
+      }
     }
-  }, [selectedBooking]);
+  }, [selectedBooking, staffList]);
 
   // Calculate dynamic settlement total based on pricing adjustments
   const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
@@ -1268,6 +1298,42 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Staff Selection Dropdown */}
+                  <div>
+                    <label className="block text-[10px] text-teal-300 font-bold mb-1 flex items-center justify-between">
+                      <span>Select Registered Staff Member (Auto-Fill) *</span>
+                      {staffList.length > 0 && (
+                        <span className="text-[9px] text-teal-400 font-normal">
+                          {staffList.length} staff registered
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={selectedStaffMemberId}
+                      onChange={(e) => {
+                        const sId = e.target.value;
+                        setSelectedStaffMemberId(sId);
+                        if (sId && sId !== 'custom') {
+                          const found = staffList.find(s => s.id === sId);
+                          if (found) {
+                            setWorkerStaffName(found.name || '');
+                            setWorkerStaffId(found.staffId || found.id || '');
+                            setWorkerDepartment(found.department || found.role || 'Clinical Laboratory / Pathology');
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-400 font-bold"
+                    >
+                      <option value="">-- Select from Staff Dropdown --</option>
+                      {staffList.map((stf) => (
+                        <option key={stf.id} value={stf.id}>
+                          {stf.name} — {stf.role || stf.designation || 'Staff'} ({stf.department || 'Lab'}) [{stf.staffId || stf.id}]
+                        </option>
+                      ))}
+                      <option value="custom">+ Manual / Other Staff Entry</option>
+                    </select>
+                  </div>
+
                   {/* Staff Name & Staff ID */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
@@ -1397,6 +1463,39 @@ export const CashierView: React.FC<CashierViewProps> = ({
                       {couponApplied ? 'Applied ✓' : 'Apply'}
                     </button>
                   </div>
+
+                  {/* Staff Gift Beneficiary Selector */}
+                  {(couponCode.toUpperCase().includes('STAFF') || selectedStaffMemberId) && staffList.length > 0 && (
+                    <div className="p-3 bg-purple-900/40 rounded-xl border border-purple-400/40 space-y-1.5 animate-in fade-in duration-200">
+                      <label className="block text-[10px] text-purple-200 font-bold flex items-center justify-between">
+                        <span>Select Internal Staff Member for Gift / Welfare Waiver:</span>
+                        <span className="text-[9px] text-purple-300 font-mono">Automated Admin Reporting</span>
+                      </label>
+                      <select
+                        value={selectedStaffMemberId}
+                        onChange={(e) => {
+                          const sId = e.target.value;
+                          setSelectedStaffMemberId(sId);
+                          const found = staffList.find(s => s.id === sId);
+                          if (found) {
+                            setWorkerStaffName(found.name || '');
+                            setWorkerStaffId(found.staffId || found.id || 'STF-001');
+                            setWorkerDepartment(found.department || found.role || 'Internal Staff');
+                            setCouponSponsorName('nanoLabs Staff Welfare Fund');
+                            setCouponNotes(`Staff Benefit Gift: ${found.name} (${found.role || 'Personnel'})`);
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-purple-400/50 rounded-lg text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-purple-300"
+                      >
+                        <option value="">-- Choose Registered Staff Beneficiary --</option>
+                        {staffList.map((stf) => (
+                          <option key={stf.id} value={stf.id}>
+                            {stf.name} — {stf.role || stf.designation || 'Staff'} [{stf.staffId || stf.id}]
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Sponsor / Donor Name & Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
