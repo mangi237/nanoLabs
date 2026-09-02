@@ -440,77 +440,128 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
 
             {isCompleted ? (
               <div className="space-y-4">
-                {/* Structured Sub-Parameters Table if available */}
-                {Array.isArray(currentTest.subParameters) && currentTest.subParameters.length > 0 && (
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
-                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
-                      <FileCheck className="w-4 h-4 text-teal-600" />
-                      Biochemical Parameter Values & Reference Ranges
+                {/* When PDF Certificate is attached, state See results in PDF file */}
+                {hasPdf ? (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-teal-950 uppercase tracking-wider">Clinical Finding</div>
+                          <div className="text-sm font-black text-teal-900">See results in PDF file</div>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-teal-100 text-teal-800 text-[11px] font-bold rounded-lg border border-teal-200">
+                        Official PDF Attached
+                      </span>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-bold">
-                          <tr>
-                            <th className="py-2.5 px-3">Analyte / Parameter</th>
-                            <th className="py-2.5 px-3">Measured Finding</th>
-                            <th className="py-2.5 px-3">Unit</th>
-                            <th className="py-2.5 px-3">Biological Reference Range</th>
-                            <th className="py-2.5 px-3 text-right">Status Flag</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {currentTest.subParameters.map((sp: any, idx: number) => {
-                            const isHigh = sp.flag === 'High';
-                            const isLow = sp.flag === 'Low';
-                            const refStr = sp.refRangeMale || sp.refRange || sp.refRangeFemale || `${sp.maleMin || 0} - ${sp.maleMax || 100}`;
+                    <div className="p-5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-2xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-teal-600 text-white rounded-xl shadow-md">
+                          <FileText className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">
+                            {currentTest.pdfName || `${currentTest.testName || 'DiagnosticReport'}.pdf`}
+                          </h4>
+                          <p className="text-xs text-slate-500">
+                            {currentTest.pdfSize ? `${(currentTest.pdfSize / 1024).toFixed(1)} KB • ` : ''}Digitally signed & encrypted certificate
+                          </p>
+                        </div>
+                      </div>
 
-                            return (
-                              <tr key={sp.id || idx} className="hover:bg-slate-50/50">
-                                <td className="py-2.5 px-3 font-semibold text-slate-900">{sp.name}</td>
-                                <td className="py-2.5 px-3 font-mono font-black text-slate-900">{sp.value || 'Normal'}</td>
-                                <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">{sp.unit || '-'}</td>
-                                <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">{refStr}</td>
-                                <td className="py-2.5 px-3 text-right">
-                                  {isHigh ? (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">HIGH</span>
-                                  ) : isLow ? (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">LOW</span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">NORMAL</span>
-                                  )}
-                                </td>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={pdfLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={handleDownloadWithAudit}
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download PDF Certificate
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Structured Sub-Parameters Table if available */}
+                    {Array.isArray(currentTest.subParameters) && currentTest.subParameters.length > 0 && (
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                        <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                          <FileCheck className="w-4 h-4 text-teal-600" />
+                          Biochemical Parameter Values & Reference Ranges
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-bold">
+                              <tr>
+                                <th className="py-2.5 px-3">Analyte / Parameter</th>
+                                <th className="py-2.5 px-3">Measured Finding</th>
+                                <th className="py-2.5 px-3">Unit</th>
+                                <th className="py-2.5 px-3">Biological Reference Range</th>
+                                <th className="py-2.5 px-3 text-right">Status Flag</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {currentTest.subParameters.map((sp: any, idx: number) => {
+                                const isHigh = sp.flag === 'High';
+                                const isLow = sp.flag === 'Low';
+                                const refStr = sp.refRangeMale || sp.refRange || sp.refRangeFemale || `${sp.maleMin || 0} - ${sp.maleMax || 100}`;
 
-                {/* Single value or text result */}
-                {currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
-                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
-                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
-                      <FileCheck className="w-4 h-4 text-teal-600" />
-                      Validated Laboratory Findings
-                    </div>
-                    <div className="font-mono font-black text-lg text-slate-900">
-                      {currentTest.resultValue} {currentTest.units || ''}
-                    </div>
-                  </div>
-                )}
+                                return (
+                                  <tr key={sp.id || idx} className="hover:bg-slate-50/50">
+                                    <td className="py-2.5 px-3 font-semibold text-slate-900">{sp.name}</td>
+                                    <td className="py-2.5 px-3 font-mono font-black text-slate-900">{sp.value || 'Normal'}</td>
+                                    <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">{sp.unit || '-'}</td>
+                                    <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">{refStr}</td>
+                                    <td className="py-2.5 px-3 text-right">
+                                      {isHigh ? (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">HIGH</span>
+                                      ) : isLow ? (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">LOW</span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">NORMAL</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Legacy or general text result */}
-                {currentTest.result && !currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
-                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
-                    <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
-                      <FileCheck className="w-4 h-4 text-teal-600" />
-                      Validated Laboratory Findings
-                    </div>
-                    <p className="text-slate-800 font-medium whitespace-pre-wrap">{currentTest.result}</p>
-                  </div>
+                    {/* Single value or text result */}
+                    {currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
+                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
+                        <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                          <FileCheck className="w-4 h-4 text-teal-600" />
+                          Validated Laboratory Findings
+                        </div>
+                        <div className="font-mono font-black text-lg text-slate-900">
+                          {currentTest.resultValue} {currentTest.units || ''}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Legacy or general text result */}
+                    {currentTest.result && !currentTest.resultValue && (!currentTest.subParameters || currentTest.subParameters.length === 0) && (
+                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm leading-relaxed space-y-2">
+                        <div className="flex items-center gap-2 text-teal-800 font-bold text-xs uppercase tracking-wider">
+                          <FileCheck className="w-4 h-4 text-teal-600" />
+                          Validated Laboratory Findings
+                        </div>
+                        <p className="text-slate-800 font-medium whitespace-pre-wrap">{currentTest.result}</p>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Biologist / Clinical Pathologist Remarks */}
@@ -528,37 +579,6 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
                         Signed: {currentTest.biologistName} (Verified Clinical Biologist)
                       </div>
                     )}
-                  </div>
-                )}
-
-                {hasPdf && (
-                  <div className="p-5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-2xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-teal-600 text-white rounded-xl shadow-md">
-                        <FileText className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">
-                          {currentTest.pdfName || `${currentTest.testName || 'DiagnosticReport'}.pdf`}
-                        </h4>
-                        <p className="text-xs text-slate-500">
-                          {currentTest.pdfSize ? `${(currentTest.pdfSize / 1024).toFixed(1)} KB • ` : ''}Digitally signed & encrypted certificate
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={pdfLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={handleDownloadWithAudit}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download PDF Certificate
-                      </a>
-                    </div>
                   </div>
                 )}
               </div>
