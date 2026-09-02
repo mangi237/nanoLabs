@@ -674,7 +674,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     <Stethoscope className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
                       type="text"
-                      placeholder="e.g. Dr. Arthur M. Vance, MD, FRCPath"
+                      placeholder="e.g. Dr. Samuel M., MD, Clinical Biologist"
                       value={formData.directorName}
                       onChange={(e) => setFormData({ ...formData, directorName: e.target.value })}
                       className="w-full pl-10 p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white"
