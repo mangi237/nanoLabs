@@ -463,9 +463,9 @@ type ScreenType =
     return (
       <AuthProvider>
         <ThemeProvider>
-          <LanguageProvider>
+          {/* <LanguageProvider> */}
             <MainAppContent />
-          </LanguageProvider>
+          {/* </LanguageProvider> */}
         </ThemeProvider>
       </AuthProvider>
     );
