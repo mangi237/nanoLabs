@@ -191,82 +191,68 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       setUploadingCard(false);
     }
   };
-// In ReceptionistView.tsx, update the getPatientTests function:
 
-const getPatientTests = (patient: any) => {
-  const patientId = (patient.id || '').trim();
-  const patientPid = (patient.patientId || '').trim();
-  const patientEmail = (patient.email || '').trim().toLowerCase();
-  const patientPhone = (patient.phone || '').trim();
+  const getPatientTests = (patient: any) => {
+    const patientId = (patient.id || '').trim();
+    const patientPid = (patient.patientId || patient.pid || '').trim().toLowerCase();
+    const patientAccessCode = (patient.accessCode || '').trim();
 
-  // FIXED: Only match bookings for this specific patient
-  const matchedBookings = bookings.filter(b => {
-    const bPid = (b.patientId || '').trim();
-    const bPatientPid = (b.patientPid || '').trim();
-    const bEmail = (b.patientEmail || '').trim().toLowerCase();
-    const bPhone = (b.patientPhone || '').trim();
+    // Strict matching: Only bookings explicitly associated with this patient's unique PID or DB Document ID
+    const matchedBookings = bookings.filter(b => {
+      const bPid = (b.patientId || '').trim();
+      const bPatientPid = (b.patientPid || '').trim().toLowerCase();
+      const bAccessCode = ((b as any).accessCode || '').trim();
 
-    // FIXED: Strict matching - patient must match by ID, PID, email, or phone
-    const matchId = patientId && (bPid === patientId || bPatientPid === patientId);
-    const matchPid = patientPid && (bPid === patientPid || bPatientPid === patientPid);
-    const matchEmail = patientEmail && bEmail && patientEmail === bEmail;
-    const matchPhone = patientPhone && bPhone && patientPhone === bPhone;
+      const matchPid = Boolean(patientPid && (bPatientPid === patientPid || bPid.toLowerCase() === patientPid));
+      const matchDocId = Boolean(patientId && (bPid === patientId || bPatientPid === patientId.toLowerCase()));
+      const matchCode = Boolean(patientAccessCode && bAccessCode && patientAccessCode === bAccessCode);
 
-    return matchId || matchPid || matchEmail || matchPhone;
-  });
+      return matchPid || matchDocId || matchCode;
+    });
 
-  // FIXED: Only get tests from matched bookings
-  const allTestsFromBookings = matchedBookings.flatMap(b => (b.tests || []).map((t, idx) => {
-    const isThisTestValidated = (t as any).receptionistValidated === true || t.status === 'Completed' || t.status === 'In_Lab_Testing' || b.paymentStatus === 'paid';
-    return {
-      id: t.id || t.testId || `bt-${b.id}-${idx}`,
-      testId: t.testId || t.id || `t-${idx}`,
-      testName: t.testName || (t as any).name || 'Diagnostic Test',
-      category: t.category || 'General Diagnostic',
-      price: t.price || 5500,
-      status: t.status || (isThisTestValidated ? (b.paymentStatus === 'paid' ? 'Pending_Collection' : 'Pending_Payment') : 'Pending_Validation'),
-      bookingCode: b.bookingCode,
-      bookingId: b.id,
-      receptionistValidated: isThisTestValidated,
-      createdAt: b.createdAt,
-      // FIXED: Include sample type for better identification
-      sampleTypeRequired: t.sampleTypeRequired || 'Venous Blood'
-    };
-  }));
+    const allTestsFromBookings = matchedBookings.flatMap(b => (b.tests || []).map((t, idx) => {
+      const isThisTestValidated = (t as any).receptionistValidated === true || t.status === 'Completed' || t.status === 'In_Lab_Testing' || b.paymentStatus === 'paid';
+      return {
+        id: t.id || t.testId || `bt-${b.id}-${idx}`,
+        testId: t.testId || t.id || `t-${idx}`,
+        testName: t.testName || (t as any).name || 'Diagnostic Test',
+        category: t.category || 'General Diagnostic',
+        price: t.price || 5500,
+        status: t.status || (isThisTestValidated ? (b.paymentStatus === 'paid' ? 'Pending_Collection' : 'Pending_Payment') : 'Pending_Validation'),
+        bookingCode: b.bookingCode,
+        bookingId: b.id,
+        receptionistValidated: isThisTestValidated,
+        createdAt: b.createdAt
+      };
+    }));
 
-  // FIXED: Only get direct lab tests that belong to this patient
-  const directLabTests = (patient.labTests || [])
-    .filter((t: any) => {
-      // Only include tests that are actually for this patient
-      return t.patientId === patientId || t.patientPid === patientPid || t.patientEmail === patientEmail;
-    })
-    .map((t: any, idx: number) => ({
-      id: t.id || t.testId || `direct-${idx}-${t.name || t.testName}`,
+    // Only include lab tests stored directly in the patient document that are not already present in bookings
+    const directLabTests = (patient.labTests || []).map((t: any, idx: number) => ({
+      id: t.id || t.testId || `direct-${patient.id || 'p'}-${idx}-${t.name || t.testName}`,
       testId: t.testId || t.id || `t-${idx}`,
       testName: t.testName || t.name || 'Laboratory Diagnostic Test',
       category: t.category || 'Laboratory Test',
       price: t.price || 5500,
       status: t.status || (t.paid ? 'Paid' : 'Pending_Payment'),
       bookingCode: t.bookingCode || 'DIRECT',
-      bookingId: t.bookingId || t.id || `direct-${idx}`,
+      bookingId: t.bookingId || t.id || `direct-${patient.id || 'p'}-${idx}`,
       receptionistValidated: t.receptionistValidated === true || t.status === 'Paid' || t.paid === true,
-      createdAt: t.requestedDate || t.requestedAt || patient.createdAt || new Date().toISOString(),
-      sampleTypeRequired: t.sampleType || 'Venous Blood'
+      createdAt: t.requestedDate || t.requestedAt || patient.createdAt || new Date().toISOString()
     }));
 
-  const combined = [...allTestsFromBookings];
-  directLabTests.forEach((dt: any) => {
-    const alreadyIn = combined.some(ct => 
-      (ct.id && ct.id === dt.id) || 
-      (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
-    );
-    if (!alreadyIn) {
-      combined.push(dt);
-    }
-  });
+    const combined = [...allTestsFromBookings];
+    directLabTests.forEach((dt: any ) => {
+      const alreadyIn = combined.some(ct => 
+        (ct.id && ct.id === dt.id) || 
+        (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
+      );
+      if (!alreadyIn) {
+        combined.push(dt);
+      }
+    });
 
-  return combined;
-};
+    return combined;
+  };
 
   const toggleTestSelection = (patientId: string, testIdentifier: string) => {
     setSelectedTestsMap(prev => {
@@ -353,20 +339,19 @@ const getPatientTests = (patient: any) => {
 
   useEffect(() => {
     setLoading(true);
-    // FIXED: Subscribe to bookings - no patientId, but the getPatientTests function filters properly
+    // 1. Subscribe to Live Bookings / Test Statuses
     const unsubBookings = limsService.subscribeToBookings(targetLabId, (updatedBookings) => {
-      // Store all bookings, but getPatientTests will filter by patient
       setBookings(updatedBookings);
       setLoading(false);
     });
-  
-    // Subscribe to Patients Directory
+
+    // 2. Subscribe to Live Patients Directory
     const unsubPatients = limsService.subscribeToPatients(targetLabId, (updatedPatients) => {
       setPatients(updatedPatients);
       setLoading(false);
     });
-  
-    // Load Registered Staff & Doctors
+
+    // 3. Load Registered Staff & Doctors
     const loadStaffAndDoctors = async () => {
       try {
         const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
@@ -378,7 +363,7 @@ const getPatientTests = (patient: any) => {
           } catch {}
         }
         setRegisteredStaffList(sList);
-  
+
         const docStats = await limsService.fetchDoctorReferralStats(targetLabId);
         setReferringDoctorsList(docStats || []);
       } catch (err) {
@@ -386,12 +371,13 @@ const getPatientTests = (patient: any) => {
       }
     };
     loadStaffAndDoctors();
-  
+
     return () => {
       unsubBookings();
       unsubPatients();
     };
   }, [targetLabId]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -1414,14 +1400,43 @@ const getPatientTests = (patient: any) => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Referring Doctor / Practitioner</label>
-                      <input
-                        type="text"
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>Referring Doctor / Clinician</span>
+                        {referringDoctorsList.length > 0 && (
+                          <span className="text-[10px] text-teal-700 font-semibold">{referringDoctorsList.length} Partner Doctors</span>
+                        )}
+                      </label>
+                      <select
                         value={referringDoctor}
-                        onChange={e => setReferringDoctor(e.target.value)}
-                        placeholder="e.g. Dr. Samuel M., Consultant Physician"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      />
+                        onChange={e => {
+                          const val = e.target.value;
+                          setReferringDoctor(val);
+                          const docObj = referringDoctorsList.find(d => d.doctorName === val);
+                          if (docObj && docObj.hospital) {
+                            setReferralHospital(docObj.hospital);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                      >
+                        <option value="">-- Self-Referred / Outpatient --</option>
+                        {referringDoctorsList.map((doc: any) => (
+                          <option key={doc.id || doc.doctorName} value={doc.doctorName}>
+                            {doc.doctorName} {doc.specialty ? `(${doc.specialty})` : ''} {doc.hospital ? `- ${doc.hospital}` : ''}
+                          </option>
+                        ))}
+                        <option value="CUSTOM_ENTRY">+ Add External Doctor Manually...</option>
+                      </select>
+                      {referringDoctor === 'CUSTOM_ENTRY' && (
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            placeholder="Enter Doctor Full Name (e.g. Dr. Samuel M.)"
+                            onChange={e => setReferringDoctor(e.target.value)}
+                            autoFocus
+                            className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Hospital / Medical Center</label>
@@ -1440,7 +1455,7 @@ const getPatientTests = (patient: any) => {
                       type="text"
                       value={referralNotes}
                       onChange={e => setReferralNotes(e.target.value)}
-                      placeholder="e.g. Suspected typhoid fever, pre-op blood screen"
+                      placeholder="e.g. Suspected urinary infection / Routine corporate health check"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
