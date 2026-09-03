@@ -545,7 +545,7 @@ export interface PrelevementActCode {
   name: string;
   cote: string;
   multiplier: number;
-  defaultCoefficient?: number;
+  // defaultCoefficient?: number;
   coefficientType: 'KB' | 'B' | 'P' | 'K';
   sampleType: string;
   defaultPrice: number;
