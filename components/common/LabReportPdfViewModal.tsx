@@ -291,7 +291,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section (Matching medicalreport.webp) */}
-            {booking.tests.map((testItem, tIdx) => (
+            {booking.tests.map((testItem : any  , tIdx : any) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -327,7 +327,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-800">
                       {testItem.subParameters && testItem.subParameters.length > 0 ? (
-                        testItem.subParameters.map((sp) => {
+                        testItem.subParameters.map((sp : any) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
                           const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
