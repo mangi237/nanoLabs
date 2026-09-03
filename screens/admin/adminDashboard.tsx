@@ -8,6 +8,8 @@ import TestCatalogManagement from './TestCatalogManagement';
 import ReportsScreen from './ReportsScreen';
 import PatientManagement from './PatientManagement';
 import ReferringDoctorsManagement from './ReferringDoctorsManagement';
+import HeaderFooterTemplateManager from '../../components/admin/HeaderFooterTemplateManager';
+import InsuranceRatesManager from '../../components/admin/InsuranceRatesManager';
 import LabProfileModal from '../../components/admin/LabProfileModal';
 import { 
   LayoutDashboard, 
@@ -20,7 +22,9 @@ import {
   ShieldCheck,
   Building2,
   Camera,
-  Stethoscope
+  Stethoscope,
+  Layers,
+  Percent
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 
@@ -40,12 +44,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { lab } = useAuth();
   const [showLabProfileModal, setShowLabProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'analytics' | 'reports' | 'patients'
+    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'templates' | 'insurance' | 'analytics' | 'reports' | 'patients'
   >('overview');
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'doctors', label: 'Referring Doctors', icon: Stethoscope, badge: '20% Comm.' },
+    { id: 'templates', label: 'Header & Footer Templates', icon: Layers, badge: 'Dual Styles' },
+    { id: 'insurance', label: 'Insurance & COTE Config', icon: Percent, badge: 'Cameroon' },
+    { id: 'doctors', label: 'Referring Doctors', icon: Stethoscope },
     { id: 'inventory', label: 'Inventory Manager', icon: Package, badge: 'Reagents' },
     { id: 'catalog', label: 'Test Catalog', icon: FlaskConical },
     { id: 'staff', label: 'Manage Staff', icon: UserCog },
@@ -128,6 +134,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }
             }}
           />
+        )}
+
+        {activeTab === 'templates' && (
+          <HeaderFooterTemplateManager />
+        )}
+
+        {activeTab === 'insurance' && (
+          <InsuranceRatesManager />
         )}
 
         {activeTab === 'doctors' && (
