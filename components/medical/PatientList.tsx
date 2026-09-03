@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
+import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
 import { 
   Search, 
   Users, 
@@ -19,7 +20,9 @@ import {
   CheckCircle2,
   Droplet,
   Shield,
-  Stethoscope
+  Stethoscope,
+  Filter,
+  Receipt
 } from 'lucide-react';
 
 interface PatientListProps {
@@ -32,6 +35,7 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedInsuranceFilter, setSelectedInsuranceFilter] = useState<string>('ALL');
   const [selectedAdminPatient, setSelectedAdminPatient] = useState<any | null>(null);
 
   // Check if current user is admin or explicitly in admin mode
@@ -55,11 +59,36 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
     }
   };
 
-  const filteredPatients = patients.filter(p =>
-    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.patientId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.phone?.includes(searchQuery)
-  );
+  const filteredPatients = patients.filter(p => {
+    const matchesSearch = 
+      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.patientId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.phone?.includes(searchQuery) ||
+      p.insuranceProvider?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (selectedInsuranceFilter === 'ALL') return true;
+    if (selectedInsuranceFilter === 'CASH') return !p.hasInsurance;
+    if (selectedInsuranceFilter === 'INSURED') return Boolean(p.hasInsurance);
+    return (p.insuranceProvider || '').toLowerCase() === selectedInsuranceFilter.toLowerCase();
+  });
+
+  // Calculate financial statistics across filtered patients
+  const totalGrossCharges = filteredPatients.reduce((sum, p) => {
+    return sum + (p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0);
+  }, 0);
+
+  const totalInsuranceShare = filteredPatients.reduce((sum, p) => {
+    if (p.hasInsurance) {
+      const gross = p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0;
+      const rate = p.insuranceCoverageRate !== undefined ? p.insuranceCoverageRate : 0.8;
+      return sum + (p.insuranceCoveredAmount || Math.round(gross * rate));
+    }
+    return sum;
+  }, 0);
+
+  const totalTicketModerateur = totalGrossCharges - totalInsuranceShare;
 
   // Calculate total price paid by a patient across validated tests
   const calculateTotalPaid = (patient: any) => {
@@ -68,7 +97,6 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
     }
     if (Array.isArray(patient.labTests)) {
       return patient.labTests.reduce((sum: number, t: any) => {
-        // If payment was completed or confirmed
         if (t.paid || t.paymentStatus === 'paid' || t.status === 'completed' || t.confirmedByCashier) {
           const testPrice = typeof t.price === 'number' ? t.price : 0;
           return sum + testPrice;
@@ -81,7 +109,6 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
 
   const handleRowClick = (patient: any) => {
     if (isAdmin) {
-      // In Admin mode: strictly show basic administrative card modal, NEVER navigate to clinical screen!
       setSelectedAdminPatient(patient);
     } else if (onSelectPatient) {
       onSelectPatient(patient);
@@ -95,7 +122,7 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">
-              {isAdmin ? 'Patient Administrative Directory' : 'Patient Medical Registry'}
+              {isAdmin ? 'Patient & Insurance Financial Registry' : 'Patient Medical Registry'}
             </h2>
             {isAdmin && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -106,41 +133,88 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {isAdmin 
-              ? 'Basic demographic and financial billing records (clinical test details restricted by law)' 
+              ? 'Real-time billing breakdown: Gross Charges, Insurance Caisse Coverage, and Patient Ticket Modérateur' 
               : 'Registered patient directory and laboratory test history'}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200">
           <Users className="w-4 h-4" />
-          {filteredPatients.length} Registered Patients
+          {filteredPatients.length} Active Records
         </div>
       </div>
 
-      {/* Admin Privacy Compliance Alert Banner */}
+      {/* Admin Insurance Financial Overview Cards */}
       {isAdmin && (
-        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-3 text-xs text-slate-600">
-          <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold text-slate-800">
-              Health Data Protection & Medical Confidentiality Notice
-            </p>
-            <p className="text-slate-600 text-[11px] leading-relaxed">
-              In strict compliance with patient privacy laws, administrative access is restricted to basic demographics, contact details, and financial payments. <strong>Clinical test requests, diagnostic analysis, and medical findings are restricted to certified laboratory personnel.</strong>
-            </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-slate-500 text-xs">
+              <span className="font-bold uppercase tracking-wider text-[10px]">Total Gross Charges</span>
+              <Receipt className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className="text-xl font-black text-slate-900 font-mono">
+              {totalGrossCharges.toLocaleString()} <span className="text-xs font-normal text-slate-500">FCFA</span>
+            </div>
+            <div className="text-[11px] text-slate-400">All tests & collection acts billed</div>
+          </div>
+
+          <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-indigo-700 text-xs">
+              <span className="font-bold uppercase tracking-wider text-[10px]">Insurance Coverage (Caisse)</span>
+              <Shield className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="text-xl font-black text-indigo-950 font-mono">
+              {totalInsuranceShare.toLocaleString()} <span className="text-xs font-normal text-indigo-600">FCFA</span>
+            </div>
+            <div className="text-[11px] text-indigo-600/80">Pending/Settled by Insurers & Caisses</div>
+          </div>
+
+          <div className="p-4 bg-teal-50/60 rounded-2xl border border-teal-100 shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-teal-800 text-xs">
+              <span className="font-bold uppercase tracking-wider text-[10px]">Patient Copay (Ticket Modérateur)</span>
+              <CreditCard className="w-4 h-4 text-teal-600" />
+            </div>
+            <div className="text-xl font-black text-teal-950 font-mono">
+              {totalTicketModerateur.toLocaleString()} <span className="text-xs font-normal text-teal-600">FCFA</span>
+            </div>
+            <div className="text-[11px] text-teal-700/80">Direct Out-of-Pocket / Cash collected</div>
           </div>
         </div>
       )}
 
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-        <input
-          type="text"
-          placeholder="Search patients by name, patient code or phone number..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-xs transition-all"
-        />
+      {/* Search & Cameroon Insurance Filter Controls */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative sm:col-span-2">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <input
+            type="text"
+            placeholder="Search patients by name, code, phone, or insurance company..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-xs transition-all"
+          />
+        </div>
+
+        <div>
+          <div className="relative">
+            <Filter className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+            <select
+              value={selectedInsuranceFilter}
+              onChange={e => setSelectedInsuranceFilter(e.target.value)}
+              className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200/80 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-xs cursor-pointer appearance-none"
+            >
+              <option value="ALL">All Payment Types & Insurers</option>
+              <option value="INSURED">All Insured Patients (Tiers Payant)</option>
+              <option value="CASH">Direct Cash / Private Out-of-Pocket</option>
+              <optgroup label="Cameroon Insurance Providers">
+                {CAMEROON_INSURANCE_COMPANIES.map(ins => (
+                  <option key={ins.id} value={ins.name}>
+                    {ins.name} ({ins.shortName || ins.city})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Patients Table / List */}
@@ -148,11 +222,16 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
         <div className="divide-y divide-slate-100">
           {filteredPatients.map(patient => {
             const totalPaid = calculateTotalPaid(patient);
+            const grossCharge = patient.totalCharges || patient.totalPrice || totalPaid || 0;
+            const insRate = patient.insuranceCoverageRate !== undefined ? patient.insuranceCoverageRate : 0.8;
+            const insShare = patient.hasInsurance ? (patient.insuranceCoveredAmount || Math.round(grossCharge * insRate)) : 0;
+            const copay = grossCharge - insShare;
+
             return (
               <div
                 key={patient.id}
                 onClick={() => handleRowClick(patient)}
-                className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${
+                className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
                   isAdmin 
                     ? 'hover:bg-slate-50 cursor-pointer' 
                     : 'hover:bg-teal-50/40 cursor-pointer'
