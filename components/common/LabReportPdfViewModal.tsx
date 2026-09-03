@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Printer, 
@@ -45,6 +45,8 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   const labDirectorPhone = labInfo?.directorPhone || booking.labDetails?.directorPhone || '';
   const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || booking.labLogo || booking.labDetails?.logoUrl || '';
 
+  const [headerTemplate, setHeaderTemplate] = useState<'template1' | 'template2'>('template2');
+
   const handlePrint = () => {
     window.print();
   };
@@ -86,6 +88,32 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Dual Header/Footer Template Selector */}
+            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => setHeaderTemplate('template1')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  headerTemplate === 'template1'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Template 1 (Accredited Letterhead)
+              </button>
+              <button
+                type="button"
+                onClick={() => setHeaderTemplate('template2')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  headerTemplate === 'template2'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Template 2 (Cameroon Biodiagnostics)
+              </button>
+            </div>
+
             <button
               onClick={handlePrint}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
@@ -222,9 +250,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     <div>{booking.sampleCollectedAt || labAddress.split(',')[0]}</div>
                   </div>
                 </div>
-                <div>
-                  <span className="text-slate-500 text-[11px]">Ref. By: </span>
-                  <strong className="text-slate-900 text-[11px]">{booking.doctorName || 'Dr. Hiren Shah'}</strong>
+                <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                  <div className="text-slate-500 text-[10px] uppercase font-bold">Médecin Prescripteur / Ref. By:</div>
+                  <div className="text-slate-900 text-[11px] font-black">
+                    {booking.doctorName || 'Docteur HAPPY LYNDA - NEPHROLOGUE'}
+                  </div>
+                  <div className="text-slate-600 text-[10px] font-medium">
+                    {booking.doctorFacility || 'Polyclinique de Poitiers / Centre Affilié'}
+                  </div>
                 </div>
               </div>
 
@@ -258,7 +291,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section (Matching medicalreport.webp) */}
-            {booking.tests.map((testItem: any , tIdx:number) => (
+            {booking.tests.map((testItem, tIdx) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -294,7 +327,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-800">
                       {testItem.subParameters && testItem.subParameters.length > 0 ? (
-                        testItem.subParameters.map((sp:any) => {
+                        testItem.subParameters.map((sp) => {
                           const isHigh = sp.flag === 'High' || (sp.name?.toLowerCase().includes('pcv') && sp.value && Number(sp.value) > 50);
                           const isLow = sp.flag === 'Low' || (sp.name?.toLowerCase().includes('hemoglobin') && sp.value && Number(sp.value) < 13);
                           const isBorderline = sp.flag === 'Borderline' || sp.name?.toLowerCase().includes('platelet');
