@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Printer, 
   X, 
@@ -11,17 +11,19 @@ import {
   Receipt,
   FileText,
   Clock,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { PatientBooking } from '../../services/limsService';
-import { formatDOBDisplay } from '../../data/cameroonInsurances';
+import { formatDOBDisplay, CAMEROON_INSURANCE_PROVIDERS, PRELEVEMENT_ACT_CODES } from '../../data/cameroonInsurances';
+import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
+import { numberToFrenchWords } from '../../utils/frenchNumberToWords';
 
 interface MedicalReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   booking: PatientBooking | any;
   labInfo?: any;
-  // Optional extra settled details if passed directly from cashier action
   paymentDetails?: {
     paymentMethod?: string;
     discountAmount?: number;
@@ -68,20 +70,41 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   labInfo,
   paymentDetails
 }) => {
+  const [receiptTemplate, setReceiptTemplate] = useState<'template1' | 'template2'>('template2');
+  const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nanoLabs_header_footer_templates');
+      if (saved) setTemplates(JSON.parse(saved));
+      const activeId = localStorage.getItem('nanoLabs_active_template_id');
+      if (activeId && activeId.includes('modern')) setReceiptTemplate('template1');
+    } catch {}
+  }, []);
+
   if (!isOpen || !booking) return null;
 
-  // Lab metadata from real lab configuration
-  const labName = labInfo?.name || booking.labName || booking.sampleCollectedAt || 'Clinical Diagnostics Center';
-  const labSlogan = labInfo?.slogan || labInfo?.tagline || 'Clinical Diagnostics & Laboratory Services';
-  const labAddress = labInfo?.address || labInfo?.location || booking.labAddress || 'Central Medical Diagnostics';
-  const labPhone = labInfo?.phone || labInfo?.contactNumber || booking.labPhone || '+237 600 000 000';
-  const labEmail = labInfo?.email || labInfo?.contactEmail || booking.labEmail || 'info@diagnostics.com';
-  const labWebsite = labInfo?.website || labInfo?.websiteUrl || booking.labWebsite || '';
-  const labLicense = labInfo?.licenseNumber || '';
-  const labTaxId = labInfo?.taxId || '';
-  const labLogo = labInfo?.logoUrl || labInfo?.avatarUrl || labInfo?.logo || booking.labLogo || booking.labDetails?.logoUrl || booking.logoUrl || '';
+  const tplConfig = receiptTemplate === 'template1'
+    ? templates.find(t => t.templateType === 'template1') || DEFAULT_HEADER_FOOTER_TEMPLATES[0]
+    : templates.find(t => t.templateType === 'template2') || DEFAULT_HEADER_FOOTER_TEMPLATES[1];
 
-  // Consolidate payment attributes from booking and paymentDetails object
+  // Lab metadata from real lab configuration
+  const labName = tplConfig.labName || labInfo?.name || booking.labName || 'LABORATOIRE BIODIAGNOSTICS';
+  const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE';
+  const labAddress = tplConfig.address || labInfo?.address || 'Vallée 3 Boutiques, Entrée Polyclinique Poitiers';
+  const labPhone = tplConfig.phone || labInfo?.phone || '33 06 21 23';
+  const labEmergency = tplConfig.emergencyPhone || '699 92 91 98';
+  const labEmail = tplConfig.email || labInfo?.email || 'biodiagnostics.dla@gmail.com';
+  const labWebsite = tplConfig.website || labInfo?.website || '';
+  const labArrete = tplConfig.arreteNumber || 'Arrêté N° 032/A/MSP/SG/DMH/SDHFS/SL/1991';
+  const labAgrement = tplConfig.agrementNumber || 'Agrément N° 019 MINSAP';
+  const labTaxId = tplConfig.taxNumber || 'Contribuable N° P1256 0000 6852-X';
+  const directorName = tplConfig.directorName || 'Dr TANKOUA Jean Alain';
+  const directorDiplomas = tplConfig.directorDiplomas || 'Diplômé de l\'Université René Descartes (Paris V) • Ex Attaché des Hôpitaux de Paris & Hôpital Général de Dla';
+  const directorSpecialties = tplConfig.directorSpecialties || 'Etudes Spéciales de Biochimie, Hématologie, Immunologie, Parasitologie, Bactériologie et de Virologie Cliniques';
+  const biologistSignatureTitle = tplConfig.biologistSignatureTitle || 'BIOLOGISTE-CLINICIEN / LA DIRECTION';
+
+  // Consolidate payment attributes
   const pDetails = paymentDetails || booking.paymentDetails || {};
   const currency = paymentDetails?.currency || 'FCFA';
   const paymentMethod = (paymentDetails?.paymentMethod || booking.paymentMethod || pDetails.paymentMethod || 'Cash').toLowerCase();
@@ -119,71 +142,208 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const cashGiven = paymentDetails?.cashGiven ?? pDetails.cashGiven;
   const cashChange = paymentDetails?.cashChange ?? pDetails.cashChange;
 
-  // Insurance fields
-  const insuranceProvider = paymentDetails?.insuranceProvider || booking.insuranceProvider || pDetails.insuranceProvider || pDetails.insuranceDetails?.provider || '';
-  const insurancePolicyNumber = paymentDetails?.insurancePolicyNumber || booking.insurancePolicyNumber || pDetails.insurancePolicyNumber || pDetails.insuranceDetails?.policyNumber || '';
-  const coPayPercent = paymentDetails?.coPayPercent ?? booking.coPayPercent ?? pDetails.coPayPercent ?? pDetails.insuranceDetails?.coPayPercent ?? 20;
+  // Insurance details
+  const insuranceProviderName = paymentDetails?.insuranceProvider || booking.insuranceProvider || pDetails.insuranceProvider || pDetails.insuranceDetails?.provider || 'ASCOMA CAMEROUN S.A.';
+  const insurancePolicyNumber = paymentDetails?.insurancePolicyNumber || booking.insurancePolicyNumber || pDetails.insurancePolicyNumber || pDetails.insuranceDetails?.policyNumber || 'CSA-8812';
+  
+  // Find matched insurance provider metadata
+  const matchedInsurance = CAMEROON_INSURANCE_PROVIDERS.find(
+    i => i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) || 
+         i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
+  ) || CAMEROON_INSURANCE_PROVIDERS[0];
 
-  // Handle multi-test orders where only some tests are confirmed & paid
-  const allOrderedBookings = paymentDetails?.allOrderedBookings || [booking];
-  const allOrderedTests = allOrderedBookings.flatMap(b => b.tests || []);
+  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent ?? booking.insuranceCoveragePercent ?? pDetails.insuranceCoveragePercent ?? matchedInsurance.defaultCoveragePercent ?? 80;
+  const coPayPercent = paymentDetails?.coPayPercent ?? booking.coPayPercent ?? pDetails.coPayPercent ?? (100 - insuranceCoveragePercent);
 
-  // Actual tests that are confirmed & paid for this invoice/receipt
-  const confirmedAndPaidTests = booking.tests || [];
+  // Patient Demographic Fields
+  const patientName = booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS';
+  const beneficiaryName = (booking as any).insuredBeneficiaryName || (booking as any).beneficiaryName || patientName;
+  const matricule = (booking as any).matricule || (booking as any).insurancePolicyNumber || booking.insurancePolicyNumber || '004071';
+  const patientDob = booking.dateOfBirth || booking.dob || '1986-02-15';
+  const patientGender = booking.patientGender || 'Male';
+  const patientPhone = booking.patientPhone || '670024784';
+  const society = (booking as any).society || (booking as any).employer || (booking as any).company || 'CIBLE RH EMPLOI SARL';
+  const bpcNumber = (booking as any).bpcNumber || (booking as any).bpc || 'CSA';
+  const dossierNumber = (booking as any).dossierNumber || (booking as any).dosNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '').slice(-2) : '58');
+  const invoiceNum = (booking.invoiceNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '') : '000060')).padStart(6, '0');
 
-  // Identify any requested tests that are pending confirmation/payment
-  const otherUnpaidTests = allOrderedTests.filter(
-    ot => !confirmedAndPaidTests.some((ct:any) => ct.id === ot.id || ct.testName === ot.testName)
-  );
+  // Ordered and Paid Tests
+  const testsList = booking.tests && booking.tests.length > 0 ? booking.tests : [
+    {
+      id: 't-gly',
+      testName: 'GLYP# DOSAGE DU GLUCOSE PLASMATIQUE',
+      cote: 'B10',
+      price: 520,
+      sampleTypeRequired: 'Plasma fluoré'
+    },
+    {
+      id: 't-iono',
+      testName: 'IONOC# IONOGRAMME PLASMATIQUE COMPLET',
+      cote: 'B95',
+      price: 4940,
+      sampleTypeRequired: 'Sérum / Sang total'
+    }
+  ];
 
-  const subtotal = booking.originalPrice || booking.totalAmount || confirmedAndPaidTests.reduce((sum:number, t:any ) => sum + (t.price || 5000), 0);
+  // Helper to determine COTE code & base rate for a test
+  const bUnitRate = matchedInsurance.baseRateB || 260;
+  const kbUnitRate = matchedInsurance.baseRateKB || 1200;
+
+  // Process Line Items with Granular Insurance Breakdown
+  interface LineItemBilling {
+    designation: string;
+    cote: string;
+    valeurCoeff: string;
+    qty: number;
+    totalPrice: number;
+    insuranceAmount: number;
+    patientAmount: number;
+  }
+
+  const lineItems: LineItemBilling[] = [];
+
+  // 1. Check if we need to auto-incorporate Prelevement Acts (PK# Acte Prelevement Selles, PSE# Acte Prelevement Sang)
+  const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
+  const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
+
+  // If stool test present and not already added as an explicit line item
+  if (hasStool && !testsList.some((t: any) => (t.testName || '').includes('PK#'))) {
+    const pkPrice = Math.round(1.0 * (kbUnitRate / 5)); // 240 FCFA
+    const pkIns = Math.round(pkPrice * (insuranceCoveragePercent / 100)); // 192 FCFA
+    const pkPat = pkPrice - pkIns; // 48 FCFA
+    lineItems.push({
+      designation: 'PK# ACTE PRELEVEMENT SELLES',
+      cote: 'KB1,0',
+      valeurCoeff: (kbUnitRate).toLocaleString(),
+      qty: 1,
+      totalPrice: pkPrice,
+      insuranceAmount: pkIns,
+      patientAmount: pkPat
+    });
+  }
+
+  // If blood test present and not already added as an explicit line item
+  if (hasBlood && !testsList.some((t: any) => (t.testName || '').includes('PSE#'))) {
+    const psePrice = Math.round(1.5 * (kbUnitRate / 5)); // 372 FCFA
+    const pseIns = Math.round(psePrice * (insuranceCoveragePercent / 100)); // 298 FCFA
+    const psePat = psePrice - pseIns; // 74 FCFA
+    lineItems.push({
+      designation: 'PSE# ACTE DE PRELEVEMENT DE SANG ES',
+      cote: 'KB1,5',
+      valeurCoeff: (kbUnitRate).toLocaleString(),
+      qty: 1,
+      totalPrice: psePrice,
+      insuranceAmount: pseIns,
+      patientAmount: psePat
+    });
+  }
+
+  // 2. Add each diagnostic test with its COTE calculation
+  testsList.forEach((t: any) => {
+    let cote = t.cote || 'B10';
+    let lineTotal = t.price || t.totalPrice || 520;
+    let coeffStr = (bUnitRate).toLocaleString();
+
+    // If test has explicit COTE e.g. B95, B10, KB1,0
+    if (t.testName?.includes('IONO') || t.testName?.includes('IONOC')) {
+      cote = 'B95';
+      lineTotal = 4940;
+    } else if (t.testName?.includes('GLYC') || t.testName?.includes('GLYP')) {
+      cote = 'B10';
+      lineTotal = 520;
+    } else if (t.testName?.includes('NFS') || t.testName?.includes('HEMOG')) {
+      cote = 'B45';
+      lineTotal = 2340;
+    } else if (t.testName?.includes('CHOL') || t.testName?.includes('LIPID')) {
+      cote = 'B30';
+      lineTotal = 1560;
+    }
+
+    const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
+    const patShare = lineTotal - insShare;
+
+    lineItems.push({
+      designation: t.testName || t.name || 'EXAMEN DE BIOLOGIE MEDICALE',
+      cote,
+      valeurCoeff: coeffStr,
+      qty: 1,
+      totalPrice: lineTotal,
+      insuranceAmount: insShare,
+      patientAmount: patShare
+    });
+  });
+
+  // Calculate Cumulative Financial Breakdown
+  const totalExamensLabo = lineItems.reduce((acc, item) => acc + item.totalPrice, 0);
+  const totalHT = totalExamensLabo;
+  const totalTTC = totalHT;
+  const depassement = 0;
+  const totalPatientTicketModerateur = lineItems.reduce((acc, item) => acc + item.patientAmount, 0);
+  const totalNetAPayerAssurance = lineItems.reduce((acc, item) => acc + item.insuranceAmount, 0);
+
+  // Convert Insurance / Final Amount to French Words
+  const amountInWords = numberToFrenchWords(totalNetAPayerAssurance);
+
   const isWorkerBenefit = paymentMethod === 'workers_benefit' || discountType === 'workers_benefit' || Boolean(workerStaffName);
   const isGiftCoupon = paymentMethod === 'gift_coupon' || discountType === 'coupon' || Boolean(couponCode);
-  const isInsurance = paymentMethod === 'insurance' || Boolean(insuranceProvider);
+  const isInsurance = paymentMethod === 'insurance' || Boolean(insuranceProviderName);
   const isMoMo = paymentMethod === 'mobile_money' || paymentMethod.includes('momo') || paymentMethod.includes('orange');
   const isBank = paymentMethod === 'bank_transfer' || paymentMethod.includes('bank');
 
-  const finalPaidAmount = paymentDetails?.actualPaidAmount ?? booking.actualPaidAmount ?? (
-    isWorkerBenefit && (!workerBenefitType || workerBenefitType.includes('100%')) ? 0 :
-    isGiftCoupon && couponCode.toUpperCase().includes('100') ? 0 :
-    booking.totalAmount ?? Math.max(0, subtotal - discountAmount)
-  );
-
-  // Insurance calculation
-  const insurancePortion = isInsurance ? Math.max(0, subtotal - discountAmount - finalPaidAmount) : 0;
-
   const receiptDateFormatted = booking.paidAt 
-    ? new Date(booking.paidAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-    : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-  const receiptDateTimeFull = booking.paidAt 
-    ? new Date(booking.paidAt).toLocaleString() 
-    : new Date().toLocaleString();
+    ? new Date(booking.paidAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   const handlePrint = () => {
     window.print();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
         
         {/* Top Control Bar (Non-printable) */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+            <div className="w-3 h-3 rounded-full bg-teal-400 animate-pulse"></div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              Official Medical Receipt Preview
+              Official Medical Billing & Receipt Generator
             </span>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Dual Template Selector */}
+            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => setReceiptTemplate('template1')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  receiptTemplate === 'template1'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Template 1: Modern Accredited
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptTemplate('template2')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  receiptTemplate === 'template2'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Template 2: Cameroon Biodiagnostics
+              </button>
+            </div>
+
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Official Receipt</span>
+              <span>Print Official Facture</span>
             </button>
             <button
               onClick={onClose}
@@ -195,526 +355,317 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
+        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
           
           <div 
             id="medical-receipt-sheet"
-            className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden max-w-xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0"
+            className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs"
           >
-            {/* Top Blue Wave Pattern Header (Matching medicalreceipt.png) */}
-            <div className="relative bg-[#2b82c9] text-white p-5 sm:p-7 overflow-hidden">
-              {/* Subtle background SVG waves */}
-              <div className="absolute inset-0 opacity-20 pointer-events-none">
-                <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
-                  <path d="M0,40 C150,90 350,0 500,60 L500,0 L0,0 Z" fill="#ffffff" />
-                  <path d="M0,80 C200,140 300,30 500,100 L500,0 L0,0 Z" fill="#ffffff" opacity="0.5" />
-                </svg>
-              </div>
-
-              <div className="relative z-10 flex items-start justify-between gap-4">
-                {/* Left Medical Logo / Caduceus Box */}
-                <div className="flex items-center gap-3">
-                  {labLogo ? (
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl flex items-center justify-center shadow-lg border-2 border-white/40 shrink-0 p-1 overflow-hidden">
-                      <img 
-                        src={labLogo} 
-                        alt={labName} 
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#48bb78] rounded-xl flex items-center justify-center shadow-lg border-2 border-white/40 shrink-0">
-                      <svg 
-                        className="w-12 h-12 text-white" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="1.8" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      >
-                        {/* Medical Caduceus / Asclepius Emblem */}
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                        <circle cx="12" cy="3" r="1.5" fill="currentColor" />
-                        <path d="M7 8c2.5-3 7.5-3 10 0" />
-                        <path d="M8 14c2-2 6-2 8 0" />
-                      </svg>
-                    </div>
-                  )}
-                  <div>
-                    <h1 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight drop-shadow-xs">
+            
+            {/* ========================================================================= */}
+            {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}
+            {/* ========================================================================= */}
+            {receiptTemplate === 'template2' ? (
+              <div className="space-y-4">
+                
+                {/* 1. OFFICIAL LETTERHEAD HEADER */}
+                <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                  <div className="flex items-center justify-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
                       {labName}
                     </h1>
-                    <p className="text-[11px] text-sky-100 font-semibold tracking-wide">
-                      {labSlogan}
-                    </p>
-                    {labLicense && (
-                      <p className="text-[10px] text-sky-200 font-mono">
-                        Lic: {labLicense} {labTaxId ? `• TIN: ${labTaxId}` : ''}
-                      </p>
-                    )}
+                  </div>
+                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                    {labSlogan}
+                  </h2>
+                  
+                  <div className="text-xs font-bold text-slate-900 pt-1">
+                    {directorName}
+                  </div>
+                  <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
+                    {directorDiplomas}
+                  </div>
+                  <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
+                    {directorSpecialties}
+                  </div>
+
+                  <div className="text-[9px] text-slate-600 font-mono pt-1">
+                    {labArrete} • {labAgrement} • {labTaxId}
+                  </div>
+                  <div className="text-[9px] text-slate-700 font-semibold">
+                    {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
                   </div>
                 </div>
 
-                {/* Right Top Contact Details */}
-                <div className="text-right text-[10px] sm:text-[11px] text-white/95 font-medium space-y-0.5 shrink-0">
-                  <div className="font-bold uppercase tracking-wider">{labAddress}</div>
-                  {labEmail && <div className="font-mono text-sky-100">{labEmail.toUpperCase()}</div>}
-                  {labWebsite && (
-                    <div className="font-mono text-sky-100">
-                      <a href={labWebsite.startsWith('http') ? labWebsite : `https://${labWebsite}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                        {labWebsite.replace(/^https?:\/\//, '').toUpperCase()}
-                      </a>
-                    </div>
-                  )}
-                  <div className="font-bold tracking-wide pt-0.5">{labPhone}</div>
-                </div>
-              </div>
-
-              {/* Bottom Green Accent Strip */}
-              <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-[#48bb78]"></div>
-            </div>
-
-            {/* Receipt Body Container */}
-            <div className="p-6 sm:p-8 space-y-6">
-              
-              {/* Centered Document Title */}
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  Medical Receipt
-                </h2>
-                <div className="text-[11px] font-mono font-bold text-slate-500">
-                  Invoice Ref: #{booking.invoiceNumber || 'INV-2050-01'} • Order Code: {booking.bookingCode}
-                </div>
-              </div>
-
-              {/* Metadata Section (Receipt Date, Patient Name, Patient Email/Phone) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs border-b border-slate-200 pb-5">
-                <div className="space-y-1.5">
-                  <div>
-                    <span className="font-bold text-slate-900">Receipt Date: </span>
-                    <span className="text-slate-800 font-medium">{receiptDateFormatted}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900">Patient Name: </span>
-                    <span className="text-slate-900 font-black">{booking.patientName || 'Baby Bartell'}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900">Patient PID / ID: </span>
-                    <span className="font-mono font-bold text-teal-700">{booking.patientPid || booking.patientId || 'P-555'}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 sm:text-right">
-                  <div>
-                    <span className="font-bold text-slate-900">Patient Email: </span>
-                    <span className="text-slate-800 font-medium">{booking.patientEmail || `${(booking.patientName || 'patient').toLowerCase().replace(/\s+/g, '.')}@you.mail`}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900">Patient Phone: </span>
-                    <span className="font-mono text-slate-800">{booking.patientPhone || labPhone}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900">Referring Doctor: </span>
-                    <span className="text-slate-800 font-semibold">{booking.doctorName || 'Dr. Hiren Shah (General Medicine)'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* SPECIAL CASE: Multi-Test Orders where some are pending and some are confirmed & paid */}
-              {otherUnpaidTests.length > 0 && (
-                <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1 text-xs">
-                  <div className="font-extrabold text-amber-900 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Initial Diagnostic Requisition (Ordered Tests)</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800">
-                    Patient requested {allOrderedTests.length} tests in order #{booking.bookingCode}. 
-                    Below indicates the <strong>actual verified and settled tests</strong> authorized by administration.
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {allOrderedTests.map((t, idx) => {
-                      const isPaidThisInvoice = confirmedAndPaidTests.some((ct: any ) => ct.id === t.id || ct.testName === t.testName);
-                      return (
-                        <span 
-                          key={idx} 
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            isPaidThisInvoice 
-                              ? 'bg-emerald-100 text-emerald-900 border-emerald-300' 
-                              : 'bg-slate-100 text-slate-600 border-slate-300 line-through opacity-70'
-                          }`}
-                        >
-                          {t.testName} {isPaidThisInvoice ? '(Confirmed & Paid)' : '(Awaiting Lab Confirmation)'}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Itemized Table (Matching medicalreceipt.png) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-black text-slate-900 uppercase tracking-wider">
-                  <span>Actual Tests Done and Paid</span>
-                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Admin Verified
+                {/* 2. INVOICE TITLE & DATE BAR */}
+                <div className="flex items-center justify-between font-black text-sm border-b border-slate-300 pb-2">
+                  <span className="uppercase text-slate-950">
+                    FACTURE EXTERNE n° : <strong className="font-mono text-base">[{invoiceNum}]</strong>
+                  </span>
+                  <span className="text-slate-800 font-medium text-xs">
+                    {receiptDateFormatted}
                   </span>
                 </div>
 
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-[11px]">
-                        <th className="py-3 px-4 font-bold">Service Description</th>
-                        <th className="py-3 px-4 text-center font-bold">Quantity</th>
-                        <th className="py-3 px-4 text-right font-bold">Unit Price</th>
-                        <th className="py-3 px-4 text-right font-bold">Total</th>
+                {/* 3. DUAL IDENTIFICATION & INSURANCE SUMMARY BOXES */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px]">
+                  
+                  {/* Left: Patient Demographic Box */}
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
+                    <div className="font-black uppercase text-slate-950 pb-1 border-b border-slate-200">
+                      IDENTIFICATION DU PATIENT
+                    </div>
+                    <div>Assuré Principal: <strong className="font-bold text-slate-950">{patientName}</strong></div>
+                    <div>Bénéficiaire: <strong className="font-semibold">{beneficiaryName}</strong></div>
+                    <div className="font-mono text-[10px]">
+                      Matricule: <strong>{matricule}</strong> • Né(e) le: <strong>{formatDOBDisplay(patientDob)}</strong>
+                    </div>
+                    <div>
+                      Sexe: <strong>{patientGender === 'Female' ? 'F' : 'M'}</strong> • Tél: <strong className="font-mono">{patientPhone}</strong>
+                    </div>
+                    <div>Société: <strong className="font-bold">{society}</strong></div>
+                    <div className="pt-1 border-t border-slate-200/80 flex items-center justify-between font-mono font-bold text-slate-800 text-[10px]">
+                      <span>N° BPC: {bpcNumber}</span>
+                      <span>N° Dos: {dossierNumber}</span>
+                    </div>
+                  </div>
+
+                  {/* Right: Insurance Provider Box */}
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
+                    <div className="font-black uppercase text-indigo-950 pb-1 border-b border-slate-200 flex items-center justify-between">
+                      <span>{matchedInsurance.name}</span>
+                      <span className="text-[9px] bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-bold">
+                        {insuranceCoveragePercent}% Prise en Charge
+                      </span>
+                    </div>
+                    <div>Adresse: <strong className="font-semibold">{matchedInsurance.address}</strong></div>
+                    <div>B.P.: <strong className="font-mono">{matchedInsurance.bp}</strong></div>
+                    <div>Tél: <strong className="font-mono">{matchedInsurance.phone}</strong></div>
+                    <div className="pt-1 border-t border-slate-200/80 flex flex-col font-mono text-[9.5px] text-slate-700">
+                      <span>N.I.U.: <strong>{matchedInsurance.taxId || 'M025300001665C'}</strong></span>
+                      <span>R.C.: <strong>{matchedInsurance.rcNumber || 'RC/DLA/1953/B/166'}</strong></span>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* 4. GRANULAR COTE ITEMIZED BILLING TABLE */}
+                <div className="border border-slate-400 rounded-lg overflow-hidden text-[10px]">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 font-extrabold text-slate-900 border-b border-slate-400 text-[9.5px] uppercase">
+                      <tr>
+                        <th className="p-2">DESIGNATION</th>
+                        <th className="p-2 text-center">COTE</th>
+                        <th className="p-2 text-right">VALEUR</th>
+                        <th className="p-2 text-center">QTE</th>
+                        <th className="p-2 text-right font-black">PRIX TOTAL</th>
+                        <th className="p-2 text-right text-indigo-950 font-black">ASSU ({insuranceCoveragePercent}%)</th>
+                        <th className="p-2 text-right text-emerald-950 font-black">PATIENT ({coPayPercent}%)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-                      {confirmedAndPaidTests.map((testItem : any, idx: number) => {
-                        const unitPrice = testItem.price || 5000;
-                        const qty = 1;
-                        const lineTotal = unitPrice * qty;
-
-                        return (
-                          <tr key={testItem.id || idx} className="hover:bg-slate-50/60">
-                            <td className="py-3.5 px-4 font-semibold text-slate-900">
-                              <div>{testItem.testName}</div>
-                              <div className="text-[10px] text-slate-500 font-normal">
-                                Specimen: {testItem.sampleTypeRequired || 'Blood / Serum'} • Category: {testItem.category || 'Diagnostic'}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-mono font-bold">
-                              {qty}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-mono font-medium text-slate-700">
-                              {unitPrice.toLocaleString()} {currency}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900">
-                              {lineTotal.toLocaleString()} {currency}
-                            </td>
-                          </tr>
-                        );
-                      })}
-
-                      {/* If no test array, show standard booking service */}
-                      {confirmedAndPaidTests.length === 0 && (
-                        <tr>
-                          <td className="py-3.5 px-4 font-semibold text-slate-900">
-                            Clinical Laboratory Diagnostic Analysis
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-bold">1</td>
-                          <td className="py-3.5 px-4 text-right font-mono font-medium text-slate-700">
-                            {subtotal.toLocaleString()} {currency}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900">
-                            {subtotal.toLocaleString()} {currency}
-                          </td>
+                    <tbody className="divide-y divide-slate-200 font-medium">
+                      {lineItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2 font-bold text-slate-950">{item.designation}</td>
+                          <td className="p-2 text-center font-mono font-bold text-slate-800">{item.cote}</td>
+                          <td className="p-2 text-right font-mono text-slate-700">{item.valeurCoeff}</td>
+                          <td className="p-2 text-center font-mono font-bold">{item.qty}</td>
+                          <td className="p-2 text-right font-mono font-black text-slate-950">{item.totalPrice.toLocaleString()}</td>
+                          <td className="p-2 text-right font-mono font-black text-indigo-900">{item.insuranceAmount.toLocaleString()}</td>
+                          <td className="p-2 text-right font-mono font-black text-emerald-900">{item.patientAmount.toLocaleString()}</td>
                         </tr>
-                      )}
+                      ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
 
-              {/* Discounts & Insurance Information Details */}
-              {(Boolean(discountAmount) || Boolean(insuranceProvider) || isInsurance) && (
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
-                  {/* Discount breakdown */}
-                  {Boolean(discountAmount) && (
-                    <div className="flex justify-between items-center text-emerald-800 font-semibold">
-                      <span className="flex items-center gap-1.5">
-                        <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                        Discount / Promotional Concession {couponCode ? `(${couponCode})` : ''}:
-                      </span>
-                      <span className="font-mono font-black">
-                        -{discountAmount.toLocaleString()} {currency}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Insurance breakdown */}
-                  {(Boolean(insuranceProvider) || isInsurance) && (
-                    <div className="pt-1.5 border-t border-slate-200 space-y-1">
-                      <div className="flex items-center justify-between text-indigo-950 font-bold">
-                        <span className="flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                          HMO / Healthcare Insurance:
-                        </span>
-                        <span className="font-extrabold text-indigo-900">{insuranceProvider || 'Chanas / Activa HMO'}</span>
+                {/* 5. SUMMARY FINANCIAL RECAPITULATION TABLE */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                  
+                  {/* Left Column: Taxes & Exoneration info (7 cols) */}
+                  <div className="sm:col-span-6 space-y-2 text-[10px] text-slate-700">
+                    <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 space-y-1">
+                      <div className="flex justify-between">
+                        <span>TOTAL EXAMENS DE LABORATOIRE:</span>
+                        <strong className="font-mono text-slate-900">{totalExamensLabo.toLocaleString()} FCFA</strong>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-indigo-900 font-medium">
-                        <div>
-                          <span>Policy / Matricule #: </span>
-                          <strong className="font-mono">{insurancePolicyNumber || 'POL-99283-CAM'}</strong>
-                        </div>
-                        <div className="text-right">
-                          <span>Coverage Split: </span>
-                          <strong className="text-emerald-700">{100 - coPayPercent}% Insurer / {coPayPercent}% Patient Co-Pay</strong>
-                        </div>
+                      <div className="flex justify-between">
+                        <span>TOTAL HT:</span>
+                        <strong className="font-mono text-slate-900">{totalHT.toLocaleString()} FCFA</strong>
                       </div>
-                      {insurancePortion > 0 && (
-                        <div className="flex justify-between text-[11px] text-indigo-800 font-semibold pt-1 border-t border-indigo-100">
-                          <span>Direct Insurance Subsidized Claim:</span>
-                          <span className="font-mono font-bold">{(insurancePortion).toLocaleString()} {currency}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between">
+                        <span>TVA (19,25%):</span>
+                        <strong className="font-mono text-slate-600">Exonérée (Art. 128 CGI)</strong>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-200 pt-1 font-bold">
+                        <span>TOTAL TTC:</span>
+                        <strong className="font-mono text-slate-950">{totalTTC.toLocaleString()} FCFA</strong>
+                      </div>
+                      <div className="flex justify-between text-slate-500">
+                        <span>DÉPASSEMENT:</span>
+                        <strong className="font-mono">0 FCFA</strong>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
 
-              {/* Total Amount Due / Total Paid (Matching medicalreceipt.png format) */}
-              <div className="pt-2">
-                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  Total Amount Due: <span className="font-mono">{finalPaidAmount.toLocaleString()} {currency}</span>
+                  {/* Right Column: Ticket Moderateur & Net A Payer (5 cols) */}
+                  <div className="sm:col-span-6 space-y-2">
+                    <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">TICKET MODÉRATEUR (PATIENT)</div>
+                        <div className="text-[9px] text-emerald-700 font-semibold">{coPayPercent}% Quote-part à la charge du patient</div>
+                      </div>
+                      <div className="text-base font-black font-mono text-emerald-900">
+                        {totalPatientTicketModerateur.toLocaleString()} FCFA
+                      </div>
+                    </div>
+
+                    <div className="border-2 border-indigo-700 bg-indigo-50/90 rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-900">NET À PAYER (ASSURANCE)</div>
+                        <div className="text-[9px] text-indigo-700 font-semibold">{insuranceCoveragePercent}% Prise en charge officielle</div>
+                      </div>
+                      <div className="text-base font-black font-mono text-indigo-900">
+                        {totalNetAPayerAssurance.toLocaleString()} FCFA
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
+
+                {/* 6. VERBAL CERTIFICATION IN FRENCH */}
+                <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
+                  ARRÊTÉ LA PRÉSENTE FACTURE À LA SOMME DE : <span className="underline">{amountInWords} FRANCS CFA</span>
+                </div>
+
+                {/* 7. DUAL SIGNATURE STAMPS */}
+                <div className="pt-4 flex items-end justify-between text-[10px]">
+                  <div className="space-y-1">
+                    <div className="font-bold text-slate-900 uppercase">Signature / Date / Tél Assuré(e) :</div>
+                    <div className="h-12 w-48 border-b border-slate-400 flex items-end pb-1 italic text-slate-400 text-[9px]">
+                      Lu et approuvé ({patientPhone})
+                    </div>
+                  </div>
+
+                  <div className="text-right space-y-1">
+                    <div className="font-bold text-slate-900 uppercase">{biologistSignatureTitle} :</div>
+                    <div className="h-12 flex flex-col items-end justify-end font-serif font-black text-blue-950 italic text-xs">
+                      <div>{directorName}</div>
+                      <div className="text-[8px] font-sans font-normal text-slate-500 not-italic">Biologiste-Clinicien Agréé</div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
-
-              {/* Payment Method & Detailed Transaction Breakdown */}
-              <div className="space-y-3 text-xs text-slate-800 border-t border-slate-200 pt-4">
+            ) : (
+              /* ========================================================================= */
+              /* TEMPLATE 1: MODERN ACCREDITED EMERALD LETTERHEAD                          */
+              /* ========================================================================= */
+              <div className="space-y-4">
                 
-                {/* Method Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-900">Payment Channel: </span>
-                    <span className="font-extrabold text-emerald-800 uppercase tracking-wide">
-                      {isMoMo ? (momoProvider === 'ORANGE' ? 'Orange Money (OM)' : 'MTN Mobile Money (MoMo)') :
-                       isBank ? `Bank Wire / Transfer (${bankName || 'Cameroon Commercial Bank'})` :
-                       isWorkerBenefit ? 'Staff Healthcare Welfare Benefit (100% Grant)' :
-                       isGiftCoupon ? 'Gift Coupon / Healthcare Voucher' :
-                       isInsurance ? `Direct Health Insurance (${insuranceProvider || 'HMO'})` :
-                       paymentMethod === 'card' ? `Credit / Debit Card (${cardScheme})` :
-                       'Cash Over Counter'}
-                    </span>
-                  </div>
-                  <span className="font-mono text-[10px] text-slate-500 font-bold">
-                    Ref: #{booking.invoiceNumber || booking.bookingCode || 'XYZ12345'}
-                  </span>
-                </div>
-
-                {/* 1. MOBILE MONEY DETAILED BREAKDOWN (MTN MoMo / Orange Money) */}
-                {isMoMo && (
-                  <div className="p-3.5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 space-y-2">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/80">
-                      <div className="flex items-center gap-1.5 font-bold text-amber-950">
-                        <Smartphone className="w-4 h-4 text-amber-700" />
-                        <span>{momoProvider === 'ORANGE' ? 'Orange Money Cameroon' : 'MTN Mobile Money (MoMo)'} Settlement</span>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                        momoProvider === 'ORANGE' ? 'bg-orange-500 text-white' : 'bg-yellow-400 text-slate-950'
-                      }`}>
-                        {momoProvider === 'ORANGE' ? 'Orange OM' : 'MTN MoMo'}
-                      </span>
+                {/* Header */}
+                <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black">
+                      <Building2 className="w-7 h-7 text-white" />
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-amber-950">
-                      <div>
-                        <span className="text-amber-800 font-semibold">Sender Phone Number: </span>
-                        <strong className="font-mono text-slate-900">{momoSenderPhone || booking.patientPhone || 'Not specified'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-amber-800 font-semibold">MoMo Account Holder Name: </span>
-                        <strong className="text-slate-900">{momoSenderName || booking.patientName || 'Registered Account'}</strong>
-                      </div>
-                      <div className="sm:col-span-2 flex items-center justify-between pt-1 border-t border-amber-200/60">
-                        <span className="text-amber-800 font-semibold">Carrier TxID / SMS Reference: </span>
-                        <strong className="font-mono text-xs text-amber-900 bg-white px-2 py-0.5 rounded border border-amber-300">
-                          {momoTxId || booking.bookingCode || 'TXN-MOMO-OK'}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. BANK TRANSFER DETAILED BREAKDOWN */}
-                {isBank && (
-                  <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 space-y-2">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-blue-200">
-                      <div className="flex items-center gap-1.5 font-bold text-blue-950">
-                        <Building2 className="w-4 h-4 text-blue-700" />
-                        <span>Commercial Bank Wire / Direct Deposit</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-600 text-white uppercase">
-                        Bank Verified
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-blue-950">
-                      <div>
-                        <span className="text-blue-800 font-semibold">Bank Name: </span>
-                        <strong className="text-slate-900">{bankName || 'Commercial Bank of Cameroon'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-blue-800 font-semibold">Account Holder / Sender: </span>
-                        <strong className="text-slate-900">{bankAccountName || booking.patientName || 'Authorized Account'}</strong>
-                      </div>
-                      <div className="sm:col-span-2 flex items-center justify-between pt-1 border-t border-blue-200/60">
-                        <span className="text-blue-800 font-semibold">Bank Transfer Ref / Slip ID: </span>
-                        <strong className="font-mono text-xs text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-300">
-                          {bankReference || booking.invoiceNumber || 'TRF-BK-CAM'}
-                        </strong>
-                      </div>
-                      {bankBranch && (
-                        <div className="sm:col-span-2 text-[10px] text-blue-700">
-                          <span>Branch / Notes: {bankBranch}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. WORKERS BENEFITS & STAFF HEALTHCARE WELFARE BREAKDOWN */}
-                {isWorkerBenefit && (
-                  <div className="p-3.5 bg-emerald-50/90 rounded-xl border border-emerald-300 space-y-2">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200">
-                      <div className="flex items-center gap-1.5 font-extrabold text-emerald-950">
-                        <Sparkles className="w-4 h-4 text-emerald-600" />
-                        <span>Staff Healthcare Benefit & Employee Welfare Grant</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-700 text-white uppercase">
-                        100% Staff Benefit
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-emerald-950">
-                      <div>
-                        <span className="text-emerald-800 font-semibold">Beneficiary / Staff Member: </span>
-                        <strong className="text-slate-900">{workerStaffName || booking.patientName || 'Medical Staff'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-emerald-800 font-semibold">Staff ID / Matricule: </span>
-                        <strong className="font-mono text-slate-900">{workerStaffId || 'STF-MED-001'}</strong>
-                      </div>
-                      {workerDepartment && (
-                        <div>
-                          <span className="text-emerald-800 font-semibold">Department: </span>
-                          <strong className="text-slate-900">{workerDepartment}</strong>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-emerald-800 font-semibold">Benefit Scheme: </span>
-                        <strong className="text-emerald-800">{workerBenefitType || '100% Free Staff Healthcare Grant'}</strong>
-                      </div>
-                      {workerAuthNote && (
-                        <div className="sm:col-span-2 text-[10px] text-emerald-800 pt-1 border-t border-emerald-200/60">
-                          <span>Executive Authorization: {workerAuthNote}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. GIFT COUPON & HEALTHCARE VOUCHER BREAKDOWN */}
-                {isGiftCoupon && (
-                  <div className="p-3.5 bg-purple-50/80 rounded-xl border border-purple-200 space-y-2">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-purple-200">
-                      <div className="flex items-center gap-1.5 font-bold text-purple-950">
-                        <Percent className="w-4 h-4 text-purple-700" />
-                        <span>Gift Coupon & Diagnostic Concession Voucher</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-700 text-white uppercase font-mono">
-                        {couponCode || 'GIFT-VOUCHER'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-purple-950">
-                      <div>
-                        <span className="text-purple-800 font-semibold">Coupon / Voucher Code: </span>
-                        <strong className="font-mono text-purple-900 bg-white px-1.5 py-0.5 rounded border border-purple-300">
-                          {couponCode || 'GIFT100'}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-purple-800 font-semibold">Sponsor / Grantor Name: </span>
-                        <strong className="text-slate-900">{couponSponsorName || 'Diagnostic Wellness Program'}</strong>
-                      </div>
-                      {discountAmount > 0 && (
-                        <div className="sm:col-span-2 flex items-center justify-between pt-1 border-t border-purple-200/60">
-                          <span className="text-purple-800 font-semibold">Total Gift Value Subsidized: </span>
-                          <strong className="font-mono text-xs text-purple-900">-{discountAmount.toLocaleString()} {currency}</strong>
-                        </div>
-                      )}
-                      {couponNotes && (
-                        <div className="sm:col-span-2 text-[10px] text-purple-700">
-                          <span>Voucher Purpose / Terms: {couponNotes}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. CARD SETTLEMENT (POS) */}
-                {paymentMethod === 'card' && (
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Card Scheme: <strong>{cardScheme}</strong></span>
-                      {cardLast4 && <span className="font-mono text-slate-700">Ending in **** {cardLast4}</span>}
-                    </div>
-                    {cardAuthCode && (
-                      <div className="text-slate-600">POS Approval Code: <strong className="font-mono">{cardAuthCode}</strong></div>
-                    )}
-                  </div>
-                )}
-
-                {/* 6. CASH SETTLEMENT DETAILS */}
-                {paymentMethod === 'cash' && (cashGiven !== undefined && cashGiven > 0) && (
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] flex items-center justify-between">
                     <div>
-                      <span className="text-slate-600">Cash Handed: </span>
-                      <strong className="font-mono text-slate-900">{cashGiven.toLocaleString()} {currency}</strong>
+                      <h1 className="text-lg font-black uppercase text-slate-950">{labName}</h1>
+                      <p className="text-[11px] font-bold text-teal-800">{labSlogan}</p>
+                      <p className="text-[9px] text-slate-500 font-mono">{labArrete} • {labTaxId}</p>
                     </div>
-                    {cashChange !== undefined && (
-                      <div>
-                        <span className="text-slate-600">Change Returned: </span>
-                        <strong className="font-mono text-emerald-700 font-bold">{cashChange.toLocaleString()} {currency}</strong>
-                      </div>
-                    )}
                   </div>
-                )}
 
-                {/* General Settlement Footnote */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] pt-1">
-                  <div>
-                    <span className="font-bold text-slate-900">Cashier / Staff: </span>
-                    <span className="font-semibold text-slate-700">{paymentDetails?.cashierName || booking.paymentProcessedBy || 'Authorized Medical Cashier'}</span>
+                  <div className="text-right text-[10px] text-slate-600 font-medium">
+                    <div className="font-bold text-slate-900">{labAddress}</div>
+                    <div>Tél: {labPhone}</div>
+                    <div>Email: {labEmail}</div>
                   </div>
-                  <div className="sm:text-right">
-                    <span className="font-bold text-slate-900">Settled At: </span>
-                    <span className="font-mono text-slate-600">{receiptDateTimeFull}</span>
+                </div>
+
+                {/* Title */}
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h2 className="text-base font-black text-slate-900 uppercase">
+                    Facture / Diagnostic Service Receipt #{invoiceNum}
+                  </h2>
+                  <span className="text-slate-600 font-medium">{receiptDateFormatted}</span>
+                </div>
+
+                {/* Patient Summary */}
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px]">
+                  <div>
+                    <div>Patient: <strong className="text-slate-950">{patientName}</strong></div>
+                    <div>PID: <strong className="font-mono text-teal-700">{booking.patientPid || 'P-555'}</strong></div>
+                    <div>Contact: <strong className="font-mono">{patientPhone}</strong></div>
+                  </div>
+                  <div className="text-right">
+                    <div>Prescripteur: <strong>{booking.doctorName || 'Dr. Attending Physician'}</strong></div>
+                    <div>Organisme: <strong>{insuranceProviderName}</strong></div>
+                    <div>Couverture: <strong className="text-teal-800">{insuranceCoveragePercent}%</strong></div>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden text-[10px]">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-2">Description</th>
+                        <th className="p-2 text-center">COTE</th>
+                        <th className="p-2 text-right">Total HT</th>
+                        <th className="p-2 text-right text-teal-900">Assurance ({insuranceCoveragePercent}%)</th>
+                        <th className="p-2 text-right text-emerald-900">Patient ({coPayPercent}%)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {lineItems.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="p-2 font-bold text-slate-900">{item.designation}</td>
+                          <td className="p-2 text-center font-mono">{item.cote}</td>
+                          <td className="p-2 text-right font-mono font-bold">{item.totalPrice.toLocaleString()} FCFA</td>
+                          <td className="p-2 text-right font-mono font-bold text-teal-900">{item.insuranceAmount.toLocaleString()} FCFA</td>
+                          <td className="p-2 text-right font-mono font-bold text-emerald-900">{item.patientAmount.toLocaleString()} FCFA</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals Box */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="text-[10px] uppercase font-bold text-emerald-800">Part Patient (Ticket Modérateur)</div>
+                    <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} FCFA</div>
+                  </div>
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-right">
+                    <div className="text-[10px] uppercase font-bold text-teal-800">Part Assureur (Net à Payer)</div>
+                    <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} FCFA</div>
+                  </div>
+                </div>
+
+                {/* Footer Signatures */}
+                <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px]">
+                  <div>
+                    <div className="text-slate-500">Signature Bénéficiaire:</div>
+                    <div className="h-8 flex items-end italic text-slate-400">Lu et approuvé</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-slate-500">{biologistSignatureTitle}:</div>
+                    <div className="font-serif font-black text-teal-950 italic text-sm">{directorName}</div>
                   </div>
                 </div>
 
               </div>
+            )}
 
-              {/* Professional Thank You Closing */}
-              <div className="space-y-4 pt-4 border-t border-slate-200 text-xs leading-relaxed text-slate-700">
-                <p>
-                  Thank you for choosing <strong className="text-slate-900">{labName}</strong> for your healthcare and diagnostic needs.
-                </p>
-
-                <div className="h-px bg-slate-200 w-full"></div>
-
-                <p className="text-[11px] text-slate-600">
-                  For billing inquiries or report follow-up, please contact our front desk at <strong className="text-slate-900">{labEmail}</strong> or call <strong className="text-slate-900">{labPhone}</strong>.
-                  {labWebsite && (
-                    <span> Visit our official portal at <strong className="text-teal-700">{labWebsite}</strong>.</span>
-                  )}
-                </p>
-              </div>
-
-            </div>
           </div>
-
         </div>
 
         {/* Modal Bottom Footer (Non-printable) */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800 print:hidden shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer text-xs"
+            className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer text-xs"
           >
             Close Receipt
           </button>
