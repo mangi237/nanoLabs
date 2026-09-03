@@ -358,7 +358,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               nano<span className="text-teal-600">Labs</span> Portal
             </h1>
             <p className="text-xs sm:text-sm text-slate-500">
-              {t('portal_subtitle')}
+              {t('portal subtitle')}
             </p>
           </div>
 
@@ -369,8 +369,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Navigation className="w-4 h-4 text-teal-700" />
               </div>
               <div className="min-w-0">
-                <h4 className="text-xs font-bold text-slate-900 truncate">{t('looking_for_lab')}</h4>
-                <p className="text-[11px] text-slate-500 truncate">{t('browse_accredited')}</p>
+                <h4 className="text-xs font-bold text-slate-900 truncate">{t('looking for lab')}</h4>
+                <p className="text-[11px] text-slate-500 truncate">{t('browse accredited')}</p>
               </div>
             </div>
             <button
@@ -379,7 +379,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer"
             >
               <MapPin className="w-3.5 h-3.5" />
-              {t('search_lab_btn')}
+              {t('search lab btn')}
             </button>
           </div>
 
@@ -510,9 +510,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <div className="relative">
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        {t('assigned_lab_label')}
+                        {t('assigned lab label')}
                       </label>
-                      <span className="text-[10px] text-slate-400 font-medium">{t('search_to_select')}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{t('search to select')}</span>
                     </div>
 
                     <button
@@ -532,7 +532,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
                         )}
                         <span className="truncate font-semibold">
-                          {labName || t('search_or_select_placeholder')}
+                          {labName || t('search or select placeholder')}
                         </span>
                       </div>
                       <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -546,7 +546,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           <input
                             type="text"
                             autoFocus
-                            placeholder={t('search_input_placeholder')}
+                            placeholder={t('search input placeholder')}
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -556,7 +556,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                         <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
                           {filteredLabs.length === 0 ? (
                             <div className="p-3 text-center text-xs text-slate-400">
-                              {searchQuery ? t('no_lab_found') : t('type_lab_to_search')}
+                              {searchQuery ? t('no lab found') : t('type lab to search')}
                             </div>
                           ) : (
                             filteredLabs.map((l: any) => (
@@ -607,15 +607,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        {t('access_code_label')}
+                        {t('access code label')}
                       </label>
-                      <span className="text-[10px] text-teal-700 font-semibold">{t('staff_and_patients')}</span>
+                      <span className="text-[10px] text-teal-700 font-semibold">{t('staff and patients')}</span>
                     </div>
                     <div className="relative">
                       <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
                         type="password"
-                        placeholder={t('access_code_placeholder')}
+                        placeholder={t('access code placeholder')}
                         value={accessCode}
                         onChange={e => setAccessCode(e.target.value)}
                         required
@@ -623,7 +623,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       />
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1.5">
-                      {t('access_code_hint')}
+                      {t('access code hint')}
                     </p>
                   </div>
 
@@ -640,7 +640,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       </>
                     ) : (
                       <>
-                        {t('sign_in_btn')}
+                        {t('sign in btn')}
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -678,7 +678,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     onClick={onNavigateRegister}
                     className="text-xs text-teal-700 hover:text-teal-900 font-bold transition-colors hover:underline cursor-pointer"
                   >
-                    {t('new_patient_prompt')}
+                    {t('new patient prompt')}
                   </button>
 
                   <button
@@ -687,7 +687,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <PlusCircle className="w-4 h-4 text-teal-600" />
-                    {t('register_lab_btn')}
+                    {t('register lab btn')}
                   </button>
                 </div>
               </div>
@@ -749,8 +749,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Activity className="w-7 h-7 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-xl font-extrabold text-white">{t('about_nanolabs_title')}</h3>
-                <p className="text-xs text-teal-300 font-medium">{t('about_nanolabs_subtitle')}</p>
+                <h3 className="text-xl font-extrabold text-white">{t('about nanolabs title')}</h3>
+                <p className="text-xs text-teal-300 font-medium">{t('about nanolabs subtitle')}</p>
               </div>
             </div>
 
@@ -787,47 +787,47 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
             <div className="space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                {t('guarantees_title')}
+                {t('guarantees title')}
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-400 font-bold text-xs">
                     <Lock className="w-4 h-4" />
-                    {t('zk_title')}
+                    {t('zk title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('zk_desc')}
+                    {t('zk desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Shield className="w-4 h-4" />
-                    {t('isolation_title')}
+                    {t('isolation title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('isolation_desc')}
+                    {t('isolation desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-teal-300 font-bold text-xs">
                     <Cpu className="w-4 h-4" />
-                    {t('ai_title')}
+                    {t('ai title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('ai_desc')}
+                    {t('ai desc')}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-1">
                   <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                     <HeartHandshake className="w-4 h-4" />
-                    {t('billing_title')}
+                    {t('billing title')}
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {t('billing_desc')}
+                    {t('billing desc')}
                   </p>
                 </div>
               </div>
@@ -841,7 +841,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 onClick={() => setShowAboutModal(false)}
                 className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                {t('close_return')}
+                {t('close return')}
               </button>
             </div>
           </div>
