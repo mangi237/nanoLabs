@@ -27,7 +27,12 @@ import {
   SlidersHorizontal,
   FileCheck,
   Microscope,
-  Info
+  Info,
+  FolderPlus,
+  Layers,
+  Code,
+  Shield,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface TestCatalogManagementProps {
@@ -35,6 +40,17 @@ interface TestCatalogManagementProps {
   onBack?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+}
+
+interface HierarchicalParam {
+  section: string;
+  subHeader?: string;
+  name: string;
+  defaultValue?: string;
+  unit?: string;
+  dualUnit?: string;
+  refRange?: string;
+  interpretation?: string;
 }
 
 export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
@@ -47,6 +63,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const targetLabId = lab?.id || 'lab-1';
 
   const [catalog, setCatalog] = useState<any[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
@@ -55,15 +72,22 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const [showModal, setShowModal] = useState(false);
   const [editingTest, setEditingTest] = useState<any | null>(null);
 
+  // New Category Popover / State
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Hematology' as OfficialCategory,
+    actCode: 'ACT-LAB',
+    cote: 'B30',
+    category: 'Hematology' as string,
     price: 4500,
     turnaroundTime: '2 hours after sampling',
     method: '',
     conditions: '',
     sampleType: 'Serum / Venous Blood',
-    description: ''
+    description: '',
+    hierarchicalParams: [] as HierarchicalParam[]
   });
 
   const turnaroundSuggestions = [
@@ -80,6 +104,9 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
     '10 to 14 days'
   ];
 
+  // All combined available categories
+  const allCategories = Array.from(new Set([...OFFICIAL_CATEGORIES, ...customCategories]));
+
   useEffect(() => {
     fetchCatalog();
   }, [targetLabId]);
@@ -91,9 +118,18 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
       const snap = await getDocs(ref);
       let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+      // Extract unique custom categories if present
+      const distinctCats = list.map((item: any) => item.category).filter(Boolean);
+      const extras = distinctCats.filter(c => !(OFFICIAL_CATEGORIES as readonly string[]).includes(c));
+      setCustomCategories(Array.from(new Set(extras)));
+
       // If lab hasn't saved a custom catalog yet, fallback to master default list
       if (list.length === 0) {
-        list = OFFICIAL_MASTER_TEST_CATALOG;
+        list = OFFICIAL_MASTER_TEST_CATALOG.map((item, idx) => ({
+          ...item,
+          actCode: item.id?.toUpperCase() || `ACT-${idx + 100}`,
+          cote: item.category === 'Microbiology' ? 'B95' : item.category === 'Biochemistry' ? 'B30' : 'B45'
+        }));
       }
       setCatalog(list);
     } catch (e) {
@@ -114,6 +150,8 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         await setDoc(itemRef, {
           name: item.name,
           category: item.category,
+          actCode: item.id?.toUpperCase() || 'ACT-LAB',
+          cote: item.category === 'Microbiology' ? 'B95' : item.category === 'Biochemistry' ? 'B30' : 'B45',
           price: item.price,
           turnaroundTime: item.turnaroundTime,
           method: item.method,
@@ -135,17 +173,129 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
     }
   };
 
+  const handleCreateNewCategory = () => {
+    if (!newCategoryName.trim()) return;
+    const cat = newCategoryName.trim();
+    if (!customCategories.includes(cat)) {
+      setCustomCategories([...customCategories, cat]);
+    }
+    setFormData(prev => ({ ...prev, category: cat }));
+    setNewCategoryName('');
+    setShowNewCategoryModal(false);
+  };
+
+  // Preset Template loader
+  const applyPresetTemplate = (type: 'bacteriology' | 'cervico_vaginal' | 'biochemistry_dual' | 'collection_act') => {
+    if (type === 'bacteriology') {
+      setFormData(prev => ({
+        ...prev,
+        category: 'Microbiologie',
+        actCode: 'ECBU#',
+        cote: 'B95',
+        sampleType: 'Urine / Prélèvement Stérile',
+        turnaroundTime: '48 hours',
+        hierarchicalParams: [
+          { section: 'PRELEVEMENT', name: 'Nature du prélèvement', defaultValue: 'Urine de milieu de jet' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Examen direct sur culot', name: 'Aspect', defaultValue: 'Claire' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Examen direct sur culot', name: 'Couleur', defaultValue: 'Inexistant' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Numération cytologique', name: 'Leucocytes', defaultValue: '< 02 /mm3', refRange: '< 10 /mm3' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Numération cytologique', name: 'Hématies', defaultValue: 'Rares', refRange: '< 05 /mm3' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Éléments microscopiques', name: 'Cristaux', defaultValue: 'Non observés' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Éléments microscopiques', name: 'Cylindres', defaultValue: 'Non observés' },
+          { section: 'EXAMEN BACTERIOLOGIQUE', subHeader: 'Coloration de Gram du Culot', name: 'Coloration de Gram', defaultValue: 'Absence de germe visible' },
+          { section: 'EXAMEN BACTERIOLOGIQUE', subHeader: 'Culture & Identification', name: 'Culture sur géloses', defaultValue: 'Culture stérile après 48h à 37°C' }
+        ]
+      }));
+    } else if (type === 'cervico_vaginal') {
+      setFormData(prev => ({
+        ...prev,
+        category: 'Microbiologie',
+        actCode: 'FCV#',
+        cote: 'B90',
+        sampleType: 'Prélèvement Cervico-Vaginal',
+        turnaroundTime: '48 hours',
+        hierarchicalParams: [
+          { section: 'PRELEVEMENT', name: 'Site de ponction', defaultValue: 'Cul-de-sac vaginal postérieur' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Cytologie', name: 'Cellules épithéliales', defaultValue: 'Nombreuses' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Cytologie', name: 'Polynucléaires neutrophiles', defaultValue: 'Quelques' },
+          { section: 'EXAMEN CYTOLOGIQUE', subHeader: 'Flore de Döderlein', name: 'Bacilles de Döderlein', defaultValue: 'Présents et abondants' },
+          { section: 'EXAMEN BACTERIOLOGIQUE', subHeader: 'Microscopie & Recherche', name: 'Levures / Spores', defaultValue: 'Absence de filaments mycéliens' },
+          { section: 'EXAMEN BACTERIOLOGIQUE', subHeader: 'Microscopie & Recherche', name: 'Trichomonas vaginalis', defaultValue: 'Négatif' },
+          { section: 'EXAMEN BACTERIOLOGIQUE', subHeader: 'Culture', name: 'Culture mycologique & bactérienne', defaultValue: 'Flore physiologique normale' }
+        ]
+      }));
+    } else if (type === 'biochemistry_dual') {
+      setFormData(prev => ({
+        ...prev,
+        category: 'Biochimie Sanguine',
+        actCode: 'GLYP#',
+        cote: 'B30',
+        sampleType: 'Sérum / Plasma Fluoré',
+        turnaroundTime: '2 hours after sampling',
+        hierarchicalParams: [
+          { 
+            section: 'BIOCHIMIE SANGUINE', 
+            name: 'Glycémie à jeun (Glucose)', 
+            defaultValue: '1.05', 
+            unit: 'g/L', 
+            dualUnit: '5.83 mmol/L', 
+            refRange: '0.70 - 1.10 g/L (3.89 - 6.11 mmol/L)',
+            interpretation: 'Hypoglycémie: < 0.70 g/L; Normal: 0.70 - 1.10 g/L; Diabète: >= 1.26 g/L'
+          }
+        ]
+      }));
+    } else if (type === 'collection_act') {
+      setFormData(prev => ({
+        ...prev,
+        category: 'Actes de Prélèvement',
+        actCode: 'PSE#',
+        cote: 'KB1,5',
+        price: 2500,
+        name: 'ACTE DE PRELEVEMENT DE SANG ES',
+        sampleType: 'Prélèvement sanguin par ponction veineuse',
+        turnaroundTime: 'Immédiat',
+        hierarchicalParams: []
+      }));
+    }
+  };
+
+  const handleAddHierarchicalParam = () => {
+    setFormData(prev => ({
+      ...prev,
+      hierarchicalParams: [
+        ...prev.hierarchicalParams,
+        { section: 'EXAMEN DIRECT', name: 'Nouveau Paramètre', defaultValue: '', unit: '', refRange: '' }
+      ]
+    }));
+  };
+
+  const handleUpdateHierarchicalParam = (index: number, field: keyof HierarchicalParam, val: string) => {
+    const updated = [...formData.hierarchicalParams];
+    updated[index] = { ...updated[index], [field]: val };
+    setFormData(prev => ({ ...prev, hierarchicalParams: updated }));
+  };
+
+  const handleRemoveHierarchicalParam = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      hierarchicalParams: prev.hierarchicalParams.filter((_, idx) => idx !== index)
+    }));
+  };
+
   const handleOpenAdd = () => {
     setEditingTest(null);
     setFormData({
       name: '',
+      actCode: 'ACT-LAB',
+      cote: 'B30',
       category: 'Hematology',
       price: 5000,
       turnaroundTime: '2 hours after sampling',
       method: 'Automated Clinical Diagnostic Procedure',
       conditions: 'Fasting venous blood or standard sample',
       sampleType: 'Serum / Venous Blood',
-      description: ''
+      description: '',
+      hierarchicalParams: []
     });
     setShowModal(true);
   };
@@ -154,13 +304,16 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
     setEditingTest(test);
     setFormData({
       name: test.name || test.testName || '',
-      category: (test.category || 'Hematology') as OfficialCategory,
+      actCode: test.actCode || test.code || 'ACT-LAB',
+      cote: test.cote || 'B30',
+      category: test.category || 'Hematology',
       price: test.price || 4500,
       turnaroundTime: test.turnaroundTime || test.expectedTime || '2 hours after sampling',
       method: test.method || '',
       conditions: test.conditions || '',
       sampleType: test.sampleType || 'Venous Blood / Serum',
-      description: test.description || ''
+      description: test.description || '',
+      hierarchicalParams: test.hierarchicalParams || []
     });
     setShowModal(true);
   };
@@ -171,7 +324,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
     setFormData(prev => ({
       ...prev,
       name: newName,
-      category: detectedCategory
+      category: prev.category === 'Hematology' ? detectedCategory : prev.category
     }));
   };
 
@@ -215,6 +368,8 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const filteredCatalog = catalog.filter(t => {
     const matchesSearch = 
       (t.name || t.testName || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.actCode || t.code || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.cote || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.category || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.method || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.conditions || '')?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -228,15 +383,23 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const getCategoryBadgeColor = (category: string) => {
     switch (category) {
       case 'Microbiology':
+      case 'Microbiologie':
+      case 'Bactériologie':
         return 'bg-amber-50 text-amber-800 border-amber-200';
       case 'Hematology':
+      case 'Hématologie':
         return 'bg-rose-50 text-rose-800 border-rose-200';
       case 'Serology / Immunology':
+      case 'Sérologie':
         return 'bg-purple-50 text-purple-800 border-purple-200';
       case 'Biochemistry':
+      case 'Biochimie':
+      case 'Biochimie Sanguine':
         return 'bg-blue-50 text-blue-800 border-blue-200';
       case 'Hormones & Tumor Markers':
         return 'bg-teal-50 text-teal-800 border-teal-200';
+      case 'Actes de Prélèvement':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
       default:
         return 'bg-slate-50 text-slate-800 border-slate-200';
     }
@@ -259,17 +422,25 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-teal-100 text-teal-800 tracking-wide">
-              Official Diagnostic Standards
+              Official Diagnostic Standards & COTE Acts
             </span>
-            <span className="text-xs text-slate-400 font-semibold">• {catalog.length} Active Procedures</span>
+            <span className="text-xs text-slate-400 font-semibold">• {catalog.length} Active Acts / Tests</span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900">Medical Laboratory Test Catalog</h2>
+          <h2 className="text-xl font-bold text-slate-900">Medical Laboratory Test & Category Architecture</h2>
           <p className="text-xs text-slate-500 max-w-2xl mt-0.5">
-            Manage test procedures, withdrawal preparations, turnaround timing, and custom laboratory pricing across all 5 official medical categories.
+            Configure diagnostic nomenclature (Act Codes, COTE B/KB/P), multi-tier observation sections (Bacteriology, Cytology, Dual-Unit Biochemistry), and custom category structures.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowNewCategoryModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold border border-slate-200 transition-all cursor-pointer"
+          >
+            <FolderPlus className="w-4 h-4 text-teal-700" />
+            <span>+ Add Category</span>
+          </button>
+
           <button
             onClick={handleSyncOfficialCatalog}
             disabled={syncing}
@@ -285,7 +456,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
             className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Custom Test</span>
+            <span>Add Custom Test / Act</span>
           </button>
         </div>
       </div>
@@ -309,7 +480,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         >
           All Categories ({catalog.length})
         </button>
-        {OFFICIAL_CATEGORIES.map(cat => {
+        {allCategories.map(cat => {
           const count = catalog.filter(c => c.category === cat).length;
           const isActive = selectedCategory === cat;
           return (
@@ -336,7 +507,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
         <input
           type="text"
-          placeholder="Search catalog by test name, method, preparation condition, or description..."
+          placeholder="Search catalog by test name, act code (CREATS#, PK#, GLYP#), COTE (B30, KB1,0), method, or category..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200/80 rounded-2xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-xs"
@@ -360,10 +531,20 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                     <h3 className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">
                       {item.name || item.testName}
                     </h3>
-                    <div className="flex items-center gap-1.5 mt-1">
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${getCategoryBadgeColor(item.category)}`}>
-                        {item.category || 'Hematology'}
+                        {item.category || 'General'}
                       </span>
+                      {item.actCode && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                          {item.actCode}
+                        </span>
+                      )}
+                      {item.cote && (
+                        <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          COTE: {item.cote}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -395,6 +576,19 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                 </span>
               </div>
 
+              {/* Hierarchical Structure Summary */}
+              {item.hierarchicalParams && item.hierarchicalParams.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-teal-50/50 border border-teal-200/60 text-[11px] text-teal-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1 text-[10px] uppercase text-teal-800">
+                    <Layers className="w-3 h-3 text-teal-600" />
+                    Structured Template ({item.hierarchicalParams.length} parameters)
+                  </div>
+                  <div className="text-[10px] text-teal-800 font-mono truncate">
+                    {Array.from(new Set(item.hierarchicalParams.map((p: any) => p.section))).join(' • ')}
+                  </div>
+                </div>
+              )}
+
               {/* Conditions of Withdrawal / Preparation */}
               {item.conditions && (
                 <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 space-y-0.5">
@@ -406,21 +600,6 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                     {item.conditions}
                   </p>
                 </div>
-              )}
-
-              {/* Method */}
-              {item.method && (
-                <div className="text-[11px] text-slate-500 line-clamp-1">
-                  <span className="font-semibold text-slate-700">Method: </span>
-                  {item.method}
-                </div>
-              )}
-
-              {/* Description */}
-              {item.description && (
-                <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
-                  {item.description}
-                </p>
               )}
             </div>
 
@@ -437,7 +616,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                 onClick={() => handleOpenEdit(item)}
                 className="px-3 py-1.5 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                Customize Price
+                Customize Structure & Price
               </button>
             </div>
           </div>
@@ -457,59 +636,176 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         )}
       </div>
 
-      {/* Modal for Add / Edit */}
+      {/* Modal for Creating New Custom Category */}
+      {showNewCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-teal-400" />
+                <h3 className="font-bold text-sm">Add New Diagnostic Category</h3>
+              </div>
+              <button onClick={() => setShowNewCategoryModal(false)} className="text-white/80 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Parasitologie, Mycologie, Cytologie, Actes de Prélèvement..."
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCategoryModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNewCategory}
+                  className="px-5 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-md hover:bg-teal-700 cursor-pointer"
+                >
+                  Save Category
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Add / Edit Test & Hierarchical Structure */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8">
+          <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8">
             <div className="flex items-center justify-between px-6 py-4 bg-teal-700 text-white">
               <div>
                 <h3 className="font-bold text-base">
-                  {editingTest ? 'Edit Diagnostic Test & Pricing' : 'Add New Clinical Test'}
+                  {editingTest ? 'Edit Diagnostic Test & Template Architecture' : 'Add New Clinical Test / Act'}
                 </h3>
-                <p className="text-[11px] text-teal-100">Set procedure name, category, preparation conditions and prices</p>
+                <p className="text-[11px] text-teal-100">Set act codes, nomenclature COTE, multi-tier sections & pricing</p>
               </div>
               <button onClick={() => setShowModal(false)} className="text-white/80 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Test Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Full Blood Count (FBC / CBC) or Stool Culture"
-                  value={formData.name}
-                  onChange={e => handleNameChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Category will auto-select as you type the test name
+            <form onSubmit={handleSave} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Quick Preset Buttons */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Quick Architecture Presets (Auto-populate sections):
                 </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyPresetTemplate('bacteriology')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-teal-500 text-xs font-bold text-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Microscope className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Bactériologie / ECBU Template</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetTemplate('cervico_vaginal')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-teal-500 text-xs font-bold text-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FlaskConical className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Prélèvement Cervico-Vaginal Template</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetTemplate('biochemistry_dual')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-teal-500 text-xs font-bold text-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Biochimie Dual-Unit Glycémie</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetTemplate('collection_act')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-teal-500 text-xs font-bold text-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Acte de Prélèvement (KB 1,5)</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Basic Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Test / Act Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. EXAMEN CYTO-BACTERIOLOGIQUE DES URINES or GLYCEMIE A JEUN"
+                    value={formData.name}
+                    onChange={e => handleNameChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Medical Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.category}
-                    onChange={e => setFormData({ ...formData, category: e.target.value as OfficialCategory })}
+                    onChange={e => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-semibold"
                   >
-                    {OFFICIAL_CATEGORIES.map(cat => (
+                    {allCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Act Code & Nomenclature COTE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Act Code (Nomenclature)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CREATS#, GLYP#, ECBU#, PSE#, PK#"
+                    value={formData.actCode}
+                    onChange={e => setFormData({ ...formData, actCode: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Laboratory Price (FCFA / XAF) <span className="text-red-500">*</span>
+                    COTE (B / KB / P)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. B30, B45, B95, KB1,0, KB1,5, P20"
+                    value={formData.cote}
+                    onChange={e => setFormData({ ...formData, cote: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-bold text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Laboratory Price (FCFA) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -521,40 +817,125 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                 </div>
               </div>
 
-              {/* Turnaround Time */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Turnaround Time (Time to Return Results) <span className="text-red-500">*</span>
+              {/* Turnaround Time & Sample Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Turnaround Time <span className="text-red-500">*</span>
                   </label>
-                  <span className="text-[11px] text-slate-400">Prominently displayed to patients</span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2 hours after sampling, 48 hours"
+                    value={formData.turnaroundTime}
+                    onChange={e => setFormData({ ...formData, turnaroundTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 2 hours after sampling, 3 days after sampling"
-                  value={formData.turnaroundTime}
-                  onChange={e => setFormData({ ...formData, turnaroundTime: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 mb-2"
-                />
 
-                {/* Turnaround Time Presets */}
-                <div className="flex flex-wrap gap-1.5">
-                  {turnaroundSuggestions.map(time => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, turnaroundTime: time })}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                        formData.turnaroundTime === time
-                          ? 'bg-teal-600 text-white border-teal-600 font-bold'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-teal-300'
-                      }`}
-                    >
-                      {time}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Specimen / Sample Type
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Midstream Urine, Serum, Stool, Cervical Swab..."
+                    value={formData.sampleType}
+                    onChange={e => setFormData({ ...formData, sampleType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
+              </div>
+
+              {/* Structured Hierarchical Multi-Tier Parameters Builder */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-teal-600" />
+                      Hierarchical Template Parameters (Cytology, Bacteriology, Biochemistry)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Static formatted parameter rows on the left with configurable default observations for lab techs
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddHierarchicalParam}
+                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Parameter Row</span>
+                  </button>
+                </div>
+
+                {formData.hierarchicalParams.length === 0 ? (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-center text-xs text-slate-500">
+                    No sub-parameters configured. This test will use a standard single result input, or click a preset above to load multi-tier sections.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-60 overflow-y-auto p-1">
+                    {formData.hierarchicalParams.map((param, pIdx) => (
+                      <div key={pIdx} className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                          <div className="sm:col-span-3">
+                            <label className="text-[10px] font-bold text-slate-500 block">Section Header</label>
+                            <input
+                              type="text"
+                              value={param.section}
+                              onChange={e => handleUpdateHierarchicalParam(pIdx, 'section', e.target.value)}
+                              placeholder="e.g. EXAMEN CYTOLOGIQUE"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <label className="text-[10px] font-bold text-slate-500 block">Parameter Name</label>
+                            <input
+                              type="text"
+                              value={param.name}
+                              onChange={e => handleUpdateHierarchicalParam(pIdx, 'name', e.target.value)}
+                              placeholder="e.g. Leucocytes, Cristaux, Aspect"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <label className="text-[10px] font-bold text-slate-500 block">Default / Observation</label>
+                            <input
+                              type="text"
+                              value={param.defaultValue || ''}
+                              onChange={e => handleUpdateHierarchicalParam(pIdx, 'defaultValue', e.target.value)}
+                              placeholder="e.g. Rares, < 02 /mm3, Claire"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-[10px] font-bold text-slate-500 block">Ref. Range / Dual</label>
+                            <input
+                              type="text"
+                              value={param.refRange || param.dualUnit || ''}
+                              onChange={e => handleUpdateHierarchicalParam(pIdx, 'refRange', e.target.value)}
+                              placeholder="< 10 /mm3 or 5.45 mmol/L"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-600"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-1 flex items-end justify-center pb-1">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveHierarchicalParam(pIdx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Conditions of Withdrawal / Preparation */}
@@ -568,48 +949,6 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                   value={formData.conditions}
                   onChange={e => setFormData({ ...formData, conditions: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
-                />
-                <span className="text-[10px] text-slate-400 mt-0.5 block">
-                  Patients will see these withdrawal instructions before booking so they prepare adequately
-                </span>
-              </div>
-
-              {/* Method */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Analytical Method / Technology
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Real-Time RT-PCR, 5-part Flow Cytometry, ELISA, Microplate Culture..."
-                  value={formData.method}
-                  onChange={e => setFormData({ ...formData, method: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              {/* Sample Type */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Specimen / Sample Type
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Serum (Red tube), EDTA Whole Blood, Stool, Midstream Urine..."
-                  value={formData.sampleType}
-                  onChange={e => setFormData({ ...formData, sampleType: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Clinical Description & Scope</label>
-                <textarea
-                  rows={2}
-                  placeholder="Clinical significance and diagnostic purpose..."
-                  value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -625,7 +964,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-md hover:bg-teal-700 cursor-pointer"
                 >
-                  Save Test Configuration
+                  Save Test Configuration & Architecture
                 </button>
               </div>
             </form>
@@ -642,8 +981,8 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
-        title="Diagnostic Test Catalog"
-        subtitle="Configure medical tests, turnaround times & pricing"
+        title="Diagnostic Test & Category Architecture"
+        subtitle="Configure medical tests, nomenclature COTE, observation templates & pricing"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
       />
