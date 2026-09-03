@@ -8,6 +8,7 @@ import { cryptoSecurity } from '../../utils/cryptoSecurity';
 import { auditService } from '../../services/auditService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { 
   ArrowLeft, 
   Printer, 
@@ -33,6 +34,7 @@ import {
   BadgeAlert,
   History,
   Lock,
+  Mail,
   Stethoscope
 } from 'lucide-react';
 
@@ -57,6 +59,7 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showReportPdfModal, setShowReportPdfModal] = useState(false);
+  const [showEnvelopeModal, setShowEnvelopeModal] = useState(false);
 
   // Sync / fetch latest test state from Firestore
   const fetchLatestTestData = async () => {
@@ -301,6 +304,14 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={() => setShowEnvelopeModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-700 to-rose-700 hover:from-amber-800 hover:to-rose-800 text-amber-50 rounded-xl text-xs font-bold shadow-md shadow-amber-900/20 transition-all cursor-pointer"
+              >
+                <Mail className="w-4 h-4 text-amber-200" />
+                Open Sealed Envelope
+              </button>
+
+              <button
                 onClick={handlePrintWithAudit}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
@@ -367,6 +378,43 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
               <History className="w-3.5 h-3.5" />
               View Access Ledger ({currentTest.patientCode || 'PT-REC'})
             </button>
+          </div>
+
+          {/* PRESCRIBING REFERRING DOCTOR HEADER BLOCK (BIODIAGNOSTICS STYLE) */}
+          <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-900/50 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600/30 text-indigo-300 rounded-xl border border-indigo-500/30 shrink-0">
+                  <Stethoscope className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold tracking-wider text-indigo-300 uppercase">
+                    Prescribing Clinician / Médecin Prescripteur
+                  </div>
+                  <div className="text-sm sm:text-base font-extrabold text-white">
+                    {currentTest.doctorName || 'Docteur HAPPY LYNDA - NEPHROLOGUE'}
+                  </div>
+                  <div className="text-xs text-indigo-200/80 font-medium">
+                    {currentTest.doctorFacility || 'Polyclinique de Poitiers / Centre Hospitalier Affilié'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-indigo-800/60 pt-2 sm:pt-0 text-[11px] text-indigo-200">
+                <div>
+                  <span className="text-indigo-400">Prescription Date: </span>
+                  <span className="font-mono font-bold text-white">
+                    {currentTest.prescribedDate || currentTest.createdAt ? new Date(currentTest.prescribedDate || currentTest.createdAt).toLocaleDateString('fr-FR') : '02/12/2026'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-indigo-400">Prélèvement: </span>
+                  <span className="font-mono font-bold text-white">
+                    {currentTest.sampleCollectedAtDate || currentTest.collectedAt ? new Date(currentTest.sampleCollectedAtDate || currentTest.collectedAt).toLocaleDateString('fr-FR') : '02/12/2026'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* WORKFLOW STATUS STEPPER (4 STAGES) */}
@@ -652,6 +700,24 @@ export const ResultViewScreen: React.FC<ResultViewScreenProps> = ({
           tests: [currentTest]
         }}
         labInfo={lab}
+      />
+
+      {/* Sealed Physical Envelope Digital Experience */}
+      <SealedEnvelopeResultModal
+        isOpen={showEnvelopeModal}
+        onClose={() => setShowEnvelopeModal(false)}
+        test={currentTest}
+        labName={lab?.name || 'nanoLabs Central Diagnostics'}
+        doctorName={currentTest.doctorName || currentTest.referringDoctor || 'Dr. Attending Physician'}
+        patientName={currentTest.patientName || user?.name || 'Patient'}
+        patientPid={currentTest.patientCode || currentTest.patientId || user?.patientId || 'PAT-CMR-01'}
+        patientGender={currentTest.gender || currentTest.patientGender}
+        patientAge={currentTest.age || currentTest.patientAge}
+        patientPhone={currentTest.patientPhone || user?.phone}
+        onOpenPdf={() => {
+          setShowEnvelopeModal(false);
+          setShowReportPdfModal(true);
+        }}
       />
     </div>
   );
