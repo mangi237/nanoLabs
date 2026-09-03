@@ -9,6 +9,7 @@ import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
 import BatchConsolidatedReportModal from '../../components/patient/BatchConsolidatedReportModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { 
   Calendar, 
   FileText, 
@@ -30,7 +31,9 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Mail,
+  Stethoscope
 } from 'lucide-react';
 
 interface PatientDashboardProps {
@@ -61,68 +64,188 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [receiptModalBooking, setReceiptModalBooking] = useState<PatientBooking | null>(null);
   const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
+  const [envelopeModalTest, setEnvelopeModalTest] = useState<any | null>(null);
 
   useEffect(() => {
-    fetchPatientData();
+    let unsubBookings: (() => void) | null = null;
 
-    const targetLabId = lab?.id || 'lab-1';
-    const patientId = user?.id || user?.patientId;
-    
-    // FIXED: Pass patientId to subscription to only get this patient's bookings
-    const unsubBookings = limsService.subscribeToBookings(
-      targetLabId, 
-      (allBookings) => {
-        // Now only returns bookings for this patient
-        setBookings(allBookings);
-      },
-      undefined,
-      patientId // <-- FIXED: Pass patientId
-    );
+    const initDashboardData = async () => {
+      setLoading(true);
+      try {
+        const targetLabId = lab?.id || 'lab-1';
+
+        // 1. Fetch Patient Document
+        const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
+        const found = snap.docs.find(d => {
+          const data = d.data();
+          const dEmail = (data.email || '').trim().toLowerCase();
+          const uEmail = (user?.email || '').trim().toLowerCase();
+          const dPhone = (data.phone || '').replace(/\D/g, '');
+          const uPhone = (user?.phone || '').replace(/\D/g, '');
+          const dCode = (data.accessCode || '').trim().toUpperCase();
+          const uCode = (user?.accessCode || (user as any)?.passcode || '').trim().toUpperCase();
+          const dPid = (data.patientId || '').trim().toUpperCase();
+          const uPid = (user?.patientId || (user as any)?.pid || '').trim().toUpperCase();
+          const dName = (data.name || '').trim().toLowerCase();
+          const uName = (user?.name || '').trim().toLowerCase();
+
+          if (d.id === user?.id) return true;
+          if (uPid && (dPid === uPid || d.id.toUpperCase() === uPid)) return true;
+          if (uCode && dCode && dCode === uCode) return true;
+          if (uEmail && dEmail && !uEmail.includes('@nanolabs.cm') && dEmail === uEmail) return true;
+          if (uPhone && dPhone && uPhone.length >= 7 && dPhone === uPhone) return true;
+          if (uName && dName && uName.length >= 3 && dName === uName && !['patient', 'valued patient', 'guest', 'user'].includes(uName)) {
+            return true;
+          }
+          return false;
+        });
+
+        let loadedDocData: any = null;
+        if (found) {
+          setPatientRecordId(found.id);
+          const data = found.data();
+          loadedDocData = { id: found.id, ...data };
+          setPatientDocData(loadedDocData);
+          setPatientFullName(data.name || user?.name || 'Patient Record');
+          if (data.labTests && Array.isArray(data.labTests)) {
+            setTests(data.labTests);
+          } else {
+            setTests([]);
+          }
+        } else {
+          setPatientDocData(null);
+          setTests([]);
+        }
+
+        // 2. Initial fetch of central LIMS bookings scoped to this patient
+        const allBookings = await limsService.fetchAllBookings(targetLabId);
+        const myBookings = filterPatientBookings(allBookings, loadedDocData, user);
+        setBookings(myBookings);
+
+        // 3. Real-time subscription with resolved patient document
+        unsubBookings = limsService.subscribeToBookings(targetLabId, (liveBookings) => {
+          const filtered = filterPatientBookings(liveBookings, loadedDocData, user);
+          setBookings(filtered);
+        });
+      } catch (e) {
+        console.error('Error fetching patient data:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initDashboardData();
 
     return () => {
-      unsubBookings();
+      if (unsubBookings) {
+        unsubBookings();
+      }
     };
-  }, [user?.id, user?.email]);
+  }, [user?.id, user?.email, user?.accessCode, (user as any)?.patientId, lab?.id]);
+
+  const filterPatientBookings = (allBookings: PatientBooking[], patDoc: any, currentUser: any) => {
+    const validIds = [
+      currentUser?.id,
+      (currentUser as any)?.patientId,
+      (currentUser as any)?.pid,
+      patDoc?.id,
+      patDoc?.patientId
+    ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+    const userEmail = (currentUser?.email || patDoc?.email || '').trim().toLowerCase();
+    const userPhone = (currentUser?.phone || patDoc?.phone || '').replace(/\D/g, '');
+    const userName = (currentUser?.name || patDoc?.name || '').trim().toLowerCase();
+    const genericNames = ['patient', 'valued patient', 'guest', 'user', 'unknown', '', 'clinical staff', 'internal staff'];
+
+    return allBookings.filter(b => {
+      const bPatientId = String(b.patientId || '').trim().toLowerCase();
+      const bPatientPid = String(b.patientPid || '').trim().toLowerCase();
+      const bEmail = String(b.patientEmail || '').trim().toLowerCase();
+      const bPhone = String(b.patientPhone || '').replace(/\D/g, '');
+      const bName = String(b.patientName || '').trim().toLowerCase();
+
+      // 1. Direct Primary ID Match (Strongest & Unambiguous)
+      if (validIds.length > 0) {
+        if (bPatientId && validIds.includes(bPatientId)) return true;
+        if (bPatientPid && validIds.includes(bPatientPid)) return true;
+      }
+
+      // 2. Email Match (Must be valid individual email and match exactly)
+      if (userEmail && bEmail && userEmail === bEmail && !userEmail.includes('@nanolabs.cm')) {
+        // If booking has an explicit patientId different from our valid IDs, do NOT claim someone else's booking
+        if (!bPatientId || validIds.length === 0 || validIds.includes(bPatientId)) {
+          return true;
+        }
+      }
+
+      // 3. Phone Match (digits length >= 7)
+      if (userPhone && bPhone && userPhone.length >= 7 && userPhone === bPhone) {
+        if (!bPatientId || validIds.length === 0 || validIds.includes(bPatientId)) {
+          return true;
+        }
+      }
+
+      // 4. Exact Name Match (Only if name is distinct, non-generic, and booking patientId is either empty or matches validIds)
+      if (userName && bName && userName.length >= 3 && !genericNames.includes(userName) && userName === bName) {
+        if (!bPatientId || validIds.length === 0 || validIds.includes(bPatientId)) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  };
 
   const fetchPatientData = async () => {
     try {
-      setLoading(true);
       const targetLabId = lab?.id || 'lab-1';
-      const patientId = user?.id || user?.patientId;
 
-      // 1. Fetch Patient Document
+      // Fetch Patient Document
       const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
-      const found = snap.docs.find(d => 
-        d.id === patientId ||
-        d.data().email === user?.email || 
-        d.data().accessCode === user?.accessCode ||
-        d.data().name === user?.name
-      );
+      const found = snap.docs.find(d => {
+        const data = d.data();
+        const dEmail = (data.email || '').trim().toLowerCase();
+        const uEmail = (user?.email || '').trim().toLowerCase();
+        const dPhone = (data.phone || '').replace(/\D/g, '');
+        const uPhone = (user?.phone || '').replace(/\D/g, '');
+        const dCode = (data.accessCode || '').trim().toUpperCase();
+        const uCode = (user?.accessCode || (user as any)?.passcode || '').trim().toUpperCase();
+        const dPid = (data.patientId || '').trim().toUpperCase();
+        const uPid = (user?.patientId || (user as any)?.pid || '').trim().toUpperCase();
+        const dName = (data.name || '').trim().toLowerCase();
+        const uName = (user?.name || '').trim().toLowerCase();
+
+        if (d.id === user?.id) return true;
+        if (uPid && (dPid === uPid || d.id.toUpperCase() === uPid)) return true;
+        if (uCode && dCode && dCode === uCode) return true;
+        if (uEmail && dEmail && !uEmail.includes('@nanolabs.cm') && dEmail === uEmail) return true;
+        if (uPhone && dPhone && uPhone.length >= 7 && dPhone === uPhone) return true;
+        if (uName && dName && uName.length >= 3 && dName === uName && !['patient', 'valued patient', 'guest', 'user'].includes(uName)) {
+          return true;
+        }
+        return false;
+      });
+
+      let loadedDocData: any = null;
       if (found) {
         setPatientRecordId(found.id);
         const data = found.data();
-        setPatientDocData(data);
+        loadedDocData = { id: found.id, ...data };
+        setPatientDocData(loadedDocData);
         setPatientFullName(data.name || user?.name || 'Patient Record');
-        if (data.labTests) {
+        if (data.labTests && Array.isArray(data.labTests)) {
           setTests(data.labTests);
         } else {
           setTests([]);
         }
-      } else {
-        setTests([]);
       }
 
-      // 2. FIXED: Fetch ONLY this patient's bookings
-      if (patientId) {
-        const myBookings = await limsService.getPatientBookings(targetLabId, patientId);
-        setBookings(myBookings);
-      } else {
-        setBookings([]);
-      }
+      // Fetch Central LIMS Bookings for this Patient
+      const allBookings = await limsService.fetchAllBookings(targetLabId);
+      const myBookings = filterPatientBookings(allBookings, loadedDocData || patientDocData, user);
+      setBookings(myBookings);
     } catch (e) {
-      console.error('Error fetching patient data:', e);
-    } finally {
-      setLoading(false);
+      console.error('Error refreshing patient data:', e);
     }
   };
 
@@ -151,7 +274,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
-  // Calculate total spending - only on patient's own bookings
+  // Calculate total spending
   const totalSpentPaid = bookings
     .filter(b => b.paymentStatus === 'paid')
     .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
@@ -179,7 +302,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Welcome Banner - (unchanged) */}
+        {/* Welcome Banner */}
         <div 
           style={{
             background: `linear-gradient(135deg, ${lab?.primaryColor || '#0f766e'}, ${lab?.secondaryColor || '#1e3a8a'})`
@@ -216,6 +339,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </div>
           </div>
 
+          {/* Big Circled Logo at Right Side */}
           <div className="shrink-0 self-center sm:self-auto">
             {lab?.logoUrl ? (
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 bg-white/10 backdrop-blur-md shadow-2xl p-1 flex items-center justify-center overflow-hidden">
@@ -351,7 +475,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
               activeSegmentTab === 'tests' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
             }`}>
-              {tests.length}
+              {totalAllTestsCount || tests.length}
             </span>
           </button>
 
@@ -373,7 +497,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: DIAGNOSTIC TESTS & LIVE TRACKING */}
+        {/* TAB 1: DIAGNOSTIC REQUISITIONS & TEST BATCHES */}
         {activeSegmentTab === 'tests' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -383,7 +507,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   <span>My Diagnostic Test Batches & Requisitions</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tests grouped into medical visit batches with consolidated booklets
+                  Tests grouped into medical visit batches with consolidated booklets, physician sharing & digital PDF downloads
                 </p>
               </div>
 
@@ -409,7 +533,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
             </div>
 
-            {/* List of Batches / Bookings - Only patient's own bookings */}
+            {/* List of Batches / Bookings */}
             {bookings.length > 0 ? (
               <div className="space-y-5">
                 {bookings.map((booking) => {
@@ -447,7 +571,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                           </div>
                         </div>
 
+                        {/* Batch Action Suite */}
                         <div className="flex items-center gap-2.5 flex-wrap">
+                          {/* Payment status badge */}
                           <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wide border ${
                             isPaid
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
@@ -456,35 +582,67 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                             {(booking.totalAmount || 0).toLocaleString()} FCFA ({isPaid ? 'PAID' : 'UNPAID'})
                           </span>
 
+                          {/* Open Sealed Envelope Experience */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const firstCompleted = booking.tests?.find(t => t.status === 'Completed') || booking.tests?.[0] || {
+                                testName: `Batch ${booking.bookingCode} Laboratory Diagnostic Panel`,
+                                id: booking.id
+                              };
+                              setEnvelopeModalTest({
+                                ...firstCompleted,
+                                patientName: booking.patientName,
+                                patientPid: booking.patientPid,
+                                doctorName: booking.doctorName,
+                                bookingCode: booking.bookingCode,
+                                sections: (firstCompleted as any).sections,
+                                subParameters: (firstCompleted as any).subParameters
+                              });
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                            title="Experience the tactile physical envelope unsealing for your results"
+                          >
+                            <Mail className="w-4 h-4 text-amber-200" />
+                            <span>Open Sealed Envelope</span>
+                          </button>
+
+                          {/* Download / Print Full Consolidated Result */}
                           <button
                             type="button"
                             onClick={() => setBatchReportBooking(booking)}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                            title="Download Full Signed PDF Report of all tests in this batch"
                           >
                             <Printer className="w-4 h-4" />
-                            <span>Download Full Results</span>
+                            <span>Download Full Results (Signed PDF)</span>
                           </button>
 
+                          {/* Share with Physician */}
                           {onNavigateTab && (
                             <button
                               type="button"
                               onClick={() => onNavigateTab('share')}
                               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+                              title="Email encrypted results directly to your doctor"
                             >
                               <Share2 className="w-4 h-4" />
                               <span>Share with Doctor</span>
                             </button>
                           )}
 
+                          {/* Receipt */}
                           <button
                             type="button"
                             onClick={() => setReceiptModalBooking(booking)}
                             className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs border border-slate-700 transition-all cursor-pointer"
+                            title="View official medical receipt"
                           >
                             <Receipt className="w-4 h-4 text-teal-400" />
                             <span>Receipt</span>
                           </button>
 
+                          {/* Toggle Expand */}
                           <button
                             type="button"
                             onClick={() => setExpandedBookingId(isExpanded ? null : booking.id)}
@@ -495,7 +653,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* Full Batch PDF Alert */}
+                      {/* Full Batch PDF Alert if Available */}
                       {booking.pdfReportUrl && (
                         <div className="px-6 py-3 bg-teal-50 border-b border-teal-100 flex items-center justify-between">
                           <div className="flex items-center gap-2 text-xs text-teal-900 font-bold">
@@ -563,7 +721,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                                       </td>
 
                                       <td className="py-3.5 px-4">
-                                        {hasPerTestPdf ? (
+                                        {((test as any).hasPdf || (test as any).pdfUrl || (test as any).fileUrl || (booking as any).pdfReportUrl || (booking as any).pdfUrl) ? (
                                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-800 rounded-lg text-xs font-bold">
                                             <FileText className="w-3.5 h-3.5 text-teal-600" />
                                             <span>See results in PDF file</span>
@@ -710,7 +868,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: RECEIPTS */}
+        {/* TAB 2: MULTI-TEST BOOKING RECEIPTS & ITEMIZATION */}
         {activeSegmentTab === 'receipts' && (
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -869,7 +1027,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         )}
       </main>
 
-      {/* Modals - unchanged */}
+      {/* Official Consolidated Batch Diagnostic Report Modal (Signed PDF) */}
       <BatchConsolidatedReportModal
         isOpen={Boolean(batchReportBooking)}
         onClose={() => setBatchReportBooking(null)}
@@ -889,6 +1047,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         }}
       />
 
+      {/* Medical Booklet Modal */}
       <MedicalBookletModal
         isOpen={showBookletModal}
         onClose={() => setShowBookletModal(false)}
@@ -911,6 +1070,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         lab={lab}
       />
 
+      {/* Patient Access Audit Trail Modal */}
       <PatientActivityAuditModal
         isOpen={showAuditModal}
         onClose={() => setShowAuditModal(false)}
@@ -929,11 +1089,30 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         labName={lab?.name || 'nanoLabs Diagnostic Facility'}
       />
 
+      {/* Official Itemized Medical Receipt Modal */}
       <MedicalReceiptModal
         isOpen={Boolean(receiptModalBooking)}
         onClose={() => setReceiptModalBooking(null)}
         booking={receiptModalBooking}
         labInfo={lab}
+      />
+
+      {/* Sealed Physical Envelope Digital Experience Modal */}
+      <SealedEnvelopeResultModal
+        isOpen={Boolean(envelopeModalTest)}
+        onClose={() => setEnvelopeModalTest(null)}
+        test={envelopeModalTest}
+        labName={lab?.name || 'nanoLabs Diagnostic Facility'}
+        doctorName={envelopeModalTest?.doctorName || 'Dr. Attending Physician / Clinician'}
+        patientName={envelopeModalTest?.patientName || patientFullName}
+        patientPid={envelopeModalTest?.patientPid || patientDocData?.patientId || patientRecordId}
+        patientGender={patientDocData?.gender || user?.gender}
+        patientAge={patientDocData?.age || user?.age}
+        patientPhone={patientDocData?.phone || user?.phone}
+        onOpenPdf={() => {
+          setBatchReportBooking(envelopeModalTest);
+          setEnvelopeModalTest(null);
+        }}
       />
     </div>
   );

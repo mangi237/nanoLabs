@@ -36,6 +36,7 @@
     "formidable": "^3.5.4",
     "from": "^0.1.7",
     "lucide-react": "^1.28.0",
+    "motion": "^13.2.0",
     "multer": "^2.0.2",
     "nativewind": "^4.2.6",
     "next": "15.5.9",
