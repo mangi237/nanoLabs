@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Header from '../../components/common/Header';
 import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
-import { db, getDocs, collection, query, where } from '../../services/firebase';
+import { db, getDocs, collection, query, where, updateDoc, doc } from '../../services/firebase';
 import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
+import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
   TestTube, 
@@ -29,6 +30,7 @@ import {
   ArrowRight,
   BookOpen,
   PlusCircle,
+  Plus,
   X,
   Database,
   Tag,
@@ -101,6 +103,15 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [reagentQtyToAdd, setReagentQtyToAdd] = useState<number>(1);
   const [reagentUnitToAdd, setReagentUnitToAdd] = useState<string>('mL');
 
+  // Lab Test Catalog & Add Test to Order Modal State
+  const [catalog, setCatalog] = useState<any[]>([]);
+  const [showAddTestModal, setShowAddTestModal] = useState(false);
+  const [addTestSearchQuery, setAddTestSearchQuery] = useState('');
+  const [addTestCategoryFilter, setAddTestCategoryFilter] = useState('All');
+
+  // Hierarchical Structured Parameters state
+  const [activeHierarchicalValues, setActiveHierarchicalValues] = useState<Record<string, string>>({});
+
   // Option 2 Upload State
   const [pdfUploadDataUrl, setPdfUploadDataUrl] = useState<string>('');
   const [uploadFileName, setUploadFileName] = useState<string>('');
@@ -143,6 +154,23 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
         ...doc.data()
       } as ReagentItem));
       setInventoryItems(items);
+
+      // Fetch lab test catalog for adding tests on the fly
+      try {
+        const catCol = collection(db, 'labs', targetLabId, 'testCatalog');
+        const catSnap = await getDocs(catCol);
+        let catList = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (catList.length === 0) {
+          catList = OFFICIAL_MASTER_TEST_CATALOG.map(t => ({
+            ...t,
+            actCode: t.id?.toUpperCase() || 'ACT-LAB',
+            cote: t.category === 'Microbiology' ? 'B95' : t.category === 'Biochemistry' ? 'B30' : 'B45'
+          }));
+        }
+        setCatalog(catList);
+      } catch (catErr) {
+        setCatalog(OFFICIAL_MASTER_TEST_CATALOG);
+      }
     } catch (err) {
       console.error('Error loading Lab Tech queue data:', err);
     } finally {
@@ -336,8 +364,68 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     }
     setActiveSubParamValues(subObj);
 
+    // Load hierarchical template values
+    const hierObj: Record<string, string> = {};
+    if (test.hierarchicalParams && test.hierarchicalParams.length > 0) {
+      test.hierarchicalParams.forEach((hp: any, idx: number) => {
+        hierObj[hp.name || `hp-${idx}`] = hp.value || hp.defaultValue || '';
+      });
+    } else {
+      // Check if catalog has hierarchicalParams for this test
+      const catItem = catalog.find(c => c.name?.toLowerCase() === test.testName?.toLowerCase() || c.id === test.testId);
+      if (catItem?.hierarchicalParams) {
+        catItem.hierarchicalParams.forEach((hp: any, idx: number) => {
+          hierObj[hp.name || `hp-${idx}`] = hp.defaultValue || '';
+        });
+      }
+    }
+    setActiveHierarchicalValues(hierObj);
+
     // Load reagents used if any
     setActiveReagentsUsed(test.reagentsUsed || []);
+  };
+
+  // Add additional test or non-test billable act directly to current patient booking
+  const handleAddTestToCurrentBooking = async (testToAdd: any) => {
+    if (!activeBooking) return;
+    const newTestItem: BookingTestItem = {
+      id: `test-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      testId: testToAdd.id,
+      testCode: testToAdd.actCode || testToAdd.code || 'ACT-LAB',
+      testName: testToAdd.name || testToAdd.testName,
+      category: testToAdd.category || 'General',
+      sampleTypeRequired: testToAdd.sampleType || testToAdd.sampleTypeRequired || 'Venous Blood',
+      price: testToAdd.price || 4500,
+      status: 'In_Lab_Testing',
+      units: testToAdd.units || '',
+      subParameters: testToAdd.subParameters || [],
+      hierarchicalParams: testToAdd.hierarchicalParams || []
+    };
+
+    const updatedTests = [...(activeBooking.tests || []), newTestItem];
+    const newTotalAmount = (activeBooking.totalAmount || 0) + (newTestItem.price || 0);
+    const updatedBooking = {
+      ...activeBooking,
+      tests: updatedTests,
+      totalAmount: newTotalAmount
+    };
+
+    setActiveBooking(updatedBooking);
+    setSelectedTestIndex(updatedTests.length - 1);
+    loadTestState(newTestItem);
+    setShowAddTestModal(false);
+
+    try {
+      await updateDoc(doc(db, 'labs', targetLabId, 'bookings', activeBooking.id), {
+        tests: updatedTests,
+        totalAmount: newTotalAmount,
+        updatedAt: new Date().toISOString()
+      });
+      setActionSuccessMessage(`✅ Added "${newTestItem.testName}" (${newTestItem.testCode}) to patient booklet.`);
+      fetchData();
+    } catch (e) {
+      console.error('Error adding test to booking:', e);
+    }
   };
 
   const handleSelectTestInBooklet = (idx: number) => {
@@ -929,6 +1017,16 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                   })}
                 </div>
 
+                {/* Add Test / Billable Act Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowAddTestModal(true)}
+                  className="w-full py-2.5 px-3 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-4 h-4 text-teal-600" />
+                  <span>+ Add Test / Billable Act to Order</span>
+                </button>
+
                 {/* Whole Booklet Submit Button */}
                 <div className="pt-4">
                   <button
@@ -1143,6 +1241,82 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                           </div>
                         )}
 
+                        {/* Hierarchical Structured Observations (e.g. Bacteriology, Cervico-Vaginal Swabs, Dual-Unit Bio) */}
+                        {(() => {
+                          const effHier = (currentTestInModal.hierarchicalParams && currentTestInModal.hierarchicalParams.length > 0)
+                            ? currentTestInModal.hierarchicalParams
+                            : (catalog.find(c => c.name?.toLowerCase() === currentTestInModal.testName?.toLowerCase() || c.id === currentTestInModal.testId)?.hierarchicalParams || []);
+                          
+                          if (!effHier || effHier.length === 0) return null;
+
+                          // Group by section
+                          const grouped: Record<string, any[]> = {};
+                          effHier.forEach((p: any) => {
+                            const sec = p.section || 'Observation Template';
+                            if (!grouped[sec]) grouped[sec] = [];
+                            grouped[sec].push(p);
+                          });
+
+                          return (
+                            <div className="space-y-4 bg-slate-50/90 p-4 sm:p-5 rounded-2xl border border-slate-200">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                                  <Layers className="w-4 h-4 text-teal-600" />
+                                  Structured Template Observations
+                                </h4>
+                                <span className="text-[10px] font-mono text-slate-500 font-bold">
+                                  {effHier.length} parameters configured
+                                </span>
+                              </div>
+
+                              {Object.entries(grouped).map(([sectionName, params]) => (
+                                <div key={sectionName} className="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-200">
+                                  <div className="text-[11px] font-black uppercase tracking-wider text-teal-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                                    <span>{sectionName}</span>
+                                    <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
+                                  </div>
+                                  <div className="space-y-2 pt-1">
+                                    {params.map((param: any, pIdx: number) => {
+                                      const key = param.name || `hp-${pIdx}`;
+                                      const currentVal = activeHierarchicalValues[key] !== undefined 
+                                        ? activeHierarchicalValues[key] 
+                                        : (param.defaultValue || '');
+                                      
+                                      return (
+                                        <div key={pIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                          <div className="sm:col-span-5">
+                                            <span className="text-xs font-bold text-slate-800">{param.name}</span>
+                                            {param.unit && (
+                                              <span className="text-[10px] text-slate-400 font-mono ml-1.5">({param.unit})</span>
+                                            )}
+                                            {param.refRange && (
+                                              <span className="text-[9px] text-slate-400 block font-mono">Ref: {param.refRange}</span>
+                                            )}
+                                          </div>
+                                          <div className="sm:col-span-7">
+                                            <input
+                                              type="text"
+                                              value={currentVal}
+                                              onChange={e => {
+                                                setActiveHierarchicalValues({
+                                                  ...activeHierarchicalValues,
+                                                  [key]: e.target.value
+                                                });
+                                              }}
+                                              placeholder={param.defaultValue || 'Enter finding / count...'}
+                                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                            />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
                         {/* Reagents Used Section (RULE: Ask in test card, filter expired, prompt quantity) */}
                         <div className="bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3">
                           <div className="flex items-center justify-between">
@@ -1220,7 +1394,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveReagentFromTest(ru.reagentId || '')}
+                                      onClick={() => handleRemoveReagentFromTest(ru.reagentId)}
                                       className="text-slate-400 hover:text-rose-600 p-1"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -1440,6 +1614,130 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
             phone: lab?.phone || '+237 600 000 000'
           }}
         />
+      )}
+
+      {/* Add Test / Billable Act to Patient Booklet Modal */}
+      {showAddTestModal && activeBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-5 bg-gradient-to-r from-teal-900 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-teal-400" />
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">Add Test / Medical Act to Patient Order</h3>
+                  <p className="text-[11px] text-teal-200/80">
+                    Order #{activeBooking.bookingCode || activeBooking.id} • {activeBooking.patientName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddTestModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Filter & Search Toolbar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50 space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={addTestSearchQuery}
+                  onChange={e => setAddTestSearchQuery(e.target.value)}
+                  placeholder="Search by test name, code (e.g. ECBU#, PSE#, GLU), category, or COTE (e.g. B95, KB1,0)..."
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+                {['All', 'Biochemistry', 'Microbiology', 'Hematology', 'Parasitology', 'Immunology', 'Serology', 'Ancillary / Acts'].map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setAddTestCategoryFilter(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      addTestCategoryFilter === cat
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Catalog List */}
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
+              {(() => {
+                const filtered = catalog.filter(t => {
+                  const query = addTestSearchQuery.toLowerCase().trim();
+                  const nameMatch = (t.name || t.testName || '').toLowerCase().includes(query);
+                  const codeMatch = (t.actCode || t.code || '').toLowerCase().includes(query);
+                  const coteMatch = (t.cote || '').toLowerCase().includes(query);
+                  const catMatch = (t.category || '').toLowerCase().includes(query);
+                  const matchesSearch = !query || nameMatch || codeMatch || coteMatch || catMatch;
+
+                  if (addTestCategoryFilter === 'All') return matchesSearch;
+                  if (addTestCategoryFilter === 'Ancillary / Acts') {
+                    return matchesSearch && ((t.category || '').toLowerCase().includes('ancillary') || (t.category || '').toLowerCase().includes('act') || (t.actCode || '').startsWith('P'));
+                  }
+                  return matchesSearch && (t.category || '').toLowerCase().includes(addTestCategoryFilter.toLowerCase());
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      No matching laboratory tests or billing acts found.
+                    </div>
+                  );
+                }
+
+                return filtered.map(t => {
+                  const isAlreadyInBooking = activeBooking.tests?.some(bt => bt.testId === t.id || bt.testName?.toLowerCase() === (t.name || t.testName)?.toLowerCase());
+                  
+                  return (
+                    <div key={t.id || t.code} className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 px-2 rounded-xl">
+                      <div className="space-y-0.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-xs text-slate-900 truncate">
+                            {t.name || t.testName}
+                          </span>
+                          {t.actCode && (
+                            <span className="text-[10px] font-mono font-bold bg-teal-50 text-teal-700 px-1.5 py-0.2 rounded border border-teal-200">
+                              {t.actCode}
+                            </span>
+                          )}
+                          {t.cote && (
+                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded">
+                              COTE {t.cote}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          {t.category || 'General'} • Sample: {t.sampleType || 'Venous Blood'} • Price: {(t.price || 4500).toLocaleString()} FCFA
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddTestToCurrentBooking(t)}
+                        className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isAlreadyInBooking ? 'Add Again' : 'Add Test'}</span>
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
