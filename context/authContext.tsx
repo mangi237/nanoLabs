@@ -4,7 +4,7 @@ import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
 import { ensureFirebaseAuth } from '../services/firebase';
 
-// Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
+// Web localStorage adapter providing standard AsyncStorage API
 const AsyncStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
@@ -54,52 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any>(null);
   const [lab, setLab] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Changed to false initially
 
-  useEffect(() => {
-    checkAuthStatus();
-    
-    // Auto logout on session timeout
-    const interval = setInterval(async () => {
-      const lastLogin = await AsyncStorage.getItem('lastLogin');
-      if (lastLogin) {
-        const elapsed = Date.now() - parseInt(lastLogin);
-        if (elapsed > SESSION_TIMEOUT) {
-          await clearSession();
-        }
-      }
-    }, 60000); // Check every minute
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      await ensureFirebaseAuth();
-      const storedUser = await AsyncStorage.getItem('user');
-      const storedLab = await AsyncStorage.getItem('lab');
-      const lastLogin = await AsyncStorage.getItem('lastLogin');
-      
-      // Check session timeout
-      if (lastLogin) {
-        const elapsed = Date.now() - parseInt(lastLogin);
-        if (elapsed > SESSION_TIMEOUT) {
-          await clearSession();
-          return;
-        }
-      }
-      
-      if (storedUser && storedLab) {
-        setUser(JSON.parse(storedUser));
-        setLab(JSON.parse(storedLab));
-        setIsAuthenticated(true);
-      }
-    } catch (error) {
-      console.error('Error checking auth:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // REMOVED auto-checkAuthStatus on mount - we want landing page to show first
+  // Users must explicitly click "Go to Portal" to login
 
   const login = async (accessCode: string, labId: string) => {
     try {
