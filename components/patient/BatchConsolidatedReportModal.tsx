@@ -25,6 +25,7 @@ interface BatchConsolidatedReportModalProps {
   labInfo?: any;
   patientInfo?: any;
   onShareToDoctor?: (booking: PatientBooking) => void;
+  
 }
 
 export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModalProps> = ({

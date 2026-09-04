@@ -580,23 +580,34 @@ export const SharedReportViewerScreen: React.FC<SharedReportViewerScreenProps> =
       {/* PDF Modal */}
       {showPdfModal && (
         <BatchConsolidatedReportModal
-          isOpen={showPdfModal}
-          onClose={() => setShowPdfModal(false)}
-          booking={{
-            id: reportData?.bookingCode || 'b-1',
-            bookingCode: reportData?.bookingCode,
-            patientName: reportData?.patientName,
-            patientPid: reportData?.patientId,
-            doctorName: reportData?.doctorName,
-            labName: reportData?.labName,
-            createdAt: new Date().toISOString(),
-            tests: reportData?.tests || []
-          }}
-          labInfo={{
-            name: reportData?.labName || 'nanoLabs Central Diagnostic Center',
-            licenseNumber: 'NANOLABS/LAB/2026/0491'
-          }}
-        />
+  isOpen={showPdfModal}
+  onClose={() => setShowPdfModal(false)}
+  booking={{
+    id: reportData?.bookingCode || 'b-1',
+    bookingCode: reportData?.bookingCode,
+    patientName: reportData?.patientName,
+    patientPid: reportData?.patientId,
+    doctorName: reportData?.doctorName,
+    labName: reportData?.labName,
+    createdAt: new Date().toISOString(),
+    tests: reportData?.tests || [],
+    labId: reportData?.labId || '',
+    patientId: reportData?.patientId || '',
+    invoiceNumber: reportData?.invoiceNumber || 'N/A',
+    totalAmount: reportData?.totalAmount || 0,
+    // 👇 Fixed: Added the last 4 missing fields
+    paymentStatus: reportData?.paymentStatus || 'PAID',
+    collectedSamples: reportData?.collectedSamples || [],
+    overallStatus: reportData?.overallStatus || 'COMPLETED',
+    updatedAt: reportData?.updatedAt || new Date().toISOString(),
+  }}
+  labInfo={{
+    name: reportData?.labName || 'nanoLabs Central Diagnostic Center',
+    licenseNumber: 'NANOLABS/LAB/2026/0491'
+  }}
+/>
+
+    
       )}
     </div>
   );
