@@ -586,19 +586,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const firstCompleted = booking.tests?.find(t => t.status === 'Completed') || booking.tests?.[0] || {
-                                testName: `Batch ${booking.bookingCode} Laboratory Diagnostic Panel`,
-                                id: booking.id
-                              };
-                              setEnvelopeModalTest({
-                                ...firstCompleted,
-                                patientName: booking.patientName,
-                                patientPid: booking.patientPid,
-                                doctorName: booking.doctorName,
-                                bookingCode: booking.bookingCode,
-                                sections: (firstCompleted as any).sections,
-                                subParameters: (firstCompleted as any).subParameters
-                              });
+                              setEnvelopeModalTest(booking);
                             }}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer"
                             title="Experience the tactile physical envelope unsealing for your results"
@@ -1101,7 +1089,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       <SealedEnvelopeResultModal
         isOpen={Boolean(envelopeModalTest)}
         onClose={() => setEnvelopeModalTest(null)}
+        booking={envelopeModalTest}
         test={envelopeModalTest}
+        tests={envelopeModalTest?.tests}
         labName={lab?.name || 'nanoLabs Diagnostic Facility'}
         doctorName={envelopeModalTest?.doctorName || 'Dr. Attending Physician / Clinician'}
         patientName={envelopeModalTest?.patientName || patientFullName}
