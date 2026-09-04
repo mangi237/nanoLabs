@@ -2,7 +2,7 @@
 /**
  * Immutable Compliance Audit Ledger Service
  * Fulfills Transparency, Traceability, and Non-repudiation mandates
- * (Law No. 2024/017 & Law No. 2010/012, MINSANTE BAMNHI Universal Registry)
+ * (Law No. 2024/017 & Law No. 2010/012, nanoLabs Universal Compliance Registry)
  */
 import { db, collection, addDoc, getDocs, query, where, orderBy, limit } from './firebase';
 
