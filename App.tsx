@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/authContext';
 import { ThemeProvider } from './context/themeContext';
 import { LanguageProvider } from './context/languageContext';
@@ -70,6 +70,14 @@ const MainAppContent: React.FC = () => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [selectedTest, setSelectedTest] = useState<any>(null);
   const [registeredPatient, setRegisteredPatient] = useState<any>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Force landing page on initial load
+  useEffect(() => {
+    // Always start on landing page regardless of auth state
+    setScreen('landing');
+    setIsInitialLoad(false);
+  }, []);
 
   // Handle navigation from landing page to portal/login
   const handleGoToPortal = () => {
@@ -149,6 +157,12 @@ const MainAppContent: React.FC = () => {
   };
 
   const renderScreen = () => {
+    // CRITICAL: If screen is 'landing', ALWAYS show the landing page
+    // regardless of user auth state
+    if (screen === 'landing') {
+      return <LandingPage onGoToPortal={handleGoToPortal} />;
+    }
+
     // If user is authenticated and must change password
     if (user && user.mustChangePassword) {
       return (
@@ -161,7 +175,7 @@ const MainAppContent: React.FC = () => {
       );
     }
 
-    // If user is logged in, show the appropriate dashboard (regardless of screen)
+    // If user is logged in, show the appropriate dashboard
     if (user) {
       // Check user role and show appropriate dashboard
       if (user.role === 'admin' || user.role === 'super_admin') {
@@ -220,70 +234,65 @@ const MainAppContent: React.FC = () => {
       }
     }
 
-    // If no user is logged in, show the landing page or auth screens
-    // ALWAYS show landing page first unless user explicitly navigates away
-    if (screen === 'landing') {
-      return <LandingPage onGoToPortal={handleGoToPortal} />;
-    }
+    // If no user is logged in, show auth screens based on screen state
+    switch (screen) {
+      case 'login':
+        return (
+          <LoginScreen
+            onLoginSuccess={handleLoginSuccess}
+            onNavigateRegister={() => setScreen('register')}
+            onNavigateSelectLab={() => setScreen('select-lab')}
+          />
+        );
 
-    // Show login for all other cases without user
-    if (screen === 'login') {
-      return (
-        <LoginScreen
-          onLoginSuccess={handleLoginSuccess}
-          onNavigateRegister={() => setScreen('register')}
-          onNavigateSelectLab={() => setScreen('select-lab')}
-        />
-      );
-    }
+      case 'register':
+        return (
+          <RegisterScreen
+            onBackToLogin={() => setScreen('login')}
+            onRegisterSuccess={(patientData) => {
+              setRegisteredPatient(patientData);
+              setScreen('registration-complete');
+            }}
+          />
+        );
 
-    if (screen === 'register') {
-      return (
-        <RegisterScreen
-          onBackToLogin={() => setScreen('login')}
-          onRegisterSuccess={(patientData) => {
-            setRegisteredPatient(patientData);
-            setScreen('registration-complete');
-          }}
-        />
-      );
-    }
+      case 'registration-complete':
+        return (
+          <RegistrationCompleteScreen
+            patientData={registeredPatient}
+            onGoToLogin={() => setScreen('login')}
+            onGoToDashboard={() => {
+              if (registeredPatient) {
+                setUser({
+                  id: registeredPatient.id || registeredPatient.patientId,
+                  patientId: registeredPatient.patientId,
+                  name: registeredPatient.name,
+                  accessCode: registeredPatient.accessCode,
+                  labId: registeredPatient.labId,
+                  labName: registeredPatient.labName,
+                  role: 'patient',
+                  roles: ['patient']
+                });
+                setScreen('patient-dashboard');
+              }
+            }}
+          />
+        );
 
-    if (screen === 'registration-complete') {
-      return (
-        <RegistrationCompleteScreen
-          patientData={registeredPatient}
-          onGoToLogin={() => setScreen('login')}
-          onGoToDashboard={() => {
-            if (registeredPatient) {
-              setUser({
-                id: registeredPatient.id || registeredPatient.patientId,
-                patientId: registeredPatient.patientId,
-                name: registeredPatient.name,
-                accessCode: registeredPatient.accessCode,
-                labId: registeredPatient.labId,
-                labName: registeredPatient.labName,
-                role: 'patient',
-                roles: ['patient']
-              });
-              setScreen('patient-dashboard');
-            }
-          }}
-        />
-      );
-    }
+      case 'select-lab':
+        return (
+          <LabSelectionScreen
+            onBack={() => setScreen('login')}
+            onSelectLab={() => setScreen('login')}
+          />
+        );
 
-    if (screen === 'select-lab') {
-      return (
-        <LabSelectionScreen
-          onBack={() => setScreen('login')}
-          onSelectLab={() => setScreen('login')}
-        />
-      );
+      // If user somehow gets here without being logged in and screen isn't set,
+      // go back to landing page
+      default:
+        setScreen('landing');
+        return <LandingPage onGoToPortal={handleGoToPortal} />;
     }
-
-    // Fallback - if somehow we get here without user, show landing page
-    return <LandingPage onGoToPortal={handleGoToPortal} />;
   };
 
   return (
