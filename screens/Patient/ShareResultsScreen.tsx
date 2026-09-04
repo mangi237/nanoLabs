@@ -1315,7 +1315,7 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
                       Yebo KYC Medical Identity Verification
                     </span>
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                      MINSANTE
+                      nanoLabs Certified
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed">
