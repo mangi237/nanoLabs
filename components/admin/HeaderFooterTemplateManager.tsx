@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, 
   Building2, 
@@ -17,14 +17,25 @@ import {
   MapPin, 
   Phone, 
   Mail, 
-  Globe 
+  Globe,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Maximize2
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 
 export interface HeaderFooterTemplateConfig {
   id: string;
   name: string;
-  templateType: 'template1' | 'template2';
+  templateType: 'template1' | 'template2' | 'custom1' | 'custom2';
+  isCustomUpload?: boolean;
+  headerImageUrl?: string;
+  footerImageUrl?: string;
+  headerImageHeight?: number;
+  footerImageHeight?: number;
+  useHeaderImageOnly?: boolean;
+  useFooterImageOnly?: boolean;
   labName: string;
   subTitle: string;
   directorName: string;
@@ -53,6 +64,7 @@ export const DEFAULT_HEADER_FOOTER_TEMPLATES: HeaderFooterTemplateConfig[] = [
     id: 'tpl-modern-accredited',
     name: 'Template 1: Modern Accredited Letterhead (High Precision)',
     templateType: 'template1',
+    isCustomUpload: false,
     labName: 'nanoLabs Clinical Diagnostics Center',
     subTitle: 'Accredited Medical Biology & Clinical Laboratory Services',
     directorName: 'Prof. Dr. Roland Enow',
@@ -78,6 +90,7 @@ export const DEFAULT_HEADER_FOOTER_TEMPLATES: HeaderFooterTemplateConfig[] = [
     id: 'tpl-cameroon-biodiagnostics',
     name: 'Template 2: Cameroon Biodiagnostics Multi-Specialty Letterhead',
     templateType: 'template2',
+    isCustomUpload: false,
     labName: 'LABORATOIRE BIODIAGNOSTICS',
     subTitle: 'ANALYSES DE BIOLOGIE MEDICALE',
     directorName: 'Dr TANKOUA Jean Alain',
@@ -98,6 +111,66 @@ export const DEFAULT_HEADER_FOOTER_TEMPLATES: HeaderFooterTemplateConfig[] = [
     showWatermark: true,
     watermarkText: 'BIODIAGNOSTICS',
     footerNotes: 'Validé par Biologiste-Clinicien agréé. Arrêté N° 032/A/MSP/SG/DMH/SDHFS/SL/1991.'
+  },
+  {
+    id: 'tpl-custom-1',
+    name: 'Custom Template 1: Uploaded Custom Header & Footer',
+    templateType: 'custom1',
+    isCustomUpload: true,
+    useHeaderImageOnly: true,
+    useFooterImageOnly: true,
+    headerImageHeight: 110,
+    footerImageHeight: 60,
+    labName: 'Center of Excellence Diagnostic Laboratory',
+    subTitle: 'OFFICIAL MEDICAL ANALYSIS AND RESEARCH',
+    directorName: 'Dr. Sarah Ndongo',
+    directorDiplomas: 'Specialist in Medical Biology & Immunology',
+    directorSpecialties: 'Clinical Hematology, Biochemistry & Molecular Testing',
+    arreteNumber: 'Arrêté N° 102/MINSANTE/2022',
+    agrementNumber: 'Agrément N° 044/CAB/MINSANTE',
+    taxNumber: 'M078900012345B',
+    rcNumber: 'RC/YDE/2022/B/312',
+    address: 'Avenue Kennedy, Bastos Center',
+    bpCity: 'B.P. 880 Yaoundé - Cameroun',
+    phone: '+237 222 23 45 67',
+    emergencyPhone: '+237 677 88 99 00',
+    email: 'contact@excellence-lab.cm',
+    website: 'www.excellence-lab.cm',
+    accentColor: '#059669',
+    biologistSignatureTitle: 'LE BIOLOGISTE RESPONSABLE',
+    showWatermark: true,
+    watermarkText: 'VERIFIED LABORATORY REPORT',
+    footerNotes: 'Document certifié conforme aux normes médicales nationales.'
+  },
+  {
+    id: 'tpl-custom-2',
+    name: 'Custom Template 2: Institutional / Polyclinic Letterhead',
+    templateType: 'custom2',
+    isCustomUpload: true,
+    useHeaderImageOnly: true,
+    useFooterImageOnly: true,
+    headerImageHeight: 110,
+    footerImageHeight: 60,
+    labName: 'POLYCLINIQUE INTERNATIONALE LAB',
+    subTitle: 'SERVICE DE BIOLOGIE MEDICALE & ANALYSES SPECIALISEES',
+    directorName: 'Dr. Mbarga Emmanuel',
+    directorDiplomas: 'Ancien Interne des Hôpitaux, Spécialiste en Biologie Clinique',
+    directorSpecialties: 'Biochimie, Immuno-Hématologie et Virologie',
+    arreteNumber: 'Arrêté N° 078/A/MSP/2018',
+    agrementNumber: 'Agrément N° 012/MSP',
+    taxNumber: 'M048200003921K',
+    rcNumber: 'RC/DLA/2018/A/104',
+    address: 'Rue de Narvick, Bonapriso',
+    bpCity: 'B.P. 401 Douala - Cameroun',
+    phone: '+237 233 43 90 00',
+    emergencyPhone: '+237 690 11 22 33',
+    email: 'lab@polyclinique-internationale.cm',
+    website: 'www.polyclinique-internationale.cm',
+    accentColor: '#7C3AED',
+    biologistSignatureTitle: 'CHEF DE SERVICE DU LABORATOIRE',
+    showWatermark: true,
+    watermarkText: 'ORIGINAL CERTIFIED',
+    footerNotes: 'Résultats validés électroniquement. Arrêté N° 078/A/MSP/2018.'
   }
 ];
 
@@ -107,13 +180,25 @@ export const HeaderFooterTemplateManager: React.FC = () => {
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(() => {
     try {
       const saved = localStorage.getItem('nanoLabs_header_footer_templates');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+          // If saved list only has 2 templates, merge with custom templates
+          if (parsed.length === 2) {
+            return [...parsed, DEFAULT_HEADER_FOOTER_TEMPLATES[2], DEFAULT_HEADER_FOOTER_TEMPLATES[3]];
+          }
+          return parsed;
+        }
+      }
     } catch {}
     return DEFAULT_HEADER_FOOTER_TEMPLATES;
   });
 
   const [activePreviewType, setActivePreviewType] = useState<'receipt' | 'report'>('receipt');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const headerFileInputRef = useRef<HTMLInputElement>(null);
+  const footerFileInputRef = useRef<HTMLInputElement>(null);
 
   const currentTemplate = templates[selectedTemplateIndex] || templates[0];
 
@@ -128,6 +213,28 @@ export const HeaderFooterTemplateManager: React.FC = () => {
     });
   };
 
+  const handleHeaderImageUpload = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      handleFieldChange('headerImageUrl', result);
+      handleFieldChange('useHeaderImageOnly', true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFooterImageUpload = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      handleFieldChange('footerImageUrl', result);
+      handleFieldChange('useFooterImageOnly', true);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = () => {
     try {
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(templates));
@@ -140,7 +247,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
   };
 
   const handleResetToDefault = () => {
-    if (window.confirm('Reset this template to official Cameroon laboratory default values?')) {
+    if (window.confirm('Reset this template to official laboratory default values?')) {
       setTemplates(prev => {
         const updated = [...prev];
         updated[selectedTemplateIndex] = { ...DEFAULT_HEADER_FOOTER_TEMPLATES[selectedTemplateIndex] };
@@ -160,10 +267,10 @@ export const HeaderFooterTemplateManager: React.FC = () => {
             </span>
             <div>
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                Dual Header & Footer Letterhead Templates
+                Header & Footer Template & Custom Upload Manager
               </h2>
               <p className="text-xs text-slate-500">
-                Configure both official accredited header/footer styles used across printed diagnostic reports, booklets, and billing receipts.
+                Choose accredited built-in layouts OR upload your lab's own custom header/footer images for printed reports, booklets, and billing receipts.
               </p>
             </div>
           </div>
@@ -184,7 +291,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
             className="px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            <span>Save & Apply Active Templates</span>
+            <span>Save & Apply Active Template</span>
           </button>
         </div>
       </div>
@@ -196,38 +303,44 @@ export const HeaderFooterTemplateManager: React.FC = () => {
         </div>
       )}
 
-      {/* Template Selection Tabs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Template Selection Tabs (4 Options) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {templates.map((tpl, idx) => {
           const isSelected = selectedTemplateIndex === idx;
+          const isCustom = idx >= 2 || tpl.isCustomUpload;
           return (
             <div
               key={tpl.id}
               onClick={() => setSelectedTemplateIndex(idx)}
-              className={`p-5 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
+              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
                 isSelected 
-                  ? 'border-teal-500 bg-teal-50/30 shadow-md ring-2 ring-teal-500/20' 
+                  ? 'border-teal-500 bg-teal-50/40 shadow-md ring-2 ring-teal-500/20' 
                   : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-1">
                   <div className="flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${isSelected ? 'bg-teal-600 ring-2 ring-teal-300' : 'bg-slate-300'}`} />
-                    <h3 className="font-extrabold text-sm text-slate-900">{tpl.name}</h3>
+                    <span className={`w-3 h-3 rounded-full shrink-0 ${isSelected ? 'bg-teal-600 ring-2 ring-teal-300' : 'bg-slate-300'}`} />
+                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                      isCustom ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'
+                    }`}>
+                      {isCustom ? 'Custom Upload' : 'Standard Accredited'}
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-600 line-clamp-1">{tpl.directorDiplomas}</p>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-600 text-white uppercase">
+                      Editing
+                    </span>
+                  )}
                 </div>
-                {isSelected && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-600 text-white uppercase tracking-wider">
-                    Editing
-                  </span>
-                )}
+                <h3 className="font-extrabold text-xs text-slate-900 line-clamp-1">{tpl.name}</h3>
+                <p className="text-[11px] text-slate-500 line-clamp-1">{tpl.labName}</p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>{tpl.arreteNumber}</span>
-                <span className="font-bold text-slate-700">{tpl.phone}</span>
+              <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span>{isCustom ? (tpl.headerImageUrl ? 'Header: Uploaded' : 'No image yet') : tpl.arreteNumber.split('/')[0]}</span>
+                <span className="font-bold text-slate-700">{tpl.phone.split('/')[0]}</span>
               </div>
             </div>
           );
@@ -237,23 +350,156 @@ export const HeaderFooterTemplateManager: React.FC = () => {
       {/* Main Grid: Left Editor Controls & Right Live Document Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left Column: Form Editor (5 Cols) */}
+        {/* Left Column: Form & Upload Controls (6 Cols) */}
         <div className="lg:col-span-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-teal-600" />
-              Configure Letterhead Fields: {currentTemplate.name.split(':')[0]}
-            </h3>
-            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-              {currentTemplate.templateType === 'template2' ? 'Cameroon Biodiagnostics Layout' : 'Modern Accredited Layout'}
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-teal-600" />
+                Configure: {currentTemplate.name}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {currentTemplate.isCustomUpload ? 'Upload your facility header & footer images or customize standard metadata' : 'Pre-configured accredited laboratory letterhead'}
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shrink-0">
+              {currentTemplate.templateType}
             </span>
           </div>
 
-          <div className="space-y-4 max-h-[68vh] overflow-y-auto pr-1">
+          <div className="space-y-5 max-h-[68vh] overflow-y-auto pr-1">
+            
+            {/* Custom Header & Footer Image Upload Section */}
+            <div className="p-4 bg-teal-50/50 rounded-2xl border border-teal-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                  <Upload className="w-4 h-4 text-teal-700" />
+                  Custom Header & Footer Image Uploads
+                </h4>
+                <span className="text-[10px] text-teal-700 font-semibold">PNG, JPG, WebP supported</span>
+              </div>
+
+              {/* Header Image Box */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                  <span>1. Official Header Image (Letterhead Top Banner)</span>
+                  {currentTemplate.headerImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange('headerImageUrl', '')}
+                      className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {currentTemplate.headerImageUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-white p-2 shadow-inner">
+                      <img 
+                        src={currentTemplate.headerImageUrl} 
+                        alt="Header Banner" 
+                        className="w-full object-contain max-h-28 rounded-lg"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <label className="text-slate-600 font-medium">Header Height: {currentTemplate.headerImageHeight || 110}px</label>
+                      <input 
+                        type="range" 
+                        min="50" 
+                        max="200" 
+                        value={currentTemplate.headerImageHeight || 110}
+                        onChange={(e) => handleFieldChange('headerImageHeight', parseInt(e.target.value))}
+                        className="flex-1 accent-teal-600"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => headerFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-teal-300 hover:border-teal-500 rounded-xl p-4 text-center cursor-pointer bg-white transition-colors space-y-1"
+                  >
+                    <ImageIcon className="w-6 h-6 text-teal-600 mx-auto" />
+                    <p className="text-xs font-bold text-slate-800">Click to upload Custom Header Letterhead</p>
+                    <p className="text-[10px] text-slate-500">Recommended size: 1200 x 200px (Transparent PNG or High-Res JPG)</p>
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  ref={headerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleHeaderImageUpload(e.target.files[0]);
+                  }}
+                />
+              </div>
+
+              {/* Footer Image Box */}
+              <div className="space-y-2 pt-2 border-t border-teal-200/60">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                  <span>2. Official Footer Image / Seal Banner</span>
+                  {currentTemplate.footerImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange('footerImageUrl', '')}
+                      className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {currentTemplate.footerImageUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-white p-2 shadow-inner">
+                      <img 
+                        src={currentTemplate.footerImageUrl} 
+                        alt="Footer Banner" 
+                        className="w-full object-contain max-h-20 rounded-lg"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <label className="text-slate-600 font-medium">Footer Height: {currentTemplate.footerImageHeight || 60}px</label>
+                      <input 
+                        type="range" 
+                        min="30" 
+                        max="120" 
+                        value={currentTemplate.footerImageHeight || 60}
+                        onChange={(e) => handleFieldChange('footerImageHeight', parseInt(e.target.value))}
+                        className="flex-1 accent-teal-600"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => footerFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-teal-300 hover:border-teal-500 rounded-xl p-3 text-center cursor-pointer bg-white transition-colors space-y-1"
+                  >
+                    <ImageIcon className="w-5 h-5 text-teal-600 mx-auto" />
+                    <p className="text-xs font-bold text-slate-800">Click to upload Custom Footer / Accreditation Stamp</p>
+                    <p className="text-[10px] text-slate-500">Recommended size: 1200 x 100px</p>
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  ref={footerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleFooterImageUpload(e.target.files[0]);
+                  }}
+                />
+              </div>
+            </div>
+
             {/* Primary Names */}
             <div className="space-y-3">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                1. Main Facility & Title Header
+                Facility & Header Text Details
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
@@ -285,7 +531,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
             {/* Medical Director & Qualifications */}
             <div className="space-y-3 pt-2 border-t border-slate-100">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                2. Director & Medical Credentials
+                Director & Medical Credentials
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -341,7 +587,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
             {/* Legal Accreditations & Tax ID */}
             <div className="space-y-3 pt-2 border-t border-slate-100">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                3. Legal Accreditations & Ministry Approvals
+                Legal Accreditations & Ministry Approvals
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -397,7 +643,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
             {/* Address & Emergency Contacts */}
             <div className="space-y-3 pt-2 border-t border-slate-100">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                4. Location & Contact Numbers
+                Location & Contact Numbers
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
@@ -461,6 +707,22 @@ export const HeaderFooterTemplateManager: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Footer Accreditation Note */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Footer Legal Note
+              </h4>
+              <div>
+                <textarea
+                  rows={2}
+                  value={currentTemplate.footerNotes}
+                  onChange={e => handleFieldChange('footerNotes', e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                />
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -503,39 +765,50 @@ export const HeaderFooterTemplateManager: React.FC = () => {
           {/* Paper Mockup Container */}
           <div className="bg-white rounded-2xl border border-slate-300 shadow-xl p-5 sm:p-6 text-slate-900 overflow-hidden font-sans text-xs">
             
-            {/* 1. LETTERHEAD HEADER ACCORDING TO CURRENT TEMPLATE */}
-            <div className="border-b-2 border-slate-800 pb-3 text-center space-y-1">
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-teal-800 text-white flex items-center justify-center font-black text-sm shrink-0">
-                  <Building2 className="w-6 h-6 text-white" />
+            {/* 1. LETTERHEAD HEADER (Custom Upload Image OR Standard Layout) */}
+            {currentTemplate.headerImageUrl ? (
+              <div className="border-b-2 border-slate-800 pb-2 mb-3">
+                <img 
+                  src={currentTemplate.headerImageUrl} 
+                  alt={currentTemplate.labName} 
+                  style={{ maxHeight: `${currentTemplate.headerImageHeight || 110}px` }}
+                  className="w-full object-contain mx-auto"
+                />
+              </div>
+            ) : (
+              <div className="border-b-2 border-slate-800 pb-3 text-center space-y-1">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-10 h-10 rounded-lg bg-teal-800 text-white flex items-center justify-center font-black text-sm shrink-0">
+                    <Building2 className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-base sm:text-lg font-black uppercase text-slate-950 tracking-tight">
+                      {currentTemplate.labName}
+                    </h1>
+                    <h2 className="text-[11px] font-extrabold text-teal-900 uppercase tracking-wide">
+                      {currentTemplate.subTitle}
+                    </h2>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-base sm:text-lg font-black uppercase text-slate-950 tracking-tight">
-                    {currentTemplate.labName}
-                  </h1>
-                  <h2 className="text-[11px] font-extrabold text-teal-900 uppercase tracking-wide">
-                    {currentTemplate.subTitle}
-                  </h2>
+
+                <div className="text-[10px] text-slate-800 font-bold pt-1">
+                  {currentTemplate.directorName}
+                </div>
+                <div className="text-[9px] text-slate-600 font-medium leading-tight max-w-xl mx-auto">
+                  {currentTemplate.directorDiplomas}
+                </div>
+                <div className="text-[9px] text-slate-600 italic leading-tight max-w-xl mx-auto">
+                  {currentTemplate.directorSpecialties}
+                </div>
+
+                <div className="text-[8.5px] text-slate-500 font-mono pt-0.5">
+                  {currentTemplate.arreteNumber} • {currentTemplate.agrementNumber} • {currentTemplate.taxNumber}
+                </div>
+                <div className="text-[8.5px] text-slate-600 font-semibold">
+                  {currentTemplate.address} {currentTemplate.bpCity} • Tél: {currentTemplate.phone} • Urgences: {currentTemplate.emergencyPhone}
                 </div>
               </div>
-
-              <div className="text-[10px] text-slate-800 font-bold pt-1">
-                {currentTemplate.directorName}
-              </div>
-              <div className="text-[9px] text-slate-600 font-medium leading-tight max-w-xl mx-auto">
-                {currentTemplate.directorDiplomas}
-              </div>
-              <div className="text-[9px] text-slate-600 italic leading-tight max-w-xl mx-auto">
-                {currentTemplate.directorSpecialties}
-              </div>
-
-              <div className="text-[8.5px] text-slate-500 font-mono pt-0.5">
-                {currentTemplate.arreteNumber} • {currentTemplate.agrementNumber} • {currentTemplate.taxNumber}
-              </div>
-              <div className="text-[8.5px] text-slate-600 font-semibold">
-                {currentTemplate.address} {currentTemplate.bpCity} • Tél: {currentTemplate.phone} • Urgences: {currentTemplate.emergencyPhone}
-              </div>
-            </div>
+            )}
 
             {/* PREVIEW CONTENT FOR RECEIPT */}
             {activePreviewType === 'receipt' && (
@@ -714,10 +987,21 @@ export const HeaderFooterTemplateManager: React.FC = () => {
               </div>
             )}
 
-            {/* Accreditation Bottom Tag */}
-            <div className="mt-4 pt-2 border-t border-slate-200 text-center text-[8.5px] text-slate-500">
-              {currentTemplate.footerNotes}
-            </div>
+            {/* Custom Upload Footer Image OR Standard Bottom Tag */}
+            {currentTemplate.footerImageUrl ? (
+              <div className="mt-4 pt-2 border-t border-slate-200">
+                <img 
+                  src={currentTemplate.footerImageUrl} 
+                  alt="Footer Stamp" 
+                  style={{ maxHeight: `${currentTemplate.footerImageHeight || 60}px` }}
+                  className="w-full object-contain mx-auto"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 pt-2 border-t border-slate-200 text-center text-[8.5px] text-slate-500">
+                {currentTemplate.footerNotes}
+              </div>
+            )}
 
           </div>
         </div>
