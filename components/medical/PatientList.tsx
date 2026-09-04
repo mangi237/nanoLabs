@@ -74,22 +74,6 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
     return (p.insuranceProvider || '').toLowerCase() === selectedInsuranceFilter.toLowerCase();
   });
 
-  // Calculate financial statistics across filtered patients
-  const totalGrossCharges = filteredPatients.reduce((sum, p) => {
-    return sum + (p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0);
-  }, 0);
-
-  const totalInsuranceShare = filteredPatients.reduce((sum, p) => {
-    if (p.hasInsurance) {
-      const gross = p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0;
-      const rate = p.insuranceCoverageRate !== undefined ? p.insuranceCoverageRate : 0.8;
-      return sum + (p.insuranceCoveredAmount || Math.round(gross * rate));
-    }
-    return sum;
-  }, 0);
-
-  const totalTicketModerateur = totalGrossCharges - totalInsuranceShare;
-
   // Calculate total price paid by a patient across validated tests
   const calculateTotalPaid = (patient: any) => {
     if (patient.totalPaid !== undefined) {
@@ -106,6 +90,22 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
     }
     return 0;
   };
+
+  // Calculate financial statistics across filtered patients
+  const totalGrossCharges = filteredPatients.reduce((sum, p) => {
+    return sum + (p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0);
+  }, 0);
+
+  const totalInsuranceShare = filteredPatients.reduce((sum, p) => {
+    if (p.hasInsurance) {
+      const gross = p.totalCharges || p.totalPrice || p.totalAmount || calculateTotalPaid(p) || 0;
+      const rate = p.insuranceCoverageRate !== undefined ? p.insuranceCoverageRate : 0.8;
+      return sum + (p.insuranceCoveredAmount || Math.round(gross * rate));
+    }
+    return sum;
+  }, 0);
+
+  const totalTicketModerateur = totalGrossCharges - totalInsuranceShare;
 
   const handleRowClick = (patient: any) => {
     if (isAdmin) {
