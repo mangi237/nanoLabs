@@ -2,9 +2,12 @@ export interface TestSubParameter {
   id: string;
   name: string;
   unit: string;
+  sectionHeader?: string; // e.g. "Haematology" or "Biochimie Clinique"
+  subHeader?: string; // e.g. "Differential Count (DC)" or "Cholesterol Fractions"
   refRangeMale: string;
   refRangeFemale: string;
   refRangeChild: string;
+  refRangeWords?: string; // e.g. "Adults: 13.0-17.0", "Cord < 2.0"
   maleMin?: number;
   maleMax?: number;
   femaleMin?: number;
@@ -12,6 +15,18 @@ export interface TestSubParameter {
   childMin?: number;
   childMax?: number;
   defaultValue?: string;
+  value?: string;
+  resultInWords?: string;
+  patientValue?: string;
+  isAbnormal?: boolean;
+  printOnReport?: boolean;
+  parameterType?: 'numeric' | 'text' | 'formula' | 'heading' | 'select';
+  formulaIdentifier?: string; // e.g. "PCV", "RBC", "HB", "MCV", "MCH"
+  computationFormula?: string; // e.g. "PCV * 10 / RBC", "HB * 10 / RBC", "ALB / GLOB"
+  options?: string[];
+  method?: string; // e.g. "Automated Impedance", "Spectrophotometry", "Hexokinase"
+  notes?: string;
+  comments?: string;
 }
 
 export interface MasterTestItem {
@@ -24,6 +39,7 @@ export interface MasterTestItem {
   refRangeMale: string;
   refRangeFemale: string;
   refRangeChild: string;
+  refRangeWords?: string;
   maleMin?: number;
   maleMax?: number;
   femaleMin?: number;
@@ -37,8 +53,12 @@ export interface MasterTestItem {
   }>;
   conditions?: string; // Patient preparation & reasons for withdrawal / test rules
   basePrice: number; // Price in XAF / FCFA
+  cote?: string; // e.g. "B40", "KB15", "P30"
+  samplingActCode?: string; // e.g. "PSE#", "PK#", "PU#"
+  samplingFee?: number; // e.g. 1800
   turnaroundTime: string;
   description: string;
+  method?: string;
   tubeColor?: string;
   requiredReagents?: any[];
   subParameters?: TestSubParameter[];
