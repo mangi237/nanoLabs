@@ -110,7 +110,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Insurance details
   const [insuranceProvider, setInsuranceProvider] = useState('');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
-  const [coPayPercent, setCoPayPercent] = useState<number>(20);
+  const [coPayPercent, setCoPayPercent] = useState<number>(20); // default 20% patient co-pay
 
   // Security Access Code verification for Cashiers
   const [cashierAccessCode, setCashierAccessCode] = useState('');
@@ -122,14 +122,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = limsService.subscribeToBookings(
-      targetLabId, 
-      (updatedBookings) => {
-        setBookings(updatedBookings);
-        setLoading(false);
-      },
-      undefined
-    );
+    const unsubscribe = limsService.subscribeToBookings(targetLabId, (updatedBookings) => {
+      setBookings(updatedBookings);
+      setLoading(false);
+    });
 
     return () => {
       unsubscribe();
@@ -183,7 +179,15 @@ export const CashierView: React.FC<CashierViewProps> = ({
       if (!insurancePolicyNumber && (selectedBooking as any).insurancePolicyNumber) {
         setInsurancePolicyNumber((selectedBooking as any).insurancePolicyNumber);
       }
+      const patientCoverage = (selectedBooking as any).insuranceCoveragePercent;
+      const patientCoPay = (selectedBooking as any).coPayPercent;
+      if (patientCoPay !== undefined) {
+        setCoPayPercent(Number(patientCoPay));
+      } else if (patientCoverage !== undefined) {
+        setCoPayPercent(100 - Number(patientCoverage));
+      }
 
+      // Check if patient is a registered staff member and auto-select
       if (staffList.length > 0) {
         const matchedStaff = staffList.find(s => 
           (s.name && selectedBooking.patientName && s.name.trim().toLowerCase() === selectedBooking.patientName.trim().toLowerCase()) ||
@@ -199,28 +203,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   }, [selectedBooking, staffList]);
 
-  // FIXED: Get validated tests only
-  const getValidatedTests = (booking: PatientBooking) => {
-    return (booking.tests || []).filter(t => t.receptionistValidated === true);
-  };
-
-  const getValidatedTotal = (booking: PatientBooking) => {
-    return getValidatedTests(booking).reduce((sum, t) => sum + (t.price || 0), 0);
-  };
-
-  const getValidatedCount = (booking: PatientBooking) => {
-    return getValidatedTests(booking).length;
-  };
-
-  // FIXED: Calculate settlement - ONLY for validated tests
+  // Calculate dynamic settlement total based on pricing adjustments
   const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
     const targetBookings = group && group.length > 0 ? group : booking ? [booking] : [];
-    
-    let baseTotal = 0;
-    targetBookings.forEach(b => {
-      const validatedTests = getValidatedTests(b);
-      baseTotal += validatedTests.reduce((sum, t) => sum + (t.price || 0), 0);
-    });
+    const baseTotal = targetBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
     let discountAmount = 0;
 
@@ -245,7 +231,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       } else if (codeUpper.includes('10') || codeUpper === 'PROMO10') {
         discountAmount = Math.round(baseTotal * 0.1);
       } else {
-        discountAmount = baseTotal;
+        discountAmount = baseTotal; // Default full gift coupon
       }
     } else if (discountType === 'percent') {
       discountAmount = Math.round((baseTotal * (discountValue || 0)) / 100);
@@ -262,7 +248,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       } else if (clean.includes('10')) {
         discountAmount = Math.round(baseTotal * 0.1);
       } else {
-        discountAmount = Math.round((baseTotal * 15) / 100);
+        discountAmount = Math.round((baseTotal * 15) / 100); // 15% coupon discount
       }
     }
 
@@ -315,10 +301,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // FIXED: Only process validated tests
   const handleCollectPayment = async () => {
     if (!selectedBooking && (!selectedGroupBookings || selectedGroupBookings.length === 0)) return;
 
+    // Security access code validation
     setAccessCodeError('');
     const enteredCode = cashierAccessCode.trim();
     if (!enteredCode) {
@@ -343,7 +329,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       return;
     }
 
-    // Validations for each payment method
+    // MoMo Validation: Ensure phone number and sender name exist
     if (paymentMethod === 'mobile_money') {
       if (!momoSenderPhone.trim()) {
         setAccessCodeError('Please enter the Sender Mobile Money phone number used for the transaction.');
@@ -355,6 +341,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
+    // Bank Transfer Validation
     if (paymentMethod === 'bank_transfer') {
       if (!bankAccountName.trim()) {
         setAccessCodeError('Please enter the Bank Account Holder / Sender name.');
@@ -366,6 +353,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
+    // Workers Benefit Validation
     if (paymentMethod === 'workers_benefit') {
       if (!workerStaffName.trim()) {
         setAccessCodeError('Please enter the Staff Member full name receiving the benefit.');
@@ -373,6 +361,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
+    // Gift Coupon Validation
     if (paymentMethod === 'gift_coupon') {
       if (!couponCode.trim()) {
         setAccessCodeError('Please enter or select a Gift Coupon code.');
@@ -418,9 +407,14 @@ export const CashierView: React.FC<CashierViewProps> = ({
       cashGiven: paymentMethod === 'cash' ? (parseFloat(cashGiven) || payableAmount) : undefined,
       cashChange: paymentMethod === 'cash' ? changeToReturn : undefined,
       actualPaidAmount: payableAmount,
+      insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
+      insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
+      insuranceCoveragePercent: paymentMethod === 'insurance' ? (100 - coPayPercent) : undefined,
+      coPayPercent: paymentMethod === 'insurance' ? coPayPercent : undefined,
       insuranceDetails: paymentMethod === 'insurance' ? {
         provider: insuranceProvider || (targetBookings[0] as any).insuranceProvider || 'HMO Insurance',
         policyNumber: insurancePolicyNumber || (targetBookings[0] as any).insurancePolicyNumber || 'N/A',
+        insuranceCoveragePercent: 100 - coPayPercent,
         coPayPercent,
         patientCoPayAmount: patientPortion,
         insuranceClaimAmount: insurancePortion
@@ -438,6 +432,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         });
       }
 
+      // INSTANT REACTIVE LOCAL STATE UPDATE
       const updatedFirstBooking: PatientBooking = {
         ...targetBookings[0],
         paymentStatus: 'paid' as const,
@@ -477,6 +472,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         return b;
       }));
 
+      // Remove paid ids from selection
       setSelectedInvoiceIds(prev => prev.filter(id => !targetIds.includes(id)));
 
       setShowReceipt(updatedFirstBooking);
@@ -493,6 +489,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       setCustomPriceInput('');
       setCashGiven('');
 
+      // Background re-sync
       fetchData();
     } catch (e) {
       console.error('Payment collection error:', e);
@@ -501,10 +498,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // ONLY show bookings that have validated tests
+  // ONLY show bookings that have been validated/checked-in by Receptionist
   const unpaidBookings = bookings.filter(b => 
     b.paymentStatus === 'unpaid' && 
-    getValidatedTests(b).length > 0
+    (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in')
   );
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
 
@@ -524,7 +521,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
     if (revenuePeriod === 'month') {
       return paidDate >= thirtyDaysAgo;
     }
-    return true;
+    return true; // 'all'
   });
 
   const periodRevenue = filteredPaidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
@@ -539,7 +536,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   );
 
   const patientGroups = React.useMemo(() => {
-    const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number; validatedCount: number } } = {};
+    const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number } } = {};
     
     filteredUnpaid.forEach(b => {
       const key = b.patientPid || b.patientId || b.patientName;
@@ -549,15 +546,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
           patientName: b.patientName,
           patientPid: b.patientPid || b.patientId || 'N/A',
           bookings: [],
-          totalAmount: 0,
-          validatedCount: 0
+          totalAmount: 0
         };
       }
-      const validatedTotal = getValidatedTotal(b);
-      const validatedCount = getValidatedCount(b);
       groups[key].bookings.push(b);
-      groups[key].totalAmount += validatedTotal;
-      groups[key].validatedCount += validatedCount;
+      groups[key].totalAmount += b.totalAmount || 0;
     });
 
     return Object.values(groups);
@@ -567,16 +560,17 @@ export const CashierView: React.FC<CashierViewProps> = ({
     <div className="space-y-6">
       <Header
         title="Cashier & Financial Gatekeeper Desk"
-        subtitle="Step 2: Collect payment for receptionist-validated tests only"
+        subtitle="Step 2: Collect payment, mark order as PAID & unlock patient for Phlebotomy queue"
         onNotificationPress={onNotificationPress}
         onProfilePress={onProfilePress}
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
+      {/* Staff Hero Banner */}
       <StaffHeroBanner
         workstationNumber="Workstation 02"
         workstationTitle="Head Cashier & Billing Gatekeeper"
-        description="Collect payments for receptionist-validated tests. Only validated tests appear here."
+        description="Verify diagnostic test invoices, process multi-channel payments, and automatically unlock patient booklets for Phlebotomy sampling."
         gradientFrom="from-emerald-950"
         gradientVia="from-slate-900"
         gradientTo="to-emerald-900"
@@ -590,6 +584,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="text-2xl font-black text-emerald-400 font-mono">
               {periodRevenue.toLocaleString()} XAF
             </div>
+            {/* Timeframe Filter Selector */}
             <div className="flex items-center justify-end gap-1 pt-1">
               {[
                 { id: 'today', label: 'Today' },
@@ -618,10 +613,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Validated Tests Awaiting Payment</p>
-            <h3 className="text-2xl font-black text-amber-600 mt-1">
-              {unpaidBookings.reduce((sum, b) => sum + getValidatedCount(b), 0)}
-            </h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Unpaid Pending Orders</p>
+            <h3 className="text-2xl font-black text-amber-600 mt-1">{unpaidBookings.length}</h3>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold">
             <Clock className="w-6 h-6" />
@@ -663,7 +656,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
             }`}
           >
             <Receipt className="w-4 h-4" />
-            <span>Unpaid Validated Tests ({unpaidBookings.reduce((sum, b) => sum + getValidatedCount(b), 0)})</span>
+            <span>Unpaid Invoices Queue ({unpaidBookings.length})</span>
           </button>
 
           <button
@@ -700,65 +693,111 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
       {/* CONTENT AREA BASED ON ACTIVE TAB */}
       {activeTab === 'unpaid' ? (
-        /* Unpaid Invoices Queue Table - ONLY validated tests */
+        /* Unpaid Invoices Queue Table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
-            <div>
-              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-emerald-600" />
-                Validated Tests Awaiting Payment ({unpaidBookings.reduce((sum, b) => sum + getValidatedCount(b), 0)})
-              </h3>
-              <span className="text-xs text-slate-500">Only receptionist-validated tests appear here</span>
-            </div>
-
-            {selectedInvoiceIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const selected = filteredUnpaid.filter(b => selectedInvoiceIds.includes(b.id));
-                  if (selected.length > 0) {
-                    setSelectedGroupBookings(selected);
-                    setSelectedBooking(selected[0]);
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={filteredUnpaid.length > 0 && selectedInvoiceIds.length === filteredUnpaid.length}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedInvoiceIds(filteredUnpaid.map(b => b.id));
+                  } else {
+                    setSelectedInvoiceIds([]);
                   }
                 }}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 animate-in fade-in"
-              >
-                <DollarSign className="w-4 h-4" />
-                <span>Pay Selected ({selectedInvoiceIds.length} tests)</span>
-              </button>
-            )}
+                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+              />
+              <div>
+                <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-emerald-600" />
+                  Unpaid Invoices Awaiting Settlement ({filteredUnpaid.length})
+                </h3>
+                <span className="text-xs text-slate-500">Gatekeeper Status: Blocked from Phlebotomy</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {selectedInvoiceIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selected = filteredUnpaid.filter(b => selectedInvoiceIds.includes(b.id));
+                    if (selected.length > 0) {
+                      setSelectedGroupBookings(selected);
+                      setSelectedBooking(selected[0]);
+                    }
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 animate-in fade-in"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  <span>Verify Selected ({selectedInvoiceIds.length}) - {filteredUnpaid.filter(b => selectedInvoiceIds.includes(b.id)).reduce((s, b) => s + (b.totalAmount || 0), 0).toLocaleString()} XAF</span>
+                </button>
+              )}
+
+              {filteredUnpaid.length > 1 && selectedInvoiceIds.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGroupBookings(filteredUnpaid);
+                    setSelectedBooking(filteredUnpaid[0]);
+                  }}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Verify All Invoices ({filteredUnpaid.reduce((s, b) => s + (b.totalAmount || 0), 0).toLocaleString()} XAF)</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-xs text-slate-500">Loading invoices...</div>
           ) : filteredUnpaid.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 space-y-1">
-              <p className="font-bold text-emerald-800">All validated tests have been paid!</p>
-              <p className="text-slate-500">Patients have been automatically unlocked for Phlebotomy.</p>
+              <p className="font-bold text-emerald-800">All daily patient booklets are settled & paid!</p>
+              <p className="text-slate-500">Patients have been automatically unlocked and routed to the Phlebotomist queue.</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {patientGroups.map((group) => {
                 const isExpanded = expandedPatientKey === group.key;
+                const groupBookingIds = group.bookings.map(b => b.id);
+                const isGroupAllSelected = groupBookingIds.every(id => selectedInvoiceIds.includes(id));
 
                 return (
                   <div key={group.key} className="p-4 hover:bg-slate-50/80 transition-colors space-y-3">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">
-                            {group.patientName}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                            PID: {group.patientPid}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            {group.validatedCount} Validated Test{group.validatedCount !== 1 ? 's' : ''}
-                          </span>
-                        </div>
+                      <div className="flex items-start gap-3 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isGroupAllSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedInvoiceIds(prev => Array.from(new Set([...prev, ...groupBookingIds])));
+                            } else {
+                              setSelectedInvoiceIds(prev => prev.filter(id => !groupBookingIds.includes(id)));
+                            }
+                          }}
+                          className="w-4 h-4 mt-1 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm text-slate-900">
+                              {group.patientName}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                              PID: {group.patientPid}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              {group.bookings.length} Unpaid Order{group.bookings.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
 
-                        <div className="text-xs text-slate-500 flex items-center gap-3">
-                          <span>Total Payable Balance: <strong className="font-mono text-emerald-700 font-bold">{group.totalAmount.toLocaleString()} XAF</strong></span>
+                          <div className="text-xs text-slate-500 flex items-center gap-3">
+                            <span>Total Payable Balance: <strong className="font-mono text-emerald-700 font-bold">{group.totalAmount.toLocaleString()} XAF</strong></span>
+                          </div>
                         </div>
                       </div>
 
@@ -768,7 +807,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
                         >
                           <FlaskConical className="w-4 h-4 text-emerald-600" />
-                          <span>View Validated Tests</span>
+                          <span>View Tests Dropdown</span>
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-slate-600" />
                           ) : (
@@ -776,33 +815,47 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           )}
                         </button>
 
-                        <button
-                          onClick={() => {
-                            setSelectedGroupBookings(group.bookings);
-                            setSelectedBooking(group.bookings[0]);
-                          }}
-                          className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <DollarSign className="w-4 h-4" />
-                          <span>Pay All Validated ({group.totalAmount.toLocaleString()} FCFA)</span>
-                        </button>
+                        {group.bookings.length > 1 ? (
+                          <button
+                            onClick={() => {
+                              setSelectedGroupBookings(group.bookings);
+                              setSelectedBooking(group.bookings[0]);
+                            }}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            <span>Collect All ({group.totalAmount.toLocaleString()} FCFA)</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setSelectedGroupBookings(null);
+                              setSelectedBooking(group.bookings[0]);
+                            }}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            Collect Payment
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* EXPANDED ACCORDION - Shows ONLY validated tests */}
+                    {/* EXPANDED ACCORDION DROPDOWN SHOWING ALL REQUESTED TESTS */}
                     {isExpanded && (
-                      <div className="mt-4 pt-4 border-t border-slate-200 bg-slate-50/70 p-4 rounded-2xl space-y-3">
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-emerald-200 space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                           <h4 className="font-bold text-xs text-slate-800 flex items-center gap-2">
                             <Receipt className="w-4 h-4 text-emerald-600" />
-                            Validated Tests Ready for Payment
+                            Diagnostic Test Orders for {group.patientName}
                           </h4>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            Verify payment to send to Phlebotomist
+                          </span>
                         </div>
 
                         <div className="space-y-3">
                           {group.bookings.map((booking) => {
-                            const validatedTests = getValidatedTests(booking);
-                            if (validatedTests.length === 0) return null;
                             const isBookingChecked = selectedInvoiceIds.includes(booking.id);
 
                             return (
@@ -834,7 +887,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                     </div>
 
                                     <div className="flex flex-wrap gap-1.5 pt-1">
-                                      {validatedTests.map((t) => (
+                                      {booking.tests?.map((t) => (
                                         <span
                                           key={t.id}
                                           className="px-2.5 py-1 bg-emerald-50 text-emerald-900 rounded-lg text-xs font-semibold border border-emerald-200"
@@ -848,9 +901,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
                                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                                   <div className="text-right">
-                                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Validated Total</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Invoice Total</div>
                                     <div className="text-sm font-black text-emerald-700 font-mono">
-                                      {validatedTests.reduce((sum, t) => sum + (t.price || 0), 0).toLocaleString()} FCFA
+                                      {(booking.totalAmount || 0).toLocaleString()} FCFA
                                     </div>
                                   </div>
 
@@ -859,7 +912,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
                                   >
                                     <DollarSign className="w-3.5 h-3.5" />
-                                    Verify & Pay
+                                    Verify & Pay Order
                                   </button>
                                 </div>
                               </div>
@@ -903,7 +956,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                     <th className="py-3 px-4">Patient & PID</th>
                     <th className="py-3 px-4">Invoice / Code</th>
-                    <th className="py-3 px-4">Tests Paid</th>
+                    <th className="py-3 px-4">Tests Performed</th>
                     <th className="py-3 px-4">Payment Method</th>
                     <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4 text-right">Amount Paid</th>
@@ -925,8 +978,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
                       <td className="py-3.5 px-4">
                         <div className="flex flex-wrap gap-1">
-                          {(b.tests || []).filter(t => t.paid === true).map((t, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-semibold">
+                          {b.tests?.map((t, idx) => (
+                            <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold">
                               {t.testName}
                             </span>
                           ))}
@@ -966,7 +1019,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* COLLECT PAYMENT MODAL - Full with all conditional payment sections */}
+      {/* COLLECT PAYMENT MODAL */}
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
@@ -977,7 +1030,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <DollarSign className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-white">Process Validated Test Payment</h3>
+                  <h3 className="font-extrabold text-base text-white">Process Patient Order Payment</h3>
                   <p className="text-xs text-emerald-300">Invoice {selectedBooking.invoiceNumber} • {selectedBooking.bookingCode}</p>
                 </div>
               </div>
@@ -986,25 +1039,19 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
             <div className="space-y-4 text-xs">
               <div className="p-3 bg-slate-800 rounded-2xl space-y-1">
-                <div className="text-slate-400">Patient Name</div>
-                <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">
-                  Validated Tests: {getValidatedTests(selectedBooking).length} of {selectedBooking.tests?.length || 0} total
+                <div className="flex items-center justify-between">
+                  <div className="text-slate-400">Patient Name</div>
+                  {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />
+                      Virtual Delivery Requested
+                    </span>
+                  )}
                 </div>
+                <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
+                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests ({selectedBooking.tests?.map(t => t.testName).join(', ')})</div>
               </div>
 
-              {/* Show ONLY validated tests */}
-              <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-1">
-                <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Validated Tests</div>
-                {getValidatedTests(selectedBooking).map((t, idx) => (
-                  <div key={t.id || idx} className="flex justify-between text-xs py-0.5">
-                    <span className="text-white">{t.testName}</span>
-                    <span className="font-mono text-emerald-400">{(t.price || 0).toLocaleString()} FCFA</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Payment Method Selection */}
               <div>
                 <label className="block text-slate-300 font-bold mb-2 flex items-center justify-between">
                   <span>Select Payment Channel / Method</span>
@@ -1057,8 +1104,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
-              {/* ===== CONDITIONAL PAYMENT DETAILS SECTIONS ===== */}
-              {/* 1. MOBILE MONEY SECTION */}
+              {/* 1. CONDITIONAL SECTION: MOBILE MONEY (MTN MoMo / Orange Money) */}
               {paymentMethod === 'mobile_money' && (
                 <div className="p-3.5 bg-gradient-to-br from-amber-950/40 via-slate-900 to-orange-950/30 rounded-2xl border border-amber-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1069,6 +1115,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     <span className="text-[10px] text-slate-400 font-mono">MTN / Orange Cameroon</span>
                   </div>
 
+                  {/* Provider selection: MTN or ORANGE */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">MoMo Operator / Provider *</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1106,6 +1153,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Sender Phone & Sender Account Name */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1133,6 +1181,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Carrier TxID / SMS Reference */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-semibold mb-1 flex items-center justify-between">
                       <span>Transaction ID / SMS Reference Code</span>
@@ -1149,7 +1198,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 2. BANK TRANSFER SECTION */}
+              {/* 2. CONDITIONAL SECTION: BANK TRANSFER / DIRECT WIRE / DEPOSIT */}
               {paymentMethod === 'bank_transfer' && (
                 <div className="p-3.5 bg-gradient-to-br from-blue-950/40 via-slate-900 to-indigo-950/30 rounded-2xl border border-blue-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1160,6 +1209,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     <span className="text-[10px] text-slate-400 font-mono">BEAC / Cameroon</span>
                   </div>
 
+                  {/* Bank Name Selector */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-semibold mb-1">
                       Bank Name / Financial Institution *
@@ -1178,6 +1228,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </select>
                   </div>
 
+                  {/* Account Holder Name & Bank Transfer Reference */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1205,6 +1256,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Branch / Notes */}
                   <div>
                     <label className="block text-[10px] text-slate-400 mb-1">
                       Bank Branch / Deposit Notes (Optional)
@@ -1220,7 +1272,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 3. WORKERS BENEFIT SECTION */}
+              {/* 3. CONDITIONAL SECTION: WORKERS BENEFITS & STAFF WELFARE */}
               {paymentMethod === 'workers_benefit' && (
                 <div className="p-3.5 bg-gradient-to-br from-teal-950/50 via-slate-900 to-emerald-950/40 rounded-2xl border border-teal-500/50 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1233,6 +1285,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </span>
                   </div>
 
+                  {/* Benefit Scheme */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Worker Benefit Category *</label>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -1257,6 +1310,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Staff Selection Dropdown */}
                   <div>
                     <label className="block text-[10px] text-teal-300 font-bold mb-1 flex items-center justify-between">
                       <span>Select Registered Staff Member (Auto-Fill) *</span>
@@ -1292,6 +1346,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </select>
                   </div>
 
+                  {/* Staff Name & Staff ID */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1319,6 +1374,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Department & Authorization Note */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1354,7 +1410,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 4. GIFT COUPON SECTION */}
+              {/* 4. CONDITIONAL SECTION: GIFT COUPONS & PROMOTIONAL VOUCHERS */}
               {paymentMethod === 'gift_coupon' && (
                 <div className="p-3.5 bg-gradient-to-br from-purple-950/50 via-slate-900 to-indigo-950/40 rounded-2xl border border-purple-500/50 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1367,6 +1423,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </span>
                   </div>
 
+                  {/* Preset Gift Coupons */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Quick Select Gift / Voucher Presets:</label>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-xs">
@@ -1395,6 +1452,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Custom Coupon Input */}
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Tag className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-2.5" />
@@ -1418,6 +1476,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </button>
                   </div>
 
+                  {/* Staff Gift Beneficiary Selector */}
                   {(couponCode.toUpperCase().includes('STAFF') || selectedStaffMemberId) && staffList.length > 0 && (
                     <div className="p-3 bg-purple-900/40 rounded-xl border border-purple-400/40 space-y-1.5 animate-in fade-in duration-200">
                       <label className="block text-[10px] text-purple-200 font-bold flex items-center justify-between">
@@ -1450,6 +1509,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   )}
 
+                  {/* Sponsor / Donor Name & Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1479,7 +1539,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 5. CASH PAYMENT SECTION */}
+              {/* 5. CONDITIONAL SECTION: CASH PAYMENT & LIVE CHANGE CALCULATOR */}
               {paymentMethod === 'cash' && (
                 <div className="p-3.5 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-teal-950/30 rounded-2xl border border-emerald-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1522,6 +1582,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           </div>
                         </div>
 
+                        {/* Quick preset cash tender buttons */}
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick Tender:</span>
                           <button
@@ -1548,7 +1609,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 6. CARD (POS) SECTION */}
+              {/* 6. CONDITIONAL SECTION: CARD (POS) */}
               {paymentMethod === 'card' && (
                 <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-200">
                   <div className="font-extrabold text-xs text-slate-200 flex items-center gap-1.5">
@@ -1595,7 +1656,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 7. INSURANCE SECTION */}
+              {/* 7. CONDITIONAL SECTION: INSURANCE CO-PAY DETAILS */}
               {paymentMethod === 'insurance' && (
                 <div className="p-3.5 bg-indigo-950/70 rounded-2xl border border-indigo-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
@@ -1633,20 +1694,24 @@ export const CashierView: React.FC<CashierViewProps> = ({
                       <span>Co-Pay Coverage Split:</span>
                       <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer Claim • {coPayPercent}% Patient Co-Pay</span>
                     </label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 mb-2">
                       {[
-                        { coPay: 0, label: '100% Insurer (0% Co-Pay)' },
-                        { coPay: 20, label: '80% Insurer (20% Co-Pay)' },
-                        { coPay: 30, label: '70% Insurer (30% Co-Pay)' },
-                        { coPay: 50, label: '50% Insurer (50% Co-Pay)' }
+                        { coPay: 0, label: '0% Co-Pay (100%)' },
+                        { coPay: 10, label: '10% Co-Pay (90%)' },
+                        { coPay: 15, label: '15% Co-Pay (85%)' },
+                        { coPay: 20, label: '20% Co-Pay (80%)' },
+                        { coPay: 25, label: '25% Co-Pay (75%)' },
+                        { coPay: 30, label: '30% Co-Pay (70%)' },
+                        { coPay: 50, label: '50% Co-Pay (50%)' },
+                        { coPay: 80, label: '80% Co-Pay (20%)' }
                       ].map((split) => (
                         <button
                           key={split.coPay}
                           type="button"
                           onClick={() => setCoPayPercent(split.coPay)}
-                          className={`py-1 px-2 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                          className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer text-center ${
                             coPayPercent === split.coPay
-                              ? 'bg-indigo-600 text-white border-indigo-400'
+                              ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
                               : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
                           }`}
                         >
@@ -1654,11 +1719,29 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         </button>
                       ))}
                     </div>
+
+                    <div className="flex items-center gap-3 p-2 bg-slate-900/80 rounded-xl border border-indigo-900/60 text-xs">
+                      <span className="text-slate-400 text-[11px] whitespace-nowrap">Custom Co-Pay %:</span>
+                      <input 
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={coPayPercent}
+                        onChange={(e) => {
+                          const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                          setCoPayPercent(val);
+                        }}
+                        className="w-20 px-2 py-1 bg-slate-950 border border-indigo-700 rounded-lg text-white font-bold text-center text-xs"
+                      />
+                      <span className="text-[11px] text-indigo-300">
+                        = Patient pays <strong>{coPayPercent}%</strong>, Insurer covers <strong>{100 - coPayPercent}%</strong>
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* GENERAL DISCOUNTS & CUSTOM OVERRIDE */}
+              {/* GENERAL DISCOUNTS & CUSTOM OVERRIDE (for standard methods) */}
               {!['workers_benefit', 'gift_coupon'].includes(paymentMethod) && (
                 <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1712,6 +1795,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </button>
                   </div>
 
+                  {/* Custom negotiated price */}
                   <div className="flex items-center gap-2">
                     <label className="text-[11px] text-slate-400 shrink-0">Custom Override Total:</label>
                     <input
@@ -1772,26 +1856,34 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 return (
                   <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
                     <div className="flex justify-between text-slate-400 text-xs">
-                      <span>Validated Tests Total:</span>
+                      <span>Original Catalog Total:</span>
                       <span className="font-mono">{details.baseTotal.toLocaleString()} XAF</span>
                     </div>
 
                     {details.discountAmount > 0 && (
                       <div className="flex justify-between text-emerald-400 text-xs font-semibold">
-                        <span>{paymentMethod === 'workers_benefit' ? 'Staff Welfare Benefit:' : paymentMethod === 'gift_coupon' ? 'Gift Coupon:' : 'Discount Applied:'}</span>
+                        <span>
+                          {paymentMethod === 'workers_benefit' ? 'Staff Welfare Benefit (100% Grant):' :
+                           paymentMethod === 'gift_coupon' ? `Gift Coupon Concession (${couponCode || 'GIFT100'}):` :
+                           'Discount / Concession Applied:'}
+                        </span>
                         <span className="font-mono font-bold">-{details.discountAmount.toLocaleString()} XAF</span>
                       </div>
                     )}
 
                     {paymentMethod === 'insurance' && (
                       <div className="flex justify-between text-indigo-300 text-xs">
-                        <span>Insurance Claim ({100 - coPayPercent}%):</span>
+                        <span>HMO Insurance Claim Portion ({100 - coPayPercent}%):</span>
                         <span className="font-mono font-bold">-{details.insurancePortion.toLocaleString()} XAF</span>
                       </div>
                     )}
 
                     <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-white font-extrabold text-sm">Amount to Collect:</span>
+                      <span className="text-white font-extrabold text-sm">
+                        {paymentMethod === 'workers_benefit' || (paymentMethod === 'gift_coupon' && details.finalTotal === 0) 
+                          ? 'Net Patient Payable (Fully Subsidized):' 
+                          : 'Actual Paid by Patient:'}
+                      </span>
                       <span className={`text-xl font-black font-mono ${payable === 0 ? 'text-teal-400' : 'text-emerald-400'}`}>
                         {payable.toLocaleString()} XAF
                       </span>
@@ -1833,7 +1925,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* RECEIPT MODAL */}
+      {/* OFFICIAL PROFESSIONAL BRANDED RECEIPT MODAL */}
       {showReceipt && (
         <MedicalReceiptModal
           isOpen={Boolean(showReceipt)}
@@ -1849,6 +1941,26 @@ export const CashierView: React.FC<CashierViewProps> = ({
             discountAmount: showReceipt.discountAmount,
             discountType: (showReceipt as any).discountType || discountType,
             couponCode: showReceipt.couponCode || couponCode,
+            couponSponsorName: (showReceipt.paymentDetails?.couponSponsorName) || couponSponsorName,
+            couponNotes: (showReceipt.paymentDetails?.couponNotes) || couponNotes,
+            workerStaffName: (showReceipt.paymentDetails?.workerStaffName) || workerStaffName,
+            workerStaffId: (showReceipt.paymentDetails?.workerStaffId) || workerStaffId,
+            workerDepartment: (showReceipt.paymentDetails?.workerDepartment) || workerDepartment,
+            workerBenefitType: (showReceipt.paymentDetails?.workerBenefitType) || workerBenefitType,
+            workerAuthNote: (showReceipt.paymentDetails?.workerAuthNote) || workerAuthNote,
+            momoProvider: (showReceipt.paymentDetails?.momoProvider) || momoProvider,
+            momoSenderPhone: (showReceipt.paymentDetails?.momoSenderPhone) || momoSenderPhone,
+            momoSenderName: (showReceipt.paymentDetails?.momoSenderName) || momoSenderName,
+            momoTxId: (showReceipt.paymentDetails?.momoTxId) || momoTxId,
+            bankName: (showReceipt.paymentDetails?.bankName) || bankName,
+            bankAccountName: (showReceipt.paymentDetails?.bankAccountName) || bankAccountName,
+            bankReference: (showReceipt.paymentDetails?.bankReference) || bankReference,
+            bankBranch: (showReceipt.paymentDetails?.bankBranch) || bankBranch,
+            cardScheme: (showReceipt.paymentDetails?.cardScheme) || cardScheme,
+            cardLast4: (showReceipt.paymentDetails?.cardLast4) || cardLast4,
+            cardAuthCode: (showReceipt.paymentDetails?.cardAuthCode) || cardAuthCode,
+            cashGiven: (showReceipt.paymentDetails?.cashGiven) ?? (parseFloat(cashGiven) || undefined),
+            cashChange: (showReceipt.paymentDetails?.cashChange),
             cashierName: user?.name || 'Authorized Medical Cashier',
             paidAt: showReceipt.paidAt || new Date().toISOString(),
             actualPaidAmount: showReceipt.actualPaidAmount
