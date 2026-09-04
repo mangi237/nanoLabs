@@ -46,7 +46,16 @@ import {
   User,
   Filter,
   CheckCheck,
-  FileCheck
+  FileCheck,
+  Zap,
+  Calculator,
+  SlidersHorizontal,
+  Activity,
+  Info,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  ListOrdered
 } from 'lucide-react';
 
 interface LabTechViewProps {
@@ -95,8 +104,33 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Active Test Working States
   const [activeResultValue, setActiveResultValue] = useState<string>('');
   const [activeSubParamValues, setActiveSubParamValues] = useState<Record<string, string>>({});
+  const [activeTestSubParameters, setActiveTestSubParameters] = useState<any[]>([]);
+  const [activeParamObservations, setActiveParamObservations] = useState<Record<string, string>>({});
+  const [activeParamFlags, setActiveParamFlags] = useState<Record<string, 'Normal' | 'Low' | 'High' | 'Borderline' | 'Critical'>>({});
+  const [activeParamPrintToggles, setActiveParamPrintToggles] = useState<Record<string, boolean>>({});
+  const [activeAntibiogram, setActiveAntibiogram] = useState<Array<{ id: string; antibiotic: string; discPotency?: string; zoneMm?: string; sensitivity: 'S' | 'I' | 'R' | string }>>([]);
   const [activeClinicalNotes, setActiveClinicalNotes] = useState<string>('');
   const [activeReagentsUsed, setActiveReagentsUsed] = useState<UsedReagentRecord[]>([]);
+
+  // Add Custom Parameter & Sub-Header Modal States
+  const [showAddCustomParamModal, setShowAddCustomParamModal] = useState(false);
+  const [customParamName, setCustomParamName] = useState('');
+  const [customParamUnit, setCustomParamUnit] = useState('');
+  const [customParamRefMale, setCustomParamRefMale] = useState('');
+  const [customParamRefFemale, setCustomParamRefFemale] = useState('');
+  const [customParamSection, setCustomParamSection] = useState('');
+  const [customParamMethod, setCustomParamMethod] = useState('');
+  const [customParamDefaultVal, setCustomParamDefaultVal] = useState('');
+  
+  const [showAddSectionModal, setShowAddSectionModal] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+
+  // Antibiogram Row Modal
+  const [showAddAntibiogramRow, setShowAddAntibiogramRow] = useState(false);
+  const [newAntibioticName, setNewAntibioticName] = useState('');
+  const [newAntibioticPotency, setNewAntibioticPotency] = useState('10 µg');
+  const [newAntibioticZone, setNewAntibioticZone] = useState('20');
+  const [newAntibioticSens, setNewAntibioticSens] = useState<'S' | 'I' | 'R'>('S');
 
   // Reagent Selector Popover / Inline Picker State
   const [selectedReagentIdToAdd, setSelectedReagentIdToAdd] = useState<string>('');
@@ -342,27 +376,259 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     }
   };
 
+  // Live Biomedical Formula Computation Assistant
+  const computeFormulas = (values: Record<string, string>, params: any[]) => {
+    const newVals = { ...values };
+
+    // 1. Packed Cell Volume (PCV), Red Blood Cells (RBC), Hemoglobin (Hb) -> MCV, MCH, MCHC
+    const pcvVal = parseFloat(newVals['pcv'] || newVals['hematocrit'] || '');
+    const rbcVal = parseFloat(newVals['rbc'] || '');
+    const hbVal = parseFloat(newVals['hb'] || newVals['hemoglobin'] || '');
+
+    if (!isNaN(pcvVal) && !isNaN(rbcVal) && rbcVal > 0) {
+      if (params.some(p => p.id === 'mcv' || p.name.includes('MCV'))) {
+        newVals['mcv'] = ((pcvVal * 10) / rbcVal).toFixed(1);
+      }
+    }
+    if (!isNaN(hbVal) && !isNaN(rbcVal) && rbcVal > 0) {
+      if (params.some(p => p.id === 'mch' || p.name.includes('MCH'))) {
+        newVals['mch'] = ((hbVal * 10) / rbcVal).toFixed(1);
+      }
+    }
+    if (!isNaN(hbVal) && !isNaN(pcvVal) && pcvVal > 0) {
+      if (params.some(p => p.id === 'mchc' || p.name.includes('MCHC'))) {
+        newVals['mchc'] = ((hbVal * 100) / pcvVal).toFixed(1);
+      }
+    }
+
+    // 2. Albumin & Globulin -> A/G Ratio
+    const albVal = parseFloat(newVals['albumin'] || newVals['alb'] || '');
+    const globVal = parseFloat(newVals['globulin'] || newVals['glob'] || '');
+    if (!isNaN(albVal) && !isNaN(globVal) && globVal > 0) {
+      if (params.some(p => p.id === 'ag_ratio' || p.name.toLowerCase().includes('a/g'))) {
+        newVals['ag_ratio'] = (albVal / globVal).toFixed(2);
+      }
+    }
+
+    // 3. Total Bilirubin - Direct Bilirubin -> Indirect Bilirubin
+    const totalBili = parseFloat(newVals['total_bilirubin'] || newVals['t_bili'] || '');
+    const directBili = parseFloat(newVals['direct_bilirubin'] || newVals['d_bili'] || '');
+    if (!isNaN(totalBili) && !isNaN(directBili)) {
+      if (params.some(p => p.id === 'indirect_bilirubin' || p.name.toLowerCase().includes('indirect'))) {
+        newVals['indirect_bilirubin'] = Math.max(0, totalBili - directBili).toFixed(2);
+      }
+    }
+
+    // 4. Lipid Profile: Total Chol, HDL, Triglycerides -> Friedewald LDL
+    const cholVal = parseFloat(newVals['total_cholesterol'] || newVals['cholesterol'] || '');
+    const hdlVal = parseFloat(newVals['hdl'] || newVals['hdl_cholesterol'] || '');
+    const tgVal = parseFloat(newVals['triglycerides'] || newVals['tg'] || '');
+    if (!isNaN(cholVal) && !isNaN(hdlVal) && !isNaN(tgVal) && tgVal < 400) {
+      if (params.some(p => p.id === 'ldl' || p.name.toLowerCase().includes('ldl'))) {
+        newVals['ldl'] = Math.max(0, cholVal - hdlVal - (tgVal / 5)).toFixed(1);
+      }
+    }
+
+    return newVals;
+  };
+
+  // Quick Fill Normal Reference Values across all subparameters
+  const handleQuickFillNormalValues = () => {
+    if (!activeBooking) return;
+    const gender = activeBooking.patientGender || 'Male';
+    const newVals: Record<string, string> = { ...activeSubParamValues };
+    const newFlags: Record<string, 'Normal' | 'Low' | 'High' | 'Borderline' | 'Critical'> = { ...activeParamFlags };
+    const newObs: Record<string, string> = { ...activeParamObservations };
+
+    activeTestSubParameters.forEach(sp => {
+      const min = gender === 'Female' ? sp.femaleMin : gender === 'Child' ? sp.childMin : sp.maleMin;
+      const max = gender === 'Female' ? sp.femaleMax : gender === 'Child' ? sp.childMax : sp.maleMax;
+
+      if (min !== undefined && max !== undefined) {
+        const median = (min + max) / 2;
+        newVals[sp.id] = Number.isInteger(median) ? String(median) : median.toFixed(1);
+      } else if (sp.defaultValue) {
+        newVals[sp.id] = sp.defaultValue;
+      } else if (sp.refRangeWords && sp.refRangeWords.toLowerCase().includes('negative')) {
+        newVals[sp.id] = 'Negative';
+      } else {
+        newVals[sp.id] = 'Normal';
+      }
+
+      newFlags[sp.id] = 'Normal';
+      if (!newObs[sp.id]) {
+        newObs[sp.id] = 'Norm / Expected morphology';
+      }
+    });
+
+    const withFormulas = computeFormulas(newVals, activeTestSubParameters);
+    setActiveSubParamValues(withFormulas);
+    setActiveParamFlags(newFlags);
+    setActiveParamObservations(newObs);
+
+    if (!activeResultValue) {
+      setActiveResultValue('Normal / Within Reference Limits');
+    }
+    setActionSuccessMessage('⚡ Populated baseline normal values across all parameters.');
+  };
+
+  // Add Custom Parameter Row Dynamically
+  const handleAddCustomParam = () => {
+    if (!customParamName.trim()) return;
+    const newId = `custom-p-${Date.now()}`;
+    const newParam: any = {
+      id: newId,
+      name: customParamName.trim(),
+      unit: customParamUnit.trim(),
+      sectionHeader: customParamSection.trim() || undefined,
+      refRangeMale: customParamRefMale.trim() || 'Normal',
+      refRangeFemale: customParamRefFemale.trim() || 'Normal',
+      refRangeChild: customParamRefFemale.trim() || 'Normal',
+      defaultValue: customParamDefaultVal.trim() || undefined,
+      method: customParamMethod.trim() || undefined,
+      printOnReport: true
+    };
+
+    const updated = [...activeTestSubParameters, newParam];
+    setActiveTestSubParameters(updated);
+    if (customParamDefaultVal) {
+      setActiveSubParamValues({
+        ...activeSubParamValues,
+        [newId]: customParamDefaultVal.trim()
+      });
+    }
+    setActiveParamPrintToggles({
+      ...activeParamPrintToggles,
+      [newId]: true
+    });
+    setActiveParamFlags({
+      ...activeParamFlags,
+      [newId]: 'Normal'
+    });
+
+    setCustomParamName('');
+    setCustomParamUnit('');
+    setCustomParamRefMale('');
+    setCustomParamRefFemale('');
+    setCustomParamSection('');
+    setCustomParamMethod('');
+    setCustomParamDefaultVal('');
+    setShowAddCustomParamModal(false);
+    setActionSuccessMessage(`✅ Added parameter "${newParam.name}" to this test.`);
+  };
+
+  // Add Section Sub-Header Dynamically
+  const handleAddSectionHeader = () => {
+    if (!newSectionTitle.trim()) return;
+    const newId = `section-${Date.now()}`;
+    const newSectionParam: any = {
+      id: newId,
+      name: newSectionTitle.trim(),
+      unit: '',
+      sectionHeader: newSectionTitle.trim(),
+      refRangeMale: '',
+      refRangeFemale: '',
+      refRangeChild: '',
+      parameterType: 'heading',
+      printOnReport: true
+    };
+
+    setActiveTestSubParameters([...activeTestSubParameters, newSectionParam]);
+    setNewSectionTitle('');
+    setShowAddSectionModal(false);
+    setActionSuccessMessage(`✅ Added section header "${newSectionParam.name}".`);
+  };
+
+  // Remove Parameter
+  const handleRemoveCustomParam = (paramId: string) => {
+    setActiveTestSubParameters(activeTestSubParameters.filter(p => p.id !== paramId));
+    const newVals = { ...activeSubParamValues };
+    delete newVals[paramId];
+    setActiveSubParamValues(newVals);
+  };
+
+  // Add Antibiotic Row to Antibiogram
+  const handleAddAntibioticRow = () => {
+    if (!newAntibioticName.trim()) return;
+    const newRow = {
+      id: `ab-${Date.now()}`,
+      antibiotic: newAntibioticName.trim(),
+      discPotency: newAntibioticPotency.trim() || '10 µg',
+      zoneMm: newAntibioticZone.trim() || '20',
+      sensitivity: newAntibioticSens
+    };
+    setActiveAntibiogram([...activeAntibiogram, newRow]);
+    setNewAntibioticName('');
+    setNewAntibioticPotency('10 µg');
+    setNewAntibioticZone('20');
+    setNewAntibioticSens('S');
+    setShowAddAntibiogramRow(false);
+    setActionSuccessMessage(`✅ Added antibiotic "${newRow.antibiotic}" to sensitivity matrix.`);
+  };
+
+  const handleRemoveAntibioticRow = (id: string) => {
+    setActiveAntibiogram(activeAntibiogram.filter(a => a.id !== id));
+  };
+
   // Load state when switching between tests inside the booklet modal
   const loadTestState = (test: BookingTestItem) => {
     setActiveResultValue(test.resultValue || '');
     setActiveClinicalNotes(test.labNotes || '');
     
-    // Load sub-parameters
-    const subObj: Record<string, string> = {};
+    // Find master test definition or catalog definition
+    const master = getMasterTest(test);
+    const catItem = catalog.find(c => c.name?.toLowerCase() === test.testName?.toLowerCase() || c.id === test.testId);
+
+    // Load sub-parameters list
+    let initialParams: any[] = [];
     if (test.subParameters && test.subParameters.length > 0) {
-      test.subParameters.forEach(sp => {
-        subObj[sp.id] = sp.value || '';
-      });
-    } else {
-      // Check if master catalog has subparameters
-      const master = getMasterTest(test);
-      if (master?.subParameters) {
-        master.subParameters.forEach(sp => {
-          subObj[sp.id] = sp.defaultValue || '';
-        });
-      }
+      initialParams = [...test.subParameters];
+    } else if (master?.subParameters && master.subParameters.length > 0) {
+      initialParams = master.subParameters.map(sp => ({ ...sp }));
+    } else if (catItem?.subParameters && catItem.subParameters.length > 0) {
+      initialParams = catItem.subParameters.map((sp: any) => ({ ...sp }));
     }
+
+    // If still empty and test has units/refRange, create a default root parameter
+    if (initialParams.length === 0 && (test.units || master?.units || master?.refRangeMale)) {
+      initialParams = [
+        {
+          id: test.testId || test.id || 'p-main',
+          name: test.testName,
+          unit: test.units || master?.units || '',
+          refRangeMale: master?.refRangeMale || 'Normal',
+          refRangeFemale: master?.refRangeFemale || 'Normal',
+          refRangeChild: master?.refRangeChild || 'Normal',
+          maleMin: master?.maleMin,
+          maleMax: master?.maleMax,
+          femaleMin: master?.femaleMin,
+          femaleMax: master?.femaleMax,
+          childMin: master?.childMin,
+          childMax: master?.childMax,
+          method: master?.method || ''
+        }
+      ];
+    }
+
+    setActiveTestSubParameters(initialParams);
+
+    // Load sub-parameter values, observations, flags, print toggles
+    const subObj: Record<string, string> = {};
+    const obsObj: Record<string, string> = {};
+    const flagsObj: Record<string, any> = {};
+    const printObj: Record<string, boolean> = {};
+
+    initialParams.forEach(sp => {
+      subObj[sp.id] = sp.value !== undefined ? sp.value : (sp.defaultValue || '');
+      obsObj[sp.id] = sp.resultInWords || sp.notes || sp.interpretation || '';
+      flagsObj[sp.id] = sp.flag || (sp.isAbnormal ? 'High' : 'Normal');
+      printObj[sp.id] = sp.printOnReport !== undefined ? sp.printOnReport : true;
+    });
+
     setActiveSubParamValues(subObj);
+    setActiveParamObservations(obsObj);
+    setActiveParamFlags(flagsObj);
+    setActiveParamPrintToggles(printObj);
 
     // Load hierarchical template values
     const hierObj: Record<string, string> = {};
@@ -370,16 +636,33 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       test.hierarchicalParams.forEach((hp: any, idx: number) => {
         hierObj[hp.name || `hp-${idx}`] = hp.value || hp.defaultValue || '';
       });
-    } else {
-      // Check if catalog has hierarchicalParams for this test
-      const catItem = catalog.find(c => c.name?.toLowerCase() === test.testName?.toLowerCase() || c.id === test.testId);
-      if (catItem?.hierarchicalParams) {
-        catItem.hierarchicalParams.forEach((hp: any, idx: number) => {
-          hierObj[hp.name || `hp-${idx}`] = hp.defaultValue || '';
-        });
-      }
+    } else if (catItem?.hierarchicalParams) {
+      catItem.hierarchicalParams.forEach((hp: any, idx: number) => {
+        hierObj[hp.name || `hp-${idx}`] = hp.defaultValue || '';
+      });
     }
     setActiveHierarchicalValues(hierObj);
+
+    // Load antibiogram (if any or culture test)
+    if (test.antibiogram && test.antibiogram.length > 0) {
+      setActiveAntibiogram(test.antibiogram.map((ab: any, idx: number) => ({
+        id: ab.id || `ab-loaded-${idx}-${Date.now()}`,
+        antibiotic: ab.antibiotic || '',
+        discPotency: ab.discPotency || '',
+        zoneMm: ab.zoneMm || '',
+        sensitivity: ab.sensitivity || 'S'
+      })));
+    } else if ((test.category || '').toLowerCase().includes('microbiology') || (test.testName || '').toLowerCase().includes('culture') || (test.testName || '').toLowerCase().includes('sensitivity')) {
+      setActiveAntibiogram([
+        { id: 'ab-1', antibiotic: 'Amoxicillin + Clavulanic Acid (Augmentin)', discPotency: '20/10 µg', zoneMm: '22', sensitivity: 'S' },
+        { id: 'ab-2', antibiotic: 'Ciprofloxacin (CIP)', discPotency: '5 µg', zoneMm: '26', sensitivity: 'S' },
+        { id: 'ab-3', antibiotic: 'Ceftriaxone (CRO)', discPotency: '30 µg', zoneMm: '24', sensitivity: 'S' },
+        { id: 'ab-4', antibiotic: 'Gentamicin (GEN)', discPotency: '10 µg', zoneMm: '18', sensitivity: 'I' },
+        { id: 'ab-5', antibiotic: 'Cotrimoxazole (SXT)', discPotency: '1.25/23.75 µg', zoneMm: '11', sensitivity: 'R' }
+      ]);
+    } else {
+      setActiveAntibiogram([]);
+    }
 
     // Load reagents used if any
     setActiveReagentsUsed(test.reagentsUsed || []);
@@ -480,26 +763,44 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     try {
       const techName = user?.name || 'Medical Technologist';
 
+      // Construct enriched subParameters with values, flags, observations, print toggles
+      const fullSubParameters = activeTestSubParameters.map(sp => ({
+        ...sp,
+        value: activeSubParamValues[sp.id] !== undefined ? activeSubParamValues[sp.id] : (sp.defaultValue || ''),
+        resultInWords: activeParamObservations[sp.id] || '',
+        flag: activeParamFlags[sp.id] || 'Normal',
+        printOnReport: activeParamPrintToggles[sp.id] !== false
+      }));
+
+      const hasAbnormal = fullSubParameters.some(sp => sp.flag && sp.flag !== 'Normal');
+      const calculatedFlag = hasAbnormal ? 'High' : 'Normal';
+
       const success = await limsService.submitIndividualTestResult({
         labId: targetLabId,
         bookingId: activeBooking.id,
         testId: currentTest.id || currentTest.testId || '',
-        resultValue: activeResultValue,
+        resultValue: activeResultValue || (fullSubParameters.length > 0 ? (fullSubParameters[0].value || 'Normal') : 'Normal'),
+        resultFlag: calculatedFlag,
         subParams: activeSubParamValues,
+        fullSubParameters,
+        hierarchicalParams: currentTest.hierarchicalParams,
+        antibiogram: activeAntibiogram,
         notes: activeClinicalNotes,
         techName,
         reagentsUsed: activeReagentsUsed
       });
 
       if (success) {
-        setActionSuccessMessage(`✅ Successfully validated "${currentTest.testName}". Reagents deducted.`);
+        setActionSuccessMessage(`✅ Successfully validated "${currentTest.testName}". All parameters & flags recorded.`);
         
         // Update local active booking
         const updatedTests = [...activeBooking.tests];
         updatedTests[selectedTestIndex] = {
           ...currentTest,
-          resultValue: activeResultValue,
+          resultValue: activeResultValue || (fullSubParameters.length > 0 ? fullSubParameters[0].value : 'Normal'),
           status: 'Completed',
+          subParameters: fullSubParameters,
+          antibiogram: activeAntibiogram,
           labNotes: activeClinicalNotes,
           reagentsUsed: activeReagentsUsed,
           completedAt: new Date().toISOString(),
@@ -535,14 +836,38 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       const techName = user?.name || 'Medical Technologist';
 
       // Save current test first to capture uncommitted form fields
-      const testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }> = {};
+      const testResultsMap: Record<string, { 
+        resultValue?: string; 
+        resultFlag?: 'Normal' | 'Low' | 'High' | 'Borderline';
+        subParams?: Record<string, string>; 
+        fullSubParameters?: any[];
+        hierarchicalParams?: any[];
+        antibiogram?: any[];
+        reagentsUsed?: any[];
+        notes?: string;
+      }> = {};
 
       activeBooking.tests.forEach((t, i) => {
         const testKey = t.id;
         if (i === selectedTestIndex) {
+          const fullSubParameters = activeTestSubParameters.map(sp => ({
+            ...sp,
+            value: activeSubParamValues[sp.id] !== undefined ? activeSubParamValues[sp.id] : (sp.defaultValue || ''),
+            resultInWords: activeParamObservations[sp.id] || '',
+            flag: activeParamFlags[sp.id] || 'Normal',
+            printOnReport: activeParamPrintToggles[sp.id] !== false
+          }));
+
+          const hasAbnormal = fullSubParameters.some(sp => sp.flag && sp.flag !== 'Normal');
+
           testResultsMap[testKey] = {
-            resultValue: activeResultValue,
+            resultValue: activeResultValue || (fullSubParameters.length > 0 ? (fullSubParameters[0].value || 'Normal') : 'Normal'),
+            resultFlag: hasAbnormal ? 'High' : 'Normal',
             subParams: activeSubParamValues,
+            fullSubParameters,
+            hierarchicalParams: t.hierarchicalParams,
+            antibiogram: activeAntibiogram,
+            reagentsUsed: activeReagentsUsed,
             notes: activeClinicalNotes
           };
         } else {
@@ -553,6 +878,10 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
           testResultsMap[testKey] = {
             resultValue: t.resultValue || 'Normal',
             subParams: spMap,
+            fullSubParameters: t.subParameters,
+            hierarchicalParams: t.hierarchicalParams,
+            antibiogram: t.antibiogram,
+            reagentsUsed: t.reagentsUsed,
             notes: t.labNotes || ''
           };
         }
@@ -883,11 +1212,11 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       {/* 2. PATIENT BOOKLET MODAL (PRIMARY REQUIREMENT)           */}
       {/* ======================================================== */}
       {activeBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-5xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-[97vw] 2xl:max-w-7xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-in fade-in zoom-in-95">
             
             {/* Modal Header: Patient Name & Basic Info Bar */}
-            <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white p-5 sm:p-6 border-b border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+            <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white p-4 sm:p-5 border-b border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-400/30">
@@ -910,7 +1239,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                   )}
                 </div>
 
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
                   {activeBooking.patientName}
                 </h2>
 
@@ -954,17 +1283,17 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
 
             {/* Notification Banner */}
             {actionSuccessMessage && (
-              <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-3 text-xs text-emerald-900 font-bold flex items-center gap-2 animate-in fade-in">
+              <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 text-xs text-emerald-900 font-bold flex items-center gap-2 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{actionSuccessMessage}</span>
               </div>
             )}
 
-            {/* Modal Body: Two Column Layout */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50/50">
+            {/* Modal Body: Booked Tests Sidebar + Main Workstation Canvas */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 bg-slate-50/50">
               
-              {/* Left Column: Booked & Validated Tests Box */}
-              <div className="lg:col-span-4 space-y-3">
+              {/* Leftmost Column: Booked & Validated Tests Box (Tests In Booklet) */}
+              <div className="lg:col-span-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                     <BookOpen className="w-4 h-4 text-teal-600" />
@@ -973,7 +1302,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                   <span className="text-[10px] text-slate-400 font-mono">Validated by Phlebotomist</span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[50vh] lg:max-h-[62vh] overflow-y-auto pr-1">
                   {activeBooking.tests?.map((test, idx) => {
                     const isSelected = selectedTestIndex === idx;
                     const isDone = test.status === 'Completed';
@@ -982,7 +1311,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                       <div
                         key={test.id || idx}
                         onClick={() => handleSelectTestInBooklet(idx)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer space-y-1 ${
                           isSelected
                             ? 'bg-teal-50/90 border-teal-500 shadow-md ring-2 ring-teal-500/20'
                             : isDone
@@ -1028,7 +1357,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                 </button>
 
                 {/* Whole Booklet Submit Button */}
-                <div className="pt-4">
+                <div className="pt-2">
                   <button
                     onClick={handleSubmitWholeBooklet}
                     disabled={isSubmittingBooklet}
@@ -1040,22 +1369,29 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                 </div>
               </div>
 
-              {/* Right Column: Selected Test Working Card & 3 Responding Ways */}
-              <div className="lg:col-span-8 space-y-5">
+              {/* Main Workstation: Selected Test Canvas */}
+              <div className="lg:col-span-9 space-y-4">
                 {currentTestInModal ? (
-                  <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-6">
+                  <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-5">
                     
                     {/* Selected Test Details Header */}
-                    <div className="border-b border-slate-100 pb-4 space-y-2">
+                    <div className="border-b border-slate-100 pb-3 space-y-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 rounded-xl bg-teal-100 text-teal-800">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2.5 rounded-2xl bg-teal-100 text-teal-800 shrink-0">
                             <FlaskConical className="w-5 h-5" />
                           </div>
                           <div>
-                            <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-                              {currentTestInModal.testName}
-                            </h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                                {currentTestInModal.testName}
+                              </h3>
+                              {currentTestInModal.testCode && (
+                                <span className="text-[11px] font-mono font-black bg-teal-50 text-teal-800 px-2 py-0.5 rounded-lg border border-teal-200">
+                                  {currentTestInModal.testCode}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-slate-500 font-mono">
                               Category: {currentTestInModal.category} • Sample: {masterDef?.sampleType || currentTestInModal.sampleType || 'Venous Blood'}
                             </p>
@@ -1071,7 +1407,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                       </div>
 
                       {masterDef?.description && (
-                        <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                           {masterDef.description}
                         </p>
                       )}
@@ -1122,318 +1458,722 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                     </div>
 
                     {/* ======================================================== */}
-                    {/* MODE 1: COMPREHENSIVE INPUTS + PREDICTIVE CHIPS + REAGENTS */}
+                    {/* MODE 1: SPLIT WORKSTATION (STATIC LEFT + DETAILED RIGHT)   */}
                     {/* ======================================================== */}
                     {activeOptionMode === 'form' && (
-                      <div className="space-y-6">
+                      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
                         
-                        {/* Predictive Answers Chips */}
-                        <div className="bg-teal-50/70 p-4 rounded-2xl border border-teal-100 space-y-2">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900">
-                            <Sparkles className="w-4 h-4 text-teal-600" />
-                            <span>Predictive & Quick Answers:</span>
+                        {/* ----------------------------------------------------- */}
+                        {/* LEFT COLUMN: STATIC REFERENCE & NAVIGATION HUB         */}
+                        {/* ----------------------------------------------------- */}
+                        <div className="xl:col-span-4 space-y-4 xl:sticky xl:top-2">
+                          
+                          {/* Test Biological Context Card */}
+                          <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-3 shadow-md">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                              <span className="text-[11px] font-mono text-teal-400 font-bold uppercase tracking-wider">
+                                Technical Reference
+                              </span>
+                              <span className="text-[10px] bg-teal-500/20 text-teal-300 border border-teal-400/30 px-2 py-0.5 rounded-full font-mono">
+                                {masterDef?.method || 'Enzymatic / Automated'}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Specimen Matrix:</span>
+                                <span className="font-bold text-slate-200">{masterDef?.sampleType || currentTestInModal.sampleType || 'Venous Blood'}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Patient Bracket:</span>
+                                <span className="font-bold text-slate-200">{activeBooking.patientGender || 'Adult'} • {activeBooking.patientAge || '30'} yrs</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Standard TAT:</span>
+                                <span className="font-bold text-slate-200">{masterDef?.turnaroundTime || '2 Hours'}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {predictiveChoices.map((choice, cIdx) => (
-                              <button
-                                key={cIdx}
-                                type="button"
-                                onClick={() => setActiveResultValue(choice)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                  activeResultValue === choice
-                                    ? 'bg-teal-600 text-white shadow-xs'
-                                    : 'bg-white text-slate-700 border border-teal-200 hover:bg-teal-100/60'
-                                }`}
-                              >
-                                {choice}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
 
-                        {/* Direct Result Input Field */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                            <span>Primary Analytical Result / Finding:</span>
-                            <span className="text-[11px] font-mono text-slate-400">
-                              Units: {currentTestInModal.units || masterDef?.units || 'Qualitative'}
-                            </span>
-                          </label>
-                          <input
-                            type="text"
-                            value={activeResultValue}
-                            onChange={e => setActiveResultValue(e.target.value)}
-                            placeholder="Enter detailed value, e.g. Non-Reactive, 13.5 g/dL, Negative..."
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          />
-                        </div>
+                          {/* Live Parameter Directory & Fill Progress */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <ListOrdered className="w-3.5 h-3.5 text-teal-600" />
+                                Parameter Navigator
+                              </h4>
+                              {(() => {
+                                const total = activeTestSubParameters.length;
+                                const filled = activeTestSubParameters.filter(p => !!activeSubParamValues[p.id]).length;
+                                return (
+                                  <span className="text-[10px] font-mono font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">
+                                    {filled}/{total} Filled
+                                  </span>
+                                );
+                              })()}
+                            </div>
 
-                        {/* Multi-Parameter Sub-Parameters Form (e.g. CBC, Liver, Renal) */}
-                        {masterDef?.subParameters && masterDef.subParameters.length > 0 && (
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                              <Layers className="w-3.5 h-3.5 text-teal-600" />
-                              Sub-Parameters & Differential Counts
-                            </h4>
-
-                            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                              <table className="w-full text-left text-xs">
-                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-bold">
-                                  <tr>
-                                    <th className="py-2.5 px-3">Parameter</th>
-                                    <th className="py-2.5 px-3">Measured Value</th>
-                                    <th className="py-2.5 px-3">Unit</th>
-                                    <th className="py-2.5 px-3">Ref Range</th>
-                                    <th className="py-2.5 px-3 text-right">Flag</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 font-mono">
-                                  {masterDef.subParameters.map(sp => {
-                                    const valStr = activeSubParamValues[sp.id] || '';
-                                    const valNum = parseFloat(valStr);
-                                    let flag = 'Normal';
-                                    const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
-                                    const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
-                                    
-                                    if (!isNaN(valNum)) {
-                                      if (min !== undefined && valNum < min) flag = 'Low';
-                                      if (max !== undefined && valNum > max) flag = 'High';
-                                    }
-
-                                    const refDisplay = activeBooking.patientGender === 'Female' 
-                                      ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
-                                      : sp.refRangeMale || `${min || 0} - ${max || 100}`;
-
+                            {/* Parameter Directory List */}
+                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                              {activeTestSubParameters.length > 0 ? (
+                                activeTestSubParameters.map(sp => {
+                                  if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
                                     return (
-                                      <tr key={sp.id} className="hover:bg-slate-50/60">
-                                        <td className="py-2 px-3 font-semibold text-slate-800 font-sans">{sp.name}</td>
-                                        <td className="py-1.5 px-3">
+                                      <div key={sp.id} className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wider text-teal-800 border-b border-slate-200">
+                                        § {sp.name}
+                                      </div>
+                                    );
+                                  }
+                                  const isFilled = !!activeSubParamValues[sp.id];
+                                  const flag = activeParamFlags[sp.id] || 'Normal';
+
+                                  return (
+                                    <div
+                                      key={sp.id}
+                                      className="flex items-center justify-between p-1.5 rounded-xl hover:bg-slate-100 text-xs transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2 truncate">
+                                        {isFilled ? (
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        ) : (
+                                          <div className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0" />
+                                        )}
+                                        <span className="font-semibold text-slate-700 truncate">{sp.name}</span>
+                                      </div>
+                                      {isFilled && flag !== 'Normal' && (
+                                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
+                                          flag === 'High' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                                        }`}>
+                                          {flag}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <p className="text-[11px] text-slate-400 italic">Single-finding test format.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Diagnostic Formulas Guide */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                            <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                              <Calculator className="w-3.5 h-3.5 text-teal-600" />
+                              Auto-Formulas Guide
+                            </h4>
+                            <div className="space-y-1.5 font-mono text-[10px] text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100">
+                              <div>• MCV = (PCV × 10) / RBC</div>
+                              <div>• MCH = (Hb × 10) / RBC</div>
+                              <div>• MCHC = (Hb × 100) / PCV</div>
+                              <div>• A/G Ratio = Albumin / Globulin</div>
+                              <div>• Indirect Bili = Total - Direct</div>
+                              <div>• Friedewald LDL = Chol - HDL - (TG/5)</div>
+                            </div>
+                          </div>
+
+                          {/* Quick Action Buttons Palette */}
+                          <div className="space-y-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleQuickFillNormalValues}
+                              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-yellow-300" />
+                              <span>⚡ Quick Fill Normal Baseline</span>
+                            </button>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowAddCustomParamModal(true)}
+                                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-50 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3 text-teal-600" />
+                                <span>+ Add Parameter</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setShowAddSectionModal(true)}
+                                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-50 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                              >
+                                <Layers className="w-3 h-3 text-teal-600" />
+                                <span>+ Add Section</span>
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowAddAntibiogramRow(true)}
+                              className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-indigo-800 border border-indigo-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            >
+                              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>+ Antibiogram Antibiotic Row</span>
+                            </button>
+                          </div>
+
+                        </div>
+
+                        {/* ----------------------------------------------------- */}
+                        {/* RIGHT COLUMN: COMPREHENSIVE MULTI-TIER FORM CANVAS     */}
+                        {/* ----------------------------------------------------- */}
+                        <div className="xl:col-span-8 space-y-6">
+                          
+                          {/* Predictive Answers Chips */}
+                          <div className="bg-teal-50/70 p-4 rounded-2xl border border-teal-100 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900">
+                                <Sparkles className="w-4 h-4 text-teal-600" />
+                                <span>Predictive Quick Findings:</span>
+                              </div>
+                              <span className="text-[10px] text-teal-700 font-mono">1-click insert</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {predictiveChoices.map((choice, cIdx) => (
+                                <button
+                                  key={cIdx}
+                                  type="button"
+                                  onClick={() => setActiveResultValue(choice)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    activeResultValue === choice
+                                      ? 'bg-teal-600 text-white shadow-xs'
+                                      : 'bg-white text-slate-700 border border-teal-200 hover:bg-teal-100/60'
+                                  }`}
+                                >
+                                  {choice}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Direct Primary Finding Long Input Field */}
+                          <div className="space-y-1.5 bg-slate-50/60 p-4 rounded-2xl border border-slate-200">
+                            <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                              <span>Primary Analytical Finding / Impression:</span>
+                              <span className="text-[11px] font-mono text-slate-500">
+                                Units: {currentTestInModal.units || masterDef?.units || 'Qualitative'}
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              value={activeResultValue}
+                              onChange={e => setActiveResultValue(e.target.value)}
+                              placeholder="Enter comprehensive finding, e.g. Negative for Plasmodium falciparum, 13.8 g/dL, Clear yellow..."
+                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-inner"
+                            />
+                          </div>
+
+                          {/* Multi-Parameter Sub-Parameters Detailed Form */}
+                          {activeTestSubParameters && activeTestSubParameters.length > 0 && (
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                  <Layers className="w-4 h-4 text-teal-600" />
+                                  Structured Parameter Measurements & Qualitative Fields
+                                </h4>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {activeTestSubParameters.length} parameters configured
+                                </span>
+                              </div>
+
+                              <div className="space-y-3">
+                                {activeTestSubParameters.map((sp, spIdx) => {
+                                  // Heading / Sub-Header Row
+                                  if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
+                                    return (
+                                      <div
+                                        key={sp.id || spIdx}
+                                        className="bg-slate-800 text-white px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-xs mt-4"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-2 h-2 rounded-full bg-teal-400" />
+                                          <span className="text-xs font-extrabold tracking-wide uppercase">{sp.name}</span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveCustomParam(sp.id)}
+                                          className="text-slate-400 hover:text-rose-400 p-1"
+                                          title="Remove Section Header"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    );
+                                  }
+
+                                  const valStr = activeSubParamValues[sp.id] || '';
+                                  const obsStr = activeParamObservations[sp.id] || '';
+                                  const currentFlag = activeParamFlags[sp.id] || 'Normal';
+                                  const shouldPrint = activeParamPrintToggles[sp.id] !== false;
+
+                                  const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
+                                  const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
+                                  const refDisplay = activeBooking.patientGender === 'Female' 
+                                    ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
+                                    : sp.refRangeMale || `${min || 0} - ${max || 100}`;
+
+                                  return (
+                                    <div
+                                      key={sp.id || spIdx}
+                                      className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 hover:border-teal-300 transition-all space-y-2.5 shadow-xs"
+                                    >
+                                      {/* Top Row: Parameter Name, Unit, Method, Ref Range & Actions */}
+                                      <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-black text-slate-900">{sp.name}</span>
+                                          {sp.unit && (
+                                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">
+                                              {sp.unit}
+                                            </span>
+                                          )}
+                                          {sp.method && (
+                                            <span className="text-[9px] font-mono text-slate-400">
+                                              ({sp.method})
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                            Ref: <strong>{refDisplay}</strong>
+                                          </span>
+
+                                          {/* Print on Report Toggle */}
+                                          <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={shouldPrint}
+                                              onChange={e => {
+                                                setActiveParamPrintToggles({
+                                                  ...activeParamPrintToggles,
+                                                  [sp.id]: e.target.checked
+                                                });
+                                              }}
+                                              className="rounded text-teal-600 focus:ring-teal-500"
+                                            />
+                                            <span>Print</span>
+                                          </label>
+
+                                          {sp.id.startsWith('custom-p-') && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveCustomParam(sp.id)}
+                                              className="text-slate-300 hover:text-rose-600 p-1"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Bottom Row: Roomy Long Input Fields (Measured Value + Qualitative Observation + Flags) */}
+                                      <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
+                                        
+                                        {/* Measured Value Field (Long Roomy Input) */}
+                                        <div className="md:col-span-4">
                                           <input
                                             type="text"
                                             value={valStr}
                                             onChange={e => {
-                                              setActiveSubParamValues({
+                                              const newVals = {
                                                 ...activeSubParamValues,
+                                                [sp.id]: e.target.value
+                                              };
+                                              const calculated = computeFormulas(newVals, activeTestSubParameters);
+                                              setActiveSubParamValues(calculated);
+
+                                              // Auto-flag calculation
+                                              const numVal = parseFloat(e.target.value);
+                                              if (!isNaN(numVal) && min !== undefined && max !== undefined) {
+                                                if (numVal < min) {
+                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Low' }));
+                                                } else if (numVal > max) {
+                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'High' }));
+                                                } else {
+                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Normal' }));
+                                                }
+                                              }
+                                            }}
+                                            placeholder="Measured Value (e.g. 14.2)..."
+                                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                          />
+                                        </div>
+
+                                        {/* Qualitative Finding / Morphology Remarks (Long Input Field) */}
+                                        <div className="md:col-span-5">
+                                          <input
+                                            type="text"
+                                            value={obsStr}
+                                            onChange={e => {
+                                              setActiveParamObservations({
+                                                ...activeParamObservations,
                                                 [sp.id]: e.target.value
                                               });
                                             }}
-                                            placeholder="Value..."
-                                            className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                            placeholder="Qualitative remark / morphology (e.g. Normocytic normochromic)..."
+                                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-sans text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                           />
-                                        </td>
-                                        <td className="py-2 px-3 text-[11px] text-slate-500">{sp.unit || '-'}</td>
-                                        <td className="py-2 px-3 text-[11px] text-slate-600">{refDisplay}</td>
-                                        <td className="py-2 px-3 text-right">
-                                          {flag === 'High' ? (
-                                            <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">HIGH</span>
-                                          ) : flag === 'Low' ? (
-                                            <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">LOW</span>
-                                          ) : (
-                                            <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">NORMAL</span>
-                                          )}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
+                                        </div>
 
-                        {/* Hierarchical Structured Observations (e.g. Bacteriology, Cervico-Vaginal Swabs, Dual-Unit Bio) */}
-                        {(() => {
-                          const effHier = (currentTestInModal.hierarchicalParams && currentTestInModal.hierarchicalParams.length > 0)
-                            ? currentTestInModal.hierarchicalParams
-                            : (catalog.find(c => c.name?.toLowerCase() === currentTestInModal.testName?.toLowerCase() || c.id === currentTestInModal.testId)?.hierarchicalParams || []);
-                          
-                          if (!effHier || effHier.length === 0) return null;
-
-                          // Group by section
-                          const grouped: Record<string, any[]> = {};
-                          effHier.forEach((p: any) => {
-                            const sec = p.section || 'Observation Template';
-                            if (!grouped[sec]) grouped[sec] = [];
-                            grouped[sec].push(p);
-                          });
-
-                          return (
-                            <div className="space-y-4 bg-slate-50/90 p-4 sm:p-5 rounded-2xl border border-slate-200">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
-                                  <Layers className="w-4 h-4 text-teal-600" />
-                                  Structured Template Observations
-                                </h4>
-                                <span className="text-[10px] font-mono text-slate-500 font-bold">
-                                  {effHier.length} parameters configured
-                                </span>
-                              </div>
-
-                              {Object.entries(grouped).map(([sectionName, params]) => (
-                                <div key={sectionName} className="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-200">
-                                  <div className="text-[11px] font-black uppercase tracking-wider text-teal-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
-                                    <span>{sectionName}</span>
-                                    <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
-                                  </div>
-                                  <div className="space-y-2 pt-1">
-                                    {params.map((param: any, pIdx: number) => {
-                                      const key = param.name || `hp-${pIdx}`;
-                                      const currentVal = activeHierarchicalValues[key] !== undefined 
-                                        ? activeHierarchicalValues[key] 
-                                        : (param.defaultValue || '');
-                                      
-                                      return (
-                                        <div key={pIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                                          <div className="sm:col-span-5">
-                                            <span className="text-xs font-bold text-slate-800">{param.name}</span>
-                                            {param.unit && (
-                                              <span className="text-[10px] text-slate-400 font-mono ml-1.5">({param.unit})</span>
-                                            )}
-                                            {param.refRange && (
-                                              <span className="text-[9px] text-slate-400 block font-mono">Ref: {param.refRange}</span>
-                                            )}
-                                          </div>
-                                          <div className="sm:col-span-7">
-                                            <input
-                                              type="text"
-                                              value={currentVal}
-                                              onChange={e => {
-                                                setActiveHierarchicalValues({
-                                                  ...activeHierarchicalValues,
-                                                  [key]: e.target.value
+                                        {/* One-Click Flag Selector Pills */}
+                                        <div className="md:col-span-3 flex items-center justify-end gap-1">
+                                          {(['Normal', 'Low', 'High', 'Borderline'] as const).map(f => (
+                                            <button
+                                              key={f}
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveParamFlags({
+                                                  ...activeParamFlags,
+                                                  [sp.id]: f
                                                 });
                                               }}
-                                              placeholder={param.defaultValue || 'Enter finding / count...'}
-                                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                            />
-                                          </div>
+                                              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
+                                                currentFlag === f
+                                                  ? f === 'High'
+                                                    ? 'bg-rose-600 text-white shadow-xs'
+                                                    : f === 'Low'
+                                                    ? 'bg-amber-500 text-white shadow-xs'
+                                                    : f === 'Borderline'
+                                                    ? 'bg-purple-600 text-white shadow-xs'
+                                                    : 'bg-emerald-600 text-white shadow-xs'
+                                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                              }`}
+                                            >
+                                              {f === 'Normal' ? 'Norm' : f}
+                                            </button>
+                                          ))}
                                         </div>
-                                      );
-                                    })}
+
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Antibiogram Sensitivity Matrix Table */}
+                          {activeAntibiogram.length > 0 && (
+                            <div className="space-y-3 bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                                    <Activity className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-950">
+                                      Antibiogram / Antibiotic Susceptibility Matrix
+                                    </h4>
+                                    <p className="text-[10px] text-indigo-600 font-mono">
+                                      Disc Diffusion (Kirby-Bauer) Sensitivity Profile
+                                    </p>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
 
-                        {/* Reagents Used Section (RULE: Ask in test card, filter expired, prompt quantity) */}
-                        <div className="bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                              <Package className="w-4 h-4 text-teal-600" />
-                              Reagents Used (Auto-Deducted from Inventory)
-                            </h4>
-                            <span className="text-[10px] font-mono text-slate-500">
-                              {validUnexpiredReagents.length} unexpired reagents in stock
-                            </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddAntibiogramRow(true)}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-xl flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Add Antibiotic</span>
+                                </button>
+                              </div>
+
+                              <div className="overflow-x-auto bg-white rounded-2xl border border-indigo-200 shadow-xs">
+                                <table className="w-full text-left text-xs">
+                                  <thead className="bg-indigo-50/80 border-b border-indigo-100 text-indigo-900 text-[10px] font-bold uppercase">
+                                    <tr>
+                                      <th className="py-2.5 px-3">Antibiotic Agent</th>
+                                      <th className="py-2.5 px-3">Disc Potency</th>
+                                      <th className="py-2.5 px-3">Zone (mm)</th>
+                                      <th className="py-2.5 px-3 text-center">Sensitivity</th>
+                                      <th className="py-2.5 px-3 text-right">Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 font-mono">
+                                    {activeAntibiogram.map(ab => (
+                                      <tr key={ab.id} className="hover:bg-indigo-50/20">
+                                        <td className="py-2 px-3 font-sans font-bold text-slate-800">
+                                          {ab.antibiotic}
+                                        </td>
+                                        <td className="py-2 px-3 text-slate-500">{ab.discPotency || '-'}</td>
+                                        <td className="py-2 px-3">
+                                          <input
+                                            type="text"
+                                            value={ab.zoneMm || ''}
+                                            onChange={e => {
+                                              const updated = activeAntibiogram.map(a => 
+                                                a.id === ab.id ? { ...a, zoneMm: e.target.value } : a
+                                              );
+                                              setActiveAntibiogram(updated);
+                                            }}
+                                            className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center"
+                                          />
+                                        </td>
+                                        <td className="py-2 px-3 text-center">
+                                          <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                                            {(['S', 'I', 'R'] as const).map(sens => (
+                                              <button
+                                                key={sens}
+                                                type="button"
+                                                onClick={() => {
+                                                  const updated = activeAntibiogram.map(a => 
+                                                    a.id === ab.id ? { ...a, sensitivity: sens } : a
+                                                  );
+                                                  setActiveAntibiogram(updated);
+                                                }}
+                                                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
+                                                  ab.sensitivity === sens
+                                                    ? sens === 'S'
+                                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                                      : sens === 'I'
+                                                      ? 'bg-amber-500 text-white shadow-xs'
+                                                      : 'bg-rose-600 text-white shadow-xs'
+                                                    : 'text-slate-500 hover:text-slate-900'
+                                                }`}
+                                              >
+                                                {sens === 'S' ? 'Sensitive (S)' : sens === 'I' ? 'Intermediate (I)' : 'Resistant (R)'}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-3 text-right">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveAntibioticRow(ab.id)}
+                                            className="text-slate-400 hover:text-rose-600 p-1"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Hierarchical Structured Observations (e.g. Bacteriology, Cervico-Vaginal Swabs) */}
+                          {(() => {
+                            const effHier = (currentTestInModal.hierarchicalParams && currentTestInModal.hierarchicalParams.length > 0)
+                              ? currentTestInModal.hierarchicalParams
+                              : (catalog.find(c => c.name?.toLowerCase() === currentTestInModal.testName?.toLowerCase() || c.id === currentTestInModal.testId)?.hierarchicalParams || []);
+                            
+                            if (!effHier || effHier.length === 0) return null;
+
+                            // Group by section
+                            const grouped: Record<string, any[]> = {};
+                            effHier.forEach((p: any) => {
+                              const sec = p.section || 'Observation Template';
+                              if (!grouped[sec]) grouped[sec] = [];
+                              grouped[sec].push(p);
+                            });
+
+                            return (
+                              <div className="space-y-4 bg-slate-50/90 p-4 sm:p-5 rounded-2xl border border-slate-200">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                                    <Layers className="w-4 h-4 text-teal-600" />
+                                    Structured Template Observations
+                                  </h4>
+                                  <span className="text-[10px] font-mono text-slate-500 font-bold">
+                                    {effHier.length} parameters configured
+                                  </span>
+                                </div>
+
+                                {Object.entries(grouped).map(([sectionName, params]) => (
+                                  <div key={sectionName} className="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-200">
+                                    <div className="text-[11px] font-black uppercase tracking-wider text-teal-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                                      <span>{sectionName}</span>
+                                      <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
+                                    </div>
+                                    <div className="space-y-2 pt-1">
+                                      {params.map((param: any, pIdx: number) => {
+                                        const key = param.name || `hp-${pIdx}`;
+                                        const currentVal = activeHierarchicalValues[key] !== undefined 
+                                          ? activeHierarchicalValues[key] 
+                                          : (param.defaultValue || '');
+                                        
+                                        return (
+                                          <div key={pIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                            <div className="sm:col-span-5">
+                                              <span className="text-xs font-bold text-slate-800">{param.name}</span>
+                                              {param.unit && (
+                                                <span className="text-[10px] text-slate-400 font-mono ml-1.5">({param.unit})</span>
+                                              )}
+                                              {param.refRange && (
+                                                <span className="text-[9px] text-slate-400 block font-mono">Ref: {param.refRange}</span>
+                                              )}
+                                            </div>
+                                            <div className="sm:col-span-7">
+                                              <input
+                                                type="text"
+                                                value={currentVal}
+                                                onChange={e => {
+                                                  setActiveHierarchicalValues({
+                                                    ...activeHierarchicalValues,
+                                                    [key]: e.target.value
+                                                  });
+                                                }}
+                                                placeholder={param.defaultValue || 'Enter finding / count...'}
+                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                              />
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Reagents Used Section (Auto-Deduction) */}
+                          <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                <Package className="w-4 h-4 text-teal-600" />
+                                Reagents Used (Auto-Deducted from Inventory)
+                              </h4>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {validUnexpiredReagents.length} unexpired in stock
+                              </span>
+                            </div>
+
+                            {/* Reagent Adder Row */}
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-2xl border border-slate-200">
+                              <div className="sm:col-span-6">
+                                <label className="text-[10px] font-bold text-slate-500 block mb-1">Select Reagent:</label>
+                                <select
+                                  value={selectedReagentIdToAdd}
+                                  onChange={e => {
+                                    setSelectedReagentIdToAdd(e.target.value);
+                                    const found = validUnexpiredReagents.find(r => r.id === e.target.value);
+                                    if (found?.unit) setReagentUnitToAdd(found.unit);
+                                  }}
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                >
+                                  <option value="">-- Choose Reagent Used --</option>
+                                  {validUnexpiredReagents.map(r => (
+                                    <option key={r.id} value={r.id}>
+                                      {r.name} (Stock: {r.quantity} {r.unit || 'Units'})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="sm:col-span-3">
+                                <label className="text-[10px] font-bold text-slate-500 block mb-1">Quantity Used:</label>
+                                <input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  value={reagentQtyToAdd}
+                                  onChange={e => setReagentQtyToAdd(parseFloat(e.target.value) || 1)}
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                              </div>
+
+                              <div className="sm:col-span-3 flex items-end">
+                                <button
+                                  type="button"
+                                  onClick={handleAddReagentToTest}
+                                  disabled={!selectedReagentIdToAdd}
+                                  className="w-full py-2 px-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <PlusCircle className="w-3.5 h-3.5" />
+                                  <span>Add Reagent</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* List of Added Reagents for this Test */}
+                            {activeReagentsUsed.length > 0 ? (
+                              <div className="space-y-1.5 pt-1">
+                                {activeReagentsUsed.map(ru => (
+                                  <div
+                                    key={ru.reagentId}
+                                    className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-mono"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-2 h-2 rounded-full bg-teal-500" />
+                                      <span className="font-bold text-slate-900 font-sans">{ru.reagentName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md">
+                                        {ru.quantity} {ru.unit}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveReagentFromTest(ru.reagentId || '')}
+                                        className="text-slate-400 hover:text-rose-600 p-1"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 italic">
+                                No explicit reagents added yet. Standard catalog deductions will apply.
+                              </p>
+                            )}
                           </div>
 
-                          {/* Reagent Adder Row */}
-                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-2xl border border-slate-200">
-                            <div className="sm:col-span-6">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-1">Select Reagent:</label>
-                              <select
-                                value={selectedReagentIdToAdd}
-                                onChange={e => {
-                                  setSelectedReagentIdToAdd(e.target.value);
-                                  const found = validUnexpiredReagents.find(r => r.id === e.target.value);
-                                  if (found?.unit) setReagentUnitToAdd(found.unit);
-                                }}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                              >
-                                <option value="">-- Choose Reagent Used --</option>
-                                {validUnexpiredReagents.map(r => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.name} (Stock: {r.quantity} {r.unit || 'Units'})
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                          {/* Clinical Remarks & Notes */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-700">Clinical Observations & Technologist Impression:</label>
+                            <textarea
+                              rows={2}
+                              value={activeClinicalNotes}
+                              onChange={e => setActiveClinicalNotes(e.target.value)}
+                              placeholder="Clinical observations, morphological impression, cell morphology notes..."
+                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                          </div>
 
-                            <div className="sm:col-span-3">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-1">Quantity Used:</label>
-                              <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                value={reagentQtyToAdd}
-                                onChange={e => setReagentQtyToAdd(parseFloat(e.target.value) || 1)}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                              />
-                            </div>
+                          {/* Action Footer Bar */}
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => setShowPdfModal(true)}
+                              className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            >
+                              <Eye className="w-4 h-4 text-teal-600" />
+                              <span>Preview Printable Report</span>
+                            </button>
 
-                            <div className="sm:col-span-3 flex items-end">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                               <button
                                 type="button"
-                                onClick={handleAddReagentToTest}
-                                disabled={!selectedReagentIdToAdd}
-                                className="w-full py-2 px-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                                onClick={handleSaveCurrentTest}
+                                disabled={isSavingTest}
+                                className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                               >
-                                <PlusCircle className="w-3.5 h-3.5" />
-                                <span>Add</span>
+                                <Check className="w-4 h-4 text-teal-400" />
+                                <span>{isSavingTest ? 'Saving Test...' : 'Save & Validate This Test'}</span>
                               </button>
+
+                              {selectedTestIndex < (activeBooking.tests?.length || 0) - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectTestInBooklet(selectedTestIndex + 1)}
+                                  className="px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer border border-teal-200"
+                                >
+                                  <span>Next Test</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          {/* List of Added Reagents for this Test */}
-                          {activeReagentsUsed.length > 0 ? (
-                            <div className="space-y-1.5 pt-1">
-                              {activeReagentsUsed.map(ru => (
-                                <div
-                                  key={ru.reagentId}
-                                  className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-mono"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-teal-500" />
-                                    <span className="font-bold text-slate-900 font-sans">{ru.reagentName}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md">
-                                      {ru.quantity} {ru.unit}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveReagentFromTest(ru.reagentId  || '')}
-                                      className="text-slate-400 hover:text-rose-600 p-1"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-[11px] text-slate-400 italic">
-                              No explicit reagents added yet. Catalog defaults will be deducted if applicable.
-                            </p>
-                          )}
                         </div>
 
-                        {/* Clinical Findings & Notes */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700">Clinical Observations & Technologist Notes:</label>
-                          <textarea
-                            rows={2}
-                            value={activeClinicalNotes}
-                            onChange={e => setActiveClinicalNotes(e.target.value)}
-                            placeholder="Observations, morphological notes, microscopic findings..."
-                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        {/* Save Current Test Button */}
-                        <div className="flex items-center justify-end gap-3 pt-2">
-                          <button
-                            type="button"
-                            onClick={handleSaveCurrentTest}
-                            disabled={isSavingTest}
-                            className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                          >
-                            <Check className="w-4 h-4 text-teal-400" />
-                            <span>{isSavingTest ? 'Saving Test...' : 'Save & Validate This Test'}</span>
-                          </button>
-                        </div>
                       </div>
                     )}
 
@@ -1735,6 +2475,276 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                   );
                 });
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Parameter Modal */}
+      {showAddCustomParamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-teal-800 font-extrabold text-sm">
+                <Plus className="w-4 h-4 text-teal-600" />
+                <span>Add Custom Parameter Line</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCustomParamModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Parameter Name:</label>
+                <input
+                  type="text"
+                  value={customParamName}
+                  onChange={e => setCustomParamName(e.target.value)}
+                  placeholder="e.g. Band Neutrophils, Ketones..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Unit:</label>
+                  <input
+                    type="text"
+                    value={customParamUnit}
+                    onChange={e => setCustomParamUnit(e.target.value)}
+                    placeholder="e.g. %, mg/dL, /µL"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Method / Device:</label>
+                  <input
+                    type="text"
+                    value={customParamMethod}
+                    onChange={e => setCustomParamMethod(e.target.value)}
+                    placeholder="e.g. Microscopic"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Male Range (or standard):</label>
+                  <input
+                    type="text"
+                    value={customParamRefMale}
+                    onChange={e => setCustomParamRefMale(e.target.value)}
+                    placeholder="e.g. 0 - 5"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Female Range:</label>
+                  <input
+                    type="text"
+                    value={customParamRefFemale}
+                    onChange={e => setCustomParamRefFemale(e.target.value)}
+                    placeholder="e.g. 0 - 5"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddCustomParamModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCustomParam}
+                disabled={!customParamName.trim()}
+                className="px-5 py-2 text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-40 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                Add Parameter Line
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Section Header Modal */}
+      {showAddSectionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-teal-800 font-extrabold text-sm">
+                <Layers className="w-4 h-4 text-teal-600" />
+                <span>Add Section Sub-Header</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddSectionModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Section Title:</label>
+                <input
+                  type="text"
+                  value={newSectionTitle}
+                  onChange={e => setNewSectionTitle(e.target.value)}
+                  placeholder="e.g. CYTOLOGICAL EXAMINATION, DIFFERENTIAL COUNT..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 uppercase"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddSectionModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddSectionHeader}
+                disabled={!newSectionTitle.trim()}
+                className="px-5 py-2 text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-40 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                Create Section
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Antibiogram Antibiotic Row Modal */}
+      {showAddAntibiogramRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-indigo-900 font-extrabold text-sm">
+                <Activity className="w-4 h-4 text-indigo-600" />
+                <span>Add Antibiotic Susceptibility Row</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddAntibiogramRow(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {/* Quick Preset Buttons */}
+              <div>
+                <label className="font-bold text-slate-600 block mb-1 text-[11px]">Quick Select Standard Antibiotic:</label>
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200">
+                  {['Amoxicillin-Clavulanate (AMC 30µg)', 'Ciprofloxacin (CIP 5µg)', 'Ceftriaxone (CRO 30µg)', 'Gentamicin (CN 10µg)', 'Cotrimoxazole (SXT 25µg)', 'Amikacin (AK 30µg)', 'Imipenem (IPM 10µg)', 'Doxycycline (DO 30µg)', 'Nitrofurantoin (F 300µg)'].map((abName, aIdx) => (
+                    <button
+                      key={aIdx}
+                      type="button"
+                      onClick={() => {
+                        const parts = abName.split(' (');
+                        setNewAntibioticName(parts[0]);
+                        if (parts[1]) setNewAntibioticPotency(parts[1].replace(')', ''));
+                      }}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 hover:bg-indigo-50 text-slate-700 cursor-pointer"
+                    >
+                      {abName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Antibiotic Name:</label>
+                <input
+                  type="text"
+                  value={newAntibioticName}
+                  onChange={e => setNewAntibioticName(e.target.value)}
+                  placeholder="e.g. Ciprofloxacin, Amoxicillin-Clavulanic Acid"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Disc Potency:</label>
+                  <input
+                    type="text"
+                    value={newAntibioticPotency}
+                    onChange={e => setNewAntibioticPotency(e.target.value)}
+                    placeholder="e.g. 5µg, 30µg"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Zone (mm):</label>
+                  <input
+                    type="text"
+                    value={newAntibioticZone}
+                    onChange={e => setNewAntibioticZone(e.target.value)}
+                    placeholder="e.g. 24"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Sensitivity Interpretation:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['S', 'I', 'R'] as const).map(sens => (
+                    <button
+                      key={sens}
+                      type="button"
+                      onClick={() => setNewAntibioticSens(sens)}
+                      className={`py-2 rounded-xl text-xs font-extrabold uppercase transition-all cursor-pointer ${
+                        newAntibioticSens === sens
+                          ? sens === 'S'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : sens === 'I'
+                            ? 'bg-amber-500 text-white shadow-xs'
+                            : 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {sens === 'S' ? 'Sensitive (S)' : sens === 'I' ? 'Interm. (I)' : 'Resistant (R)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddAntibiogramRow(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddAntibioticRow}
+                disabled={!newAntibioticName.trim()}
+                className="px-5 py-2 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                Add Antibiotic Row
+              </button>
             </div>
           </div>
         </div>
