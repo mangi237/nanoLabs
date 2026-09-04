@@ -498,3 +498,6 @@ export const PatientList: React.FC<PatientListProps> = ({ onSelectPatient, isAdm
 };
 
 export default PatientList;
+
+
+

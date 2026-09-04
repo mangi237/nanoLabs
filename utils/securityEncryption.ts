@@ -19,6 +19,7 @@ const CLINICAL_ENTROPY_SALT = new Uint8Array([
   /**
    * Derives an AES-GCM 256-bit CryptoKey using PBKDF2
    */
+
   async function deriveEncryptionKey(
     passphrase: string, 
     salt: Uint8Array = CLINICAL_ENTROPY_SALT
@@ -46,9 +47,6 @@ const CLINICAL_ENTROPY_SALT = new Uint8Array([
       ['encrypt', 'decrypt']
     );
   }
-  
-  
-  
   /**
    * Encrypts an object or string payload with AES-GCM 256-bit
    */
@@ -174,7 +172,7 @@ const CLINICAL_ENTROPY_SALT = new Uint8Array([
       type: 'document',
       timestamp,
       meta: {
-        profile: ['http://minsante.cm/fhir/StructureDefinition/bamnhi-diagnostic-report'],
+        profile: ['http://nanolabs.health/fhir/StructureDefinition/diagnostic-report'],
         lastUpdated: timestamp
       },
       entry: [
@@ -185,7 +183,7 @@ const CLINICAL_ENTROPY_SALT = new Uint8Array([
             id: params.patientId,
             identifier: [
               {
-                system: 'http://minsante.cm/national-patient-id',
+                system: 'http://nanolabs.health/national-patient-id',
                 value: params.patientId
               }
             ],
@@ -251,7 +249,7 @@ const CLINICAL_ENTROPY_SALT = new Uint8Array([
         }
       ],
       complianceMetadata: {
-        standard: 'MINSANTE BAMNHI / OpenMRS FHIR R4',
+        standard: 'nanoLabs FHIR R4 Interoperability Protocol',
         consentFramework: 'Law No. 2024/017 & Law No. 2010/012',
         accessExpiration: params.shareExpirationDate || '7 Days'
       }
