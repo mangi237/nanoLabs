@@ -1,3 +1,5 @@
+import { number } from "motion/react";
+
 export interface CameroonInsuranceCompany {
   id: string;
   name: string;
@@ -545,7 +547,7 @@ export interface PrelevementActCode {
   name: string;
   cote: string;
   multiplier: number;
-  // defaultCoefficient?: number;
+  defaultCoefficient?: number | undefined;
   coefficientType: 'KB' | 'B' | 'P' | 'K';
   sampleType: string;
   defaultPrice: number;
@@ -558,6 +560,7 @@ export const PRELEVEMENT_ACT_CODES: PrelevementActCode[] = [
     cote: 'KB1,5',
     multiplier: 1.5,
     coefficientType: 'KB',
+    // defaultCoefficient: 1,
     sampleType: 'Blood / Serum / Plasma',
     defaultPrice: 372
   },
