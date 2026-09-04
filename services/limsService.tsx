@@ -49,9 +49,12 @@ export interface BookingTestItem {
     id: string;
     name: string;
     unit: string;
+    sectionHeader?: string;
+    subHeader?: string;
     refRangeMale: string;
     refRangeFemale: string;
     refRangeChild: string;
+    refRangeWords?: string;
     maleMin?: number;
     maleMax?: number;
     femaleMin?: number;
@@ -59,6 +62,17 @@ export interface BookingTestItem {
     childMin?: number;
     childMax?: number;
     value?: string;
+    resultInWords?: string;
+    patientValue?: string;
+    isAbnormal?: boolean;
+    printOnReport?: boolean;
+    parameterType?: 'numeric' | 'text' | 'formula' | 'heading' | 'select';
+    formulaIdentifier?: string;
+    computationFormula?: string;
+    options?: string[];
+    method?: string;
+    notes?: string;
+    comments?: string;
     flag?: 'Normal' | 'Low' | 'High' | 'Borderline';
   }>;
   resultValue?: string;
@@ -82,6 +96,13 @@ export interface BookingTestItem {
     dualUnit?: string;
     refRange?: string;
     interpretation?: string;
+  }>;
+  antibiogram?: Array<{
+    id?: string;
+    antibiotic: string;
+    discPotency?: string;
+    zoneMm?: string;
+    sensitivity: 'S' | 'I' | 'R' | string;
   }>;
 }
 
@@ -1075,7 +1096,16 @@ export const limsService = {
   async submitFormResults(params: {
     labId: string;
     bookingId: string;
-    testResultsMap: Record<string, { resultValue?: string; subParams?: Record<string, string>; notes?: string }>;
+    testResultsMap: Record<string, {
+      resultValue?: string;
+      resultFlag?: 'Normal' | 'Low' | 'High' | 'Borderline';
+      subParams?: Record<string, string>;
+      fullSubParameters?: any[];
+      hierarchicalParams?: any[];
+      antibiogram?: any[];
+      reagentsUsed?: Array<{ reagentId?: string; reagentName: string; quantity: number; unit?: string }>;
+      notes?: string;
+    }>;
     techName: string;
     pdfReportDataUrl?: string;
   }): Promise<boolean> {
@@ -1095,12 +1125,12 @@ export const limsService = {
           const resObj = testResultsMap[test.id];
           if (!resObj) return test;
 
-          let updatedSubParams = test.subParameters;
+          let updatedSubParams = resObj.fullSubParameters || test.subParameters;
           if (resObj.subParams && updatedSubParams) {
             updatedSubParams = updatedSubParams.map(sp => {
-              const valStr = resObj.subParams?.[sp.id] || '';
+              const valStr = resObj.subParams?.[sp.id] !== undefined ? resObj.subParams[sp.id] : (sp.value || '');
               const valNum = parseFloat(valStr);
-              let flag: 'Normal' | 'Low' | 'High' = 'Normal';
+              let flag: 'Normal' | 'Low' | 'High' = sp.flag || 'Normal';
 
               if (!isNaN(valNum)) {
                 const minVal = data.patientGender === 'Female' ? sp.femaleMin : data.patientGender === 'Child' ? sp.childMin : sp.maleMin;
@@ -1117,7 +1147,11 @@ export const limsService = {
           return {
             ...test,
             resultValue: resObj.resultValue || test.resultValue,
+            resultFlag: resObj.resultFlag || test.resultFlag,
             subParameters: updatedSubParams,
+            hierarchicalParams: resObj.hierarchicalParams || test.hierarchicalParams,
+            antibiogram: resObj.antibiogram || test.antibiogram,
+            reagentsUsed: resObj.reagentsUsed || test.reagentsUsed,
             labNotes: resObj.notes || test.labNotes,
             status: 'Completed' as TestStatus,
             completedAt: timestamp,
@@ -1200,13 +1234,17 @@ export const limsService = {
     bookingId: string;
     testId: string;
     resultValue?: string;
+    resultFlag?: 'Normal' | 'Low' | 'High' | 'Borderline';
     subParams?: Record<string, string>;
+    fullSubParameters?: any[];
+    hierarchicalParams?: any[];
+    antibiogram?: any[];
     notes?: string;
     techName: string;
     pdfReportDataUrl?: string;
     reagentsUsed?: Array<{ reagentId?: string; reagentName: string; quantity: number; unit?: string }>;
   }): Promise<boolean> {
-    const { labId, bookingId, testId, resultValue, subParams, notes, techName, pdfReportDataUrl, reagentsUsed } = params;
+    const { labId, bookingId, testId, resultValue, resultFlag, subParams, fullSubParameters, hierarchicalParams, antibiogram, notes, techName, pdfReportDataUrl, reagentsUsed } = params;
     const timestamp = new Date().toISOString();
 
     try {
@@ -1222,12 +1260,12 @@ export const limsService = {
           if (test.id !== testId && test.testId !== testId) return test;
 
           modifiedTestName = test.testName;
-          let updatedSubParams = test.subParameters;
+          let updatedSubParams = fullSubParameters || test.subParameters;
           if (subParams && updatedSubParams) {
             updatedSubParams = updatedSubParams.map(sp => {
-              const valStr = subParams[sp.id] || '';
+              const valStr = subParams[sp.id] !== undefined ? subParams[sp.id] : (sp.value || '');
               const valNum = parseFloat(valStr);
-              let flag: 'Normal' | 'Low' | 'High' = 'Normal';
+              let flag: 'Normal' | 'Low' | 'High' = sp.flag || 'Normal';
 
               if (!isNaN(valNum)) {
                 const minVal = data.patientGender === 'Female' ? sp.femaleMin : data.patientGender === 'Child' ? sp.childMin : sp.maleMin;
@@ -1244,7 +1282,10 @@ export const limsService = {
           return {
             ...test,
             resultValue: resultValue || test.resultValue,
+            resultFlag: resultFlag || test.resultFlag,
             subParameters: updatedSubParams,
+            hierarchicalParams: hierarchicalParams || test.hierarchicalParams,
+            antibiogram: antibiogram || test.antibiogram,
             labNotes: notes || test.labNotes,
             reagentsUsed: reagentsUsed || test.reagentsUsed,
             status: 'Completed' as TestStatus,
@@ -2458,7 +2499,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { ...existingData, id: d.id, };
+            return {  ...existingData, id: d.id, };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2730,7 +2771,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests .length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
