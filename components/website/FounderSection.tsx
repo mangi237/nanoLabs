@@ -28,7 +28,7 @@ export const FounderSection: React.FC = () => {
                 {/* Visual Avatar / Profile Photo Container */}
                 <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#0B1F3A] border border-white/10 flex items-center justify-center group">
                   <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80"
+                    src="https://media2.dev.to/dynamic/image/width=320,height=320,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Fuser%2Fprofile_image%2F4079159%2F38208a1c-7616-4dcc-b3c3-b6bf35bbb0dc.jpeg"
                     alt={founder.name}
                     className="w-full h-full object-cover grayscale contrast-125 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500"
                     referrerPolicy="no-referrer"
