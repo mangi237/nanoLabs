@@ -43,7 +43,7 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
   const labPhone = labInfo?.phone || '+237 670 000 000';
   const labEmail = labInfo?.email || 'diagnostics@nanolabs.health';
   const labLogo = labInfo?.logoUrl || '';
-  const labLicense = labInfo?.licenseNumber || 'MINSANTE/LAB/2026/0491';
+  const labLicense = labInfo?.licenseNumber || 'NANOLABS/LAB/2026/0491';
 
   const patientName = booking.patientName || patientInfo?.name || 'Valued Patient';
   const patientPid = booking.patientPid || booking.patientId || patientInfo?.patientId || 'PID-2026';
