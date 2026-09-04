@@ -42,7 +42,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
             <span className="text-xs font-bold text-white tracking-wide">
               {siteConfig.supportingTagline}
             </span>
-            <span className="text-xs">🇨🇲</span>
+            {/* <span className="text-xs">🇨🇲</span> */}
           </div>
 
           {/* Main Hero Headline */}
