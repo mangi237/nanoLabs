@@ -41,7 +41,7 @@ export const InsuranceRatesManager: React.FC = () => {
   const filteredInsurances = insurances.filter(ins => 
     ins.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     ins.shortName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ins.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    // ins.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (ins.taxId && ins.taxId.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -521,7 +521,7 @@ export const InsuranceRatesManager: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 text-[11px] font-medium">
                       {prelevementActs.map((act) => {
                         const kbRate = selectedInsurance.baseRateKB || 1200;
-                        const totalPrice = Math.round(act.defaultCoefficient * (kbRate / 5));
+                        const totalPrice = Math.round(act.defaultCoefficient ?? 0 * (kbRate / 5) );
                         const insShare = Math.round(totalPrice * ((selectedInsurance.defaultCoveragePercent || 80) / 100));
                         const patShare = totalPrice - insShare;
 
