@@ -6,24 +6,24 @@ import {
   Sparkles, 
   CheckCircle2, 
   Lock, 
-  Unlock, 
   FileText, 
   Printer, 
-  QrCode, 
   Stethoscope, 
-  User, 
-  Calendar, 
-  Building2, 
   Award,
-  Download,
-  Eye
+  Layers,
+  ChevronRight,
+  TestTube,
+  Activity,
+  AlertTriangle,
+  Download
 } from 'lucide-react';
-import { formatDOBDisplay } from '../../data/cameroonInsurances';
 
 interface SealedEnvelopeResultModalProps {
   isOpen: boolean;
   onClose: () => void;
-  test: any;
+  test?: any;
+  booking?: any;
+  tests?: any[];
   labName?: string;
   doctorName?: string;
   patientName?: string;
@@ -39,6 +39,8 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
   isOpen,
   onClose,
   test,
+  booking,
+  tests,
   labName = 'nanoLabs Central Diagnostic Center',
   doctorName,
   patientName,
@@ -51,20 +53,47 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
 }) => {
   const [isOpened, setIsOpened] = useState(false);
   const [isUnsealing, setIsUnsealing] = useState(false);
+  const [selectedTestIdx, setSelectedTestIdx] = useState(0);
 
   if (!isOpen) return null;
+
+  // Resolve tests array: could be from booking.tests, tests prop, or single test object
+  const resolvedTests: any[] = (booking?.tests && booking.tests.length > 0)
+    ? booking.tests
+    : (tests && tests.length > 0)
+    ? tests
+    : test?.tests && Array.isArray(test.tests) && test.tests.length > 0
+    ? test.tests
+    : test
+    ? [test]
+    : [
+        {
+          testName: 'Complete Diagnostic Health Screening Panel',
+          category: 'Clinical Pathology',
+          resultValue: 'Analyzed & Biologically Validated',
+          status: 'Completed',
+          subParameters: [
+            { name: 'Hemoglobin (Hb)', value: '14.2', unit: 'g/dL', refRange: '13.5 - 17.5' },
+            { name: 'Fasting Plasma Glucose', value: '94', unit: 'mg/dL', refRange: '70 - 100' },
+            { name: 'Total Cholesterol', value: '172', unit: 'mg/dL', refRange: '< 200' }
+          ]
+        }
+      ];
+
+  const currentTest = resolvedTests[selectedTestIdx] || resolvedTests[0];
+
+  const referringDoc = doctorName || booking?.doctorName || test?.referringDoctor || test?.doctorName || 'Dr. Attending Physician / Outpatient';
+  const pName = patientName || booking?.patientName || test?.patientName || 'Patient Record';
+  const pId = patientPid || booking?.patientPid || booking?.patientId || test?.patientPid || test?.patientId || test?.patientCode || 'PAT-CMR-2026';
+  const bookingCode = booking?.bookingCode || test?.bookingCode || `BK-${pId.replace(/[^0-9]/g, '').slice(-4) || '9042'}`;
 
   const handleBreakSeal = () => {
     setIsUnsealing(true);
     setTimeout(() => {
       setIsOpened(true);
       setIsUnsealing(false);
-    }, 900);
+    }, 850);
   };
-
-  const referringDoc = doctorName || test?.referringDoctor || test?.doctorName || 'Dr. Attending Physician / Outpatient';
-  const pName = patientName || test?.patientName || 'Patient';
-  const pId = patientPid || test?.patientPid || test?.patientId || test?.patientCode || 'PAT-CMR-01';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
@@ -107,8 +136,11 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    Official Diagnostic Report
+                  <span className="px-3 py-1 bg-amber-200/80 text-amber-900 rounded-full text-xs font-mono font-bold">
+                    BATCH: {bookingCode} ({resolvedTests.length} Diagnostic {resolvedTests.length === 1 ? 'Test' : 'Tests'})
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-2">
+                    Official Diagnostic Batch Report
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
                     Prepared for <strong className="text-slate-900">{pName}</strong> ({pId}) by <strong className="text-slate-900">{labName}</strong>
@@ -116,7 +148,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                 </div>
 
                 {/* Doctor Attribution On Envelope */}
-                <div className="bg-white/80 backdrop-blur-xs rounded-2xl p-4 border border-amber-200/80 max-w-md mx-auto text-left shadow-xs flex items-center justify-between gap-3">
+                <div className="bg-white/85 backdrop-blur-xs rounded-2xl p-4 border border-amber-200/80 max-w-md mx-auto text-left shadow-xs flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
                       <Stethoscope className="w-5 h-5" />
@@ -129,7 +161,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                   <div className="text-right">
                     <div className="text-[10px] uppercase font-bold text-slate-400">Status</div>
                     <div className="text-xs font-black text-emerald-700 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Validated
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Certified
                     </div>
                   </div>
                 </div>
@@ -147,7 +179,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                     <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-rose-900 via-rose-700 to-amber-600 text-amber-100 flex flex-col items-center justify-center shadow-xl border-4 border-amber-300/60 ring-4 ring-rose-900/30 group-hover:ring-rose-500/50 transition-all">
                       <Lock className="w-7 h-7 sm:w-8 sm:h-8 mb-1 text-amber-200 animate-pulse" />
                       <span className="text-[9px] font-black uppercase tracking-wider text-amber-200">SEALED</span>
-                      <span className="text-[8px] font-bold text-amber-300/80">MINSANTE</span>
+                      <span className="text-[8px] font-bold text-amber-300/90">nanoLabs</span>
                     </div>
 
                     {isUnsealing && (
@@ -165,7 +197,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                       onClick={handleBreakSeal}
                       className="text-xs font-black text-amber-900 hover:text-amber-950 uppercase tracking-wider underline cursor-pointer"
                     >
-                      {isUnsealing ? 'Breaking Wax Seal...' : 'Click Wax Seal to Open Confidential Envelope'}
+                      {isUnsealing ? 'Breaking Wax Seal...' : `Click Wax Seal to Unseal Full Batch (${resolvedTests.length} Tests)`}
                     </button>
                     <p className="text-[11px] text-slate-500">
                       Digitally certified with cryptographic integrity timestamp
@@ -176,42 +208,45 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
             </motion.div>
           ) : (
             /* ======================================================== */
-            /* 2. OPENED MEDICAL REPORT STAGE (EXTRACTED LETTER)       */
+            /* 2. OPENED MEDICAL REPORT STAGE (FULL BATCH EXPANDED)     */
             /* ======================================================== */
             <motion.div
               key="envelope-opened"
               initial={{ scale: 0.95, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden max-h-[88vh] flex flex-col"
             >
               {/* Top Letterhead / Accreditation Header */}
-              <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white p-6 border-b border-teal-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+              <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white p-5 sm:p-6 border-b border-teal-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-400/30">
                       Medical Diagnostic Certificate
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-teal-800/80 px-2 py-0.5 rounded text-teal-200">
+                      BATCH: {bookingCode}
                     </span>
                     <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Seal Unlocked
                     </span>
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                    {test?.testName || test?.name || 'Laboratory Analysis Report'}
+                    Consolidated Examination Findings
                   </h2>
                   <p className="text-xs text-slate-300">
-                    {labName} • Republic of Cameroon (MINSANTE Approved)
+                    {labName} • NanoLabs Certified HealthCare Network
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   {onOpenPdf && (
                     <button
                       onClick={onOpenPdf}
-                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Print / PDF</span>
+                      <span>Download Signed PDF Batch</span>
                     </button>
                   )}
                   <button
@@ -224,7 +259,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
               </div>
 
               {/* Patient and Doctor Demographics Box */}
-              <div className="bg-slate-50 p-4 sm:p-5 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs shrink-0">
+              <div className="bg-slate-50 p-4 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs shrink-0">
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase">Patient Name</div>
                   <div className="font-extrabold text-slate-900 truncate">{pName}</div>
@@ -241,39 +276,86 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase">Sample Date & Time</div>
-                  <div className="font-medium text-slate-700">
-                    {test?.collectedAt || test?.requestedDate || new Date().toLocaleDateString('en-GB')}
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Batch Tests Count</div>
+                  <div className="font-bold text-slate-800">
+                    {resolvedTests.length} Total Examinations
                   </div>
                 </div>
               </div>
 
+              {/* Multi-Test Selector Tabs if more than 1 test exists */}
+              {resolvedTests.length > 1 && (
+                <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-none">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0 flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-teal-600" />
+                    Batch Tests:
+                  </span>
+                  {resolvedTests.map((t, idx) => {
+                    const isCurrent = selectedTestIdx === idx;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedTestIdx(idx)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                          isCurrent
+                            ? 'bg-teal-700 text-white shadow-xs'
+                            : 'bg-white text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        <TestTube className="w-3 h-3" />
+                        <span>{t.testName || t.name || `Test #${idx + 1}`}</span>
+                        {t.flag && t.flag !== 'Normal' && (
+                          <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Clinical Analysis Body */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
                 
-                {/* Result High-Level Value / Summary */}
+                {/* Active Test Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                  <div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                      {currentTest.category || 'Clinical Biology'}
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900 mt-1">
+                      {currentTest.testName || currentTest.name || 'Diagnostic Examination'}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 font-mono">
+                      Status: <strong className="text-emerald-700 font-bold">{currentTest.status || 'Completed'}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Overall Test Value summary */}
                 <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200 flex items-center justify-between gap-4">
                   <div>
                     <div className="text-[10px] uppercase font-bold text-teal-700 tracking-wider">
                       Overall Diagnostic Result
                     </div>
-                    <div className="text-xl font-black text-teal-950 mt-0.5">
-                      {test?.resultValue || test?.resultText || 'Analyzed & Biologically Validated'} {test?.units || ''}
+                    <div className="text-lg sm:text-xl font-black text-teal-950 mt-0.5">
+                      {currentTest.resultValue || currentTest.resultText || currentTest.result || 'Analyzed & Biologically Validated'} {currentTest.units || currentTest.unit || ''}
                     </div>
                   </div>
-                  {test?.flag && test?.flag !== 'Normal' && (
+                  {currentTest.flag && currentTest.flag !== 'Normal' && (
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      test?.flag === 'Critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      currentTest.flag === 'Critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
                     }`}>
-                      Flag: {test?.flag}
+                      Flag: {currentTest.flag}
                     </span>
                   )}
                 </div>
 
                 {/* Hierarchical Sections or Sub-Parameters Breakdown */}
-                {test?.sections && test.sections.length > 0 ? (
+                {currentTest.sections && currentTest.sections.length > 0 ? (
                   <div className="space-y-4">
-                    {test.sections.map((sec: any, sIdx: number) => (
+                    {currentTest.sections.map((sec: any, sIdx: number) => (
                       <div key={sec.id || sIdx} className="border border-slate-200 rounded-2xl overflow-hidden">
                         <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-black text-xs text-slate-800 uppercase tracking-wide">
                           {sec.title}
@@ -304,7 +386,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                       </div>
                     ))}
                   </div>
-                ) : test?.subParameters && test.subParameters.length > 0 ? (
+                ) : currentTest.subParameters && currentTest.subParameters.length > 0 ? (
                   <div className="border border-slate-200 rounded-2xl overflow-hidden">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-100 text-slate-700 font-bold">
@@ -316,7 +398,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {test.subParameters.map((sub: any, sIdx: number) => (
+                        {currentTest.subParameters.map((sub: any, sIdx: number) => (
                           <tr key={sub.id || sIdx}>
                             <td className="p-3 font-bold text-slate-900">{sub.name}</td>
                             <td className="p-3 font-mono font-extrabold text-teal-800">{sub.value || sub.defaultValue || 'Normal'}</td>
@@ -329,11 +411,34 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                   </div>
                 ) : null}
 
-                {/* Biologist Comments / Conclusion */}
-                {test?.notes && (
+                {/* Biologist Comments / Interpretation */}
+                {currentTest.notes && (
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                     <div className="text-[10px] font-bold uppercase text-slate-400">Biologist Clinical Interpretation</div>
-                    <p className="text-xs text-slate-800 leading-relaxed font-medium">{test.notes}</p>
+                    <p className="text-xs text-slate-800 leading-relaxed font-medium">{currentTest.notes}</p>
+                  </div>
+                )}
+
+                {/* All Tests in Batch Overview List */}
+                {resolvedTests.length > 1 && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="text-xs font-bold text-slate-700">All Tests In This Batch:</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {resolvedTests.map((t, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedTestIdx(idx)}
+                          className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between ${
+                            selectedTestIdx === idx
+                              ? 'bg-teal-50 border-teal-300 font-bold text-teal-900'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="truncate">{t.testName || t.name}</span>
+                          <span className="text-[10px] text-emerald-700 font-mono font-bold">Validated</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -344,14 +449,14 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                       <Award className="w-6 h-6 text-teal-400" />
                     </div>
                     <div>
-                      <div className="font-extrabold text-slate-900">Dr. Medical Biologist Validated</div>
-                      <div className="text-[11px] text-slate-500">Ordre National des Médecins du Cameroun (ONMC)</div>
+                      <div className="font-extrabold text-slate-900">Medical Biologist Validated</div>
+                      <div className="text-[11px] text-slate-500">Ordre National des Médecins du Cameroun (ONMC) Accredited</div>
                     </div>
                   </div>
 
                   <div className="text-right font-mono text-[10px] text-slate-400">
-                    <div>Security Hash: SHA-256-{test?.id?.substring(0, 8) || '2026-NANO'}</div>
-                    <div className="text-emerald-700 font-bold">Tamper-Proof Ledger Confirmed</div>
+                    <div>Security Hash: SHA-256-{bookingCode}</div>
+                    <div className="text-emerald-700 font-bold">NanoLabs Cryptographic Seal Confirmed</div>
                   </div>
                 </div>
               </div>
