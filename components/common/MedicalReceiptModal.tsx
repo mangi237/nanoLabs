@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Printer, 
   X, 
@@ -12,7 +12,9 @@ import {
   FileText,
   Clock,
   Sparkles,
-  Layers
+  Layers,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { PatientBooking } from '../../services/limsService';
 import { formatDOBDisplay, CAMEROON_INSURANCE_PROVIDERS, PRELEVEMENT_ACT_CODES } from '../../data/cameroonInsurances';
@@ -70,23 +72,74 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   labInfo,
   paymentDetails
 }) => {
-  const [receiptTemplate, setReceiptTemplate] = useState<'template1' | 'template2'>('template2');
+  const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
+
+  const headerFileInputRef = useRef<HTMLInputElement>(null);
+  const footerFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('nanoLabs_header_footer_templates');
-      if (saved) setTemplates(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+          if (parsed.length === 2) {
+            setTemplates([...parsed, DEFAULT_HEADER_FOOTER_TEMPLATES[2], DEFAULT_HEADER_FOOTER_TEMPLATES[3]]);
+          } else {
+            setTemplates(parsed);
+          }
+        }
+      }
       const activeId = localStorage.getItem('nanoLabs_active_template_id');
-      if (activeId && activeId.includes('modern')) setReceiptTemplate('template1');
+      if (activeId) {
+        const foundIdx = DEFAULT_HEADER_FOOTER_TEMPLATES.findIndex(t => t.id === activeId);
+        if (foundIdx >= 0) setSelectedTemplateIndex(foundIdx);
+      }
     } catch {}
   }, []);
 
+  const handleHeaderUpload = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      const updated = [...templates];
+      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      updated[targetIdx] = {
+        ...updated[targetIdx],
+        headerImageUrl: result,
+        useHeaderImageOnly: true
+      };
+      setTemplates(updated);
+      setSelectedTemplateIndex(targetIdx);
+      localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFooterUpload = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      const updated = [...templates];
+      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      updated[targetIdx] = {
+        ...updated[targetIdx],
+        footerImageUrl: result,
+        useFooterImageOnly: true
+      };
+      setTemplates(updated);
+      setSelectedTemplateIndex(targetIdx);
+      localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
+    };
+    reader.readAsDataURL(file);
+  };
+
   if (!isOpen || !booking) return null;
 
-  const tplConfig = receiptTemplate === 'template1'
-    ? templates.find(t => t.templateType === 'template1') || DEFAULT_HEADER_FOOTER_TEMPLATES[0]
-    : templates.find(t => t.templateType === 'template2') || DEFAULT_HEADER_FOOTER_TEMPLATES[1];
+  const tplConfig = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
   // Lab metadata from real lab configuration
   const labName = tplConfig.labName || labInfo?.name || booking.labName || 'LABORATOIRE BIODIAGNOSTICS';
@@ -152,8 +205,25 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
          i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
   ) || CAMEROON_INSURANCE_PROVIDERS[0];
 
-  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent ?? booking.insuranceCoveragePercent ?? pDetails.insuranceCoveragePercent ?? matchedInsurance.defaultCoveragePercent ?? 80;
-  const coPayPercent = paymentDetails?.coPayPercent ?? booking.coPayPercent ?? pDetails.coPayPercent ?? (100 - insuranceCoveragePercent);
+  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent !== undefined 
+    ? paymentDetails.insuranceCoveragePercent 
+    : booking.insuranceCoveragePercent !== undefined 
+      ? booking.insuranceCoveragePercent 
+      : pDetails.insuranceCoveragePercent !== undefined
+        ? pDetails.insuranceCoveragePercent
+        : booking.coPayPercent !== undefined 
+          ? (100 - booking.coPayPercent) 
+          : pDetails.coPayPercent !== undefined 
+            ? (100 - pDetails.coPayPercent) 
+            : (matchedInsurance.defaultCoveragePercent ?? 80);
+
+  const coPayPercent = paymentDetails?.coPayPercent !== undefined
+    ? paymentDetails.coPayPercent
+    : booking.coPayPercent !== undefined
+      ? booking.coPayPercent
+      : pDetails.coPayPercent !== undefined
+        ? pDetails.coPayPercent
+        : (100 - insuranceCoveragePercent);
 
   // Patient Demographic Fields
   const patientName = booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS';
@@ -312,31 +382,63 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Dual Template Selector */}
+            {/* Template Selector */}
             <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
-              <button
-                type="button"
-                onClick={() => setReceiptTemplate('template1')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  receiptTemplate === 'template1'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Template 1: Modern Accredited
-              </button>
-              <button
-                type="button"
-                onClick={() => setReceiptTemplate('template2')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  receiptTemplate === 'template2'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Template 2: Cameroon Biodiagnostics
-              </button>
+              {templates.slice(0, 4).map((tpl, idx) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => setSelectedTemplateIndex(idx)}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    selectedTemplateIndex === idx
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
+                </button>
+              ))}
             </div>
+
+            {/* Direct Upload Buttons for Header and Footer */}
+            <input 
+              type="file" 
+              ref={headerFileInputRef} 
+              accept="image/*" 
+              className="hidden" 
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
+              }} 
+            />
+            <input 
+              type="file" 
+              ref={footerFileInputRef} 
+              accept="image/*" 
+              className="hidden" 
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
+              }} 
+            />
+
+            <button
+              type="button"
+              onClick={() => headerFileInputRef.current?.click()}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+              title="Upload custom top letterhead image"
+            >
+              <Upload className="w-3.5 h-3.5 text-teal-400" />
+              <span>Upload Header</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => footerFileInputRef.current?.click()}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+              title="Upload custom footer image"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+              <span>Upload Footer</span>
+            </button>
 
             <button
               onClick={handlePrint}
@@ -362,40 +464,54 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
             className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs"
           >
             
+            {/* Custom Uploaded Header Image if provided */}
+            {tplConfig.headerImageUrl && (
+              <div className="border-b-2 border-slate-900 pb-2">
+                <img 
+                  src={tplConfig.headerImageUrl} 
+                  alt={labName} 
+                  style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
+                  className="w-full object-contain mx-auto"
+                />
+              </div>
+            )}
+
             {/* ========================================================================= */}
             {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}
             {/* ========================================================================= */}
-            {receiptTemplate === 'template2' ? (
+            {selectedTemplateIndex % 2 === 1 || selectedTemplateIndex === 1 ? (
               <div className="space-y-4">
                 
-                {/* 1. OFFICIAL LETTERHEAD HEADER */}
-                <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
-                  <div className="flex items-center justify-center gap-2">
-                    <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
-                      {labName}
-                    </h1>
-                  </div>
-                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                    {labSlogan}
-                  </h2>
-                  
-                  <div className="text-xs font-bold text-slate-900 pt-1">
-                    {directorName}
-                  </div>
-                  <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
-                    {directorDiplomas}
-                  </div>
-                  <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
-                    {directorSpecialties}
-                  </div>
+                {/* 1. OFFICIAL LETTERHEAD HEADER (if no custom header image) */}
+                {!tplConfig.headerImageUrl && (
+                  <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                    <div className="flex items-center justify-center gap-2">
+                      <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
+                        {labName}
+                      </h1>
+                    </div>
+                    <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                      {labSlogan}
+                    </h2>
+                    
+                    <div className="text-xs font-bold text-slate-900 pt-1">
+                      {directorName}
+                    </div>
+                    <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
+                      {directorDiplomas}
+                    </div>
+                    <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
+                      {directorSpecialties}
+                    </div>
 
-                  <div className="text-[9px] text-slate-600 font-mono pt-1">
-                    {labArrete} • {labAgrement} • {labTaxId}
+                    <div className="text-[9px] text-slate-600 font-mono pt-1">
+                      {labArrete} • {labAgrement} • {labTaxId}
+                    </div>
+                    <div className="text-[9px] text-slate-700 font-semibold">
+                      {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
+                    </div>
                   </div>
-                  <div className="text-[9px] text-slate-700 font-semibold">
-                    {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
-                  </div>
-                </div>
+                )}
 
                 {/* 2. INVOICE TITLE & DATE BAR */}
                 <div className="flex items-center justify-between font-black text-sm border-b border-slate-300 pb-2">
