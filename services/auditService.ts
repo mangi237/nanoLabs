@@ -38,7 +38,6 @@ export interface AuditLogItem {
   patientCode?: string;
   testId?: string;
   testName?: string;
-  
   performedBy: {
     id: string;
     name: string;
@@ -344,7 +343,7 @@ export const auditService = {
             // FIXED: Only add logs that match this patient
             if (h.patientId === patientId || h.patientCode === patientId || 
                 (patientCode && h.patientCode === patientCode) ||
-                // (patientEmail && h.email === patientEmail) ||
+                // (patientEmail && h.patientEmail === patientEmail) ||
                 (patientName && h.patientName === patientName)) {
               if (!logs.some(l => l.id === h.id)) {
                 logs.push(h);
