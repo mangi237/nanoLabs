@@ -23,20 +23,25 @@ import {
 import { PatientBooking, BookingTestItem } from '../../services/limsService';
 import { formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
+import { useAuth } from '../../context/authContext';
 
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
   onClose: () => void;
   booking: PatientBooking | any;
   labInfo?: any;
+  isStaffOrAdmin?: boolean;
 }
 
 export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   isOpen,
   onClose,
   booking,
-  labInfo
+  labInfo,
+  isStaffOrAdmin
 }) => {
+  const { user } = useAuth();
+  const canCustomizeTemplates = isStaffOrAdmin !== undefined ? isStaffOrAdmin : (user?.role && user.role !== 'patient');
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
@@ -164,63 +169,66 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Header/Footer Template Selector */}
-            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
-              {templates.slice(0, 4).map((tpl, idx) => (
+            {/* Header/Footer Template Selector & Uploads (Staff/Admin Only) */}
+            {canCustomizeTemplates && (
+              <>
+                <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
+                  {templates.slice(0, 4).map((tpl, idx) => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateIndex(idx)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        selectedTemplateIndex === idx
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
+                    </button>
+                  ))}
+                </div>
+
+                <input 
+                  type="file" 
+                  ref={headerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
+                  }} 
+                />
+                <input 
+                  type="file" 
+                  ref={footerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
+                  }} 
+                />
+
                 <button
-                  key={tpl.id}
                   type="button"
-                  onClick={() => setSelectedTemplateIndex(idx)}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                    selectedTemplateIndex === idx
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => headerFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom top letterhead image"
                 >
-                  {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
+                  <Upload className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Upload Header</span>
                 </button>
-              ))}
-            </div>
 
-            {/* Upload Custom Header / Footer Controls */}
-            <input 
-              type="file" 
-              ref={headerFileInputRef} 
-              accept="image/*" 
-              className="hidden" 
-              onChange={(e) => {
-                if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
-              }} 
-            />
-            <input 
-              type="file" 
-              ref={footerFileInputRef} 
-              accept="image/*" 
-              className="hidden" 
-              onChange={(e) => {
-                if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
-              }} 
-            />
-
-            <button
-              type="button"
-              onClick={() => headerFileInputRef.current?.click()}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
-              title="Upload custom top letterhead image"
-            >
-              <Upload className="w-3.5 h-3.5 text-blue-400" />
-              <span>Upload Header</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => footerFileInputRef.current?.click()}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
-              title="Upload custom footer image"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
-              <span>Upload Footer</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => footerFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom footer image"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Upload Footer</span>
+                </button>
+              </>
+            )}
 
             <button
               onClick={handlePrint}

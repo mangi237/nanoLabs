@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
+
 import { sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import HumanVerificationModal from '../../components/security/HumanVerificationModal';
