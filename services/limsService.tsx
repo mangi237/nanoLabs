@@ -146,6 +146,16 @@ export interface PatientBooking {
   discountValue?: number;
   discountAmount?: number;
   couponCode?: string;
+  addOns?: Array<{
+    id: string;
+    name: string;
+    code: string;
+    price: number;
+    quantity: number;
+    category?: string;
+  }>;
+  addOnsAmount?: number;
+  testsAmount?: number;
   paymentStatus: 'unpaid' | 'paid';
   paymentMethod?: 'cash' | 'mobile_money' | 'bank_transfer' | 'card' | 'insurance' | 'workers_benefit' | 'gift_coupon' | string;
   paymentDate?: string;
@@ -627,9 +637,12 @@ export const limsService = {
           status: 'Pending_Collection' as TestStatus
         }));
 
-        const calculatedAmount = data.totalAmount && data.totalAmount > 0 
-          ? data.totalAmount 
-          : updatedTests.reduce((sum, t) => sum + (t.price || 5500), 0);
+        const testsAmount = paymentDetails?.testsAmount ?? (data.testsAmount || updatedTests.reduce((sum, t) => sum + (t.price || 5500), 0));
+        const addOnsAmount = paymentDetails?.addOnsAmount ?? (data.addOnsAmount || 0);
+        const addOnsList = paymentDetails?.addOns || data.addOns || [];
+        const calculatedAmount = paymentDetails?.totalAmount && paymentDetails.totalAmount > 0
+          ? paymentDetails.totalAmount
+          : (testsAmount + addOnsAmount);
 
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
           paymentStatus: 'paid',
@@ -639,6 +652,18 @@ export const limsService = {
           paymentProcessedBy: processedByName,
           paymentDetails: paymentDetails || null,
           totalAmount: calculatedAmount,
+          testsAmount,
+          addOnsAmount,
+          addOns: addOnsList,
+          actualPaidAmount: paymentDetails?.actualPaidAmount ?? calculatedAmount,
+          discountAmount: paymentDetails?.discountAmount ?? data.discountAmount ?? 0,
+          discountType: paymentDetails?.discountType ?? data.discountType,
+          couponCode: paymentDetails?.couponCode ?? data.couponCode,
+          insuranceProvider: paymentDetails?.insuranceProvider ?? data.insuranceProvider,
+          insurancePolicyNumber: paymentDetails?.insurancePolicyNumber ?? data.insurancePolicyNumber,
+          coPayPercent: paymentDetails?.coPayPercent ?? data.coPayPercent,
+          insuranceCoveredAmount: paymentDetails?.insuranceDetails?.insuranceClaimAmount,
+          patientCoPayAmount: paymentDetails?.insuranceDetails?.patientCoPayAmount,
           overallStatus: 'Pending_Collection',
           tests: updatedTests,
           updatedAt: timestamp
@@ -2499,7 +2524,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData, id: d.id, };
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2771,7 +2796,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -2844,7 +2869,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests .length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
