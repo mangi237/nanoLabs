@@ -91,11 +91,11 @@ export const DEFAULT_HEADER_FOOTER_TEMPLATES: HeaderFooterTemplateConfig[] = [
     name: 'Template 2: Cameroon Biodiagnostics Multi-Specialty Letterhead',
     templateType: 'template2',
     isCustomUpload: false,
-    labName: 'LABORATOIRE BIODIAGNOSTICS',
-    subTitle: 'ANALYSES DE BIOLOGIE MEDICALE',
-    directorName: 'Dr TANKOUA Jean Alain',
-    directorDiplomas: 'Diplômé de l\'Université René Descartes (Paris V) • Ex Attaché des Hôpitaux de Paris & Hôpital Général de Dla',
-    directorSpecialties: 'Etudes Spéciales de Biochimie, Hématologie, Immunologie, Parasitologie, Bactériologie et de Virologie Cliniques',
+    labName: 'NANOLABS CLINICAL DIAGNOSTIC CENTER',
+    subTitle: 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE',
+    directorName: 'Dr MANGI',
+    directorDiplomas: 'Biologiste Médical Diplômé d\'État • Spécialiste en Diagnostic Clinique',
+    directorSpecialties: 'Biochimie Médicale, Hématologie, Immunologie, Sérologie et Microbiologie Clinique',
     arreteNumber: 'Arrêté N° 032/A/MSP/SG/DMH/SDHFS/SL/1991',
     agrementNumber: 'Agrément N° 019 MINSAP',
     taxNumber: 'Contribuable N° P1256 0000 6852-X',
@@ -975,7 +975,7 @@ export const HeaderFooterTemplateManager: React.FC = () => {
                 <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[9px]">
                   <div>
                     <div className="text-slate-500">Technicien Analyste:</div>
-                    <div className="font-bold text-slate-800">Mangi Lerine Laslie</div>
+                    <div className="font-bold text-slate-800">Technicien de Laboratoire nanoLabs</div>
                   </div>
                   <div className="text-right">
                     <div className="text-slate-500">{currentTemplate.biologistSignatureTitle}:</div>
