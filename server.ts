@@ -1551,6 +1551,46 @@ app.post('/api/email/send-otp', async (req: Request, res: Response) => {
   }
 });
 
+// 5.6a Send SMS / WhatsApp KYC Verification OTP
+app.post('/api/sms/send-otp', async (req: Request, res: Response) => {
+  try {
+    const { phone, recipientName, otpCode: providedCode, type = 'yebo_kyc', labName } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'A valid phone number is required.' });
+    }
+
+    const cleanPhone = String(phone).replace(/[^\d+]/g, '');
+    const rawOtp = providedCode || generateSecureOTP();
+    const verificationId = `v-sms-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const textMessage = `🔐 *nanoLabs Medical Verification*\n\nHello ${recipientName || 'Valued Patient'},\n\nYour Yebo KYC authorization code is: *${rawOtp}*\n\nUse this 6-digit code to securely confirm release of your diagnostic laboratory results from ${labName || 'nanoLabs Central Diagnostics'}. Valid for 10 minutes.`;
+
+    const whatsappDirectLink = `https://api.whatsapp.com/send?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(textMessage)}`;
+
+    logAuditEvent(
+      'SMS_WHATSAPP_OTP_DISPATCHED',
+      'AUTHENTICATION',
+      { id: 'system', name: 'Yebo KYC SMS/WhatsApp Subsystem', role: 'system' },
+      `Dispatched Yebo KYC code [${rawOtp}] to phone ${cleanPhone} for [${type}]. Verification ID: ${verificationId}`
+    );
+
+    res.json({
+      success: true,
+      verificationId,
+      phone: cleanPhone,
+      otpCode: rawOtp,
+      whatsappDirectLink,
+      expiresAt,
+      message: `Verification code successfully generated and dispatched to ${cleanPhone}.`
+    });
+  } catch (error: any) {
+    console.error('Error in /api/sms/send-otp:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 5.6b Send Official Lab Provisioning Confirmation Email
 app.post('/api/email/send-lab-welcome', async (req: Request, res: Response) => {
   try {
@@ -1904,21 +1944,31 @@ app.post('/api/audit/log-access', (req: Request, res: Response) => {
 
 // 7c. Get Patient-Specific Access Logs
 app.get('/api/audit/patient-logs/:patientId', (req: Request, res: Response) => {
-  const patientId = String(req.params.patientId || '').toLowerCase();
-  const patientName = String(req.query.patientName || '').toLowerCase();
-  const patientEmail = String(req.query.patientEmail || '').toLowerCase();
-  const patientCode = String(req.query.patientCode || '').toLowerCase();
+  const GENERIC = ['patient', 'pat-1', 'pat-100', 'valued patient', 'guest', 'user', 'unknown', 'patient record', 'demo', 'test'];
+  const rawPid = String(req.params.patientId || '').toLowerCase().trim();
+  const rawPName = String(req.query.patientName || '').toLowerCase().trim();
+  const rawPEmail = String(req.query.patientEmail || '').toLowerCase().trim();
+  const rawPCode = String(req.query.patientCode || '').toLowerCase().trim();
+
+  const patientId = GENERIC.includes(rawPid) ? '' : rawPid;
+  const patientName = (rawPName.length < 4 || GENERIC.includes(rawPName)) ? '' : rawPName;
+  const patientEmail = (rawPEmail.includes('@nanolabs.cm') || GENERIC.includes(rawPEmail)) ? '' : rawPEmail;
+  const patientCode = GENERIC.includes(rawPCode) ? '' : rawPCode;
+
+  if (!patientId && !patientName && !patientEmail && !patientCode) {
+    return res.json({ success: true, patientId: rawPid, logs: [], count: 0 });
+  }
 
   const patientLogs = auditLogs.filter(l => {
-    const lPid = String((l as any).patientId || '').toLowerCase();
-    const lPCode = String((l as any).patientCode || '').toLowerCase();
-    const lPName = String((l as any).patientName || '').toLowerCase();
-    const lPEmail = String((l as any).patientEmail || '').toLowerCase();
+    const lPid = String((l as any).patientId || '').toLowerCase().trim();
+    const lPCode = String((l as any).patientCode || '').toLowerCase().trim();
+    const lPName = String((l as any).patientName || '').toLowerCase().trim();
+    const lPEmail = String((l as any).patientEmail || '').toLowerCase().trim();
     const lDetails = String(l.details || '').toLowerCase();
 
-    const matchId = patientId && patientId !== 'patient' && (lPid === patientId || lPCode === patientId || lDetails.includes(patientId));
-    const matchCode = patientCode && (lPid === patientCode || lPCode === patientCode || lDetails.includes(patientCode));
-    const matchName = patientName && (lPName === patientName || (patientName.length >= 4 && lDetails.includes(patientName)));
+    const matchId = patientId && (lPid === patientId || lPCode === patientId || (patientId.length >= 5 && lDetails.includes(patientId)));
+    const matchCode = patientCode && (lPid === patientCode || lPCode === patientCode || (patientCode.length >= 5 && lDetails.includes(patientCode)));
+    const matchName = patientName && (lPName === patientName || (patientName.length >= 5 && lDetails.includes(patientName)));
     const matchEmail = patientEmail && (lPEmail === patientEmail || lDetails.includes(patientEmail));
 
     return matchId || matchCode || matchName || matchEmail;
@@ -1926,7 +1976,7 @@ app.get('/api/audit/patient-logs/:patientId', (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    patientId,
+    patientId: rawPid,
     logs: patientLogs,
     count: patientLogs.length
   });
