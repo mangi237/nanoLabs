@@ -23,7 +23,7 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
     { value: 'receptionist', label: 'Receptionist Intake', icon: User, desc: 'Patient admissions & sample intake processing' },
     { value: 'cashier', label: 'Cashier & Billing', icon: DollarSign, desc: 'Billing invoices & payment collection' },
     { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope, desc: 'Sample verification & diagnostic result entry' },
-    { value: 'labtech', label: 'Lab Technologist', icon: TestTube, desc: 'Specimen processing & testing workflow' },
+    { value: 'lab_tech', label: 'Lab Technologist', icon: TestTube, desc: 'Specimen processing & testing workflow' },
     { value: 'biologist', label: 'Biologist / Clinical Pathologist', icon: ShieldCheck, desc: 'Clinical review, biochemical validation & authorized result release' },
     { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, desc: 'Stock level monitoring & reorder orders' }
   ];
@@ -106,8 +106,8 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
           <div className="space-y-3">
             {availableRoles.map(role => {
               const Icon = role.icon;
-              const isActive = user?.role === role.value;
-              const isAssigned = isLabAdmin || userRoles.includes(role.value);
+              const isActive = user?.role === role.value || (role.value === 'lab_tech' && user?.role === 'labtech');
+              const isAssigned = isLabAdmin || userRoles.includes(role.value as any) || (role.value === 'lab_tech' && userRoles.includes('labtech' as any));
 
               return (
                 <button
