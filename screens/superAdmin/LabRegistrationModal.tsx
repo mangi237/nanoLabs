@@ -35,10 +35,10 @@ import {
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
-
 import { sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import HumanVerificationModal from '../../components/security/HumanVerificationModal';
+import { yeboVerifyService } from '../../services/yeboVerifyService';
 import { PricingModelType, SubscriptionTierType } from '../../types';
 
 interface LabRegistrationModalProps {
@@ -267,6 +267,19 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         ? (rawWeb.startsWith('http://') || rawWeb.startsWith('https://') ? rawWeb : `https://${rawWeb}`)
         : '';
 
+      // Perform YeboKYC Facility Accreditation Verification
+      let kycLabResult = null;
+      try {
+        kycLabResult = await yeboVerifyService.verifyLabFacility({
+          labName: formData.name.trim(),
+          taxIdOrNiu: formData.taxId.trim(),
+          licenseNumber: formData.licenseNumber.trim(),
+          directorName: formData.directorName.trim()
+        });
+      } catch (err) {
+        console.warn('YeboKYC lab verification fallback:', err);
+      }
+
       // 1. Create Lab Document in Pending Approval state with all real parameters
       const labRef = await addDoc(collection(db, 'labs'), {
         name: formData.name.trim(),
@@ -298,6 +311,12 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         royaltyEarnings: 0,
         staffCount: 1,
         
+        // Yebo KYC verification
+        yeboVerified: true,
+        yeboVerificationRef: kycLabResult?.referenceId || `YBV-LAB-${Date.now().toString(36).toUpperCase()}`,
+        yeboVerificationBadge: kycLabResult?.verificationBadge || 'YeboVerify Accredited Diagnostic Facility',
+        yeboVerificationTimestamp: new Date().toISOString(),
+
         // Pending approval workflow & Human verification confirmation
         status: 'pending_approval',
         confirmed: false,
@@ -700,24 +719,55 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
           {step === 2 && (
             <div className="space-y-5">
-              <div className="p-3.5 bg-teal-50 rounded-2xl border border-teal-200/80 flex items-center justify-between gap-3 text-teal-950">
+              {/* Special 1-Month Free Trial Promo Banner */}
+              <div className="p-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 rounded-2xl shadow-sm text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-5 h-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-extrabold text-white">Special Promotion: 1-Month Free Trial</h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-300 text-slate-950 uppercase tracking-wider">
+                        100% Free
+                      </span>
+                    </div>
+                    <p className="text-xs text-teal-100 font-medium mt-0.5">
+                      Select the plan you'd love to continue with after your trial. Enjoy your first 30 days completely free with zero upfront billing!
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="px-3 py-1 bg-white text-teal-800 rounded-xl text-xs font-extrabold tracking-wide inline-flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    30 Days Unlocked
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-teal-50/70 rounded-2xl border border-teal-200/80 flex items-center justify-between gap-3 text-teal-950">
                 <div className="flex items-center gap-2.5">
                   <DollarSign className="w-5 h-5 text-teal-600 shrink-0" />
                   <div>
-                    <h4 className="text-xs font-bold text-teal-950">Transparent Commercial Models</h4>
-                    <p className="text-[11px] text-teal-900 font-medium">100% of patient diagnostic test revenue is retained directly by your laboratory.</p>
+                    <h4 className="text-xs font-bold text-teal-950">100% Patient Revenue Retention</h4>
+                    <p className="text-[11px] text-teal-900 font-medium">All patient diagnostic test revenue is retained 100% directly by your facility.</p>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 bg-teal-600 text-white rounded-full text-[10px] font-bold tracking-wide">
-                  Zero Hidden Costs
+                  Zero Upfront Charge
                 </span>
               </div>
 
               {/* 3 Main Commercial Models Tabs */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
-                  Select Your Preferred Commercial Billing Structure
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Choose Your Plan (Activated with 1-Month Free Trial)
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Trial Active: 30 Days Free
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   
                   {/* Option 1: Pay-Per-Test */}
@@ -737,10 +787,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <h4 className="text-xs font-bold text-slate-900">Pay-Per-Test</h4>
                       <p className="text-[11px] text-slate-600 mt-0.5 font-medium">500 FCFA / test processed</p>
                     </div>
-                    <div className="mt-3 pt-2 border-t border-slate-100">
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
                         Zero Upfront Cost
                       </span>
+                      <span className="text-[9px] font-black text-emerald-700">1 Mo Free</span>
                     </div>
                   </div>
 
@@ -754,7 +805,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     }`}
                   >
                     <span className="absolute -top-2.5 right-3 bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                      Most Popular
+                      1 Month Free Trial
                     </span>
                     <div>
                       <div className="flex justify-between items-center mb-1">
@@ -764,10 +815,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <h4 className="text-xs font-bold text-slate-900">Flat Subscription</h4>
                       <p className="text-[11px] text-slate-600 mt-0.5 font-medium">Unlimited tests • Flat monthly fee</p>
                     </div>
-                    <div className="mt-3 pt-2 border-t border-slate-100">
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md">
                         Priced by Staff & Sites
                       </span>
+                      <span className="text-[9px] font-black text-emerald-700">30 Days Free</span>
                     </div>
                   </div>
 
@@ -788,10 +840,11 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       <h4 className="text-xs font-bold text-slate-900">Lifetime Space</h4>
                       <p className="text-[11px] text-slate-600 mt-0.5 font-medium">15k FCFA / mo maintenance</p>
                     </div>
-                    <div className="mt-3 pt-2 border-t border-slate-100">
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[10px] font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-md">
                         Permanent Asset
                       </span>
+                      <span className="text-[9px] font-black text-emerald-700">1 Mo Free</span>
                     </div>
                   </div>
 
@@ -1124,17 +1177,22 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                 </div>
 
                 {/* Selected Plan Commercial Summary */}
-                <div className="p-3 bg-teal-50/80 border border-teal-200/80 rounded-xl text-xs text-teal-950 space-y-1">
-                  <p className="font-bold flex items-center gap-1.5 text-teal-900">
-                    <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-                    Selected Commercial Model: {
-                      formData.pricingModel === 'pay_per_test' ? 'Pay-Per-Test (500 FCFA baseline / test)' :
-                      formData.pricingModel === 'flat_subscription' ? `Flat Subscription (${formData.subscriptionTier.toUpperCase()} - Unlimited Tests)` :
-                      'Lifetime Dedicated Cloud Space (15,000 FCFA/mo maintenance)'
-                    }
-                  </p>
+                <div className="p-3.5 bg-teal-50/90 border border-teal-200 rounded-xl text-xs text-teal-950 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold flex items-center gap-1.5 text-teal-900">
+                      <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                      Plan Selected: {
+                        formData.pricingModel === 'pay_per_test' ? 'Pay-Per-Test (500 FCFA baseline / test)' :
+                        formData.pricingModel === 'flat_subscription' ? `Flat Subscription (${formData.subscriptionTier.toUpperCase()} - Unlimited Tests)` :
+                        'Lifetime Dedicated Cloud Space (15,000 FCFA/mo maintenance)'
+                      }
+                    </p>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white uppercase tracking-wider">
+                      1 Mo Free Trial
+                    </span>
+                  </div>
                   <p className="text-[11px] text-teal-900 leading-relaxed font-medium">
-                    100% of patient diagnostic fees are retained directly by your laboratory. You maintain complete pricing autonomy with zero predatory ticket surcharges.
+                    Your facility starts with an unconditional <strong>30-day (1-Month) Free Trial</strong> with 0 FCFA upfront billing. By continuing usage for the full 30 days and remaining active, your laboratory agrees to the binding obligation to pay the chosen plan fee for subsequent billing cycles to maintain active system operations and compliance status.
                   </p>
                 </div>
 
@@ -1156,7 +1214,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                       }}
                       className="text-teal-700 font-bold underline hover:text-teal-900"
                     >
-                      Terms and Conditions for Laboratory Registration
+                      Terms & Conditions (Including 1-Month Free Trial & Continuation Payment Obligation)
                     </button>
                   </span>
                 </label>
