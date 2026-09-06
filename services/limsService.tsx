@@ -3055,6 +3055,9 @@ export const limsService = {
     sourceLabId: string;
     sourceLabName: string;
     destinationLabId: string;
+    yeboVerified: boolean ;
+    yeboVerificationRef: string ;
+    yeboVerificationBadge: string;
     destinationLabName: string;
     transferScope: 'all' | 'specific_batches' | 'specific_tests';
     selectedBatchIds?: string[];
@@ -3065,6 +3068,7 @@ export const limsService = {
       testNames: string[];
     }>;
     reason?: string;
+
     medicalNotes?: string;
     diagnosticHistory?: any[];
     fhirPayload?: any;

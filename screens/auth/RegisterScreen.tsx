@@ -233,8 +233,10 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({
         reason,
         transferScope: 'specific_batches',
         selectedBatchIds: selectedBookingIds,
+        // yeboVerified: true,
         yeboVerified: true,
-        yeboVerificationRef: kycTransferResult?.referenceId || `YBV-TRF-${Date.now().toString(36).toUpperCase()}`,
+        // yeboVerificationRef: kycTransferResult?.referenceId || `YBV-TRF-${Date.now().toString(36).toUpperCase()}`,
+     yeboVerificationRef: kycTransferResult?.referenceId  || `YBV-TRF-${Date.now().toString(36).toUpperCase()}`,
         yeboVerificationBadge: kycTransferResult?.verificationBadge || 'YeboVerify Inter-Facility Health Record Transfer Certified',
         transferredBatchesSummary: selectedRecords.map(r => ({
           batchCode: r.bookingCode,
