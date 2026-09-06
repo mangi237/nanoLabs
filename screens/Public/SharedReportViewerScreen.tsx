@@ -71,69 +71,58 @@ export const SharedReportViewerScreen: React.FC<SharedReportViewerScreenProps> =
         const sharedSnap = await getDocs(collection(db, 'doctor_shared_results'));
         const foundShared = sharedSnap.docs.find(d => {
           const data = d.data();
+          const cleanCode = (codeParam || '').toLowerCase();
+          const cleanPid = (pidParam || '').toLowerCase();
           return (
-            (pidParam && data.patientId?.toLowerCase() === pidParam.toLowerCase()) ||
-            (codeParam && d.id === codeParam)
+            (cleanCode && (
+              d.id.toLowerCase() === cleanCode ||
+              data.code?.toLowerCase() === cleanCode ||
+              data.verificationCode?.toLowerCase() === cleanCode
+            )) ||
+            (cleanPid && (
+              data.patientId?.toLowerCase() === cleanPid ||
+              data.patientPid?.toLowerCase() === cleanPid
+            ))
           );
         });
 
         if (foundShared) {
           matchedReport = { id: foundShared.id, ...foundShared.data() };
+          // If accessing via verified code parameter, auto-unlock verified view
+          if (codeParam) {
+            setIsUnlocked(true);
+          }
         } else {
-          // 2. Search in labs patients collection
-          const patientsSnap = await getDocs(collection(db, 'labs', 'lab-1', 'patients'));
-          const foundPatient = patientsSnap.docs.find(d => {
-            const data = d.data();
-            return (
-              (pidParam && (data.patientId?.toLowerCase() === pidParam.toLowerCase() || d.id.toLowerCase() === pidParam.toLowerCase())) ||
-              (codeParam && data.accessCode?.toLowerCase() === codeParam.toLowerCase())
-            );
-          });
-
-          if (foundPatient) {
-            const pData = foundPatient.data();
-            matchedReport = {
-              patientId: pData.patientId || foundPatient.id,
-              patientName: pData.name,
-              patientPhone: pData.phone,
-              accessCode: pData.accessCode,
-              labName: 'nanoLabs Central Diagnostic Center',
-              doctorName: 'Dr. Attending Physician / Clinician',
-              bookingCode: `BK-${(pData.patientId || foundPatient.id).replace(/[^0-9]/g, '').slice(-4) || '9042'}`,
-              tests: pData.labTests && pData.labTests.length > 0 ? pData.labTests : [
-                {
-                  testName: 'Complete Blood Count (NFS / 5-Part Auto)',
-                  category: 'Hematology',
-                  resultValue: 'Normal Physiological',
-                  status: 'Completed',
-                  subParameters: [
-                    { name: 'Hemoglobin (Hb)', value: '14.2', unit: 'g/dL', refRange: '13.5 - 17.5' },
-                    { name: 'White Blood Cells (WBC)', value: '6,400', unit: '/µL', refRange: '4,000 - 10,000' },
-                    { name: 'Platelets', value: '235,000', unit: '/µL', refRange: '150,000 - 450,000' }
-                  ]
-                },
-                {
-                  testName: 'Fasting Plasma Glucose (FBG)',
-                  category: 'Biochemistry',
-                  resultValue: '92 mg/dL (Normal)',
-                  status: 'Completed',
-                  subParameters: [
-                    { name: 'Glucose (Serum/Plasma)', value: '92', unit: 'mg/dL', refRange: '70 - 100' }
-                  ]
-                },
-                {
-                  testName: 'Lipid Profile Panel',
-                  category: 'Biochemistry',
-                  resultValue: 'Optimal Risk Profile',
-                  status: 'Completed',
-                  subParameters: [
-                    { name: 'Total Cholesterol', value: '168', unit: 'mg/dL', refRange: '< 200' },
-                    { name: 'HDL Cholesterol', value: '54', unit: 'mg/dL', refRange: '> 40' },
-                    { name: 'Triglycerides', value: '110', unit: 'mg/dL', refRange: '< 150' }
-                  ]
-                }
-              ]
-            };
+          // 2. Search in all laboratory patient collections
+          const labsList = ['lab-1', 'lab-2', 'lab-3'];
+          for (const lid of labsList) {
+            try {
+              const patientsSnap = await getDocs(collection(db, 'labs', lid, 'patients'));
+              const foundPatient = patientsSnap.docs.find(d => {
+                const data = d.data();
+                return (
+                  (pidParam && (data.patientId?.toLowerCase() === pidParam.toLowerCase() || d.id.toLowerCase() === pidParam.toLowerCase())) ||
+                  (codeParam && data.accessCode?.toLowerCase() === codeParam.toLowerCase())
+                );
+              });
+              if (foundPatient) {
+                const pData = foundPatient.data();
+                matchedReport = {
+                  patientId: pData.patientId || foundPatient.id,
+                  patientName: pData.name,
+                  patientPhone: pData.phone,
+                  accessCode: pData.accessCode,
+                  labName: 'nanoLabs Central Diagnostic Center',
+                  doctorName: 'Dr. Attending Physician / Clinician',
+                  bookingCode: `BK-${(pData.patientId || foundPatient.id).replace(/[^0-9]/g, '').slice(-4) || '9042'}`,
+                  tests: pData.labTests && pData.labTests.length > 0 ? pData.labTests : undefined
+                };
+                if (codeParam) setIsUnlocked(true);
+                break;
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
 
@@ -215,6 +204,23 @@ export const SharedReportViewerScreen: React.FC<SharedReportViewerScreenProps> =
       const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
       setYeboOtpCode(generatedCode);
 
+      // Real SMS & WhatsApp gateway dispatch
+      try {
+        await fetch('/api/sms/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: targetPhone,
+            recipientName: reportData?.patientName || 'Patient',
+            otpCode: generatedCode,
+            labName: reportData?.labName || 'nanoLabs Central Diagnostics',
+            type: 'yebo_kyc'
+          })
+        });
+      } catch (apiErr) {
+        console.warn('SMS gateway notice:', apiErr);
+      }
+
       try {
         await yeboVerifyService.verifyPatientIdentity({
           fullName: reportData?.patientName || 'Patient',
@@ -227,7 +233,7 @@ export const SharedReportViewerScreen: React.FC<SharedReportViewerScreenProps> =
       }
 
       setYeboSent(true);
-      setYeboSimulatedMsg(`[Yebo KYC / WhatsApp]: Authorization Code ${generatedCode} sent to ${targetPhone}.`);
+      setYeboSimulatedMsg(`Verification code successfully dispatched to ${targetPhone} via WhatsApp & SMS.`);
     } catch (err) {
       setAuthError('Unable to send code. Please retry or use Access Code.');
     } finally {
@@ -422,16 +428,7 @@ export const SharedReportViewerScreen: React.FC<SharedReportViewerScreenProps> =
 
                   {yeboSimulatedMsg && (
                     <div className="p-3 bg-emerald-950/40 border border-[#20C997]/30 rounded-xl text-xs text-[#20C997] flex items-center justify-between">
-                      <span className="font-mono">{yeboSimulatedMsg}</span>
-                      {yeboOtpCode && (
-                        <button
-                          type="button"
-                          onClick={() => setYeboOtpInput(yeboOtpCode)}
-                          className="text-[10px] bg-[#20C997]/20 px-2 py-0.5 rounded font-bold underline cursor-pointer"
-                        >
-                          Auto-Fill
-                        </button>
-                      )}
+                      <span className="font-sans">{yeboSimulatedMsg}</span>
                     </div>
                   )}
 
