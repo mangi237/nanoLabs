@@ -40,8 +40,27 @@ import {
   HeartHandshake,
   Landmark,
   Coins,
-  Check
+  Check,
+  Plus,
+  Trash2
 } from 'lucide-react';
+
+export interface CashierAddOnItem {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+const CASHIER_ADDON_PRESETS: CashierAddOnItem[] = [
+  { id: 'prel-blood', code: 'ACT-PLV-01', name: 'Prélèvement Sanguin Standard (Phlebotomy)', price: 1000, quantity: 1 },
+  { id: 'prel-home', code: 'ACT-DOM-02', name: 'Prélèvement Spécial à Domicile (Home Draw)', price: 3000, quantity: 1 },
+  { id: 'prel-urg', code: 'ACT-URG-03', name: 'Traitement Urgence STAT (Emergency Run)', price: 2000, quantity: 1 },
+  { id: 'prel-kit', code: 'ACT-CNS-04', name: 'Kit Seringue, Tube & Aiguille sous-vide', price: 500, quantity: 1 },
+  { id: 'prel-dos', code: 'ACT-DOS-05', name: "Frais d'Ouverture & Archivage Dossier", price: 1000, quantity: 1 },
+  { id: 'prel-swb', code: 'ACT-SWB-06', name: 'Prélèvement Écouvillon / Cervico-Vaginal', price: 1500, quantity: 1 },
+];
 
 interface CashierViewProps {
   onNotificationPress?: () => void;
@@ -67,6 +86,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState<PatientBooking | null>(null);
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
+
+  // Billable Medical Acts & Add-ons state
+  const [currentAddOns, setCurrentAddOns] = useState<CashierAddOnItem[]>([]);
+  const [customAddOnName, setCustomAddOnName] = useState('');
+  const [customAddOnCode, setCustomAddOnCode] = useState('');
+  const [customAddOnPrice, setCustomAddOnPrice] = useState('');
+  const [customAddOnQty, setCustomAddOnQty] = useState(1);
 
   // Flexible Pricing, Discount & Coupon State
   const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed' | 'coupon' | 'workers_benefit'>('none');
@@ -161,6 +187,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Pre-populate patient details when a booking is selected
   useEffect(() => {
     if (selectedBooking) {
+      if (selectedBooking.addOns && selectedBooking.addOns.length > 0) {
+        setCurrentAddOns(selectedBooking.addOns);
+      } else {
+        setCurrentAddOns([]);
+      }
+
       if (!momoSenderPhone && selectedBooking.patientPhone) {
         setMomoSenderPhone(selectedBooking.patientPhone);
       }
@@ -206,7 +238,15 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Calculate dynamic settlement total based on pricing adjustments
   const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
     const targetBookings = group && group.length > 0 ? group : booking ? [booking] : [];
-    const baseTotal = targetBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const testsAmount = targetBookings.reduce((sum, b) => {
+      if (b.tests && b.tests.length > 0) {
+        return sum + b.tests.reduce((ts, t) => ts + (t.price || 0), 0);
+      }
+      return sum + (b.totalAmount || 0);
+    }, 0);
+
+    const addOnsAmount = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const baseTotal = testsAmount + addOnsAmount;
 
     let discountAmount = 0;
 
@@ -381,6 +421,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
     const { baseTotal, discountAmount, finalTotal, patientPortion, insurancePortion, changeToReturn } = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
     const payableAmount = paymentMethod === 'insurance' ? patientPortion : finalTotal;
 
+    const addOnsTotalSum = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const testsTotalSum = Math.max(0, baseTotal - addOnsTotalSum);
+
     const consolidatedPaymentDetails = {
       originalPrice: baseTotal,
       discountAmount,
@@ -411,6 +454,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
       insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
       insuranceCoveragePercent: paymentMethod === 'insurance' ? (100 - coPayPercent) : undefined,
       coPayPercent: paymentMethod === 'insurance' ? coPayPercent : undefined,
+      addOns: currentAddOns,
+      addOnsAmount: addOnsTotalSum,
+      testsAmount: testsTotalSum,
       insuranceDetails: paymentMethod === 'insurance' ? {
         provider: insuranceProvider || (targetBookings[0] as any).insuranceProvider || 'HMO Insurance',
         policyNumber: insurancePolicyNumber || (targetBookings[0] as any).insurancePolicyNumber || 'N/A',
@@ -446,6 +492,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
         insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
         insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
         overallStatus: 'Pending_Collection' as const,
+        addOns: currentAddOns,
+        addOnsAmount: addOnsTotalSum,
+        testsAmount: testsTotalSum,
         paymentDetails: consolidatedPaymentDetails
       };
 
@@ -461,6 +510,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
             discountAmount,
             actualPaidAmount: payableAmount,
             overallStatus: 'Pending_Collection',
+            addOns: currentAddOns,
+            addOnsAmount: addOnsTotalSum,
+            testsAmount: testsTotalSum,
             paymentDetails: consolidatedPaymentDetails,
             tests: (b.tests || []).map(t => ({
               ...t,
@@ -1038,18 +1090,235 @@ export const CashierView: React.FC<CashierViewProps> = ({
             </div>
 
             <div className="space-y-4 text-xs">
-              <div className="p-3 bg-slate-800 rounded-2xl space-y-1">
+              {/* Lab Branding & Cashier Accountability Header */}
+              <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {(lab?.logoUrl || (selectedBooking as any).labLogoUrl) ? (
+                    <img
+                      src={lab?.logoUrl || (selectedBooking as any).labLogoUrl}
+                      alt={lab?.name || 'Lab Logo'}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-xl object-contain border border-slate-700 bg-white p-1 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-bold shrink-0">
+                      <Building2 className="w-6 h-6 text-white" />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">{lab?.name || 'nanoLabs Medical Diagnostics'}</h4>
+                    <p className="text-[10px] text-teal-400 font-mono">
+                      Authorized Cashier: <strong className="text-white font-bold">{user?.name || 'Authorized Staff'}</strong> [{ (user as any)?.staffId || 'CSH-01' }]
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    Cashier Settlement
+                  </span>
+                </div>
+              </div>
+
+              {/* Patient & Prescribed Tests with Full Names & Codes */}
+              <div className="p-3.5 bg-slate-800/90 rounded-2xl border border-slate-700 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <div className="text-slate-400">Patient Name</div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Patient Information</span>
+                    <div className="text-sm font-black text-white">{selectedBooking.patientName}</div>
+                    <div className="text-[10px] font-mono text-teal-300">
+                      PID: {selectedBooking.patientPid || selectedBooking.patientId || 'PID-001'} • Tél: {selectedBooking.patientPhone || 'N/A'}
+                    </div>
+                  </div>
                   {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
                       <Globe className="w-3 h-3" />
-                      Virtual Delivery Requested
+                      Virtual Delivery
                     </span>
                   )}
                 </div>
-                <div className="text-base font-black text-white">{selectedBooking.patientName}</div>
-                <div className="text-slate-300">Total Items: {selectedBooking.tests?.length || 0} tests ({selectedBooking.tests?.map(t => t.testName).join(', ')})</div>
+
+                <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
+                  <span className="text-[10px] text-slate-300 font-bold flex items-center gap-1.5">
+                    <FlaskConical className="w-3.5 h-3.5 text-emerald-400" />
+                    Prescribed Diagnostic Tests ({selectedBooking.tests?.length || 0}):
+                  </span>
+                  <div className="space-y-1">
+                    {selectedBooking.tests?.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between p-2 bg-slate-900/90 rounded-xl border border-slate-700/60 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{t.testName}</span>
+                          {(t.testCode || (t as any).code) && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-teal-900/60 text-teal-300 border border-teal-700/50">
+                              {t.testCode || (t as any).code}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono font-bold text-emerald-400">
+                          {(t.price || 5500).toLocaleString()} XAF
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Billable Medical Acts, Phlebotomy & Add-ons Section */}
+              <div className="p-3.5 bg-gradient-to-br from-teal-950/40 via-slate-900 to-slate-950 rounded-2xl border border-teal-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-teal-300 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-teal-400" />
+                    Billable Medical Acts, Phlebotomy & Add-ons
+                  </span>
+                  <span className="text-[10px] font-mono text-teal-400 bg-teal-950/80 px-2 py-0.5 rounded-full border border-teal-600/40">
+                    {currentAddOns.length} Act{currentAddOns.length > 1 ? 's' : ''} Added
+                  </span>
+                </div>
+
+                {/* Quick Add Presets */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-400 font-semibold block">Quick-Add Standard Medical Acts:</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {CASHIER_ADDON_PRESETS.map((preset) => {
+                      const isAlreadyAdded = currentAddOns.some(a => a.id === preset.id || a.code === preset.code);
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            if (isAlreadyAdded) {
+                              setCurrentAddOns(prev => prev.map(a => (a.id === preset.id || a.code === preset.code) ? { ...a, quantity: a.quantity + 1 } : a));
+                            } else {
+                              setCurrentAddOns(prev => [...prev, { ...preset }]);
+                            }
+                          }}
+                          className={`p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                            isAlreadyAdded 
+                              ? 'bg-teal-900/60 border-teal-400 text-teal-200 shadow-xs' 
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-[9px] font-mono font-bold text-teal-400">{preset.code}</span>
+                            <Plus className="w-3 h-3 text-teal-400" />
+                          </div>
+                          <span className="text-[10px] font-bold leading-tight">{preset.name.split('(')[0]}</span>
+                          <span className="text-[9px] font-mono text-emerald-400 mt-0.5">+{preset.price.toLocaleString()} XAF</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Add-on input */}
+                <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
+                  <span className="text-[10px] text-slate-400 font-semibold block">Add Custom Billable Fee / Consumable:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Act Name (e.g. Domicile)"
+                      value={customAddOnName}
+                      onChange={(e) => setCustomAddOnName(e.target.value)}
+                      className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price (XAF)"
+                      value={customAddOnPrice}
+                      onChange={(e) => setCustomAddOnPrice(e.target.value)}
+                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const price = parseFloat(customAddOnPrice);
+                        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
+                        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
+                        setCurrentAddOns(prev => [
+                          ...prev,
+                          {
+                            id: `custom-${Date.now()}`,
+                            code,
+                            name: customAddOnName.trim(),
+                            price,
+                            quantity: customAddOnQty || 1
+                          }
+                        ]);
+                        setCustomAddOnName('');
+                        setCustomAddOnCode('');
+                        setCustomAddOnPrice('');
+                        setCustomAddOnQty(1);
+                      }}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Act
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current Active Add-ons List */}
+                {currentAddOns.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] text-teal-300 font-bold flex items-center justify-between">
+                      <span>Included Billable Items:</span>
+                      <span className="font-mono text-emerald-400">
+                        Subtotal: +{currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()} XAF
+                      </span>
+                    </span>
+                    <div className="space-y-1">
+                      {currentAddOns.map((ao, idx) => (
+                        <div key={ao.id || idx} className="flex items-center justify-between p-2 bg-teal-950/40 rounded-xl border border-teal-500/30 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-[10px] bg-teal-900/80 text-teal-200 px-1.5 py-0.5 rounded border border-teal-600/40">
+                              {ao.code}
+                            </span>
+                            <span className="font-bold text-white text-[11px]">{ao.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded-lg border border-slate-700">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (ao.quantity > 1) {
+                                    setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity - 1 } : item));
+                                  } else {
+                                    setCurrentAddOns(prev => prev.filter((_, i) => i !== idx));
+                                  }
+                                }}
+                                className="text-slate-400 hover:text-white px-1 font-bold cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <span className="font-mono font-bold text-[10px] text-teal-300 px-1">{ao.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity + 1 } : item));
+                                }}
+                                className="text-slate-400 hover:text-white px-1 font-bold cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <span className="font-mono font-bold text-emerald-400 text-xs whitespace-nowrap">
+                              {(ao.price * ao.quantity).toLocaleString()} XAF
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => setCurrentAddOns(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-rose-400 hover:text-rose-300 p-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1852,12 +2121,26 @@ export const CashierView: React.FC<CashierViewProps> = ({
               {(() => {
                 const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
                 const payable = paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal;
+                const addOnsSum = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                const testsSum = Math.max(0, details.baseTotal - addOnsSum);
 
                 return (
                   <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
                     <div className="flex justify-between text-slate-400 text-xs">
-                      <span>Original Catalog Total:</span>
-                      <span className="font-mono">{details.baseTotal.toLocaleString()} XAF</span>
+                      <span>Prescribed Diagnostic Tests ({selectedBooking.tests?.length || 0}):</span>
+                      <span className="font-mono">{testsSum.toLocaleString()} XAF</span>
+                    </div>
+
+                    {addOnsSum > 0 && (
+                      <div className="flex justify-between text-teal-300 text-xs font-semibold">
+                        <span>Medical Acts & Phlebotomy Fees ({currentAddOns.length}):</span>
+                        <span className="font-mono font-bold">+{addOnsSum.toLocaleString()} XAF</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-slate-400 text-xs pt-1 border-t border-slate-800/80">
+                      <span>Gross Catalog Total:</span>
+                      <span className="font-mono font-bold text-white">{details.baseTotal.toLocaleString()} XAF</span>
                     </div>
 
                     {details.discountAmount > 0 && (
