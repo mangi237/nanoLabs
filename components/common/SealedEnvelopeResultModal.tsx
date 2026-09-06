@@ -53,7 +53,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
 }) => {
   const [isOpened, setIsOpened] = useState(false);
   const [isUnsealing, setIsUnsealing] = useState(false);
-  const [selectedTestIdx, setSelectedTestIdx] = useState(0);
+  const [selectedView, setSelectedView] = useState<'all' | number>('all');
 
   if (!isOpen) return null;
 
@@ -80,7 +80,7 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
         }
       ];
 
-  const currentTest = resolvedTests[selectedTestIdx] || resolvedTests[0];
+  const currentTest = typeof selectedView === 'number' ? (resolvedTests[selectedView] || resolvedTests[0]) : null;
 
   const referringDoc = doctorName || booking?.doctorName || test?.referringDoctor || test?.doctorName || 'Dr. Attending Physician / Outpatient';
   const pName = patientName || booking?.patientName || test?.patientName || 'Patient Record';
@@ -283,141 +283,271 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                 </div>
               </div>
 
-              {/* Multi-Test Selector Tabs if more than 1 test exists */}
-              {resolvedTests.length > 1 && (
-                <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-none">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5 text-teal-600" />
-                    Batch Tests:
-                  </span>
-                  {resolvedTests.map((t, idx) => {
-                    const isCurrent = selectedTestIdx === idx;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedTestIdx(idx)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                          isCurrent
-                            ? 'bg-teal-700 text-white shadow-xs'
-                            : 'bg-white text-slate-700 hover:bg-slate-200'
-                        }`}
-                      >
-                        <TestTube className="w-3 h-3" />
-                        <span>{t.testName || t.name || `Test #${idx + 1}`}</span>
-                        {t.flag && t.flag !== 'Normal' && (
-                          <span className="w-2 h-2 rounded-full bg-rose-500" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Multi-Test Selector Tabs */}
+              <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setSelectedView('all')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    selectedView === 'all'
+                      ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-500/30'
+                      : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>All Examinations (Consolidated Batch View - {resolvedTests.length})</span>
+                </button>
+
+                {resolvedTests.length > 1 && resolvedTests.map((t, idx) => {
+                  const isCurrent = selectedView === idx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedView(idx)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                        isCurrent
+                          ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-500/30'
+                          : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                      }`}
+                    >
+                      <TestTube className="w-3 h-3 text-teal-600" />
+                      <span>{t.testName || t.name || `Test #${idx + 1}`}</span>
+                      {t.flag && t.flag !== 'Normal' && (
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* Clinical Analysis Body */}
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
                 
-                {/* Active Test Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-                  <div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                      {currentTest.category || 'Clinical Biology'}
-                    </span>
-                    <h3 className="text-lg font-black text-slate-900 mt-1">
-                      {currentTest.testName || currentTest.name || 'Diagnostic Examination'}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 font-mono">
-                      Status: <strong className="text-emerald-700 font-bold">{currentTest.status || 'Completed'}</strong>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Overall Test Value summary */}
-                <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200 flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[10px] uppercase font-bold text-teal-700 tracking-wider">
-                      Overall Diagnostic Result
+                {/* 1. CONSOLIDATED ALL TESTS VIEW (DEFAULT) */}
+                {selectedView === 'all' ? (
+                  <div className="space-y-6">
+                    <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 text-teal-950 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-teal-700" />
+                        <span>Showing All {resolvedTests.length} Laboratory Findings in this Batch</span>
+                      </div>
+                      <span className="text-[11px] text-teal-800 font-mono">
+                        Status: Complete & Validated
+                      </span>
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-teal-950 mt-0.5">
-                      {currentTest.resultValue || currentTest.resultText || currentTest.result || 'Analyzed & Biologically Validated'} {currentTest.units || currentTest.unit || ''}
-                    </div>
-                  </div>
-                  {currentTest.flag && currentTest.flag !== 'Normal' && (
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      currentTest.flag === 'Critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}>
-                      Flag: {currentTest.flag}
-                    </span>
-                  )}
-                </div>
 
-                {/* Hierarchical Sections or Sub-Parameters Breakdown */}
-                {currentTest.sections && currentTest.sections.length > 0 ? (
-                  <div className="space-y-4">
-                    {currentTest.sections.map((sec: any, sIdx: number) => (
-                      <div key={sec.id || sIdx} className="border border-slate-200 rounded-2xl overflow-hidden">
-                        <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-black text-xs text-slate-800 uppercase tracking-wide">
-                          {sec.title}
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {sec.subSections?.map((sub: any, subIdx: number) => (
-                            <div key={sub.id || subIdx} className="space-y-2">
-                              {sub.title && (
-                                <div className="text-xs font-bold text-teal-900 border-b border-slate-100 pb-1">
-                                  {sub.title}
-                                </div>
-                              )}
-                              <div className="space-y-1.5 text-xs">
-                                {sub.parameters?.map((param: any, pIdx: number) => (
-                                  <div key={param.id || pIdx} className="flex items-center justify-between py-1 border-b border-dashed border-slate-100">
-                                    <span className="text-slate-600 font-mono">
-                                      {param.staticLeftLabel || `${param.name} ........................`}
-                                    </span>
-                                    <span className="font-extrabold text-slate-950 font-mono">
-                                      {param.value || param.defaultValue || 'Conforme'} {param.unit || ''}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                    {resolvedTests.map((tItem: any, tIdx: number) => (
+                      <div key={tIdx} className="p-5 bg-white border-2 border-slate-200/90 rounded-2xl space-y-4 shadow-xs">
+                        {/* Test Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                {tItem.category || 'Clinical Biology'}
+                              </span>
+                              <span className="text-xs font-mono font-bold text-slate-400">
+                                #{tIdx + 1}
+                              </span>
                             </div>
-                          ))}
+                            <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1">
+                              {tItem.testName || tItem.name || 'Diagnostic Examination'}
+                            </h3>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                              {tItem.status || 'Completed'}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Overall Test Value */}
+                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
+                          <div>
+                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                              Biochemical / Clinical Finding
+                            </div>
+                            <div className="text-base sm:text-lg font-black text-teal-950 mt-0.5">
+                              {tItem.resultValue || tItem.resultText || tItem.result || 'Analyzed & Biologically Validated'} {tItem.units || tItem.unit || ''}
+                            </div>
+                          </div>
+                          {tItem.flag && tItem.flag !== 'Normal' && (
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              tItem.flag === 'Critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}>
+                              Flag: {tItem.flag}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* SubParameters or Hierarchical Sections */}
+                        {tItem.sections && tItem.sections.length > 0 ? (
+                          <div className="space-y-3">
+                            {tItem.sections.map((sec: any, sIdx: number) => (
+                              <div key={sec.id || sIdx} className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                                <div className="bg-slate-100 px-3 py-1.5 font-bold text-slate-800 uppercase tracking-wider">
+                                  {sec.title}
+                                </div>
+                                <div className="p-3 space-y-2">
+                                  {sec.subSections?.map((sub: any, subIdx: number) => (
+                                    <div key={sub.id || subIdx} className="space-y-1">
+                                      {sub.title && (
+                                        <div className="font-bold text-teal-900 border-b border-slate-100 pb-0.5">
+                                          {sub.title}
+                                        </div>
+                                      )}
+                                      <div className="space-y-1 font-mono">
+                                        {sub.parameters?.map((param: any, pIdx: number) => (
+                                          <div key={param.id || pIdx} className="flex items-center justify-between py-0.5 border-b border-dashed border-slate-100">
+                                            <span className="text-slate-600">{param.name || param.staticLeftLabel}</span>
+                                            <span className="font-extrabold text-slate-900">{param.value || param.defaultValue || 'Conforme'} {param.unit || ''}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : tItem.subParameters && tItem.subParameters.length > 0 ? (
+                          <div className="border border-slate-200 rounded-xl overflow-hidden">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-100 text-slate-700 font-bold">
+                                <tr>
+                                  <th className="p-2.5">Parameter</th>
+                                  <th className="p-2.5">Result</th>
+                                  <th className="p-2.5">Unit</th>
+                                  <th className="p-2.5">Ref. Range</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 font-medium">
+                                {tItem.subParameters.map((sub: any, sIdx: number) => (
+                                  <tr key={sub.id || sIdx}>
+                                    <td className="p-2.5 font-bold text-slate-900">{sub.name}</td>
+                                    <td className="p-2.5 font-mono font-extrabold text-teal-800">{sub.value || sub.defaultValue || 'Normal'}</td>
+                                    <td className="p-2.5 text-slate-500 font-mono">{sub.unit || '-'}</td>
+                                    <td className="p-2.5 text-slate-500">{sub.refRangeMale || sub.refRange || 'Standard'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+
+                        {/* Clinical Interpretation */}
+                        {tItem.notes && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                            <div className="text-[10px] font-bold uppercase text-slate-400">Interpretation</div>
+                            <p className="text-slate-800 font-medium mt-0.5">{tItem.notes}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
-                ) : currentTest.subParameters && currentTest.subParameters.length > 0 ? (
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-700 font-bold">
-                        <tr>
-                          <th className="p-3">Analysis Parameter</th>
-                          <th className="p-3">Observed Value</th>
-                          <th className="p-3">Units</th>
-                          <th className="p-3">Reference Interval</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        {currentTest.subParameters.map((sub: any, sIdx: number) => (
-                          <tr key={sub.id || sIdx}>
-                            <td className="p-3 font-bold text-slate-900">{sub.name}</td>
-                            <td className="p-3 font-mono font-extrabold text-teal-800">{sub.value || sub.defaultValue || 'Normal'}</td>
-                            <td className="p-3 text-slate-500 font-mono">{sub.unit || '-'}</td>
-                            <td className="p-3 text-slate-500">{sub.refRangeMale || sub.refRange || 'Standard'}</td>
-                          </tr>
+                ) : currentTest ? (
+                  /* 2. SINGLE TEST DETAILED VIEW */
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                      <div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                          {currentTest.category || 'Clinical Biology'}
+                        </span>
+                        <h3 className="text-lg font-black text-slate-900 mt-1">
+                          {currentTest.testName || currentTest.name || 'Diagnostic Examination'}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 font-mono">
+                          Status: <strong className="text-emerald-700 font-bold">{currentTest.status || 'Completed'}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200 flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-teal-700 tracking-wider">
+                          Overall Diagnostic Result
+                        </div>
+                        <div className="text-lg sm:text-xl font-black text-teal-950 mt-0.5">
+                          {currentTest.resultValue || currentTest.resultText || currentTest.result || 'Analyzed & Biologically Validated'} {currentTest.units || currentTest.unit || ''}
+                        </div>
+                      </div>
+                      {currentTest.flag && currentTest.flag !== 'Normal' && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          currentTest.flag === 'Critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          Flag: {currentTest.flag}
+                        </span>
+                      )}
+                    </div>
+
+                    {currentTest.sections && currentTest.sections.length > 0 ? (
+                      <div className="space-y-4">
+                        {currentTest.sections.map((sec: any, sIdx: number) => (
+                          <div key={sec.id || sIdx} className="border border-slate-200 rounded-2xl overflow-hidden">
+                            <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-black text-xs text-slate-800 uppercase tracking-wide">
+                              {sec.title}
+                            </div>
+                            <div className="p-4 space-y-3">
+                              {sec.subSections?.map((sub: any, subIdx: number) => (
+                                <div key={sub.id || subIdx} className="space-y-2">
+                                  {sub.title && (
+                                    <div className="text-xs font-bold text-teal-900 border-b border-slate-100 pb-1">
+                                      {sub.title}
+                                    </div>
+                                  )}
+                                  <div className="space-y-1.5 text-xs">
+                                    {sub.parameters?.map((param: any, pIdx: number) => (
+                                          <div key={param.id || pIdx} className="flex items-center justify-between py-1 border-b border-dashed border-slate-100">
+                                        <span className="text-slate-600 font-mono">
+                                          {param.staticLeftLabel || `${param.name} ........................`}
+                                        </span>
+                                        <span className="font-extrabold text-slate-950 font-mono">
+                                          {param.value || param.defaultValue || 'Conforme'} {param.unit || ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    ) : currentTest.subParameters && currentTest.subParameters.length > 0 ? (
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-100 text-slate-700 font-bold">
+                            <tr>
+                              <th className="p-3">Analysis Parameter</th>
+                              <th className="p-3">Observed Value</th>
+                              <th className="p-3">Units</th>
+                              <th className="p-3">Reference Interval</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium">
+                            {currentTest.subParameters.map((sub: any, sIdx: number) => (
+                              <tr key={sub.id || sIdx}>
+                                <td className="p-3 font-bold text-slate-900">{sub.name}</td>
+                                <td className="p-3 font-mono font-extrabold text-teal-800">{sub.value || sub.defaultValue || 'Normal'}</td>
+                                <td className="p-3 text-slate-500 font-mono">{sub.unit || '-'}</td>
+                                <td className="p-3 text-slate-500">{sub.refRangeMale || sub.refRange || 'Standard'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+
+                    {currentTest.notes && (
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                        <div className="text-[10px] font-bold uppercase text-slate-400">Biologist Clinical Interpretation</div>
+                        <p className="text-xs text-slate-800 leading-relaxed font-medium">{currentTest.notes}</p>
+                      </div>
+                    )}
                   </div>
                 ) : null}
-
-                {/* Biologist Comments / Interpretation */}
-                {currentTest.notes && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Biologist Clinical Interpretation</div>
-                    <p className="text-xs text-slate-800 leading-relaxed font-medium">{currentTest.notes}</p>
-                  </div>
-                )}
 
                 {/* All Tests in Batch Overview List */}
                 {resolvedTests.length > 1 && (
@@ -427,9 +557,9 @@ export const SealedEnvelopeResultModal: React.FC<SealedEnvelopeResultModalProps>
                       {resolvedTests.map((t, idx) => (
                         <div
                           key={idx}
-                          onClick={() => setSelectedTestIdx(idx)}
+                          onClick={() => setSelectedView(idx)}
                           className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between ${
-                            selectedTestIdx === idx
+                            selectedView === idx
                               ? 'bg-teal-50 border-teal-300 font-bold text-teal-900'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
