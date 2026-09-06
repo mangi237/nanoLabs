@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/authContext';
 import { 
   Printer, 
   X, 
@@ -72,8 +73,12 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   labInfo,
   paymentDetails
 }) => {
+  const { user } = useAuth();
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
+
+  // Security: Restrict template customization and upload actions strictly to staff/admin
+  const canCustomizeTemplates = user?.role && !['patient'].includes(user.role.toLowerCase());
 
   const headerFileInputRef = useRef<HTMLInputElement>(null);
   const footerFileInputRef = useRef<HTMLInputElement>(null);
@@ -142,19 +147,19 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const tplConfig = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
   // Lab metadata from real lab configuration
-  const labName = tplConfig.labName || labInfo?.name || booking.labName || 'LABORATOIRE BIODIAGNOSTICS';
-  const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE';
-  const labAddress = tplConfig.address || labInfo?.address || 'Vallée 3 Boutiques, Entrée Polyclinique Poitiers';
-  const labPhone = tplConfig.phone || labInfo?.phone || '33 06 21 23';
-  const labEmergency = tplConfig.emergencyPhone || '699 92 91 98';
-  const labEmail = tplConfig.email || labInfo?.email || 'biodiagnostics.dla@gmail.com';
-  const labWebsite = tplConfig.website || labInfo?.website || '';
-  const labArrete = tplConfig.arreteNumber || 'Arrêté N° 032/A/MSP/SG/DMH/SDHFS/SL/1991';
-  const labAgrement = tplConfig.agrementNumber || 'Agrément N° 019 MINSAP';
-  const labTaxId = tplConfig.taxNumber || 'Contribuable N° P1256 0000 6852-X';
-  const directorName = tplConfig.directorName || 'Dr TANKOUA Jean Alain';
-  const directorDiplomas = tplConfig.directorDiplomas || 'Diplômé de l\'Université René Descartes (Paris V) • Ex Attaché des Hôpitaux de Paris & Hôpital Général de Dla';
-  const directorSpecialties = tplConfig.directorSpecialties || 'Etudes Spéciales de Biochimie, Hématologie, Immunologie, Parasitologie, Bactériologie et de Virologie Cliniques';
+  const labName = tplConfig.labName || labInfo?.name || booking.labName || 'NANOLABS CLINICAL DIAGNOSTIC CENTER';
+  const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE';
+  const labAddress = tplConfig.address || labInfo?.address || 'Akwa Boulevard de la Liberté, Douala - Cameroun';
+  const labPhone = tplConfig.phone || labInfo?.phone || '+237 670 000 000';
+  const labEmergency = tplConfig.emergencyPhone || '+237 699 000 000';
+  const labEmail = tplConfig.email || labInfo?.email || 'contact@nanolabs.health';
+  const labWebsite = tplConfig.website || labInfo?.website || 'www.nanolabs.health';
+  const labArrete = tplConfig.arreteNumber || 'Arrêté N° 032/A/MINSANTE/SG/DOSTS';
+  const labAgrement = tplConfig.agrementNumber || 'Agrément N° 019 MINSANTE';
+  const labTaxId = tplConfig.taxNumber || 'Contribuable N° M052100089201L';
+  const directorName = tplConfig.directorName || 'Dr MANGI';
+  const directorDiplomas = tplConfig.directorDiplomas || 'Biologiste Médical Diplômé d\'État • Spécialiste en Diagnostic Clinique';
+  const directorSpecialties = tplConfig.directorSpecialties || 'Biochimie Médicale, Hématologie, Immunologie et Microbiologie Clinique';
   const biologistSignatureTitle = tplConfig.biologistSignatureTitle || 'BIOLOGISTE-CLINICIEN / LA DIRECTION';
 
   // Consolidate payment attributes
@@ -272,43 +277,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const lineItems: LineItemBilling[] = [];
 
-  // 1. Check if we need to auto-incorporate Prelevement Acts (PK# Acte Prelevement Selles, PSE# Acte Prelevement Sang)
-  const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
-  const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
-
-  // If stool test present and not already added as an explicit line item
-  if (hasStool && !testsList.some((t: any) => (t.testName || '').includes('PK#'))) {
-    const pkPrice = Math.round(1.0 * (kbUnitRate / 5)); // 240 FCFA
-    const pkIns = Math.round(pkPrice * (insuranceCoveragePercent / 100)); // 192 FCFA
-    const pkPat = pkPrice - pkIns; // 48 FCFA
-    lineItems.push({
-      designation: 'PK# ACTE PRELEVEMENT SELLES',
-      cote: 'KB1,0',
-      valeurCoeff: (kbUnitRate).toLocaleString(),
-      qty: 1,
-      totalPrice: pkPrice,
-      insuranceAmount: pkIns,
-      patientAmount: pkPat
-    });
-  }
-
-  // If blood test present and not already added as an explicit line item
-  if (hasBlood && !testsList.some((t: any) => (t.testName || '').includes('PSE#'))) {
-    const psePrice = Math.round(1.5 * (kbUnitRate / 5)); // 372 FCFA
-    const pseIns = Math.round(psePrice * (insuranceCoveragePercent / 100)); // 298 FCFA
-    const psePat = psePrice - pseIns; // 74 FCFA
-    lineItems.push({
-      designation: 'PSE# ACTE DE PRELEVEMENT DE SANG ES',
-      cote: 'KB1,5',
-      valeurCoeff: (kbUnitRate).toLocaleString(),
-      qty: 1,
-      totalPrice: psePrice,
-      insuranceAmount: pseIns,
-      patientAmount: psePat
-    });
-  }
-
-  // 2. Add each diagnostic test with its COTE calculation
+  // 1. Process diagnostic tests with their Test Name AND Test Code
   testsList.forEach((t: any) => {
     let cote = t.cote || 'B10';
     let lineTotal = t.price || t.totalPrice || 520;
@@ -331,9 +300,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
     const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
     const patShare = lineTotal - insShare;
+    const testCodeLabel = t.testCode || t.code ? `[${t.testCode || t.code}]` : '';
 
     lineItems.push({
-      designation: t.testName || t.name || 'EXAMEN DE BIOLOGIE MEDICALE',
+      designation: `${t.testName || t.name || 'EXAMEN DE BIOLOGIE MEDICALE'} ${testCodeLabel}`.trim(),
       cote,
       valeurCoeff: coeffStr,
       qty: 1,
@@ -342,6 +312,59 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
       patientAmount: patShare
     });
   });
+
+  // 2. Explicit Billable Add-ons & Phlebotomy Acts
+  const explicitAddOns = booking.addOns || pDetails?.addOns || [];
+  if (Array.isArray(explicitAddOns) && explicitAddOns.length > 0) {
+    explicitAddOns.forEach((ao: any) => {
+      const lineTotal = (ao.price || 1000) * (ao.quantity || 1);
+      const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
+      const patShare = lineTotal - insShare;
+      lineItems.push({
+        designation: `${ao.name} ${ao.code ? `[${ao.code}]` : ''}`.trim(),
+        cote: ao.code || 'ACT-PREL',
+        valeurCoeff: (ao.price || 1000).toLocaleString(),
+        qty: ao.quantity || 1,
+        totalPrice: lineTotal,
+        insuranceAmount: insShare,
+        patientAmount: patShare
+      });
+    });
+  } else {
+    // Standard automatic prelevement fallback if no explicit add-ons and blood/stool present
+    const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
+    const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
+
+    if (hasStool && !testsList.some((t: any) => (t.testName || '').includes('PK#'))) {
+      const pkPrice = Math.round(1.0 * (kbUnitRate / 5));
+      const pkIns = Math.round(pkPrice * (insuranceCoveragePercent / 100));
+      const pkPat = pkPrice - pkIns;
+      lineItems.push({
+        designation: 'PK# ACTE PRELEVEMENT SELLES',
+        cote: 'KB1,0',
+        valeurCoeff: (kbUnitRate).toLocaleString(),
+        qty: 1,
+        totalPrice: pkPrice,
+        insuranceAmount: pkIns,
+        patientAmount: pkPat
+      });
+    }
+
+    if (hasBlood && !testsList.some((t: any) => (t.testName || '').includes('PSE#'))) {
+      const psePrice = Math.round(1.5 * (kbUnitRate / 5));
+      const pseIns = Math.round(psePrice * (insuranceCoveragePercent / 100));
+      const psePat = psePrice - pseIns;
+      lineItems.push({
+        designation: 'PSE# ACTE DE PRELEVEMENT DE SANG ES',
+        cote: 'KB1,5',
+        valeurCoeff: (kbUnitRate).toLocaleString(),
+        qty: 1,
+        totalPrice: psePrice,
+        insuranceAmount: pseIns,
+        patientAmount: psePat
+      });
+    }
+  }
 
   // Calculate Cumulative Financial Breakdown
   const totalExamensLabo = lineItems.reduce((acc, item) => acc + item.totalPrice, 0);
@@ -382,63 +405,67 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Template Selector */}
-            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
-              {templates.slice(0, 4).map((tpl, idx) => (
+            {/* Template Selector & Uploads (Staff/Admin Only) */}
+            {canCustomizeTemplates && (
+              <>
+                <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
+                  {templates.slice(0, 4).map((tpl, idx) => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateIndex(idx)}
+                      className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        selectedTemplateIndex === idx
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Direct Upload Buttons for Header and Footer */}
+                <input 
+                  type="file" 
+                  ref={headerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
+                  }} 
+                />
+                <input 
+                  type="file" 
+                  ref={footerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
+                  }} 
+                />
+
                 <button
-                  key={tpl.id}
                   type="button"
-                  onClick={() => setSelectedTemplateIndex(idx)}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                    selectedTemplateIndex === idx
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => headerFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom top letterhead image"
                 >
-                  {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
+                  <Upload className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Upload Header</span>
                 </button>
-              ))}
-            </div>
 
-            {/* Direct Upload Buttons for Header and Footer */}
-            <input 
-              type="file" 
-              ref={headerFileInputRef} 
-              accept="image/*" 
-              className="hidden" 
-              onChange={(e) => {
-                if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
-              }} 
-            />
-            <input 
-              type="file" 
-              ref={footerFileInputRef} 
-              accept="image/*" 
-              className="hidden" 
-              onChange={(e) => {
-                if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
-              }} 
-            />
-
-            <button
-              type="button"
-              onClick={() => headerFileInputRef.current?.click()}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
-              title="Upload custom top letterhead image"
-            >
-              <Upload className="w-3.5 h-3.5 text-teal-400" />
-              <span>Upload Header</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => footerFileInputRef.current?.click()}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
-              title="Upload custom footer image"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
-              <span>Upload Footer</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => footerFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom footer image"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Upload Footer</span>
+                </button>
+              </>
+            )}
 
             <button
               onClick={handlePrint}
@@ -484,31 +511,50 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 
                 {/* 1. OFFICIAL LETTERHEAD HEADER (if no custom header image) */}
                 {!tplConfig.headerImageUrl && (
-                  <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
-                    <div className="flex items-center justify-center gap-2">
-                      <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
-                        {labName}
-                      </h1>
-                    </div>
-                    <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                      {labSlogan}
-                    </h2>
-                    
-                    <div className="text-xs font-bold text-slate-900 pt-1">
-                      {directorName}
-                    </div>
-                    <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
-                      {directorDiplomas}
-                    </div>
-                    <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
-                      {directorSpecialties}
-                    </div>
+                  <div className="border-b-2 border-slate-900 pb-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                        <img
+                          src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                          alt={labName}
+                          referrerPolicy="no-referrer"
+                          className="w-16 h-16 rounded-xl object-contain border border-slate-300 bg-white p-1 shadow-xs shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
+                          <Building2 className="w-8 h-8 text-white" />
+                        </div>
+                      )}
 
-                    <div className="text-[9px] text-slate-600 font-mono pt-1">
-                      {labArrete} • {labAgrement} • {labTaxId}
+                      <div className="text-center flex-1">
+                        <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
+                          {labName}
+                        </h1>
+                        <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                          {labSlogan}
+                        </h2>
+                      </div>
+
+                      <div className="w-16 hidden sm:block"></div>
                     </div>
-                    <div className="text-[9px] text-slate-700 font-semibold">
-                      {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
+                    
+                    <div className="text-center space-y-0.5">
+                      <div className="text-xs font-bold text-slate-900 pt-1">
+                        {directorName}
+                      </div>
+                      <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
+                        {directorDiplomas}
+                      </div>
+                      <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
+                        {directorSpecialties}
+                      </div>
+
+                      <div className="text-[9px] text-slate-600 font-mono pt-1">
+                        {labArrete} • {labAgrement} • {labTaxId}
+                      </div>
+                      <div className="text-[9px] text-slate-700 font-semibold">
+                        {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -680,11 +726,20 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
               <div className="space-y-4">
                 
                 {/* Header */}
-                <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3">
+                <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3 gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black">
-                      <Building2 className="w-7 h-7 text-white" />
-                    </div>
+                    {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                      <img
+                        src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                        alt={labName}
+                        referrerPolicy="no-referrer"
+                        className="w-14 h-14 rounded-xl object-contain border border-teal-300 bg-white p-1 shadow-xs shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
+                        <Building2 className="w-7 h-7 text-white" />
+                      </div>
+                    )}
                     <div>
                       <h1 className="text-lg font-black uppercase text-slate-950">{labName}</h1>
                       <p className="text-[11px] font-bold text-teal-800">{labSlogan}</p>
@@ -692,7 +747,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="text-right text-[10px] text-slate-600 font-medium">
+                  <div className="text-right text-[10px] text-slate-600 font-medium shrink-0">
                     <div className="font-bold text-slate-900">{labAddress}</div>
                     <div>Tél: {labPhone}</div>
                     <div>Email: {labEmail}</div>
