@@ -604,7 +604,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               {/* Medical Lab Technician */}
               <div>
                 <div className="h-8 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
-                  {booking.tests?.[0]?.completedBy || 'Mangi Lerine Laslie'}
+                  {booking.tests?.[0]?.completedBy || booking.assignedTechName || 'Technicien de Laboratoire'}
                 </div>
                 <div className="font-black text-slate-900">Technicien Analyste</div>
                 <div className="text-[10px] text-slate-500 font-medium">Exécuté et Validé</div>
