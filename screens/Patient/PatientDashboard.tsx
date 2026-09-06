@@ -69,6 +69,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   
   // UI State
   const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
+  const [testStatusFilter, setTestStatusFilter] = useState<'all' | 'completed' | 'in_testing'>('all');
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
 
