@@ -257,11 +257,13 @@ export const PatientActivityAuditModal: React.FC<PatientActivityAuditModalProps>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <span className="px-2.5 py-1 rounded-lg bg-teal-100 text-teal-900 font-bold border border-teal-200">
-                👨‍⚕️ {staffLogsCount} Staff Actions
+              <span className="px-2.5 py-1 rounded-lg bg-teal-100 text-teal-900 font-bold border border-teal-200 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-teal-700" />
+                <span>{staffLogsCount} Staff Actions</span>
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                👤 {patientLogsCount} Patient Self
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-600" />
+                <span>{patientLogsCount} Patient Self</span>
               </span>
             </div>
           </div>
