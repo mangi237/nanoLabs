@@ -109,15 +109,34 @@ export const LabTermsModal: React.FC<LabTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">3</span>
-              Commercial Models & System Fee Schedule
+              Zero-Fee Clinical Network & Prohibition of Referral Commissions (Cameroon Medical Ethics Compliance)
             </h3>
             <div className="pl-7 space-y-2">
-              <p>The Facility selects one of three commercial billing models during registration or account management:</p>
+              <p>• In strict compliance with Cameroonian medical legislation, the National Order of Medical Doctors (ONMC) Code of Medical Ethics, and international healthcare compliance standards, <strong>fee-splitting, physician referral commissions, percentage kickbacks, and financial incentives for patient diagnostic referrals are strictly prohibited</strong> on the NanoLabs platform.</p>
+              <p>• NanoLabs operates as a <strong>purely clinical workflow, communication, and secure diagnostic data routing utility</strong> between Patients, Accredited Prescribing Physicians, and Diagnostic Laboratories.</p>
+              <p>• The platform maintains no financial ledger, wallet balance, payout mechanism, or commission tracking for medical practitioners. Laboratories and doctors are legally barred from using the platform for fee-sharing arrangements.</p>
+            </div>
+          </section>
+
+          {/* Section 4 */}
+          <section className="space-y-2">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">4</span>
+              Commercial Models, 1-Month Free Trial & Mandatory Billing Obligation
+            </h3>
+            <div className="pl-7 space-y-2">
+              <p>The Facility selects one of three laboratory software billing models during registration or account management (covering cloud infrastructure and software usage only):</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Model A (Pay-Per-Test):</strong> Zero upfront software license commitment. A baseline fee of <strong>500 FCFA</strong> per completed diagnostic test is billed for cloud processing.</li>
+                <li><strong>Model A (Pay-Per-Test):</strong> Zero upfront software license commitment. A software usage fee of <strong>500 FCFA</strong> per completed diagnostic test is billed for cloud processing.</li>
                 <li><strong>Model B (Flat Monthly Subscription):</strong> Predictable monthly SaaS subscription (Starter at 25,000 FCFA, Professional at 55,000 FCFA, Business at 120,000 FCFA) with <strong>unlimited diagnostic tests</strong> and 100% of patient revenue retained directly by the Facility.</li>
                 <li><strong>Model C (Lifetime Cloud Space + Maintenance):</strong> One-time dedicated cloud tenant allocation with a fixed low monthly maintenance fee of <strong>15,000 FCFA</strong> for security updates, automated backups, and 24/7 SLA.</li>
               </ul>
+              <div className="mt-3 p-3 bg-teal-50 border border-teal-200 rounded-xl text-teal-950 font-medium">
+                <p className="font-bold text-teal-900">1-Month Free Trial & Binding Continuation Terms:</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Every new laboratory facility receives a complimentary <strong>30-day (1-Month) Free Trial</strong> with full feature access and zero upfront charges. During onboarding, the Facility selects its preferred payment plan to continue after the 30-day trial period. If the Facility actively uses the platform throughout the 30-day trial period and maintains its account past day 30, the Facility is <strong>legally obligated to pay and settle the chosen subscription / usage fee for the subsequent months</strong> in order to maintain continuous system access, audit certification, and uninterrupted laboratory operations.
+                </p>
+              </div>
               <p className="text-xs text-slate-500">NanoLabs provides the Facility with transparent records and cashier audit logs of all transactions.</p>
             </div>
           </section>
