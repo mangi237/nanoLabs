@@ -4,7 +4,7 @@ import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection, query, where, updateDoc, doc } from '../../services/firebase';
 import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '../../services/limsService';
-import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
+import { MASTER_TESTS_CATALOG } from '../../data/final_catalog';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { 
@@ -196,7 +196,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
         const catSnap = await getDocs(catCol);
         let catList = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         if (catList.length === 0) {
-          catList = OFFICIAL_MASTER_TEST_CATALOG.map(t => ({
+          catList = MASTER_TESTS_CATALOG.map(t => ({
             ...t,
             actCode: t.id?.toUpperCase() || 'ACT-LAB',
             cote: t.category === 'Microbiology' ? 'B95' : t.category === 'Biochemistry' ? 'B30' : 'B45'
@@ -204,7 +204,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
         }
         setCatalog(catList);
       } catch (catErr) {
-        setCatalog(OFFICIAL_MASTER_TEST_CATALOG);
+        setCatalog(MASTER_TESTS_CATALOG);
       }
     } catch (err) {
       console.error('Error loading Lab Tech queue data:', err);
