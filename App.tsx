@@ -18,7 +18,7 @@ import PatientManagement from './screens/admin/PatientManagement';
 import ReportsScreen from './screens/admin/ReportsScreen';
 import StaffManagement from './screens/admin/StaffManagement';
 import TestCatalogManagement from './screens/admin/TestCatalogManagement';
-
+import SharedReportViewerScreen from './screens/Public/SharedReportViewerScreen';
 import PatientDashboard from './screens/Patient/PatientDashboard';
 import AppointmentScreen from './screens/Patient/AppointmentScreen';
 import BookAppointmentScreen from './screens/Patient/BookAppointmentScreen';
@@ -36,12 +36,16 @@ import ProfileScreen from './screens/ProfileScreen';
 
 import { Activity, RefreshCw } from 'lucide-react';
 
+
+
+
+
 type ScreenType =
-  | 'landing'
   | 'login'
   | 'register'
   | 'registration-complete'
   | 'select-lab'
+  | 'verify-report'
   | 'dashboard'
   | 'admin-dashboard'
   | 'commercial-brochure'
@@ -61,52 +65,22 @@ type ScreenType =
   | 'notifications'
   | 'patient-details'
   | 'profile'
+   |  'landing'
   | 'role-switcher'
   | 'receptionist';
 
 const MainAppContent: React.FC = () => {
   const { user, setUser, lab, isLoading, logout } = useAuth();
-  const [screen, setScreen] = useState<ScreenType>('landing');
+  const [screen, setScreen] = useState<ScreenType>(user ? 'dashboard' : 'login');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [selectedTest, setSelectedTest] = useState<any>(null);
   const [registeredPatient, setRegisteredPatient] = useState<any>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-
-  // Force landing page on initial load
-  useEffect(() => {
-    // Always start on landing page regardless of auth state
-    setScreen('landing');
-    setIsInitialLoad(false);
-  }, []);
-
-  // Handle navigation from landing page to portal/login
-  const handleGoToPortal = () => {
-    setScreen('login');
-  };
-
-  // Handle login success - determine where to go based on user role
-  const handleLoginSuccess = (loggedInUser: any) => {
-    if (loggedInUser?.role === 'admin' || loggedInUser?.role === 'super_admin') {
-      setScreen('admin-dashboard');
-    } else if (loggedInUser?.role === 'patient') {
-      setScreen('patient-dashboard');
-    } else if (loggedInUser?.role === 'staff' || loggedInUser?.role === 'receptionist') {
-      setScreen('receptionist');
-    } else {
-      setScreen('dashboard');
-    }
-  };
-
-  // Handle logout - go back to landing page
-  const handleLogout = () => {
-    logout();
-    setScreen('landing');
-  };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white select-none">
         <div className="flex flex-col items-center space-y-6 max-w-sm text-center animate-in fade-in duration-300">
+          {/* Branded Logo Container */}
           <div className="relative">
             <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400 shadow-2xl shadow-teal-500/20 animate-pulse">
               <Activity className="w-10 h-10 stroke-[2.5]" />
@@ -124,6 +98,7 @@ const MainAppContent: React.FC = () => {
             </p>
           </div>
 
+          {/* Loading Indicator */}
           <div className="flex items-center gap-2 text-xs text-teal-300/80 font-mono pt-2">
             <RefreshCw className="w-4 h-4 animate-spin text-teal-400" />
             <span>Establishing Secure Session...</span>
@@ -152,94 +127,81 @@ const MainAppContent: React.FC = () => {
       case 'register': setScreen('register'); break;
       case 'brochure':
       case 'commercial-brochure': setScreen('commercial-brochure'); break;
-      default: setScreen('dashboard'); break;
+      case 'role-switcher': setScreen('role-switcher'); break;
+      case 'receptionist': setScreen('receptionist'); break;
+
+      default: setScreen('landing'); break;
     }
   };
 
+  // Render Screen Switcher
   const renderScreen = () => {
-    // CRITICAL: If screen is 'landing', ALWAYS show the landing page
-    // regardless of user auth state
-    if (screen === 'landing') {
-      return <LandingPage onGoToPortal={handleGoToPortal} />;
-    }
+    // 0. Check for Public Shared Report Verification URL (e.g. from WhatsApp/SMS share link)
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const isPublicVerifyUrl = urlParams && (
+      urlParams.get('view') === 'verify-report' ||
+      urlParams.get('code') ||
+      urlParams.get('shared') ||
+      urlParams.get('verify')
+    );
 
-    // If user is authenticated and must change password
-    if (user && user.mustChangePassword) {
+    if (screen === 'verify-report' || isPublicVerifyUrl) {
       return (
-        <SetPermanentPasswordScreen
-          onSuccess={(updatedUser) => {
-            setUser(updatedUser);
-            handleLoginSuccess(updatedUser);
+        <SharedReportViewerScreen
+          onGoToLogin={() => {
+            // Clean URL and go to login
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('login');
+          }}
+          onGoToWebsite={() => {
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('login');
           }}
         />
       );
     }
 
-    // If user is logged in, show the appropriate dashboard
-    if (user) {
-      // Check user role and show appropriate dashboard
-      if (user.role === 'admin' || user.role === 'super_admin') {
-        return (
-          <AdminDashboard
-            onNavigateTab={handleNavigateTab}
-            onNotificationPress={() => setScreen('notifications')}
-            onProfilePress={() => setScreen('profile')}
-            onSelectPatient={(patient) => {
-              setSelectedPatient(patient);
-              setScreen('patient-details');
-            }}
-          />
-        );
-      } else if (user.role === 'patient') {
-        return (
-          <PatientDashboard
-            onNavigateTab={handleNavigateTab}
-            onNotificationPress={() => setScreen('notifications')}
-            onProfilePress={() => setScreen('profile')}
-            onSelectTest={(test) => {
-              setSelectedTest(test);
-              setScreen('result-view');
-            }}
-          />
-        );
-      } else if (user.role === 'staff' || user.role === 'receptionist') {
-        return (
-          <ReceptionistView
-            onBack={() => setScreen('dashboard')}
-            onNavigateRegister={() => setScreen('register')}
-            onNotificationPress={() => setScreen('notifications')}
-            onProfilePress={() => setScreen('profile')}
-            onNavigatePatientDetails={(patientId: string) => {
-              setSelectedPatient({ id: patientId });
-              setScreen('patient-details');
-            }}
-          />
-        );
-      } else {
-        return (
-          <UnifiedDashboard
-            onNavigateTab={handleNavigateTab}
-            onNotificationPress={() => setScreen('notifications')}
-            onProfilePress={() => setScreen('profile')}
-            onSelectPatient={(patient) => {
-              setSelectedPatient(patient);
-              setScreen('patient-details');
-            }}
-            onSelectTest={(test) => {
-              setSelectedTest(test);
-              setScreen('result-view');
-            }}
-          />
-        );
-      }
+    // If user is authenticated via one-time OTP and must set their permanent password
+    if (user && user.mustChangePassword) {
+      return (
+        <SetPermanentPasswordScreen
+          onSuccess={(updatedUser) => {
+            setUser(updatedUser);
+            setScreen('dashboard');
+          }}
+        />
+      );
     }
 
-    // If no user is logged in, show auth screens based on screen state
+    const getDefaultDashboard = () => {
+      if (user?.role === 'patient') return 'patient-dashboard';
+      return 'dashboard';
+    };
+
+    if (!user && screen !== 'register' && screen !== 'registration-complete' && screen !== 'select-lab') {
+      return (
+        // <LoginScreen
+        //   onLoginSuccess={() => setScreen(getDefaultDashboard())}
+        //   onNavigateRegister={() => setScreen('register')}
+        //   onNavigateSelectLab={() => setScreen('select-lab')}
+        // />
+        <LandingPage onGoToPortal={()=> setScreen('login')}></LandingPage>
+      );
+    }
+
     switch (screen) {
+      case 'landing':
+        return (
+          <LandingPage onGoToPortal={()=> setScreen('login')}></LandingPage>
+        );
       case 'login':
         return (
           <LoginScreen
-            onLoginSuccess={handleLoginSuccess}
+            onLoginSuccess={() => setScreen(getDefaultDashboard())}
             onNavigateRegister={() => setScreen('register')}
             onNavigateSelectLab={() => setScreen('select-lab')}
           />
@@ -273,8 +235,8 @@ const MainAppContent: React.FC = () => {
                   role: 'patient',
                   roles: ['patient']
                 });
-                setScreen('patient-dashboard');
               }
+              setScreen('patient-dashboard');
             }}
           />
         );
@@ -287,17 +249,286 @@ const MainAppContent: React.FC = () => {
           />
         );
 
-      // If user somehow gets here without being logged in and screen isn't set,
-      // go back to landing page
+      case 'dashboard':
+        return (
+          <UnifiedDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+          />
+        );
+
+      case 'admin-dashboard':
+        return (
+          <AdminDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+          />
+        );
+
+      case 'staff':
+        return (
+          <StaffManagement
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'analytics':
+        return (
+          <AnalyticsDashboard
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'inventory':
+        return (
+          <InventoryManagement
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'catalog':
+        return (
+          <TestCatalogManagement
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'patient-list':
+        return (
+          <PatientManagement
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+          />
+        );
+
+      case 'reports':
+        return (
+          <ReportsScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+     
+
+      case 'patient-dashboard':
+        return (
+          <PatientDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+          />
+        );
+
+      case 'book-appointment':
+        return (
+          <BookAppointmentScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSuccess={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'appointment':
+        return (
+          <AppointmentScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNavigateBook={() => setScreen('book-appointment')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'test-history':
+        return (
+          <TestHistoryScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'share':
+        return (
+          <ShareResultsScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'result-view':
+        return (
+          <ResultViewScreen
+            test={selectedTest}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'receptionist':
+        return (
+          <ReceptionistView
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNavigateRegister={() => setScreen('register')}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onNavigatePatientDetails={(patientId: string) => {
+              setSelectedPatient({ id: patientId });
+              setScreen('patient-details');
+            }}
+          />
+        );
+
+      case 'notifications':
+        return (
+          <NotificationsScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'patient-details':
+        return (
+          <PatientDetailsScreen
+            patient={selectedPatient}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
+      case 'profile':
+        return (
+          <ProfileScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNavigateRoleSwitcher={() => setScreen('role-switcher')}
+            onNotificationPress={() => setScreen('notifications')}
+            onLogout={() => {
+              setScreen('login');
+            }}
+          />
+        );
+
+      case 'role-switcher':
+        return (
+          <RoleSwitcher
+            onBack={() => setScreen(getDefaultDashboard())}
+            onRoleSwitched={(newRole) => {
+              setScreen(newRole === 'patient' ? 'patient-dashboard' : 'dashboard');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
+
       default:
-        setScreen('landing');
-        return <LandingPage onGoToPortal={handleGoToPortal} />;
+        return (
+          <UnifiedDashboard
+            onNavigateTab={handleNavigateTab}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+          />
+        );
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+      {/* Offline and Network Sync Status Indicator */}
       <OfflineStatusIndicator />
+
+      {/* Global Quick Demo Switcher Bar at Bottom Right for easy testing */}
+      {user && (
+        <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 backdrop-blur-md text-white px-3 py-2 rounded-2xl shadow-2xl border border-slate-700 text-xs flex flex-wrap items-center gap-1.5 max-w-xl">
+          <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">Role View:</span>
+          {[
+            { id: 'superadmin', label: 'SuperAdmin' },
+            { id: 'admin', label: 'Admin' },
+            { id: 'biologist', label: 'Biologist' },
+            { id: 'inventory_manager', label: 'Inventory' },
+            { id: 'staff', label: 'Staff Hub' },
+            { id: 'receptionist', label: 'Reception' },
+            { id: 'cashier', label: 'Cashier' },
+            { id: 'analyzer', label: 'Analyzer' },
+            { id: 'lab_tech', label: 'Lab Tech' },
+            { id: 'patient', label: 'Patient' }
+          ].map((r) => (
+            <button
+              key={r.id}
+              onClick={() => {
+                setUser({ ...user, role: r.id as any });
+                setScreen('dashboard');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                user.role === r.id ? 'bg-teal-600 text-white shadow-xs' : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {renderScreen()}
     </div>
   );

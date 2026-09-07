@@ -38,12 +38,14 @@ interface ProfileScreenProps {
   onBack?: () => void;
   onNavigateRoleSwitcher?: () => void;
   onLogout?: () => void;
+  onNotificationPress?: () => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onBack,
   onNavigateRoleSwitcher,
-  onLogout
+  onLogout,
+  onNotificationPress
 }) => {
   const { user, lab, logout, setUser } = useAuth();
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
@@ -266,6 +268,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       <Header
         title={t('profile_title')}
         subtitle={t('profile_subtitle')}
+        onNotificationPress={onNotificationPress}
       />
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
