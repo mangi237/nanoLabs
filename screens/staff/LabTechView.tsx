@@ -3154,7 +3154,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
                 disabled={!newAntibioticName.trim()}
                 className="px-5 py-2 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl transition-all shadow-xs cursor-pointer"
               >
-                Add Antibiotic Row
+                Add Antibiotic Section
               </button>
             </div>
           </div>
