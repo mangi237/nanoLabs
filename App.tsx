@@ -493,7 +493,7 @@ const MainAppContent: React.FC = () => {
       <OfflineStatusIndicator />
 
       {/* Global Quick Demo Switcher Bar at Bottom Right for easy testing */}
-      {user && screen !== 'landing' && screen !== 'login' && (
+      {/* {user && screen !== 'landing' && screen !== 'login' && (
         <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 backdrop-blur-md text-white px-3 py-2 rounded-2xl shadow-2xl border border-slate-700 text-xs flex flex-wrap items-center gap-1.5 max-w-xl">
           <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">Role View:</span>
           {[
@@ -522,7 +522,7 @@ const MainAppContent: React.FC = () => {
             </button>
           ))}
         </div>
-      )}
+      )} */}
 
       {renderScreen()}
     </div>
