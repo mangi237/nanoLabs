@@ -34,7 +34,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#07111F] text-white font-sans selection:bg-[#20C997] selection:text-slate-950">
+    <div className="min-h-screen bg-[#041C18] text-white font-sans selection:bg-[#2DD4BF] selection:text-slate-950">
       {/* 1. Sticky Navigation Bar with Direct Portal Access */}
       <Navbar onGoToPortal={onGoToPortal} />
 

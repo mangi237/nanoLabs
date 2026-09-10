@@ -42,22 +42,22 @@ export const ContactSection: React.FC = () => {
   };
 
   return (
-    <section id="contact" className="py-24 bg-[#07111F] relative overflow-hidden border-t border-white/5">
+    <section id="contact" className="py-24 bg-[#041C18] relative overflow-hidden border-t border-white/5">
       {/* Background Lighting */}
-      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-[#00A6A6]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-[#14B8A6]/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Left Column: Contact Intro & Details */}
           <div className="lg:col-span-5 space-y-6">
             <div className="space-y-3">
-              <span className="text-xs font-bold text-[#1677FF] uppercase tracking-wider bg-[#1677FF]/10 px-3.5 py-1 rounded-full border border-[#1677FF]/20">
+              <span className="text-xs font-bold text-[#0EA5E9] uppercase tracking-wider bg-[#0EA5E9]/10 px-3.5 py-1 rounded-full border border-[#0EA5E9]/20">
                 Get In Touch
               </span>
               <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
                 Let's build better laboratory infrastructure.
               </h2>
-              <p className="text-sm text-[#AAB7C7] leading-relaxed">
+              <p className="text-sm text-[#93B4AF] leading-relaxed">
                 Whether you run a medical laboratory, manage a clinical diagnostic center, are looking to partner, or explore investment opportunities — we'd love to connect.
               </p>
             </div>
@@ -66,33 +66,33 @@ export const ContactSection: React.FC = () => {
             <div className="space-y-3 pt-4">
               <a
                 href={`mailto:${siteConfig.email}`}
-                className="p-4 rounded-2xl bg-[#0B1F3A]/60 border border-white/10 hover:border-[#20C997]/40 transition-all flex items-center gap-3.5 text-white group"
+                className="p-4 rounded-2xl bg-[#0A2C27]/60 border border-white/10 hover:border-[#2DD4BF]/40 transition-all flex items-center gap-3.5 text-white group"
               >
-                <div className="w-10 h-10 rounded-xl bg-[#20C997]/20 text-[#20C997] flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-[#2DD4BF]/20 text-[#2DD4BF] flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Mail className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-[#AAB7C7]">Email Us Directly</div>
-                  <div className="text-xs sm:text-sm font-bold text-white group-hover:text-[#20C997] transition-colors">{siteConfig.email}</div>
+                  <div className="text-[10px] uppercase font-bold text-[#93B4AF]">Email Us Directly</div>
+                  <div className="text-xs sm:text-sm font-bold text-white group-hover:text-[#2DD4BF] transition-colors">{siteConfig.email}</div>
                 </div>
               </a>
 
-              <div className="p-4 rounded-2xl bg-[#0B1F3A]/60 border border-white/10 flex items-center gap-3.5 text-white">
-                <div className="w-10 h-10 rounded-xl bg-[#1677FF]/20 text-[#1677FF] flex items-center justify-center">
+              <div className="p-4 rounded-2xl bg-[#0A2C27]/60 border border-white/10 flex items-center gap-3.5 text-white">
+                <div className="w-10 h-10 rounded-xl bg-[#0EA5E9]/20 text-[#0EA5E9] flex items-center justify-center">
                   <Phone className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-[#AAB7C7]">Direct Telephone</div>
+                  <div className="text-[10px] uppercase font-bold text-[#93B4AF]">Direct Telephone</div>
                   <div className="text-xs sm:text-sm font-bold text-white">{siteConfig.phone}</div>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#0B1F3A]/60 border border-white/10 flex items-center gap-3.5 text-white">
-                <div className="w-10 h-10 rounded-xl bg-[#7C5CFC]/20 text-[#7C5CFC] flex items-center justify-center">
+              <div className="p-4 rounded-2xl bg-[#0A2C27]/60 border border-white/10 flex items-center gap-3.5 text-white">
+                <div className="w-10 h-10 rounded-xl bg-[#0284C7]/20 text-[#0284C7] flex items-center justify-center">
                   <MapPin className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-[#AAB7C7]">Headquarters & Deployment</div>
+                  <div className="text-[10px] uppercase font-bold text-[#93B4AF]">Headquarters & Deployment</div>
                   <div className="text-xs sm:text-sm font-bold text-white">{siteConfig.location} 🇨🇲</div>
                 </div>
               </div>
@@ -100,16 +100,16 @@ export const ContactSection: React.FC = () => {
           </div>
 
           {/* Right Column: Interactive Form */}
-          <div className="lg:col-span-7 rounded-3xl bg-[#0B1F3A]/60 border border-white/15 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl">
+          <div className="lg:col-span-7 rounded-3xl bg-[#0A2C27]/60 border border-white/15 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl">
             {submitted ? (
               <div className="text-center py-12 space-y-4 animate-in fade-in zoom-in-95 duration-300">
-                <div className="w-16 h-16 rounded-3xl bg-[#20C997]/20 border border-[#20C997]/30 text-[#20C997] flex items-center justify-center mx-auto shadow-lg shadow-[#20C997]/20">
+                <div className="w-16 h-16 rounded-3xl bg-[#2DD4BF]/20 border border-[#2DD4BF]/30 text-[#2DD4BF] flex items-center justify-center mx-auto shadow-lg shadow-[#2DD4BF]/20">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <h3 className="text-2xl font-black text-white">
                   Message Received
                 </h3>
-                <p className="text-xs sm:text-sm text-[#AAB7C7] max-w-md mx-auto leading-relaxed">
+                <p className="text-xs sm:text-sm text-[#93B4AF] max-w-md mx-auto leading-relaxed">
                   Thank you for contacting NanoLabs. Our clinical deployment team will review your message and reply to <strong className="text-white">{email}</strong> promptly.
                 </p>
                 <button
@@ -118,7 +118,7 @@ export const ContactSection: React.FC = () => {
                     setSubmitted(false);
                     setMessage('');
                   }}
-                  className="px-6 py-2.5 rounded-xl bg-[#07111F] hover:bg-[#07111F]/80 border border-white/10 text-white text-xs font-bold cursor-pointer transition-all"
+                  className="px-6 py-2.5 rounded-xl bg-[#041C18] hover:bg-[#041C18]/80 border border-white/10 text-white text-xs font-bold cursor-pointer transition-all"
                 >
                   Send Another Inquiry
                 </button>
@@ -146,7 +146,7 @@ export const ContactSection: React.FC = () => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Dr. Jean-Paul Mbarga"
-                      className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#20C997] focus:ring-1 focus:ring-[#20C997] transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] transition-all"
                     />
                   </div>
 
@@ -160,7 +160,7 @@ export const ContactSection: React.FC = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. contact@laboratory.cm"
-                      className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#20C997] focus:ring-1 focus:ring-[#20C997] transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] transition-all"
                     />
                   </div>
                 </div>
@@ -175,7 +175,7 @@ export const ContactSection: React.FC = () => {
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
                       placeholder="e.g. Polyclinique Douala"
-                      className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#20C997] focus:ring-1 focus:ring-[#20C997] transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] transition-all"
                     />
                   </div>
 
@@ -186,7 +186,7 @@ export const ContactSection: React.FC = () => {
                     <select
                       value={country}
                       onChange={(e) => setCountry(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs focus:outline-none focus:border-[#20C997] transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs focus:outline-none focus:border-[#2DD4BF] transition-all"
                     >
                       <option value="Cameroon">Cameroon 🇨🇲</option>
                       <option value="Nigeria">Nigeria 🇳🇬</option>
@@ -206,7 +206,7 @@ export const ContactSection: React.FC = () => {
                     <select
                       value={enquiryType}
                       onChange={(e) => setEnquiryType(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs focus:outline-none focus:border-[#20C997] transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs focus:outline-none focus:border-[#2DD4BF] transition-all"
                     >
                       <option value="Laboratory">Laboratory Onboarding</option>
                       <option value="Hospital">Hospital / Clinic Network</option>
@@ -230,14 +230,14 @@ export const ContactSection: React.FC = () => {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Tell us about your laboratory, clinic, or partnership interest..."
-                    className="w-full px-4 py-3 rounded-xl bg-[#07111F] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#20C997] focus:ring-1 focus:ring-[#20C997] transition-all resize-none"
+                    className="w-full px-4 py-3 rounded-xl bg-[#041C18] border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] transition-all resize-none"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#1677FF] via-[#00A6A6] to-[#20C997] text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-[#1677FF]/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0EA5E9] via-[#14B8A6] to-[#2DD4BF] text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-[#0EA5E9]/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {loading ? (
                     <>

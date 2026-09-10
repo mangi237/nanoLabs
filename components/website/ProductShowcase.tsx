@@ -42,22 +42,22 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
   const currentTab = siteConfig.productTabs.find(t => t.id === activeTab) || siteConfig.productTabs[0];
 
   return (
-    <section id="product" className="py-24 bg-[#07111F] relative overflow-hidden border-t border-white/5">
+    <section id="product" className="py-24 bg-[#041C18] relative overflow-hidden border-t border-white/5">
       {/* Subtle background glow */}
-      <div className="absolute top-1/3 left-1/4 w-[500px] h-[500px] bg-[#1677FF]/10 rounded-full blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#20C997]/10 rounded-full blur-[130px] pointer-events-none" />
+      <div className="absolute top-1/3 left-1/4 w-[500px] h-[500px] bg-[#0EA5E9]/10 rounded-full blur-[130px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#2DD4BF]/10 rounded-full blur-[130px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#0B1F3A] border border-white/10 text-xs font-bold text-[#1677FF]">
-            <Sparkles className="w-3.5 h-3.5 text-[#20C997]" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#0A2C27] border border-white/10 text-xs font-bold text-[#0EA5E9]">
+            <Sparkles className="w-3.5 h-3.5 text-[#2DD4BF]" />
             <span>Comprehensive Clinical Suite</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Meet NanoLabs.
           </h2>
-          <p className="text-sm sm:text-base text-[#AAB7C7] leading-relaxed">
+          <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
             A modern laboratory management platform designed to simplify operations, organize clinical records, and connect everyone involved in diagnostic healthcare.
           </p>
         </div>
@@ -73,11 +73,11 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 border ${
                   isActive
-                    ? 'bg-gradient-to-r from-[#1677FF] to-[#00A6A6] text-white border-transparent shadow-lg shadow-[#1677FF]/25 scale-105'
-                    : 'bg-[#0B1F3A]/60 text-[#AAB7C7] border-white/5 hover:bg-[#0B1F3A] hover:text-white hover:border-white/15'
+                    ? 'bg-gradient-to-r from-[#0EA5E9] to-[#14B8A6] text-white border-transparent shadow-lg shadow-[#0EA5E9]/25 scale-105'
+                    : 'bg-[#0A2C27]/60 text-[#93B4AF] border-white/5 hover:bg-[#0A2C27] hover:text-white hover:border-white/15'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#20C997]'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#2DD4BF]'}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -85,17 +85,17 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
         </div>
 
         {/* Interactive Feature Stage */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#0B1F3A]/50 rounded-3xl border border-white/15 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#0A2C27]/50 rounded-3xl border border-white/15 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl">
           {/* Left Column: Feature Details & Highlights */}
           <div className="lg:col-span-5 space-y-6">
             <div className="space-y-2">
-              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#20C997]/20 text-[#20C997] border border-[#20C997]/30 uppercase tracking-wider">
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#2DD4BF]/20 text-[#2DD4BF] border border-[#2DD4BF]/30 uppercase tracking-wider">
                 {currentTab.roleAttribution}
               </span>
               <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 {currentTab.tagline}
               </h3>
-              <p className="text-sm text-[#AAB7C7] leading-relaxed">
+              <p className="text-sm text-[#93B4AF] leading-relaxed">
                 {currentTab.description}
               </p>
             </div>
@@ -104,7 +104,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
             <div className="space-y-2.5 pt-2">
               {currentTab.keyHighlights.map((highlight, hIdx) => (
                 <div key={hIdx} className="flex items-start gap-3 text-xs text-slate-200">
-                  <div className="w-5 h-5 rounded-full bg-[#20C997]/20 border border-[#20C997]/30 flex items-center justify-center text-[#20C997] shrink-0 mt-0.5">
+                  <div className="w-5 h-5 rounded-full bg-[#2DD4BF]/20 border border-[#2DD4BF]/30 flex items-center justify-center text-[#2DD4BF] shrink-0 mt-0.5">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                   </div>
                   <span className="font-medium leading-tight">{highlight}</span>
@@ -116,7 +116,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
             <div className="pt-4 border-t border-white/10 flex items-center gap-3">
               <button
                 onClick={onGoToPortal}
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#1677FF] via-[#00A6A6] to-[#20C997] text-white font-extrabold text-xs shadow-lg flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#0EA5E9] via-[#14B8A6] to-[#2DD4BF] text-white font-extrabold text-xs shadow-lg flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
               >
                 <span>Launch in Live Portal</span>
                 <ArrowRight className="w-4 h-4" />
@@ -125,14 +125,14 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
           </div>
 
           {/* Right Column: Realistic Rich UI Mockup Container */}
-          <div className="lg:col-span-7 rounded-2xl bg-[#07111F] border border-white/15 p-4 sm:p-6 shadow-2xl overflow-hidden min-h-[380px] flex flex-col justify-between">
+          <div className="lg:col-span-7 rounded-2xl bg-[#041C18] border border-white/15 p-4 sm:p-6 shadow-2xl overflow-hidden min-h-[380px] flex flex-col justify-between">
             {/* Top Mockup Header Bar */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10 text-xs font-mono">
-              <div className="flex items-center gap-2 text-[#AAB7C7]">
+              <div className="flex items-center gap-2 text-[#93B4AF]">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-white font-bold">{currentTab.label} Interface</span>
               </div>
-              <span className="text-[10px] text-[#20C997] bg-[#20C997]/10 px-2 py-0.5 rounded border border-[#20C997]/20">
+              <span className="text-[10px] text-[#2DD4BF] bg-[#2DD4BF]/10 px-2 py-0.5 rounded border border-[#2DD4BF]/20">
                 Encrypted Session
               </span>
             </div>
@@ -142,29 +142,29 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
               {activeTab === 'dashboard' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="p-3 bg-[#0B1F3A] rounded-xl border border-white/10">
-                      <div className="text-[10px] text-[#AAB7C7] uppercase font-bold">Samples In Queue</div>
+                    <div className="p-3 bg-[#0A2C27] rounded-xl border border-white/10">
+                      <div className="text-[10px] text-[#93B4AF] uppercase font-bold">Samples In Queue</div>
                       <div className="text-2xl font-black text-white font-mono mt-1">47</div>
                     </div>
-                    <div className="p-3 bg-[#0B1F3A] rounded-xl border border-white/10">
-                      <div className="text-[10px] text-[#AAB7C7] uppercase font-bold">Pending Sign-off</div>
-                      <div className="text-2xl font-black text-[#1677FF] font-mono mt-1">12</div>
+                    <div className="p-3 bg-[#0A2C27] rounded-xl border border-white/10">
+                      <div className="text-[10px] text-[#93B4AF] uppercase font-bold">Pending Sign-off</div>
+                      <div className="text-2xl font-black text-[#0EA5E9] font-mono mt-1">12</div>
                     </div>
-                    <div className="p-3 bg-[#0B1F3A] rounded-xl border border-white/10">
-                      <div className="text-[10px] text-[#AAB7C7] uppercase font-bold">Validated Today</div>
-                      <div className="text-2xl font-black text-[#20C997] font-mono mt-1">94</div>
+                    <div className="p-3 bg-[#0A2C27] rounded-xl border border-white/10">
+                      <div className="text-[10px] text-[#93B4AF] uppercase font-bold">Validated Today</div>
+                      <div className="text-2xl font-black text-[#2DD4BF] font-mono mt-1">94</div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-[#0B1F3A]/70 rounded-xl border border-white/10 space-y-2">
+                  <div className="p-3.5 bg-[#0A2C27]/70 rounded-xl border border-white/10 space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-white">
                       <span>Automated Specimen Worklist</span>
-                      <span className="text-[10px] text-[#20C997]">CBC + Biochem</span>
+                      <span className="text-[10px] text-[#2DD4BF]">CBC + Biochem</span>
                     </div>
                     <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
-                      <div className="bg-gradient-to-r from-[#1677FF] to-[#20C997] h-full w-3/4 rounded-full" />
+                      <div className="bg-gradient-to-r from-[#0EA5E9] to-[#2DD4BF] h-full w-3/4 rounded-full" />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-[#AAB7C7]">
+                    <div className="flex items-center justify-between text-[10px] text-[#93B4AF]">
                       <span>Turnaround target: 45 mins</span>
                       <span className="text-emerald-400 font-bold">Average: 32 mins</span>
                     </div>
@@ -174,24 +174,24 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
 
               {activeTab === 'patients' && (
                 <div className="space-y-3 font-sans text-xs">
-                  <div className="p-2.5 bg-[#0B1F3A] rounded-xl border border-white/10 flex items-center justify-between">
+                  <div className="p-2.5 bg-[#0A2C27] rounded-xl border border-white/10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Search className="w-4 h-4 text-[#20C997]" />
+                      <Search className="w-4 h-4 text-[#2DD4BF]" />
                       <span className="font-mono text-white">Search by PID, Name, or Phone (e.g. +237 67...)</span>
                     </div>
-                    <span className="text-[10px] text-[#AAB7C7] font-mono">Instant Index</span>
+                    <span className="text-[10px] text-[#93B4AF] font-mono">Instant Index</span>
                   </div>
 
-                  <div className="p-3.5 bg-[#0B1F3A]/80 rounded-xl border border-[#20C997]/30 space-y-2">
+                  <div className="p-3.5 bg-[#0A2C27]/80 rounded-xl border border-[#2DD4BF]/30 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="font-extrabold text-white text-sm">TCHOUA Marie-Claire</div>
-                      <span className="font-mono text-[11px] text-[#20C997] bg-[#20C997]/10 px-2 py-0.5 rounded font-bold">PID-2026-0842</span>
+                      <span className="font-mono text-[11px] text-[#2DD4BF] bg-[#2DD4BF]/10 px-2 py-0.5 rounded font-bold">PID-2026-0842</span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#AAB7C7]">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#93B4AF]">
                       <div>Age: <strong className="text-white">34 yrs (F)</strong></div>
                       <div>Phone: <strong className="text-white">+237 699 12 34 56</strong></div>
-                      <div>Insurance: <strong className="text-[#1677FF]">ASCOMA 80%</strong></div>
-                      <div>Status: <strong className="text-[#20C997]">Active Registered</strong></div>
+                      <div>Insurance: <strong className="text-[#0EA5E9]">ASCOMA 80%</strong></div>
+                      <div>Status: <strong className="text-[#2DD4BF]">Active Registered</strong></div>
                     </div>
                   </div>
                 </div>
@@ -206,10 +206,10 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
                       { name: 'Blood Culture & Antibiogram', tube: 'Blood Culture Bottle', dept: 'Microbiology', time: '48h' },
                       { name: 'Fasting Plasma Glucose', tube: 'Fluoride (Grey)', dept: 'Biochemistry', time: '20m' }
                     ].map((test, idx) => (
-                      <div key={idx} className="p-2.5 bg-[#0B1F3A] rounded-xl border border-white/10 space-y-1">
+                      <div key={idx} className="p-2.5 bg-[#0A2C27] rounded-xl border border-white/10 space-y-1">
                         <div className="font-bold text-white truncate">{test.name}</div>
-                        <div className="flex items-center justify-between text-[10px] text-[#AAB7C7]">
-                          <span className="text-[#20C997]">{test.tube}</span>
+                        <div className="flex items-center justify-between text-[10px] text-[#93B4AF]">
+                          <span className="text-[#2DD4BF]">{test.tube}</span>
                           <span className="font-mono">{test.time}</span>
                         </div>
                       </div>
@@ -220,27 +220,27 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
 
               {activeTab === 'results' && (
                 <div className="space-y-3 text-xs">
-                  <div className="p-3 bg-[#0B1F3A] rounded-xl border border-white/10 space-y-2">
+                  <div className="p-3 bg-[#0A2C27] rounded-xl border border-white/10 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white">Full Blood Count (NFS) Analysis</span>
-                      <span className="text-[10px] text-[#20C997] font-bold uppercase">Delta-Check Passed</span>
+                      <span className="text-[10px] text-[#2DD4BF] font-bold uppercase">Delta-Check Passed</span>
                     </div>
                     <div className="divide-y divide-white/5 font-mono text-[11px]">
                       <div className="flex justify-between py-1">
-                        <span className="text-[#AAB7C7]">Hemoglobin (Hb)</span>
+                        <span className="text-[#93B4AF]">Hemoglobin (Hb)</span>
                         <span className="font-bold text-emerald-400">14.2 g/dL (Normal: 12.0 - 16.0)</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-[#AAB7C7]">White Blood Cells (WBC)</span>
+                        <span className="text-[#93B4AF]">White Blood Cells (WBC)</span>
                         <span className="font-bold text-emerald-400">6,800 /µL (Normal: 4,000 - 10,000)</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-[#AAB7C7]">Platelets Count</span>
+                        <span className="text-[#93B4AF]">Platelets Count</span>
                         <span className="font-bold text-emerald-400">245,000 /µL (Normal: 150k - 450k)</span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between p-2.5 bg-[#20C997]/10 border border-[#20C997]/30 rounded-xl text-[11px] text-[#20C997] font-bold">
+                  <div className="flex items-center justify-between p-2.5 bg-[#2DD4BF]/10 border border-[#2DD4BF]/30 rounded-xl text-[11px] text-[#2DD4BF] font-bold">
                     <span>ONMC Biologist Signature Attached</span>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
@@ -255,9 +255,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
                     { role: 'Reception & Phlebotomy', desc: 'Barcodes specimen tubes, verifies patient identity, collects payments.' },
                     { role: 'Laboratory Manager / Admin', desc: 'Configures test catalogs, monitors financial analytics, reviews audit logs.' }
                   ].map((st, sIdx) => (
-                    <div key={sIdx} className="p-3 bg-[#0B1F3A] rounded-xl border border-white/10 space-y-1">
+                    <div key={sIdx} className="p-3 bg-[#0A2C27] rounded-xl border border-white/10 space-y-1">
                       <div className="font-bold text-white text-xs">{st.role}</div>
-                      <p className="text-[10px] text-[#AAB7C7] leading-snug">{st.desc}</p>
+                      <p className="text-[10px] text-[#93B4AF] leading-snug">{st.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -265,16 +265,16 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
 
               {activeTab === 'physicians' && (
                 <div className="space-y-3 text-xs">
-                  <div className="p-3.5 bg-[#0B1F3A] rounded-xl border border-white/10 space-y-2">
+                  <div className="p-3.5 bg-[#0A2C27] rounded-xl border border-white/10 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="font-bold text-white">Dr. FOKAM Jean-Paul (Polyclinique de Douala)</div>
-                      <span className="text-[10px] text-[#1677FF] bg-[#1677FF]/10 px-2 py-0.5 rounded font-bold">Connected Doctor</span>
+                      <span className="text-[10px] text-[#0EA5E9] bg-[#0EA5E9]/10 px-2 py-0.5 rounded font-bold">Connected Doctor</span>
                     </div>
-                    <p className="text-[11px] text-[#AAB7C7]">
+                    <p className="text-[11px] text-[#93B4AF]">
                       Direct encrypted portal access with real-time push alerts when referred patient results are signed.
                     </p>
                     <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
-                      <span className="text-[#20C997]">14 Active Patient Referrals</span>
+                      <span className="text-[#2DD4BF]">14 Active Patient Referrals</span>
                       <span className="font-mono text-slate-300">Automated E-Prescription</span>
                     </div>
                   </div>
@@ -293,7 +293,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
                         <div className="text-[10px] text-amber-300">Tactile Physical Wax Seal Experience</div>
                       </div>
                     </div>
-                    <span className="text-[10px] text-[#20C997] bg-[#20C997]/20 px-2 py-0.5 rounded-full font-bold">WhatsApp Ready</span>
+                    <span className="text-[10px] text-[#2DD4BF] bg-[#2DD4BF]/20 px-2 py-0.5 rounded-full font-bold">WhatsApp Ready</span>
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     Patients receive an encrypted verification link to unseal their confidential diagnostic envelope and instantly download the consolidated signed multi-test PDF.
@@ -302,12 +302,12 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
               )}
 
               {activeTab === 'audit' && (
-                <div className="p-3.5 bg-[#0B1F3A] rounded-xl border border-white/10 space-y-2 font-mono text-[11px]">
+                <div className="p-3.5 bg-[#0A2C27] rounded-xl border border-white/10 space-y-2 font-mono text-[11px]">
                   <div className="text-xs font-bold text-white flex items-center justify-between font-sans">
                     <span>Cryptographic Event Ledger</span>
-                    <span className="text-[#20C997]">Tamper-Proof</span>
+                    <span className="text-[#2DD4BF]">Tamper-Proof</span>
                   </div>
-                  <div className="space-y-1 text-[#AAB7C7]">
+                  <div className="space-y-1 text-[#93B4AF]">
                     <div className="flex justify-between">
                       <span>[14:22:01] Sample #CMR-9042 Phlebotomy Logged</span>
                       <span className="text-white">TECH-04</span>
@@ -326,9 +326,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onGoToPortal }
             </div>
 
             {/* Bottom Status bar */}
-            <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-[#AAB7C7] font-mono">
+            <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-[#93B4AF] font-mono">
               <span>Standard: HL7 FHIR DiagnosticReport</span>
-              <span className="text-[#20C997]">100% Traceable</span>
+              <span className="text-[#2DD4BF]">100% Traceable</span>
             </div>
           </div>
         </div>

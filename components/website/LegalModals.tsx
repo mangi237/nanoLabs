@@ -12,18 +12,18 @@ export const LegalModals: React.FC<LegalModalProps> = ({ isOpen, onClose, type }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-[#0B1F3A] border border-white/20 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl text-white space-y-6 relative max-h-[85vh] flex flex-col">
+      <div className="bg-[#0A2C27] border border-white/20 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl text-white space-y-6 relative max-h-[85vh] flex flex-col">
         {/* Top Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#20C997]/20 border border-[#20C997]/30 text-[#20C997] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[#2DD4BF]/20 border border-[#2DD4BF]/30 text-[#2DD4BF] flex items-center justify-center">
               {type === 'privacy' ? <ShieldCheck className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
             </div>
             <div>
               <h3 className="text-lg font-black">
                 {type === 'privacy' ? 'NanoLabs Privacy Policy' : 'NanoLabs Terms of Service'}
               </h3>
-              <p className="text-xs text-[#AAB7C7]">
+              <p className="text-xs text-[#93B4AF]">
                 Effective Date: September 2026 • Republic of Cameroon
               </p>
             </div>
@@ -38,7 +38,7 @@ export const LegalModals: React.FC<LegalModalProps> = ({ isOpen, onClose, type }
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto pr-2 space-y-4 text-xs text-[#AAB7C7] leading-relaxed">
+        <div className="flex-1 overflow-y-auto pr-2 space-y-4 text-xs text-[#93B4AF] leading-relaxed">
           {type === 'privacy' ? (
             <>
               <section className="space-y-1">
@@ -107,7 +107,7 @@ export const LegalModals: React.FC<LegalModalProps> = ({ isOpen, onClose, type }
           <span className="text-slate-400">NanoLabs HealthCare • Douala & Yaoundé</span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-[#20C997] hover:bg-[#20C997]/90 text-slate-950 font-bold cursor-pointer"
+            className="px-5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#2DD4BF]/90 text-slate-950 font-bold cursor-pointer"
           >
             I Understand
           </button>

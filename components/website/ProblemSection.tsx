@@ -71,17 +71,17 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
   ];
 
   return (
-    <section className="py-24 bg-[#0B1F3A]/40 relative overflow-hidden border-t border-white/5">
+    <section className="py-24 bg-[#0A2C27]/40 relative overflow-hidden border-t border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold text-[#1677FF] uppercase tracking-wider bg-[#1677FF]/10 px-3.5 py-1 rounded-full border border-[#1677FF]/20">
+          <span className="text-xs font-bold text-[#0EA5E9] uppercase tracking-wider bg-[#0EA5E9]/10 px-3.5 py-1 rounded-full border border-[#0EA5E9]/20">
             The Healthcare Operational Challenge
           </span>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
             Laboratories should not have to run on fragmented systems.
           </h2>
-          <p className="text-sm sm:text-base text-[#AAB7C7] leading-relaxed">
+          <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
             Many medical laboratories across Africa face daily operational hurdles caused by paper registers, disconnected communication, and isolated diagnostic benches.
           </p>
         </div>
@@ -89,7 +89,7 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
         {/* Problem vs Solution Split Matrix */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* Left: Fragmented Challenges */}
-          <div className="lg:col-span-6 rounded-3xl bg-[#07111F] border border-rose-500/20 p-6 sm:p-8 space-y-6 flex flex-col justify-between">
+          <div className="lg:col-span-6 rounded-3xl bg-[#041C18] border border-rose-500/20 p-6 sm:p-8 space-y-6 flex flex-col justify-between">
             <div className="space-y-4">
               <div className="flex items-center gap-2.5">
                 <span className="w-3 h-3 rounded-full bg-rose-500" />
@@ -97,7 +97,7 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
                   The Fragmented Reality
                 </h3>
               </div>
-              <p className="text-xs text-[#AAB7C7]">
+              <p className="text-xs text-[#93B4AF]">
                 Traditional paper and isolated spreadsheets cause delays, lost files, and workflow friction.
               </p>
 
@@ -113,7 +113,7 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
                         <Icon className="w-4 h-4 shrink-0" />
                         <span>{c.title}</span>
                       </div>
-                      <p className="text-[11px] text-[#AAB7C7] leading-snug">
+                      <p className="text-[11px] text-[#93B4AF] leading-snug">
                         {c.desc}
                       </p>
                     </div>
@@ -128,18 +128,18 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
           </div>
 
           {/* Right: The NanoLabs Solution */}
-          <div className="lg:col-span-6 rounded-3xl bg-gradient-to-br from-[#0B1F3A] to-[#07111F] border border-[#20C997]/30 p-6 sm:p-8 space-y-6 flex flex-col justify-between shadow-2xl relative">
+          <div className="lg:col-span-6 rounded-3xl bg-gradient-to-br from-[#0A2C27] to-[#041C18] border border-[#2DD4BF]/30 p-6 sm:p-8 space-y-6 flex flex-col justify-between shadow-2xl relative">
             <div className="space-y-4">
               <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-[#20C997] animate-pulse" />
+                <span className="w-3 h-3 rounded-full bg-[#2DD4BF] animate-pulse" />
                 <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
                   The NanoLabs Solution
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#20C997]/20 text-[#20C997] border border-[#20C997]/30">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2DD4BF]/20 text-[#2DD4BF] border border-[#2DD4BF]/30">
                     Connected OS
                   </span>
                 </h3>
               </div>
-              <p className="text-xs text-[#AAB7C7]">
+              <p className="text-xs text-[#93B4AF]">
                 Bringing every patient, test, examination, result, and doctor into one synchronized digital workflow.
               </p>
 
@@ -147,13 +147,13 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
                 {solutions.map((s, idx) => (
                   <div
                     key={idx}
-                    className="p-4 rounded-2xl bg-[#07111F]/80 border border-white/10 hover:border-[#20C997]/40 transition-colors space-y-1"
+                    className="p-4 rounded-2xl bg-[#041C18]/80 border border-white/10 hover:border-[#2DD4BF]/40 transition-colors space-y-1"
                   >
-                    <div className="flex items-center gap-2 text-[#20C997] font-bold text-xs">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-[#20C997]" />
+                    <div className="flex items-center gap-2 text-[#2DD4BF] font-bold text-xs">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-[#2DD4BF]" />
                       <span className="text-white">{s.title}</span>
                     </div>
-                    <p className="text-[11px] text-[#AAB7C7] pl-6 leading-relaxed">
+                    <p className="text-[11px] text-[#93B4AF] pl-6 leading-relaxed">
                       {s.desc}
                     </p>
                   </div>
@@ -167,7 +167,7 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
               </div>
               <button
                 onClick={onGoToPortal}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-[#1677FF] via-[#00A6A6] to-[#20C997] text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-[#0EA5E9] via-[#14B8A6] to-[#2DD4BF] text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer hover:scale-105 transition-transform"
               >
                 <span>Experience System</span>
                 <ArrowRight className="w-3.5 h-3.5" />

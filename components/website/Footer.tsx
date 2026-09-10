@@ -20,23 +20,23 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpenPrivacy }) => {
   return (
-    <footer className="bg-[#050C16] text-[#AAB7C7] border-t border-white/10 pt-16 pb-12">
+    <footer className="bg-[#050C16] text-[#93B4AF] border-t border-white/10 pt-16 pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-white/10">
           {/* Col 1: Brand & Slogan */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1677FF] to-[#20C997] p-0.5 shadow-md">
-                <div className="w-full h-full bg-[#07111F] rounded-[10px] flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-[#20C997] stroke-[2.5]" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0EA5E9] to-[#2DD4BF] p-0.5 shadow-md">
+                <div className="w-full h-full bg-[#041C18] rounded-[10px] flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-[#2DD4BF] stroke-[2.5]" />
                 </div>
               </div>
               <span className="text-xl font-black text-white">
-                nano<span className="text-[#20C997]">Labs</span>
+                nano<span className="text-[#2DD4BF]">Labs</span>
               </span>
             </div>
 
-            <p className="text-xs text-[#AAB7C7] max-w-sm leading-relaxed">
+            <p className="text-xs text-[#93B4AF] max-w-sm leading-relaxed">
               Building connected laboratory infrastructure from Cameroon. Connecting laboratories, patients, doctors and results through one digital ecosystem.
             </p>
 
@@ -45,7 +45,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                 href={siteConfig.founder.socials.linkedin || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-[#1677FF] transition-colors"
+                className="p-2 rounded-lg bg-[#0A2C27] text-slate-400 hover:text-white hover:bg-[#0EA5E9] transition-colors"
                 aria-label="LinkedIn"
               >
             
@@ -54,7 +54,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                 href={siteConfig.founder.socials.x || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg bg-[#0A2C27] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                 aria-label="X / Twitter"
               >
                
@@ -63,7 +63,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                 href={siteConfig.founder.socials.github || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg bg-[#0A2C27] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                 aria-label="GitHub"
               >
             
@@ -72,7 +72,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                 href={siteConfig.founder.socials.substack || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-amber-600 transition-colors"
+                className="p-2 rounded-lg bg-[#0A2C27] text-slate-400 hover:text-white hover:bg-amber-600 transition-colors"
                 aria-label="Substack"
               >
                 <BookOpen className="w-4 h-4" />
@@ -93,7 +93,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
               <li>
                 <button
                   onClick={onGoToPortal}
-                  className="text-[#20C997] font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-[#2DD4BF] font-bold hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Enter Portal</span>
@@ -138,7 +138,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                   Terms of Service
                 </button>
               </li>
-              <li><span className="text-[#20C997]">AES-256 Envelope Security</span></li>
+              <li><span className="text-[#2DD4BF]">AES-256 Envelope Security</span></li>
               <li><span className="text-slate-400">HL7 FHIR Interoperability</span></li>
             </ul>
           </div>
@@ -150,11 +150,11 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
             © {new Date().getFullYear()} NanoLabs HealthCare Inc. All rights reserved.
           </div>
 
-          <div className="flex items-center gap-2 font-bold text-white bg-[#0B1F3A] px-3 py-1 rounded-full border border-white/10">
+          <div className="flex items-center gap-2 font-bold text-white bg-[#0A2C27] px-3 py-1 rounded-full border border-white/10">
             <span>Built in Cameroon</span>
             <span>🇨🇲</span>
             <span className="text-slate-400">•</span>
-            <span className="text-[#20C997]">Designed for Africa</span>
+            <span className="text-[#2DD4BF]">Designed for Africa</span>
           </div>
         </div>
       </div>

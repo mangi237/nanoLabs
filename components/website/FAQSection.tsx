@@ -14,18 +14,18 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ onGoToPortal }) => {
   };
 
   return (
-    <section id="faq" className="py-24 bg-[#0B1F3A]/40 relative overflow-hidden border-t border-white/5">
+    <section id="faq" className="py-24 bg-[#0A2C27]/40 relative overflow-hidden border-t border-white/5">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#0B1F3A] border border-white/10 text-xs font-bold text-[#20C997]">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#0A2C27] border border-white/10 text-xs font-bold text-[#2DD4BF]">
             <HelpCircle className="w-3.5 h-3.5" />
             <span>Got Questions?</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Frequently asked questions.
           </h2>
-          <p className="text-sm sm:text-base text-[#AAB7C7]">
+          <p className="text-sm sm:text-base text-[#93B4AF]">
             Everything you need to know about NanoLabs, clinical onboarding, and portal access.
           </p>
         </div>
@@ -39,8 +39,8 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ onGoToPortal }) => {
                 key={idx}
                 className={`rounded-2xl border transition-all overflow-hidden ${
                   isOpen
-                    ? 'bg-[#07111F] border-[#20C997]/40 shadow-xl'
-                    : 'bg-[#07111F]/60 border-white/5 hover:border-white/15'
+                    ? 'bg-[#041C18] border-[#2DD4BF]/40 shadow-xl'
+                    : 'bg-[#041C18]/60 border-white/5 hover:border-white/15'
                 }`}
               >
                 <button
@@ -52,13 +52,13 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ onGoToPortal }) => {
                   <span className="text-sm sm:text-base font-bold text-white">
                     {faq.question}
                   </span>
-                  <div className={`w-8 h-8 rounded-xl bg-[#0B1F3A] flex items-center justify-center text-[#20C997] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 bg-[#20C997]/20 text-[#20C997]' : ''}`}>
+                  <div className={`w-8 h-8 rounded-xl bg-[#0A2C27] flex items-center justify-center text-[#2DD4BF] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 bg-[#2DD4BF]/20 text-[#2DD4BF]' : ''}`}>
                     <ChevronDown className="w-4 h-4" />
                   </div>
                 </button>
 
                 {isOpen && (
-                  <div className="px-5 sm:px-6 pb-6 pt-1 text-xs sm:text-sm text-[#AAB7C7] leading-relaxed border-t border-white/5 animate-in fade-in duration-200">
+                  <div className="px-5 sm:px-6 pb-6 pt-1 text-xs sm:text-sm text-[#93B4AF] leading-relaxed border-t border-white/5 animate-in fade-in duration-200">
                     <p>{faq.answer}</p>
                   </div>
                 )}
@@ -68,11 +68,11 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ onGoToPortal }) => {
         </div>
 
         {/* Support Note */}
-        <div className="mt-12 text-center text-xs text-[#AAB7C7] flex items-center justify-center gap-2">
+        <div className="mt-12 text-center text-xs text-[#93B4AF] flex items-center justify-center gap-2">
           <span>Have a question not listed here?</span>
           <a
             href="#contact"
-            className="text-[#20C997] hover:underline font-bold"
+            className="text-[#2DD4BF] hover:underline font-bold"
           >
             Contact our team →
           </a>

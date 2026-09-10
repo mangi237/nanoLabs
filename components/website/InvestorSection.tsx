@@ -43,20 +43,20 @@ export const InvestorSection: React.FC<InvestorSectionProps> = ({ onPartnerClick
   ];
 
   return (
-    <section className="py-24 bg-[#07111F] relative overflow-hidden border-t border-white/5">
+    <section className="py-24 bg-[#041C18] relative overflow-hidden border-t border-white/5">
       {/* Background Lighting */}
-      <div className="absolute top-1/2 left-1/3 w-[500px] h-[500px] bg-[#1677FF]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/3 w-[500px] h-[500px] bg-[#0EA5E9]/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold text-[#1677FF] uppercase tracking-wider bg-[#1677FF]/10 px-3.5 py-1 rounded-full border border-[#1677FF]/20">
+          <span className="text-xs font-bold text-[#0EA5E9] uppercase tracking-wider bg-[#0EA5E9]/10 px-3.5 py-1 rounded-full border border-[#0EA5E9]/20">
             Strategic Investment & Partnerships
           </span>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Building the digital infrastructure behind tomorrow's laboratories.
           </h2>
-          <p className="text-sm sm:text-base text-[#AAB7C7] leading-relaxed">
+          <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
             NanoLabs is building from Cameroon with the ambition of creating scalable, category-defining laboratory technology for African healthcare markets.
           </p>
         </div>
@@ -66,15 +66,15 @@ export const InvestorSection: React.FC<InvestorSectionProps> = ({ onPartnerClick
           {cards.map((c, idx) => (
             <div
               key={idx}
-              className="p-6 rounded-3xl bg-[#0B1F3A]/60 border border-white/10 hover:border-[#1677FF]/40 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4"
+              className="p-6 rounded-3xl bg-[#0A2C27]/60 border border-white/10 hover:border-[#0EA5E9]/40 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1677FF]/20 text-[#1677FF] border border-[#1677FF]/30">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0EA5E9]/20 text-[#0EA5E9] border border-[#0EA5E9]/30">
                   {c.badge}
                 </span>
                 <h3 className="text-lg font-black text-white">{c.title}</h3>
-                <div className="text-xs font-bold text-[#20C997]">{c.subtitle}</div>
-                <p className="text-xs text-[#AAB7C7] leading-relaxed">
+                <div className="text-xs font-bold text-[#2DD4BF]">{c.subtitle}</div>
+                <p className="text-xs text-[#93B4AF] leading-relaxed">
                   {c.desc}
                 </p>
               </div>
@@ -83,12 +83,12 @@ export const InvestorSection: React.FC<InvestorSectionProps> = ({ onPartnerClick
         </div>
 
         {/* Actions Bar */}
-        <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0B1F3A] to-[#07111F] border border-white/15 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0A2C27] to-[#041C18] border border-white/15 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
             <h3 className="text-lg sm:text-xl font-black text-white">
               Interested in partnering or investing in NanoLabs?
             </h3>
-            <p className="text-xs sm:text-sm text-[#AAB7C7] mt-1">
+            <p className="text-xs sm:text-sm text-[#93B4AF] mt-1">
               Join us in transforming laboratory healthcare infrastructure across Africa.
             </p>
           </div>
@@ -96,7 +96,7 @@ export const InvestorSection: React.FC<InvestorSectionProps> = ({ onPartnerClick
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               onClick={onPartnerClick}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#1677FF] to-[#00A6A6] hover:from-[#1677FF]/90 text-white font-extrabold text-xs shadow-lg transition-all hover:scale-105 cursor-pointer flex items-center gap-2"
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#0EA5E9] to-[#14B8A6] hover:from-[#0EA5E9]/90 text-white font-extrabold text-xs shadow-lg transition-all hover:scale-105 cursor-pointer flex items-center gap-2"
             >
               <span>Partner with NanoLabs</span>
               <ArrowRight className="w-4 h-4" />
@@ -104,9 +104,9 @@ export const InvestorSection: React.FC<InvestorSectionProps> = ({ onPartnerClick
 
             <a
               href={`mailto:${siteConfig.email}?subject=NanoLabs%20Investor%20Inquiry`}
-              className="px-5 py-3 rounded-xl bg-[#07111F] hover:bg-[#07111F]/80 border border-white/15 text-white font-bold text-xs transition-all flex items-center gap-2"
+              className="px-5 py-3 rounded-xl bg-[#041C18] hover:bg-[#041C18]/80 border border-white/15 text-white font-bold text-xs transition-all flex items-center gap-2"
             >
-              <Mail className="w-4 h-4 text-[#20C997]" />
+              <Mail className="w-4 h-4 text-[#2DD4BF]" />
               <span>Request Investor Deck</span>
             </a>
           </div>
