@@ -18,43 +18,43 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({ onGoToPortal }
   const steps = [
     {
       num: '01',
-      title: 'Patient Registered',
-      desc: 'Front desk generates or matches the unique Patient ID (PID), registers insurance coverage, and prints specimen tube barcodes.',
-      icon: UserPlus,
+      title: 'Search or Scan',
+      desc: 'Search a test by name, category or symptom — or scan your doctor’s prescription and let the AI pre-select the required tests.',
+      icon: TestTubes,
       color: '#0EA5E9'
     },
     {
       num: '02',
-      title: 'Tests Requested',
-      desc: 'Examinations are queued by department (Hematology, Biochem, Microbiology) with priority tags for urgent/stat specimens.',
-      icon: TestTubes,
+      title: 'Compare Nearby Labs',
+      desc: 'See laboratories around you with transparent price, turnaround time, distance and accreditation, and pick one or several.',
+      icon: FileEdit,
       color: '#14B8A6'
     },
     {
       num: '03',
-      title: 'Laboratory Processing',
-      desc: 'Specimens are loaded into automated analyzers or technical bench benches with real-time specimen tracking.',
-      icon: Cpu,
+      title: 'Choose Collection & Doctor',
+      desc: 'Select walk-in or home sample collection (with live distance-based pricing) and credit your recommending doctor.',
+      icon: UserPlus,
       color: '#2DD4BF'
     },
     {
       num: '04',
-      title: 'Results Entered & Checked',
-      desc: 'Quantitative values and qualitative observations are logged with automated delta-checking against reference intervals.',
-      icon: FileEdit,
+      title: 'Pay & Confirm',
+      desc: 'Review your itemized invoice, then pay by cash or Mobile Money. The lab cashier verifies payment with a secure access code.',
+      icon: Cpu,
       color: '#0EA5E9'
     },
     {
       num: '05',
-      title: 'Biologist Validation',
-      desc: 'Licensed Medical Biologist reviews consolidated findings, adds clinical interpretation notes, and applies the digital ONMC seal.',
+      title: 'Track Your Sample',
+      desc: 'Follow a live timeline — intake, phlebotomy, transit, bench analysis and quality validation — with WhatsApp and SMS updates.',
       icon: CheckCircle,
       color: '#2DD4BF'
     },
     {
       num: '06',
-      title: 'Patient & Doctor Delivery',
-      desc: 'Instant delivery of signed consolidated multi-test PDF batches via WhatsApp, SMS, and confidential sealed patient envelopes.',
+      title: 'Get & Share Results',
+      desc: 'Download signed, lab-branded consolidated reports into your medical booklet and share them with your doctor in one tap.',
       icon: Send,
       color: '#0284C7'
     }
@@ -66,13 +66,13 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({ onGoToPortal }
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold text-[#2DD4BF] uppercase tracking-wider bg-[#2DD4BF]/10 px-3.5 py-1 rounded-full border border-[#2DD4BF]/20">
-            End-to-End Diagnostic Pipeline
+            How nanoLabs Works
           </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            From patient registration to result delivery.
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight text-balance">
+            From search to result, in six simple steps.
           </h2>
           <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
-            A seamless six-step workflow eliminating manual transcription delays and keeping every healthcare stakeholder in sync.
+            Book a lab test the way you book everything else — compare, choose, pay your way, and follow it through to a result you keep.
           </p>
         </div>
 

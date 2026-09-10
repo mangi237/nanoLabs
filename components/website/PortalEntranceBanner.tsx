@@ -15,10 +15,10 @@ export const PortalEntranceBanner: React.FC<PortalEntranceBannerProps> = ({ onGo
           </div>
           <div>
             <h4 className="text-sm sm:text-base font-extrabold text-white">
-              Ready to enter NanoLabs?
+              Ready to book your first test?
             </h4>
             <p className="text-xs text-[#93B4AF]">
-              Access your medical laboratory workspace, physician portal, or patient results center.
+              Log in as a patient, doctor or laboratory to search tests, compare labs and track your results.
             </p>
           </div>
         </div>

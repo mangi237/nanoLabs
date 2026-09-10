@@ -24,67 +24,67 @@ export const EcosystemSection: React.FC<EcosystemSectionProps> = ({ onGoToPortal
   const nodes = [
     {
       id: 0,
-      title: 'Laboratories & Hubs',
-      icon: Building2,
-      color: '#0EA5E9',
-      role: 'Core Engine',
-      desc: 'Centralized multi-tenant LIMS managing sample queues, analyzer interfaces, quality control, and inventory.'
-    },
-    {
-      id: 1,
       title: 'Patients',
       icon: Users,
       color: '#2DD4BF',
-      role: 'Identity & Intake',
-      desc: 'Permanent Patient Identification (PID), digital check-in, biometric Yebo KYC verification, and booking history.'
+      role: 'B2C Hub',
+      desc: 'Search tests, scan prescriptions, compare labs, book, pay with cash or MoMo, and keep every result in one medical booklet.'
+    },
+    {
+      id: 1,
+      title: 'Test Search & AI Scan',
+      icon: TestTube,
+      color: '#14B8A6',
+      role: 'Discovery',
+      desc: 'An 80+ test catalog searchable by name, category or symptom, plus an AI scanner that reads your prescription and pre-selects tests.'
     },
     {
       id: 2,
-      title: 'Tests & Examinations',
-      icon: TestTube,
-      color: '#14B8A6',
-      role: 'Clinical Catalog',
-      desc: 'Standardized examination catalog spanning Hematology, Microbiology, Biochemistry, Serology, and Parasitology.'
+      title: 'Lab Marketplace',
+      icon: Building2,
+      color: '#0EA5E9',
+      role: 'Compare & Book',
+      desc: 'See nearby laboratories with transparent price, turnaround time, distance and accreditation — book one lab or several at once.'
     },
     {
       id: 3,
-      title: 'Results & Validation',
-      icon: FileText,
+      title: 'Payments & Cashier',
+      icon: Smartphone,
       color: '#2DD4BF',
-      role: 'Sign-Off & Quality',
-      desc: 'Multi-tier review with automated reference intervals, delta-checks, and ONMC biologist cryptographic validation.'
+      role: 'Cash & MoMo',
+      desc: 'Dynamic invoices with distance-based home collection and a small online platform percentage, verified by cashier access code.'
     },
     {
       id: 4,
-      title: 'Laboratory Staff',
-      icon: UserCheck,
+      title: 'Doctor Network',
+      icon: Stethoscope,
       color: '#0284C7',
-      role: 'Role Workspaces',
-      desc: 'Purpose-built interfaces for receptionists, phlebotomists, bench technicians, cashiers, and managers.'
+      role: 'Connect & Consult',
+      desc: 'Connect with your doctor, share results in one tap, book video or in-person consultations, and receive digital prescriptions.'
     },
     {
       id: 5,
-      title: 'Doctors & Clinicians',
-      icon: Stethoscope,
-      color: '#0EA5E9',
-      role: 'Clinical Partner',
-      desc: 'Dedicated physician portal to order panels, review antibiograms, and consult longitudinal patient results.'
+      title: 'Laboratories (LIMS)',
+      icon: UserCheck,
+      color: '#14B8A6',
+      role: 'Lab Engine',
+      desc: 'Reception, cashier, technical bench and biologist sign-off in one workspace, with lab-branded reports and configurable pricing.'
     },
     {
       id: 6,
-      title: 'Referrals & Clinics',
+      title: 'Live Sample Tracking',
       icon: Share2,
-      color: '#14B8A6',
-      role: 'Network Growth',
-      desc: 'Transparent referral tracking, automated fee distribution, and real-time specimen pickup dispatching.'
+      color: '#0EA5E9',
+      role: 'Transparency',
+      desc: 'Follow each sample from intake to phlebotomy, transit, analysis, validation and signed-ready with a real-time status timeline.'
     },
     {
       id: 7,
-      title: 'Patient Portal',
-      icon: Smartphone,
+      title: 'Results & Booklet',
+      icon: FileText,
       color: '#2DD4BF',
-      role: 'Digital Access',
-      desc: 'Sealed tactile envelope unsealing, instant WhatsApp notifications, and consolidated signed PDF downloads.'
+      role: 'Records You Keep',
+      desc: 'Signed, tamper-proof consolidated reports grouped by laboratory batch, delivered by WhatsApp and stored forever.'
     }
   ];
 
@@ -98,13 +98,13 @@ export const EcosystemSection: React.FC<EcosystemSectionProps> = ({ onGoToPortal
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#0A2C27] border border-white/10 text-xs font-bold text-[#2DD4BF]">
             <Zap className="w-3.5 h-3.5" />
-            <span>Connected HealthTech Infrastructure</span>
+            <span>Patients · Doctors · Laboratories</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            One connected laboratory ecosystem.
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight text-balance">
+            One platform for your whole diagnostic journey.
           </h2>
           <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
-            NanoLabs brings the essential parts of laboratory healthcare into one unified digital workflow — eliminating the delays of fragmented, paper-based records.
+            nanoLabs connects patients, doctors and laboratories in a single flow — from searching a test to comparing labs, paying, tracking your sample and sharing the result with your doctor.
           </p>
         </div>
 

@@ -46,10 +46,10 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
           </div>
 
           {/* Main Hero Headline */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.08] font-sans">
-            The Operating System <br />
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.08] font-sans text-balance">
+            Find, compare and book <br />
             <span className="bg-gradient-to-r from-[#0EA5E9] via-[#14B8A6] to-[#2DD4BF] bg-clip-text text-transparent">
-              for Modern Laboratories.
+              lab tests near you.
             </span>
           </h1>
 
@@ -84,17 +84,17 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
           <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-xs font-semibold text-[#93B4AF]">
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-[#2DD4BF]" />
-              Cameroon Clinical Standard
+              Transparent lab pricing
             </span>
             <span className="w-1 h-1 rounded-full bg-white/20 hidden sm:inline-block" />
             <span className="flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-[#0EA5E9]" />
-              Real-Time WhatsApp & Signed PDF Delivery
+              <Smartphone className="w-4 h-4 text-[#0EA5E9]" />
+              Pay with MoMo, Orange Money or cash
             </span>
             <span className="w-1 h-1 rounded-full bg-white/20 hidden sm:inline-block" />
             <span className="flex items-center gap-1.5">
               <Lock className="w-4 h-4 text-[#0284C7]" />
-              Client-Side Sealed Envelope Encryption
+              Tamper-proof results you keep
             </span>
           </div>
         </div>
@@ -113,7 +113,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                 <div className="w-3 h-3 rounded-full bg-amber-500/80" />
                 <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
                 <span className="ml-3 text-[11px] font-mono text-[#93B4AF] hidden sm:inline-block">
-                  https://app.nanolabs.health/dashboard • Yaoundé & Douala Live Gateway
+                  app.nanolabs.health/book • Douala & Yaoundé
                 </span>
               </div>
 
@@ -135,13 +135,13 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-white flex items-center gap-2">
-                      Central Diagnostic Laboratory
+                      Full Blood Count + Malaria
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                        Douala Hub
+                        Near you
                       </span>
                     </h3>
                     <p className="text-xs text-[#93B4AF]">
-                      Multi-tenant Clinical Laboratory Information Management System
+                      Comparing 6 nearby laboratories by price, turnaround and distance
                     </p>
                   </div>
                 </div>
@@ -151,7 +151,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                     onClick={onGoToPortal}
                     className="px-4 py-2 bg-gradient-to-r from-[#0EA5E9] to-[#14B8A6] hover:from-[#0EA5E9]/90 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-md"
                   >
-                    <span>Enter Workspace</span>
+                    <span>Book a test</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -161,45 +161,45 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="p-3.5 rounded-2xl bg-[#041C18]/80 border border-white/10 space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[#93B4AF] flex items-center justify-between">
-                    <span>Active Samples</span>
-                    <TestTube2 className="w-3.5 h-3.5 text-[#0EA5E9]" />
+                    <span>Nearby Labs</span>
+                    <Building2 className="w-3.5 h-3.5 text-[#0EA5E9]" />
                   </div>
-                  <div className="text-2xl font-black text-white font-mono">148</div>
+                  <div className="text-2xl font-black text-white font-mono">6</div>
                   <div className="text-[10px] text-[#2DD4BF] font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> 92% on-time turnaround
+                    <CheckCircle2 className="w-3 h-3" /> Accredited &amp; verified
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-[#041C18]/80 border border-white/10 space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[#93B4AF] flex items-center justify-between">
-                    <span>Patients Registered</span>
-                    <Users className="w-3.5 h-3.5 text-[#2DD4BF]" />
+                    <span>Best Price</span>
+                    <Sparkles className="w-3.5 h-3.5 text-[#2DD4BF]" />
                   </div>
-                  <div className="text-2xl font-black text-white font-mono">2,410</div>
+                  <div className="text-2xl font-black text-white font-mono">4,500</div>
                   <div className="text-[10px] text-[#0EA5E9] font-semibold">
-                    Biometric & PID Verified
+                    XAF · CityLab Bonapriso
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-[#041C18]/80 border border-white/10 space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[#93B4AF] flex items-center justify-between">
-                    <span>Validated Batches</span>
-                    <FileCheck2 className="w-3.5 h-3.5 text-[#14B8A6]" />
+                    <span>Fastest Result</span>
+                    <Clock className="w-3.5 h-3.5 text-[#14B8A6]" />
                   </div>
-                  <div className="text-2xl font-black text-white font-mono">89</div>
+                  <div className="text-2xl font-black text-white font-mono">2 hrs</div>
                   <div className="text-[10px] text-[#2DD4BF] font-semibold">
-                    ONMC Biologist Signed
+                    Turnaround time
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-[#041C18]/80 border border-white/10 space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[#93B4AF] flex items-center justify-between">
-                    <span>Physician Network</span>
-                    <Stethoscope className="w-3.5 h-3.5 text-[#0284C7]" />
+                    <span>Home Collection</span>
+                    <Smartphone className="w-3.5 h-3.5 text-[#0284C7]" />
                   </div>
-                  <div className="text-2xl font-black text-white font-mono">42</div>
+                  <div className="text-2xl font-black text-white font-mono">4/6</div>
                   <div className="text-[10px] text-[#0284C7] font-semibold">
-                    Connected Clinics
+                    Labs collect at home
                   </div>
                 </div>
               </div>
@@ -207,34 +207,40 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
               {/* Sample Workflow Table Simulation inside Hero Window */}
               <div className="rounded-2xl bg-[#041C18]/90 border border-white/10 overflow-hidden text-xs">
                 <div className="bg-[#0A2C27]/90 px-4 py-2.5 border-b border-white/10 flex items-center justify-between font-bold text-[#93B4AF]">
-                  <span>Recent Diagnostic Test Batches</span>
-                  <span className="text-[10px] text-[#2DD4BF] font-mono">Auto-Syncing</span>
+                  <span>Nearby laboratories for your tests</span>
+                  <span className="text-[10px] text-[#2DD4BF] font-mono">Sorted by price</span>
                 </div>
-                <div className="divide-y divide-white/5 font-mono">
+                <div className="divide-y divide-white/5">
                   {[
-                    { id: 'BAT-9042', patient: 'Ambe Christian M.', test: 'Full Blood Count + Lipid Panel + Glucose', status: 'Ready (Signed PDF)', time: '4 mins ago', flag: 'Ready' },
-                    { id: 'BAT-9041', patient: 'Ngo Bisseck Claire', test: 'Widal Reaction + Urinalysis Sediment', status: 'Biologist Sign-Off', time: '12 mins ago', flag: 'Review' },
-                    { id: 'BAT-9040', patient: 'Fotsing Jean-Paul', test: 'Liver Function Panel + Creatinine', status: 'Analyzer Processing', time: '28 mins ago', flag: 'Processing' }
+                    { lab: 'CityLab Bonapriso', tag: 'Accredited', price: '4,500', tat: '2 hrs', dist: '1.2 km', home: true, best: 'Cheapest' },
+                    { lab: 'BioSanté Akwa', tag: 'Accredited', price: '5,200', tat: '90 min', dist: '2.8 km', home: true, best: 'Fastest' },
+                    { lab: 'Laboratoire Central', tag: 'Accredited', price: '6,000', tat: '4 hrs', dist: '0.6 km', home: false, best: 'Closest' }
                   ].map((row) => (
-                    <div key={row.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-white/5 transition-colors">
+                    <div key={row.lab} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-2.5">
-                        <span className="px-2 py-0.5 rounded bg-white/10 text-white text-[11px] font-bold">
-                          {row.id}
+                        <span className="w-8 h-8 rounded-lg bg-[#14B8A6]/15 text-[#2DD4BF] flex items-center justify-center shrink-0">
+                          <Building2 className="w-4 h-4" />
                         </span>
                         <div>
-                          <div className="font-bold text-white font-sans">{row.patient}</div>
-                          <div className="text-[11px] text-[#93B4AF] font-sans">{row.test}</div>
+                          <div className="font-bold text-white flex items-center gap-1.5">
+                            {row.lab}
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#2DD4BF]/15 text-[#2DD4BF] uppercase tracking-wide">{row.best}</span>
+                          </div>
+                          <div className="text-[11px] text-[#93B4AF] flex items-center gap-2">
+                            <span>{row.tat} turnaround</span>
+                            <span className="w-1 h-1 rounded-full bg-white/20" />
+                            <span>{row.dist}</span>
+                            {row.home && <span className="text-[#0EA5E9] font-semibold">Home visit</span>}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          row.flag === 'Ready' ? 'bg-[#2DD4BF]/20 text-[#2DD4BF] border border-[#2DD4BF]/30' :
-                          row.flag === 'Review' ? 'bg-[#0EA5E9]/20 text-[#0EA5E9] border border-[#0EA5E9]/30' :
-                          'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        }`}>
-                          {row.status}
+                      <div className="flex items-center gap-3 pl-10 sm:pl-0">
+                        <div className="text-right">
+                          <div className="font-black text-white font-mono">{row.price}<span className="text-[10px] text-[#93B4AF] font-sans"> XAF</span></div>
+                        </div>
+                        <span className="px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-[#0EA5E9] to-[#14B8A6] text-white">
+                          Book
                         </span>
-                        <span className="text-[10px] text-[#93B4AF]">{row.time}</span>
                       </div>
                     </div>
                   ))}
@@ -248,22 +254,22 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
             {/* Badge 1: Patients */}
             <div className="absolute -top-6 -left-8 p-3 rounded-2xl bg-[#0A2C27]/95 border border-white/15 shadow-xl backdrop-blur-md flex items-center gap-3 animate-bounce duration-1000">
               <div className="w-8 h-8 rounded-xl bg-[#0EA5E9]/20 text-[#0EA5E9] flex items-center justify-center">
-                <Users className="w-4 h-4" />
+                <Sparkles className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">Patient Portal</div>
-                <div className="text-xs font-black text-white">Yebo KYC & WhatsApp</div>
+                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">AI Scanner</div>
+                <div className="text-xs font-black text-white">Scan your prescription</div>
               </div>
             </div>
 
-            {/* Badge 2: Sealed Envelope */}
+            {/* Badge 2: Mobile Money */}
             <div className="absolute -bottom-6 -right-6 p-3 rounded-2xl bg-[#0A2C27]/95 border border-white/15 shadow-xl backdrop-blur-md flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-[#2DD4BF]/20 text-[#2DD4BF] flex items-center justify-center">
-                <Lock className="w-4 h-4" />
+                <Smartphone className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">Sealed Envelope</div>
-                <div className="text-xs font-black text-white">AES-256 Tamper-Proof</div>
+                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">Payments</div>
+                <div className="text-xs font-black text-white">MoMo &amp; Orange Money</div>
               </div>
             </div>
 
@@ -273,8 +279,8 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                 <Stethoscope className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">Physician Network</div>
-                <div className="text-xs font-black text-white">Direct E-Prescriptions</div>
+                <div className="text-[10px] text-[#93B4AF] font-bold uppercase">Doctor Network</div>
+                <div className="text-xs font-black text-white">Connect &amp; consult</div>
               </div>
             </div>
           </div>

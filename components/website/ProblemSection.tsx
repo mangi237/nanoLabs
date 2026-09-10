@@ -20,53 +20,53 @@ interface ProblemSectionProps {
 export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) => {
   const challenges = [
     {
-      title: 'Manual Paper Registries',
-      desc: 'Physical logbooks lead to handwriting ambiguities, transcription errors, and missing patient demographics.',
-      icon: FileX2
-    },
-    {
-      title: 'Prolonged Turnaround Times',
-      desc: 'Bottlenecks during specimen logging, bench transfers, and physical result signatures create frustrating delays.',
-      icon: Clock3
-    },
-    {
-      title: 'Disconnected Physician Coordination',
-      desc: 'Doctors and partner clinics lack instant access to validated findings, relying on courier trips and phone calls.',
-      icon: PhoneOff
-    },
-    {
-      title: 'Fragmented Staff Workflows',
-      desc: 'Without role-based software, phlebotomists, technicians, and biologists struggle with specimen handoffs.',
-      icon: Shuffle
-    },
-    {
-      title: 'Lost Patient Diagnostic Records',
-      desc: 'Patients lose physical printouts, preventing doctors from comparing prior glucose, lipid, or biopsy values.',
+      title: 'No Way to Compare Prices',
+      desc: 'Patients call around or walk lab to lab with no clear view of price, turnaround time or distance before paying.',
       icon: SearchX
     },
     {
-      title: 'Security & Audit Vulnerability',
-      desc: 'Paper records lack tamper-proof digital seals, cryptographic validation, and access traceability.',
+      title: 'Long, Uncertain Waits',
+      desc: 'You hand over a sample and hope — with no visibility into where your test is or when the result will be ready.',
+      icon: Clock3
+    },
+    {
+      title: 'Paper Results Get Lost',
+      desc: 'Printouts are misplaced, so doctors cannot compare your previous glucose, lipid or blood values over time.',
+      icon: FileX2
+    },
+    {
+      title: 'Confusing, Opaque Bills',
+      desc: 'Sampling acts, home-visit fees and coverage splits are unclear, and cash-only desks make payment stressful.',
       icon: AlertTriangle
+    },
+    {
+      title: 'Disconnected From Your Doctor',
+      desc: 'Sharing results means physical courier trips and phone calls instead of a secure one-tap share.',
+      icon: PhoneOff
+    },
+    {
+      title: 'Travel Required for Everything',
+      desc: 'A simple blood draw means leaving work or home, even when a phlebotomist could collect the sample where you are.',
+      icon: Shuffle
     }
   ];
 
   const solutions = [
     {
-      title: 'Universal PID & Biometric KYC',
-      desc: 'Instant patient recognition with permanent identification, insurance matching, and visit records.'
+      title: 'Compare Every Nearby Lab',
+      desc: 'Transparent price, turnaround time, distance and accreditation side by side before you commit.'
     },
     {
-      title: 'Automated Sample Barcoding & Analyzer Queues',
-      desc: 'Direct test tracking from phlebotomy collection tube to bench processing and delta-check.'
+      title: 'Book, Scan & Pay in Minutes',
+      desc: 'Scan your prescription, pick walk-in or home collection, and pay by cash or Mobile Money.'
     },
     {
-      title: 'Physician Portal & Instant WhatsApp Sharing',
-      desc: 'Signed consolidated PDF reports delivered directly to physicians and patients in seconds.'
+      title: 'Track Your Sample Live',
+      desc: 'A real-time status timeline from intake to signed-ready, with WhatsApp and SMS updates.'
     },
     {
-      title: 'Granular Multi-Role Permissions',
-      desc: 'Dedicated workspaces for reception, tech bench, biologist sign-off, cashier, and admin.'
+      title: 'Own & Share Your Records',
+      desc: 'Every signed result lives in your medical booklet, shareable with any connected doctor in one tap.'
     }
   ];
 
@@ -76,13 +76,13 @@ export const ProblemSection: React.FC<ProblemSectionProps> = ({ onGoToPortal }) 
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold text-[#0EA5E9] uppercase tracking-wider bg-[#0EA5E9]/10 px-3.5 py-1 rounded-full border border-[#0EA5E9]/20">
-            The Healthcare Operational Challenge
+            Getting a lab test should not be this hard
           </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
-            Laboratories should not have to run on fragmented systems.
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight text-balance">
+            Booking a lab test should be simple, clear and fair.
           </h2>
           <p className="text-sm sm:text-base text-[#93B4AF] leading-relaxed">
-            Many medical laboratories across Africa face daily operational hurdles caused by paper registers, disconnected communication, and isolated diagnostic benches.
+            Across Cameroon, patients still guess at prices, wait blindly on paper results, and lose their history. nanoLabs replaces that with a transparent, trackable experience you control.
           </p>
         </div>
 

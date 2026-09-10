@@ -24,11 +24,11 @@ export const FinalPortalCTA: React.FC<FinalPortalCTAProps> = ({ onGoToPortal }) 
 
         {/* Big Central Headings */}
         <div className="space-y-3">
-          <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
-            Ready to enter NanoLabs?
+          <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight text-balance">
+            Your next lab test, made simple.
           </h2>
           <p className="text-sm sm:text-lg text-[#93B4AF] max-w-xl mx-auto leading-relaxed">
-            Access your medical laboratory, patient results, or partner environment through the live NanoLabs Portal.
+            Search a test, compare nearby labs, pay by cash or Mobile Money, and track your results — as a patient, doctor or laboratory.
           </p>
         </div>
 

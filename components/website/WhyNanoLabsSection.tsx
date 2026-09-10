@@ -16,38 +16,38 @@ interface WhyNanoLabsSectionProps {
 export const WhyNanoLabsSection: React.FC<WhyNanoLabsSectionProps> = ({ onGoToPortal }) => {
   const reasons = [
     {
-      title: 'Connected Workflows',
-      desc: 'Brings patient intake, sample collection, bench analysis, validation, and delivery into one frictionless pipeline.',
+      title: 'Transparent Comparison',
+      desc: 'Compare nearby labs by price, turnaround time, distance and accreditation before you pay — no more guessing or calling around.',
       icon: Network,
       color: '#0EA5E9'
     },
     {
-      title: 'Laboratory-Focused Design',
-      desc: 'Crafted specifically for clinical pathology benches with tube color-coding, multi-section parameters, and antibiograms.',
+      title: 'AI Prescription Scanner',
+      desc: 'Scan a handwritten or printed prescription and let nanoLabs read it, extract the tests, and pre-select them for booking.',
       icon: FlaskConical,
       color: '#14B8A6'
     },
     {
-      title: 'Patient Connectivity',
-      desc: 'Extends results directly to patient smartphones with WhatsApp delivery, PID lookups, and sealed digital envelopes.',
+      title: 'Pay the Way You Pay',
+      desc: 'Cash at the desk or Mobile Money with MTN MoMo and Orange Money, confirmed securely by the lab cashier.',
       icon: Smartphone,
       color: '#2DD4BF'
     },
     {
-      title: 'Physician Relationships',
-      desc: 'Enables referring doctors to review longitudinal patient graphs, prescribe test panels, and track diagnostic findings.',
+      title: 'Care Without Travel',
+      desc: 'Request home sample collection and a phlebotomist comes to you, with fair distance-based pricing calculated from your location.',
       icon: Stethoscope,
       color: '#0284C7'
     },
     {
-      title: 'Traceability & Security',
-      desc: 'Immutably logs every parameter adjustment, phlebotomist scan, and biologist sign-off with SHA-256 cryptographic proof.',
+      title: 'Records You Own',
+      desc: 'Every signed, tamper-proof result is kept in your medical booklet, shareable with any connected doctor in one tap.',
       icon: ShieldCheck,
       color: '#2DD4BF'
     },
     {
-      title: 'Local Understanding',
-      desc: 'Built around Cameroonian insurance providers (ASCOMA, SAHAM, Chanas), local telecom networks, and operational power dynamics.',
+      title: 'Built for Cameroon',
+      desc: 'Designed around local insurers (Ascoma, Activa, SAHAM, Chanas, GMC), Mobile Money, and the way healthcare really works here.',
       icon: Globe2,
       color: '#0EA5E9'
     }

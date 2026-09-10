@@ -71,11 +71,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onGoToPortal, onOpenTerms, onOpe
                   nano<span className="text-[#2DD4BF]">Labs</span>
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0EA5E9]/20 text-[#0EA5E9] border border-[#0EA5E9]/30 tracking-wider">
-                  OS
+                  LABS
                 </span>
               </div>
               <span className="text-[10px] text-[#93B4AF] font-medium hidden sm:inline-block">
-                Cameroon • HealthTech
+                Book lab tests • Cameroon
               </span>
             </div>
           </a>
