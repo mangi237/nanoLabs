@@ -614,6 +614,7 @@ export const limsService = {
       discountAmount?: number;
       discountType?: string;
       actualPaidAmount?: number;
+      
       insuranceDetails?: any;
       [key: string]: any;
     };

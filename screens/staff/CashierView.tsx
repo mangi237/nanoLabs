@@ -4,18 +4,23 @@ import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
-import { CAMEROON_INSURANCE_COMPANIES, CAMEROON_COMMERCIAL_BANKS, formatDOBDisplay, calculateAgeFromDOB } from '../../data/cameroonInsurances';
+import {
+  CAMEROON_INSURANCE_COMPANIES,
+  CAMEROON_COMMERCIAL_BANKS,
+  formatDOBDisplay,
+  calculateAgeFromDOB
+} from '../../data/cameroonInsurances';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
-import { 
-  DollarSign, 
-  Search, 
-  CheckCircle2, 
-  CreditCard, 
-  Smartphone, 
-  ShieldCheck, 
-  Building2, 
-  Clock, 
-  Receipt, 
+import {
+  DollarSign,
+  Search,
+  CheckCircle2,
+  CreditCard,
+  Smartphone,
+  ShieldCheck,
+  Building2,
+  Clock,
+  Receipt,
   AlertCircle,
   FileText,
   UserCheck,
@@ -103,7 +108,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [couponNotes, setCouponNotes] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [customPriceInput, setCustomPriceInput] = useState<string>('');
-  
+
   // Mobile Money (MoMo / Orange Money) detailed fields
   const [momoProvider, setMomoProvider] = useState<'MTN' | 'ORANGE'>('MTN');
   const [momoSenderPhone, setMomoSenderPhone] = useState('');
@@ -136,7 +141,21 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Insurance details
   const [insuranceProvider, setInsuranceProvider] = useState('');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
-  const [coPayPercent, setCoPayPercent] = useState<number>(20); // default 20% patient co-pay
+  const [coPayPercent, setCoPayPercent] = useState<number>(20);
+
+  // Patient co-pay settlement channel (only when insurance)
+  const [coPayPaymentMethod, setCoPayPaymentMethod] = useState<'cash' | 'mobile_money' | 'bank_transfer' | 'card'>('cash');
+  const [coPayMomoProvider, setCoPayMomoProvider] = useState<'MTN' | 'ORANGE'>('MTN');
+  const [coPayMomoPhone, setCoPayMomoPhone] = useState('');
+  const [coPayMomoName, setCoPayMomoName] = useState('');
+  const [coPayMomoTxId, setCoPayMomoTxId] = useState('');
+  const [coPayBankName, setCoPayBankName] = useState('Afriland First Bank');
+  const [coPayBankAccountName, setCoPayBankAccountName] = useState('');
+  const [coPayBankReference, setCoPayBankReference] = useState('');
+  const [coPayCardScheme, setCoPayCardScheme] = useState('Visa');
+  const [coPayCardLast4, setCoPayCardLast4] = useState('');
+  const [coPayCardAuthCode, setCoPayCardAuthCode] = useState('');
+  const [coPayCashGiven, setCoPayCashGiven] = useState('');
 
   // Security Access Code verification for Cashiers
   const [cashierAccessCode, setCashierAccessCode] = useState('');
@@ -158,7 +177,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
     };
   }, [targetLabId]);
 
-  // Load registered staff directory for benefit and gift allocation
   useEffect(() => {
     const fetchStaffMembers = async () => {
       try {
@@ -184,7 +202,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // Pre-populate patient details when a booking is selected
   useEffect(() => {
     if (selectedBooking) {
       if (selectedBooking.addOns && selectedBooking.addOns.length > 0) {
@@ -219,9 +236,18 @@ export const CashierView: React.FC<CashierViewProps> = ({
         setCoPayPercent(100 - Number(patientCoverage));
       }
 
-      // Check if patient is a registered staff member and auto-select
+      if (!coPayMomoPhone && selectedBooking.patientPhone) {
+        setCoPayMomoPhone(selectedBooking.patientPhone);
+      }
+      if (!coPayMomoName && selectedBooking.patientName) {
+        setCoPayMomoName(selectedBooking.patientName);
+      }
+      if (!coPayBankAccountName && selectedBooking.patientName) {
+        setCoPayBankAccountName(selectedBooking.patientName);
+      }
+
       if (staffList.length > 0) {
-        const matchedStaff = staffList.find(s => 
+        const matchedStaff = staffList.find(s =>
           (s.name && selectedBooking.patientName && s.name.trim().toLowerCase() === selectedBooking.patientName.trim().toLowerCase()) ||
           (s.staffId && (selectedBooking.patientId === s.staffId || (selectedBooking as any).patientPid === s.staffId))
         );
@@ -235,7 +261,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   }, [selectedBooking, staffList]);
 
-  // Calculate dynamic settlement total based on pricing adjustments
   const calculateSettlementDetails = (booking: PatientBooking | null, group: PatientBooking[] | null) => {
     const targetBookings = group && group.length > 0 ? group : booking ? [booking] : [];
     const testsAmount = targetBookings.reduce((sum, b) => {
@@ -271,7 +296,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       } else if (codeUpper.includes('10') || codeUpper === 'PROMO10') {
         discountAmount = Math.round(baseTotal * 0.1);
       } else {
-        discountAmount = baseTotal; // Default full gift coupon
+        discountAmount = baseTotal;
       }
     } else if (discountType === 'percent') {
       discountAmount = Math.round((baseTotal * (discountValue || 0)) / 100);
@@ -288,7 +313,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       } else if (clean.includes('10')) {
         discountAmount = Math.round(baseTotal * 0.1);
       } else {
-        discountAmount = Math.round((baseTotal * 15) / 100); // 15% coupon discount
+        discountAmount = Math.round((baseTotal * 15) / 100);
       }
     }
 
@@ -310,13 +335,19 @@ export const CashierView: React.FC<CashierViewProps> = ({
     const cashGivenNum = parseFloat(cashGiven) || 0;
     const changeToReturn = cashGivenNum > 0 ? Math.max(0, cashGivenNum - (paymentMethod === 'insurance' ? patientPortion : afterDiscount)) : 0;
 
+    const coPayCashGivenNum = parseFloat(coPayCashGiven) || 0;
+    const coPayChangeToReturn = coPayCashGivenNum > 0
+      ? Math.max(0, coPayCashGivenNum - patientPortion)
+      : 0;
+
     return {
       baseTotal,
       discountAmount,
       finalTotal: afterDiscount,
       patientPortion,
       insurancePortion,
-      changeToReturn
+      changeToReturn,
+      coPayChangeToReturn
     };
   };
 
@@ -344,7 +375,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const handleCollectPayment = async () => {
     if (!selectedBooking && (!selectedGroupBookings || selectedGroupBookings.length === 0)) return;
 
-    // Security access code validation
     setAccessCodeError('');
     const enteredCode = cashierAccessCode.trim();
     if (!enteredCode) {
@@ -369,7 +399,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
       return;
     }
 
-    // MoMo Validation: Ensure phone number and sender name exist
     if (paymentMethod === 'mobile_money') {
       if (!momoSenderPhone.trim()) {
         setAccessCodeError('Please enter the Sender Mobile Money phone number used for the transaction.');
@@ -381,7 +410,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
-    // Bank Transfer Validation
     if (paymentMethod === 'bank_transfer') {
       if (!bankAccountName.trim()) {
         setAccessCodeError('Please enter the Bank Account Holder / Sender name.');
@@ -393,7 +421,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
-    // Workers Benefit Validation
     if (paymentMethod === 'workers_benefit') {
       if (!workerStaffName.trim()) {
         setAccessCodeError('Please enter the Staff Member full name receiving the benefit.');
@@ -401,7 +428,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
-    // Gift Coupon Validation
     if (paymentMethod === 'gift_coupon') {
       if (!couponCode.trim()) {
         setAccessCodeError('Please enter or select a Gift Coupon code.');
@@ -409,16 +435,55 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
+    // Co-pay settlement channel validation when insurance is chosen
+    if (paymentMethod === 'insurance') {
+      if (coPayPaymentMethod === 'mobile_money') {
+        if (!coPayMomoPhone.trim()) {
+          setAccessCodeError('Please enter the phone number used for the patient co-pay Mobile Money payment.');
+          return;
+        }
+        if (!coPayMomoName.trim()) {
+          setAccessCodeError('Please enter the Mobile Money account holder name for the patient co-pay.');
+          return;
+        }
+      }
+      if (coPayPaymentMethod === 'bank_transfer') {
+        if (!coPayBankAccountName.trim()) {
+          setAccessCodeError('Please enter the bank account holder name for the patient co-pay.');
+          return;
+        }
+        if (!coPayBankReference.trim()) {
+          setAccessCodeError('Please enter the bank transfer reference for the patient co-pay.');
+          return;
+        }
+      }
+      if (coPayPaymentMethod === 'card') {
+        if (!coPayCardLast4.trim()) {
+          setAccessCodeError('Please enter the last 4 digits of the card used for the patient co-pay.');
+          return;
+        }
+      }
+    }
+
     setIsProcessing(true);
-    const targetBookings = selectedGroupBookings && selectedGroupBookings.length > 0 
-      ? selectedGroupBookings 
-      : selectedBooking 
-        ? [selectedBooking] 
+    const targetBookings = selectedGroupBookings && selectedGroupBookings.length > 0
+      ? selectedGroupBookings
+      : selectedBooking
+        ? [selectedBooking]
         : [];
     const targetIds = targetBookings.map(b => b.id);
     const nowIso = new Date().toISOString();
 
-    const { baseTotal, discountAmount, finalTotal, patientPortion, insurancePortion, changeToReturn } = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+    const {
+      baseTotal,
+      discountAmount,
+      finalTotal,
+      patientPortion,
+      insurancePortion,
+      changeToReturn,
+      coPayChangeToReturn
+    } = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+
     const payableAmount = paymentMethod === 'insurance' ? patientPortion : finalTotal;
 
     const addOnsTotalSum = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -457,6 +522,22 @@ export const CashierView: React.FC<CashierViewProps> = ({
       addOns: currentAddOns,
       addOnsAmount: addOnsTotalSum,
       testsAmount: testsTotalSum,
+
+      // Co-pay settlement channel details
+      coPayPaymentMethod: paymentMethod === 'insurance' ? coPayPaymentMethod : undefined,
+      coPayMomoProvider: paymentMethod === 'insurance' && coPayPaymentMethod === 'mobile_money' ? coPayMomoProvider : undefined,
+      coPayMomoSenderPhone: paymentMethod === 'insurance' && coPayPaymentMethod === 'mobile_money' ? coPayMomoPhone : undefined,
+      coPayMomoSenderName: paymentMethod === 'insurance' && coPayPaymentMethod === 'mobile_money' ? coPayMomoName : undefined,
+      coPayMomoTxId: paymentMethod === 'insurance' && coPayPaymentMethod === 'mobile_money' ? (coPayMomoTxId || `MOMO-${Date.now().toString().slice(-6)}`) : undefined,
+      coPayBankName: paymentMethod === 'insurance' && coPayPaymentMethod === 'bank_transfer' ? coPayBankName : undefined,
+      coPayBankAccountName: paymentMethod === 'insurance' && coPayPaymentMethod === 'bank_transfer' ? coPayBankAccountName : undefined,
+      coPayBankReference: paymentMethod === 'insurance' && coPayPaymentMethod === 'bank_transfer' ? coPayBankReference : undefined,
+      coPayCardScheme: paymentMethod === 'insurance' && coPayPaymentMethod === 'card' ? coPayCardScheme : undefined,
+      coPayCardLast4: paymentMethod === 'insurance' && coPayPaymentMethod === 'card' ? coPayCardLast4 : undefined,
+      coPayCardAuthCode: paymentMethod === 'insurance' && coPayPaymentMethod === 'card' ? (coPayCardAuthCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`) : undefined,
+      coPayCashGiven: paymentMethod === 'insurance' && coPayPaymentMethod === 'cash' ? (parseFloat(coPayCashGiven) || patientPortion) : undefined,
+      coPayCashChange: paymentMethod === 'insurance' && coPayPaymentMethod === 'cash' ? coPayChangeToReturn : undefined,
+
       insuranceDetails: paymentMethod === 'insurance' ? {
         provider: insuranceProvider || (targetBookings[0] as any).insuranceProvider || 'HMO Insurance',
         policyNumber: insurancePolicyNumber || (targetBookings[0] as any).insurancePolicyNumber || 'N/A',
@@ -478,7 +559,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
         });
       }
 
-      // INSTANT REACTIVE LOCAL STATE UPDATE
       const updatedFirstBooking: PatientBooking = {
         ...targetBookings[0],
         paymentStatus: 'paid' as const,
@@ -524,7 +604,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
         return b;
       }));
 
-      // Remove paid ids from selection
       setSelectedInvoiceIds(prev => prev.filter(id => !targetIds.includes(id)));
 
       setShowReceipt(updatedFirstBooking);
@@ -541,7 +620,17 @@ export const CashierView: React.FC<CashierViewProps> = ({
       setCustomPriceInput('');
       setCashGiven('');
 
-      // Background re-sync
+      // Reset co-pay state
+      setCoPayPaymentMethod('cash');
+      setCoPayMomoPhone('');
+      setCoPayMomoName('');
+      setCoPayMomoTxId('');
+      setCoPayBankAccountName('');
+      setCoPayBankReference('');
+      setCoPayCardLast4('');
+      setCoPayCardAuthCode('');
+      setCoPayCashGiven('');
+
       fetchData();
     } catch (e) {
       console.error('Payment collection error:', e);
@@ -550,9 +639,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // ONLY show bookings that have been validated/checked-in by Receptionist
-  const unpaidBookings = bookings.filter(b => 
-    b.paymentStatus === 'unpaid' && 
+  const unpaidBookings = bookings.filter(b =>
+    b.paymentStatus === 'unpaid' &&
     (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in')
   );
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
@@ -573,7 +661,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
     if (revenuePeriod === 'month') {
       return paidDate >= thirtyDaysAgo;
     }
-    return true; // 'all'
+    return true;
   });
 
   const periodRevenue = filteredPaidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
@@ -581,7 +669,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
     .filter(b => (b.paidAt || b.createdAt || '').startsWith(todayStr))
     .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
-  const filteredUnpaid = unpaidBookings.filter(b => 
+  const filteredUnpaid = unpaidBookings.filter(b =>
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
@@ -589,7 +677,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
   const patientGroups = React.useMemo(() => {
     const groups: { [key: string]: { key: string; patientName: string; patientPid: string; bookings: PatientBooking[]; totalAmount: number } } = {};
-    
+
     filteredUnpaid.forEach(b => {
       const key = b.patientPid || b.patientId || b.patientName;
       if (!groups[key]) {
@@ -618,7 +706,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
 
-      {/* Staff Hero Banner */}
       <StaffHeroBanner
         workstationNumber="Workstation 02"
         workstationTitle="Head Cashier & Billing Gatekeeper"
@@ -636,7 +723,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
             <div className="text-2xl font-black text-emerald-400 font-mono">
               {periodRevenue.toLocaleString()} XAF
             </div>
-            {/* Timeframe Filter Selector */}
             <div className="flex items-center justify-end gap-1 pt-1">
               {[
                 { id: 'today', label: 'Today' },
@@ -648,8 +734,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   key={p.id}
                   onClick={() => setRevenuePeriod(p.id as any)}
                   className={`px-2 py-0.5 rounded-lg text-[9px] font-bold cursor-pointer transition-all ${
-                    revenuePeriod === p.id 
-                      ? 'bg-emerald-400 text-slate-950 shadow-xs' 
+                    revenuePeriod === p.id
+                      ? 'bg-emerald-400 text-slate-950 shadow-xs'
                       : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800'
                   }`}
                 >
@@ -743,9 +829,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       </div>
 
-      {/* CONTENT AREA BASED ON ACTIVE TAB */}
+      {/* CONTENT AREA */}
       {activeTab === 'unpaid' ? (
-        /* Unpaid Invoices Queue Table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
             <div className="flex items-center gap-3">
@@ -893,7 +978,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                       </div>
                     </div>
 
-                    {/* EXPANDED ACCORDION DROPDOWN SHOWING ALL REQUESTED TESTS */}
                     {isExpanded && (
                       <div className="p-4 bg-slate-50 rounded-2xl border border-emerald-200 space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-200">
@@ -980,7 +1064,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
           )}
         </div>
       ) : (
-        /* SETTLED REVENUE HISTORY & BREAKDOWN TABLE */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
@@ -1075,7 +1158,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
-            
+
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
@@ -1090,7 +1173,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* Lab Branding & Cashier Accountability Header */}
               <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   {(lab?.logoUrl || (selectedBooking as any).labLogoUrl) ? (
@@ -1119,7 +1201,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
-              {/* Patient & Prescribed Tests with Full Names & Codes */}
               <div className="p-3.5 bg-slate-800/90 rounded-2xl border border-slate-700 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
@@ -1162,7 +1243,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
-              {/* Billable Medical Acts, Phlebotomy & Add-ons Section */}
+              {/* Billable Medical Acts */}
               <div className="p-3.5 bg-gradient-to-br from-teal-950/40 via-slate-900 to-slate-950 rounded-2xl border border-teal-500/40 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-xs text-teal-300 flex items-center gap-1.5">
@@ -1174,7 +1255,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   </span>
                 </div>
 
-                {/* Quick Add Presets */}
                 <div className="space-y-1.5">
                   <span className="text-[10px] text-slate-400 font-semibold block">Quick-Add Standard Medical Acts:</span>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
@@ -1192,8 +1272,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
                             }
                           }}
                           className={`p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                            isAlreadyAdded 
-                              ? 'bg-teal-900/60 border-teal-400 text-teal-200 shadow-xs' 
+                            isAlreadyAdded
+                              ? 'bg-teal-900/60 border-teal-400 text-teal-200 shadow-xs'
                               : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
                           }`}
                         >
@@ -1209,68 +1289,67 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   </div>
                 </div>
 
-                {/* Custom Add-on input */}
+                {/* Custom Add-on input with Code field */}
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
-  <input
-    type="text"
-    placeholder="Code (e.g. ACT-001)"
-    value={customAddOnCode}
-    onChange={(e) => setCustomAddOnCode(e.target.value.toUpperCase())}
-    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-teal-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-  />
-  <input
-    type="text"
-    placeholder="Act Name (e.g. Domicile)"
-    value={customAddOnName}
-    onChange={(e) => setCustomAddOnName(e.target.value)}
-    className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-  />
-  <input
-    type="number"
-    placeholder="Price (XAF)"
-    value={customAddOnPrice}
-    onChange={(e) => setCustomAddOnPrice(e.target.value)}
-    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-  />
-  <div className="flex gap-1.5">
-    <input
-      type="number"
-      min={1}
-      placeholder="Qty"
-      value={customAddOnQty}
-      onChange={(e) => setCustomAddOnQty(Math.max(1, parseInt(e.target.value) || 1))}
-      className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono text-center focus:outline-none focus:ring-1 focus:ring-teal-400"
-    />
-    <button
-      type="button"
-      onClick={() => {
-        const price = parseFloat(customAddOnPrice);
-        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
-        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
-        setCurrentAddOns(prev => [
-          ...prev,
-          {
-            id: `custom-${Date.now()}`,
-            code,
-            name: customAddOnName.trim(),
-            price,
-            quantity: customAddOnQty || 1
-          }
-        ]);
-        setCustomAddOnName('');
-        setCustomAddOnCode('');
-        setCustomAddOnPrice('');
-        setCustomAddOnQty(1);
-      }}
-      className="flex-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
-    >
-      <Plus className="w-3.5 h-3.5" />
-      Add
-    </button>
-  </div>
-</div>
+                  <input
+                    type="text"
+                    placeholder="Code (e.g. ACT-001)"
+                    value={customAddOnCode}
+                    onChange={(e) => setCustomAddOnCode(e.target.value.toUpperCase())}
+                    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-teal-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Act Name (e.g. Domicile)"
+                    value={customAddOnName}
+                    onChange={(e) => setCustomAddOnName(e.target.value)}
+                    className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Price (XAF)"
+                    value={customAddOnPrice}
+                    onChange={(e) => setCustomAddOnPrice(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Qty"
+                      value={customAddOnQty}
+                      onChange={(e) => setCustomAddOnQty(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono text-center focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const price = parseFloat(customAddOnPrice);
+                        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
+                        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
+                        setCurrentAddOns(prev => [
+                          ...prev,
+                          {
+                            id: `custom-${Date.now()}`,
+                            code,
+                            name: customAddOnName.trim(),
+                            price,
+                            quantity: customAddOnQty || 1
+                          }
+                        ]);
+                        setCustomAddOnName('');
+                        setCustomAddOnCode('');
+                        setCustomAddOnPrice('');
+                        setCustomAddOnQty(1);
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add
+                    </button>
+                  </div>
+                </div>
 
-                {/* Current Active Add-ons List */}
                 {currentAddOns.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     <span className="text-[10px] text-teal-300 font-bold flex items-center justify-between">
@@ -1369,10 +1448,17 @@ export const CashierView: React.FC<CashierViewProps> = ({
                               setCouponApplied(true);
                             }
                           }
+                          if (m.id !== 'insurance') {
+                            setCoPayPaymentMethod('cash');
+                            setCoPayMomoTxId('');
+                            setCoPayBankReference('');
+                            setCoPayCardAuthCode('');
+                            setCoPayCashGiven('');
+                          }
                         }}
                         className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
-                          isSel 
-                            ? 'bg-emerald-950/90 border-emerald-400 text-white font-bold ring-1 ring-emerald-400 shadow-md' 
+                          isSel
+                            ? 'bg-emerald-950/90 border-emerald-400 text-white font-bold ring-1 ring-emerald-400 shadow-md'
                             : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-700/80'
                         }`}
                       >
@@ -1387,7 +1473,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               </div>
 
-              {/* 1. CONDITIONAL SECTION: MOBILE MONEY (MTN MoMo / Orange Money) */}
+              {/* Mobile Money */}
               {paymentMethod === 'mobile_money' && (
                 <div className="p-3.5 bg-gradient-to-br from-amber-950/40 via-slate-900 to-orange-950/30 rounded-2xl border border-amber-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1398,7 +1484,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     <span className="text-[10px] text-slate-400 font-mono">MTN / Orange Cameroon</span>
                   </div>
 
-                  {/* Provider selection: MTN or ORANGE */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">MoMo Operator / Provider *</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1436,7 +1521,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Sender Phone & Sender Account Name */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1464,7 +1548,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Carrier TxID / SMS Reference */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-semibold mb-1 flex items-center justify-between">
                       <span>Transaction ID / SMS Reference Code</span>
@@ -1481,7 +1564,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 2. CONDITIONAL SECTION: BANK TRANSFER / DIRECT WIRE / DEPOSIT */}
+              {/* Bank Transfer */}
               {paymentMethod === 'bank_transfer' && (
                 <div className="p-3.5 bg-gradient-to-br from-blue-950/40 via-slate-900 to-indigo-950/30 rounded-2xl border border-blue-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1492,7 +1575,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     <span className="text-[10px] text-slate-400 font-mono">BEAC / Cameroon</span>
                   </div>
 
-                  {/* Bank Name Selector */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-semibold mb-1">
                       Bank Name / Financial Institution *
@@ -1511,7 +1593,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </select>
                   </div>
 
-                  {/* Account Holder Name & Bank Transfer Reference */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1539,7 +1620,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Branch / Notes */}
                   <div>
                     <label className="block text-[10px] text-slate-400 mb-1">
                       Bank Branch / Deposit Notes (Optional)
@@ -1555,7 +1635,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 3. CONDITIONAL SECTION: WORKERS BENEFITS & STAFF WELFARE */}
+              {/* Workers Benefit */}
               {paymentMethod === 'workers_benefit' && (
                 <div className="p-3.5 bg-gradient-to-br from-teal-950/50 via-slate-900 to-emerald-950/40 rounded-2xl border border-teal-500/50 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1568,7 +1648,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Benefit Scheme */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Worker Benefit Category *</label>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -1593,7 +1672,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Staff Selection Dropdown */}
                   <div>
                     <label className="block text-[10px] text-teal-300 font-bold mb-1 flex items-center justify-between">
                       <span>Select Registered Staff Member (Auto-Fill) *</span>
@@ -1629,7 +1707,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </select>
                   </div>
 
-                  {/* Staff Name & Staff ID */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1657,7 +1734,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Department & Authorization Note */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1693,7 +1769,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 4. CONDITIONAL SECTION: GIFT COUPONS & PROMOTIONAL VOUCHERS */}
+              {/* Gift Coupon */}
               {paymentMethod === 'gift_coupon' && (
                 <div className="p-3.5 bg-gradient-to-br from-purple-950/50 via-slate-900 to-indigo-950/40 rounded-2xl border border-purple-500/50 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1706,17 +1782,16 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Preset Gift Coupons */}
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Quick Select Gift / Voucher Presets:</label>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-xs">
                       {[
-                        { code: 'GIFT100', label: '100% Free Gift', desc: '100% Full Gift' },
-                        { code: 'WELLNESS50', label: '50% Wellness', desc: '50% Concession' },
-                        { code: 'FAMILY15', label: '15% Family', desc: '15% Discount' },
-                        { code: 'HEALTH20', label: '20% Health', desc: '20% Concession' },
-                        { code: 'PROMO10', label: '10% Promo', desc: '10% Promo' },
-                        { code: 'STAFF100', label: '100% Staff', desc: '100% Staff Gift' }
+                        { code: 'GIFT100', label: '100% Free Gift' },
+                        { code: 'WELLNESS50', label: '50% Wellness' },
+                        { code: 'FAMILY15', label: '15% Family' },
+                        { code: 'HEALTH20', label: '20% Health' },
+                        { code: 'PROMO10', label: '10% Promo' },
+                        { code: 'STAFF100', label: '100% Staff' }
                       ].map((cp) => (
                         <button
                           key={cp.code}
@@ -1735,13 +1810,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Custom Coupon Input */}
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Tag className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-2.5" />
                       <input
                         type="text"
-                        placeholder="Enter custom gift coupon code (e.g. GIFT100)"
+                        placeholder="Enter custom gift coupon code"
                         value={couponCode}
                         onChange={(e) => {
                           setCouponCode(e.target.value);
@@ -1759,7 +1833,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </button>
                   </div>
 
-                  {/* Staff Gift Beneficiary Selector */}
                   {(couponCode.toUpperCase().includes('STAFF') || selectedStaffMemberId) && staffList.length > 0 && (
                     <div className="p-3 bg-purple-900/40 rounded-xl border border-purple-400/40 space-y-1.5 animate-in fade-in duration-200">
                       <label className="block text-[10px] text-purple-200 font-bold flex items-center justify-between">
@@ -1792,7 +1865,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </div>
                   )}
 
-                  {/* Sponsor / Donor Name & Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-[10px] text-slate-300 font-semibold mb-1">
@@ -1802,7 +1874,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         type="text"
                         value={couponSponsorName}
                         onChange={(e) => setCouponSponsorName(e.target.value)}
-                        placeholder="e.g. Rotary Club Douala / Dr. Emmanuel"
+                        placeholder="e.g. Rotary Club Douala"
                         className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
                       />
                     </div>
@@ -1814,7 +1886,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         type="text"
                         value={couponNotes}
                         onChange={(e) => setCouponNotes(e.target.value)}
-                        placeholder="e.g. Community Diagnostic Outreach 2026"
+                        placeholder="e.g. Community Outreach 2026"
                         className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
                       />
                     </div>
@@ -1822,7 +1894,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 5. CONDITIONAL SECTION: CASH PAYMENT & LIVE CHANGE CALCULATOR */}
+              {/* Cash */}
               {paymentMethod === 'cash' && (
                 <div className="p-3.5 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-teal-950/30 rounded-2xl border border-emerald-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -1865,7 +1937,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Quick preset cash tender buttons */}
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick Tender:</span>
                           <button
@@ -1892,7 +1963,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 6. CONDITIONAL SECTION: CARD (POS) */}
+              {/* Card */}
               {paymentMethod === 'card' && (
                 <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-200">
                   <div className="font-extrabold text-xs text-slate-200 flex items-center gap-1.5">
@@ -1915,7 +1986,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">POS Auth / Approval Code</label>
+                      <label className="block text-[10px] text-slate-400 mb-1">POS Auth Code</label>
                       <input
                         type="text"
                         value={cardAuthCode}
@@ -1939,7 +2010,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* 7. CONDITIONAL SECTION: INSURANCE CO-PAY DETAILS */}
+              {/* Insurance */}
               {paymentMethod === 'insurance' && (
                 <div className="p-3.5 bg-indigo-950/70 rounded-2xl border border-indigo-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
@@ -1975,18 +2046,18 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   <div>
                     <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
                       <span>Co-Pay Coverage Split:</span>
-                      <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer Claim • {coPayPercent}% Patient Co-Pay</span>
+                      <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer • {coPayPercent}% Patient</span>
                     </label>
                     <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 mb-2">
                       {[
-                        { coPay: 0, label: '0% Co-Pay (100%)' },
-                        { coPay: 10, label: '10% Co-Pay (90%)' },
-                        { coPay: 15, label: '15% Co-Pay (85%)' },
-                        { coPay: 20, label: '20% Co-Pay (80%)' },
-                        { coPay: 25, label: '25% Co-Pay (75%)' },
-                        { coPay: 30, label: '30% Co-Pay (70%)' },
-                        { coPay: 50, label: '50% Co-Pay (50%)' },
-                        { coPay: 80, label: '80% Co-Pay (20%)' }
+                        { coPay: 0, label: '0% (100%)' },
+                        { coPay: 10, label: '10% (90%)' },
+                        { coPay: 15, label: '15% (85%)' },
+                        { coPay: 20, label: '20% (80%)' },
+                        { coPay: 25, label: '25% (75%)' },
+                        { coPay: 30, label: '30% (70%)' },
+                        { coPay: 50, label: '50% (50%)' },
+                        { coPay: 80, label: '80% (20%)' }
                       ].map((split) => (
                         <button
                           key={split.coPay}
@@ -2005,7 +2076,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
                     <div className="flex items-center gap-3 p-2 bg-slate-900/80 rounded-xl border border-indigo-900/60 text-xs">
                       <span className="text-slate-400 text-[11px] whitespace-nowrap">Custom Co-Pay %:</span>
-                      <input 
+                      <input
                         type="number"
                         min="0"
                         max="100"
@@ -2017,14 +2088,189 @@ export const CashierView: React.FC<CashierViewProps> = ({
                         className="w-20 px-2 py-1 bg-slate-950 border border-indigo-700 rounded-lg text-white font-bold text-center text-xs"
                       />
                       <span className="text-[11px] text-indigo-300">
-                        = Patient pays <strong>{coPayPercent}%</strong>, Insurer covers <strong>{100 - coPayPercent}%</strong>
+                        Patient: <strong>{coPayPercent}%</strong> • Insurer: <strong>{100 - coPayPercent}%</strong>
                       </span>
                     </div>
+                  </div>
+
+                  {/* PATIENT CO-PAY SETTLEMENT CHANNEL */}
+                  <div className="p-3 bg-indigo-900/40 rounded-xl border border-indigo-500/50 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-indigo-200 flex items-center gap-1.5">
+                        <CreditCard className="w-4 h-4 text-indigo-300" />
+                        Patient Co-Pay Settlement Channel *
+                      </span>
+                      <span className="text-[10px] text-indigo-300 font-mono">
+                        Co-pay: {calculateSettlementDetails(selectedBooking, selectedGroupBookings).patientPortion.toLocaleString()} XAF
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-indigo-200/80">
+                      The patient must settle their ticket modérateur via a real payment channel.
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {[
+                        { id: 'cash', label: 'Cash', icon: DollarSign, color: 'text-emerald-400' },
+                        { id: 'mobile_money', label: 'MoMo / OM', icon: Smartphone, color: 'text-amber-400' },
+                        { id: 'bank_transfer', label: 'Bank', icon: Landmark, color: 'text-blue-400' },
+                        { id: 'card', label: 'Card (POS)', icon: CreditCard, color: 'text-slate-300' }
+                      ].map(ch => {
+                        const Icon = ch.icon;
+                        const isSel = coPayPaymentMethod === ch.id;
+                        return (
+                          <button
+                            key={ch.id}
+                            type="button"
+                            onClick={() => setCoPayPaymentMethod(ch.id as any)}
+                            className={`p-2 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                              isSel
+                                ? 'bg-indigo-600 border-indigo-400 text-white font-bold ring-1 ring-indigo-400 shadow-md'
+                                : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <Icon className={`w-3.5 h-3.5 ${ch.color}`} />
+                              {isSel && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                            <span className="text-[10px] leading-tight font-bold">{ch.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {coPayPaymentMethod === 'cash' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <div>
+                          <label className="block text-[10px] text-slate-300 font-semibold mb-1">Co-Pay Cash Handed (FCFA)</label>
+                          <input
+                            type="number"
+                            value={coPayCashGiven}
+                            onChange={(e) => setCoPayCashGiven(e.target.value)}
+                            placeholder={`e.g. ${calculateSettlementDetails(selectedBooking, selectedGroupBookings).patientPortion}`}
+                            className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-emerald-300 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-300 font-semibold mb-1">Change to Return</label>
+                          <div className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono font-black text-amber-400">
+                            {calculateSettlementDetails(selectedBooking, selectedGroupBookings).coPayChangeToReturn.toLocaleString()} FCFA
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {coPayPaymentMethod === 'mobile_money' && (
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setCoPayMomoProvider('MTN')}
+                            className={`p-2 rounded-lg text-[11px] font-bold border ${
+                              coPayMomoProvider === 'MTN'
+                                ? 'bg-yellow-400/20 border-yellow-400 text-yellow-200'
+                                : 'bg-slate-900 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            MTN MoMo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCoPayMomoProvider('ORANGE')}
+                            className={`p-2 rounded-lg text-[11px] font-bold border ${
+                              coPayMomoProvider === 'ORANGE'
+                                ? 'bg-orange-500/20 border-orange-400 text-orange-200'
+                                : 'bg-slate-900 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            Orange Money
+                          </button>
+                        </div>
+                        <input
+                          type="tel"
+                          value={coPayMomoPhone}
+                          onChange={(e) => setCoPayMomoPhone(e.target.value)}
+                          placeholder="Phone number used"
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-mono"
+                        />
+                        <input
+                          type="text"
+                          value={coPayMomoName}
+                          onChange={(e) => setCoPayMomoName(e.target.value)}
+                          placeholder="Registered MoMo account holder name"
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={coPayMomoTxId}
+                          onChange={(e) => setCoPayMomoTxId(e.target.value)}
+                          placeholder="Transaction ID / SMS reference"
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-amber-200 placeholder-slate-500 font-mono uppercase"
+                        />
+                      </div>
+                    )}
+
+                    {coPayPaymentMethod === 'bank_transfer' && (
+                      <div className="space-y-2 pt-1">
+                        <select
+                          value={coPayBankName}
+                          onChange={(e) => setCoPayBankName(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white"
+                        >
+                          {CAMEROON_COMMERCIAL_BANKS.map((b) => (
+                            <option key={b.id} value={b.name}>{b.name} ({b.code})</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={coPayBankAccountName}
+                          onChange={(e) => setCoPayBankAccountName(e.target.value)}
+                          placeholder="Bank account holder name"
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={coPayBankReference}
+                          onChange={(e) => setCoPayBankReference(e.target.value)}
+                          placeholder="Transfer reference / deposit slip"
+                          className="w-full px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-blue-200 font-mono uppercase"
+                        />
+                      </div>
+                    )}
+
+                    {coPayPaymentMethod === 'card' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                        <select
+                          value={coPayCardScheme}
+                          onChange={(e) => setCoPayCardScheme(e.target.value)}
+                          className="px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white"
+                        >
+                          <option value="Visa">Visa</option>
+                          <option value="Mastercard">Mastercard</option>
+                          <option value="GIMAC">GIMAC</option>
+                        </select>
+                        <input
+                          type="text"
+                          maxLength={4}
+                          value={coPayCardLast4}
+                          onChange={(e) => setCoPayCardLast4(e.target.value)}
+                          placeholder="Last 4 digits"
+                          className="px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-white font-mono"
+                        />
+                        <input
+                          type="text"
+                          value={coPayCardAuthCode}
+                          onChange={(e) => setCoPayCardAuthCode(e.target.value)}
+                          placeholder="Auth code"
+                          className="px-3 py-2 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-emerald-300 font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* GENERAL DISCOUNTS & CUSTOM OVERRIDE (for standard methods) */}
+              {/* Discounts */}
               {!['workers_benefit', 'gift_coupon'].includes(paymentMethod) && (
                 <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
@@ -2078,7 +2324,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
                     </button>
                   </div>
 
-                  {/* Custom negotiated price */}
                   <div className="flex items-center gap-2">
                     <label className="text-[11px] text-slate-400 shrink-0">Custom Override Total:</label>
                     <input
@@ -2092,7 +2337,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
               )}
 
-              {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
+              {/* Access Code */}
               <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                 <label className="flex items-center justify-between text-slate-300 font-bold text-xs">
                   <span className="flex items-center gap-1.5 text-emerald-300">
@@ -2101,12 +2346,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">e.g. CSH123</span>
                 </label>
-                
+
                 <div className="relative">
                   <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type={showAccessCode ? 'text' : 'password'}
-                    placeholder="Enter your authorized cashier PIN / access code..."
+                    placeholder="Enter your authorized cashier PIN..."
                     value={cashierAccessCode}
                     onChange={(e) => {
                       setCashierAccessCode(e.target.value);
@@ -2131,7 +2376,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 )}
               </div>
 
-              {/* FINANCIAL BREAKDOWN SUMMARY */}
+              {/* Summary */}
               {(() => {
                 const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
                 const payable = paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal;
@@ -2177,8 +2422,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
 
                     <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
                       <span className="text-white font-extrabold text-sm">
-                        {paymentMethod === 'workers_benefit' || (paymentMethod === 'gift_coupon' && details.finalTotal === 0) 
-                          ? 'Net Patient Payable (Fully Subsidized):' 
+                        {paymentMethod === 'workers_benefit' || (paymentMethod === 'gift_coupon' && details.finalTotal === 0)
+                          ? 'Net Patient Payable (Fully Subsidized):'
                           : 'Actual Paid by Patient:'}
                       </span>
                       <span className={`text-xl font-black font-mono ${payable === 0 ? 'text-teal-400' : 'text-emerald-400'}`}>
@@ -2217,84 +2462,88 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
 
-{showReceipt && (() => {
-  const receiptMethod = showReceipt.paymentMethod || paymentMethod;
-  const isInsurancePayment = receiptMethod === 'insurance';
+      {showReceipt && (() => {
+        const receiptMethod = showReceipt.paymentMethod || paymentMethod;
+        const isInsPayment = receiptMethod === 'insurance';
 
-  return (
-    <MedicalReceiptModal
-      isOpen={Boolean(showReceipt)}
-      onClose={() => setShowReceipt(null)}
-      booking={showReceipt}
-      labInfo={lab}
-      paymentDetails={{
-        paymentMethod: receiptMethod,
+        return (
+          <MedicalReceiptModal
+            isOpen={Boolean(showReceipt)}
+            onClose={() => setShowReceipt(null)}
+            booking={showReceipt}
+            labInfo={lab}
+            paymentDetails={{
+              paymentMethod: receiptMethod,
 
-        // ONLY include insurance fields when insurance was actually selected
-        insuranceProvider: isInsurancePayment
-          ? (showReceipt.insuranceProvider || insuranceProvider || undefined)
-          : undefined,
-        insurancePolicyNumber: isInsurancePayment
-          ? (showReceipt.insurancePolicyNumber || insurancePolicyNumber || undefined)
-          : undefined,
-        insuranceCoveragePercent: isInsurancePayment
-          ? (showReceipt.coPayPercent !== undefined
-              ? 100 - showReceipt.coPayPercent
-              : (coPayPercent !== undefined ? 100 - coPayPercent : undefined))
-          : undefined,
-        coPayPercent: isInsurancePayment
-          ? (showReceipt.coPayPercent ?? coPayPercent ?? undefined)
-          : undefined,
+              insuranceProvider: isInsPayment
+                ? (showReceipt.insuranceProvider || insuranceProvider || undefined)
+                : undefined,
+              insurancePolicyNumber: isInsPayment
+                ? (showReceipt.insurancePolicyNumber || insurancePolicyNumber || undefined)
+                : undefined,
+              insuranceCoveragePercent: isInsPayment
+                ? (showReceipt.coPayPercent !== undefined
+                    ? 100 - showReceipt.coPayPercent
+                    : (coPayPercent !== undefined ? 100 - coPayPercent : undefined))
+                : undefined,
+              coPayPercent: isInsPayment
+                ? (showReceipt.coPayPercent ?? coPayPercent ?? undefined)
+                : undefined,
 
-        // Discounts & Coupons
-        discountAmount: showReceipt.discountAmount,
-        discountType: (showReceipt as any).discountType || (discountType !== 'none' ? discountType : undefined),
-        couponCode: (showReceipt as any).couponCode || (couponApplied ? couponCode : undefined),
-        couponSponsorName: showReceipt.paymentDetails?.couponSponsorName || couponSponsorName || undefined,
-        couponNotes: showReceipt.paymentDetails?.couponNotes || couponNotes || undefined,
+              coPayPaymentMethod: showReceipt.paymentDetails?.coPayPaymentMethod || (isInsPayment ? coPayPaymentMethod : undefined),
+              coPayMomoProvider: showReceipt.paymentDetails?.coPayMomoProvider || (coPayPaymentMethod === 'mobile_money' ? coPayMomoProvider : undefined),
+              coPayMomoSenderPhone: showReceipt.paymentDetails?.coPayMomoSenderPhone || (coPayPaymentMethod === 'mobile_money' ? coPayMomoPhone : undefined),
+              coPayMomoSenderName: showReceipt.paymentDetails?.coPayMomoSenderName || (coPayPaymentMethod === 'mobile_money' ? coPayMomoName : undefined),
+              coPayMomoTxId: showReceipt.paymentDetails?.coPayMomoTxId || (coPayPaymentMethod === 'mobile_money' ? coPayMomoTxId : undefined),
+              coPayBankName: showReceipt.paymentDetails?.coPayBankName || (coPayPaymentMethod === 'bank_transfer' ? coPayBankName : undefined),
+              coPayBankAccountName: showReceipt.paymentDetails?.coPayBankAccountName || (coPayPaymentMethod === 'bank_transfer' ? coPayBankAccountName : undefined),
+              coPayBankReference: showReceipt.paymentDetails?.coPayBankReference || (coPayPaymentMethod === 'bank_transfer' ? coPayBankReference : undefined),
+              coPayCardScheme: showReceipt.paymentDetails?.coPayCardScheme || (coPayPaymentMethod === 'card' ? coPayCardScheme : undefined),
+              coPayCardLast4: showReceipt.paymentDetails?.coPayCardLast4 || (coPayPaymentMethod === 'card' ? coPayCardLast4 : undefined),
+              coPayCardAuthCode: showReceipt.paymentDetails?.coPayCardAuthCode || (coPayPaymentMethod === 'card' ? coPayCardAuthCode : undefined),
+              coPayCashGiven: showReceipt.paymentDetails?.coPayCashGiven ?? (coPayPaymentMethod === 'cash' ? (parseFloat(coPayCashGiven) || undefined) : undefined),
+              coPayCashChange: showReceipt.paymentDetails?.coPayCashChange ?? (coPayPaymentMethod === 'cash' ? calculateSettlementDetails(showReceipt, null).coPayChangeToReturn : undefined),
 
-        // Worker Benefits
-        workerStaffName: showReceipt.paymentDetails?.workerStaffName || workerStaffName || undefined,
-        workerStaffId: showReceipt.paymentDetails?.workerStaffId || workerStaffId || undefined,
-        workerDepartment: showReceipt.paymentDetails?.workerDepartment || workerDepartment || undefined,
-        workerBenefitType: showReceipt.paymentDetails?.workerBenefitType || workerBenefitType || undefined,
-        workerAuthNote: showReceipt.paymentDetails?.workerAuthNote || workerAuthNote || undefined,
+              discountAmount: showReceipt.discountAmount,
+              discountType: (showReceipt as any).discountType || (discountType !== 'none' ? discountType : undefined),
+              couponCode: (showReceipt as any).couponCode || (couponApplied ? couponCode : undefined),
+              couponSponsorName: showReceipt.paymentDetails?.couponSponsorName || couponSponsorName || undefined,
+              couponNotes: showReceipt.paymentDetails?.couponNotes || couponNotes || undefined,
 
-        // Mobile Money
-        momoProvider: showReceipt.paymentDetails?.momoProvider || (paymentMethod === 'mobile_money' ? momoProvider : undefined),
-        momoSenderPhone: showReceipt.paymentDetails?.momoSenderPhone || (paymentMethod === 'mobile_money' ? momoSenderPhone : undefined),
-        momoSenderName: showReceipt.paymentDetails?.momoSenderName || (paymentMethod === 'mobile_money' ? momoSenderName : undefined),
-        momoTxId: showReceipt.paymentDetails?.momoTxId || (paymentMethod === 'mobile_money' ? momoTxId : undefined),
+              workerStaffName: showReceipt.paymentDetails?.workerStaffName || workerStaffName || undefined,
+              workerStaffId: showReceipt.paymentDetails?.workerStaffId || workerStaffId || undefined,
+              workerDepartment: showReceipt.paymentDetails?.workerDepartment || workerDepartment || undefined,
+              workerBenefitType: showReceipt.paymentDetails?.workerBenefitType || workerBenefitType || undefined,
+              workerAuthNote: showReceipt.paymentDetails?.workerAuthNote || workerAuthNote || undefined,
 
-        // Bank Transfer
-        bankName: showReceipt.paymentDetails?.bankName || (paymentMethod === 'bank_transfer' ? bankName : undefined),
-        bankAccountName: showReceipt.paymentDetails?.bankAccountName || (paymentMethod === 'bank_transfer' ? bankAccountName : undefined),
-        bankReference: showReceipt.paymentDetails?.bankReference || (paymentMethod === 'bank_transfer' ? bankReference : undefined),
-        bankBranch: showReceipt.paymentDetails?.bankBranch || (paymentMethod === 'bank_transfer' ? bankBranch : undefined),
+              momoProvider: showReceipt.paymentDetails?.momoProvider || (paymentMethod === 'mobile_money' ? momoProvider : undefined),
+              momoSenderPhone: showReceipt.paymentDetails?.momoSenderPhone || (paymentMethod === 'mobile_money' ? momoSenderPhone : undefined),
+              momoSenderName: showReceipt.paymentDetails?.momoSenderName || (paymentMethod === 'mobile_money' ? momoSenderName : undefined),
+              momoTxId: showReceipt.paymentDetails?.momoTxId || (paymentMethod === 'mobile_money' ? momoTxId : undefined),
 
-        // Card
-        cardScheme: showReceipt.paymentDetails?.cardScheme || (paymentMethod === 'card' ? cardScheme : undefined),
-        cardLast4: showReceipt.paymentDetails?.cardLast4 || (paymentMethod === 'card' ? cardLast4 : undefined),
-        cardAuthCode: showReceipt.paymentDetails?.cardAuthCode || (paymentMethod === 'card' ? cardAuthCode : undefined),
+              bankName: showReceipt.paymentDetails?.bankName || (paymentMethod === 'bank_transfer' ? bankName : undefined),
+              bankAccountName: showReceipt.paymentDetails?.bankAccountName || (paymentMethod === 'bank_transfer' ? bankAccountName : undefined),
+              bankReference: showReceipt.paymentDetails?.bankReference || (paymentMethod === 'bank_transfer' ? bankReference : undefined),
+              bankBranch: showReceipt.paymentDetails?.bankBranch || (paymentMethod === 'bank_transfer' ? bankBranch : undefined),
 
-        // Cash
-        cashGiven: showReceipt.paymentDetails?.cashGiven ?? (paymentMethod === 'cash' ? (parseFloat(cashGiven) || undefined) : undefined),
-        cashChange: showReceipt.paymentDetails?.cashChange ?? (paymentMethod === 'cash' ? calculateSettlementDetails(showReceipt, null).changeToReturn : undefined),
+              cardScheme: showReceipt.paymentDetails?.cardScheme || (paymentMethod === 'card' ? cardScheme : undefined),
+              cardLast4: showReceipt.paymentDetails?.cardLast4 || (paymentMethod === 'card' ? cardLast4 : undefined),
+              cardAuthCode: showReceipt.paymentDetails?.cardAuthCode || (paymentMethod === 'card' ? cardAuthCode : undefined),
 
-        // Metadata
-        cashierName: user?.name || 'Authorized Medical Cashier',
-        paidAt: showReceipt.paidAt || new Date().toISOString(),
-        actualPaidAmount: showReceipt.actualPaidAmount
-      }}
-    />
-  );
-})()}
+              cashGiven: showReceipt.paymentDetails?.cashGiven ?? (paymentMethod === 'cash' ? (parseFloat(cashGiven) || undefined) : undefined),
+              cashChange: showReceipt.paymentDetails?.cashChange ?? (paymentMethod === 'cash' ? calculateSettlementDetails(showReceipt, null).changeToReturn : undefined),
 
+              cashierName: user?.name || 'Authorized Medical Cashier',
+              paidAt: showReceipt.paidAt || new Date().toISOString(),
+              actualPaidAmount: showReceipt.actualPaidAmount
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };
