@@ -1210,51 +1210,65 @@ export const CashierView: React.FC<CashierViewProps> = ({
                 </div>
 
                 {/* Custom Add-on input */}
-                <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
-                  <span className="text-[10px] text-slate-400 font-semibold block">Add Custom Billable Fee / Consumable:</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Act Name (e.g. Domicile)"
-                      value={customAddOnName}
-                      onChange={(e) => setCustomAddOnName(e.target.value)}
-                      className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Price (XAF)"
-                      value={customAddOnPrice}
-                      onChange={(e) => setCustomAddOnPrice(e.target.value)}
-                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const price = parseFloat(customAddOnPrice);
-                        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
-                        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
-                        setCurrentAddOns(prev => [
-                          ...prev,
-                          {
-                            id: `custom-${Date.now()}`,
-                            code,
-                            name: customAddOnName.trim(),
-                            price,
-                            quantity: customAddOnQty || 1
-                          }
-                        ]);
-                        setCustomAddOnName('');
-                        setCustomAddOnCode('');
-                        setCustomAddOnPrice('');
-                        setCustomAddOnQty(1);
-                      }}
-                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Act
-                    </button>
-                  </div>
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
+  <input
+    type="text"
+    placeholder="Code (e.g. ACT-001)"
+    value={customAddOnCode}
+    onChange={(e) => setCustomAddOnCode(e.target.value.toUpperCase())}
+    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-teal-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+  />
+  <input
+    type="text"
+    placeholder="Act Name (e.g. Domicile)"
+    value={customAddOnName}
+    onChange={(e) => setCustomAddOnName(e.target.value)}
+    className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+  />
+  <input
+    type="number"
+    placeholder="Price (XAF)"
+    value={customAddOnPrice}
+    onChange={(e) => setCustomAddOnPrice(e.target.value)}
+    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
+  />
+  <div className="flex gap-1.5">
+    <input
+      type="number"
+      min={1}
+      placeholder="Qty"
+      value={customAddOnQty}
+      onChange={(e) => setCustomAddOnQty(Math.max(1, parseInt(e.target.value) || 1))}
+      className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono text-center focus:outline-none focus:ring-1 focus:ring-teal-400"
+    />
+    <button
+      type="button"
+      onClick={() => {
+        const price = parseFloat(customAddOnPrice);
+        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
+        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
+        setCurrentAddOns(prev => [
+          ...prev,
+          {
+            id: `custom-${Date.now()}`,
+            code,
+            name: customAddOnName.trim(),
+            price,
+            quantity: customAddOnQty || 1
+          }
+        ]);
+        setCustomAddOnName('');
+        setCustomAddOnCode('');
+        setCustomAddOnPrice('');
+        setCustomAddOnQty(1);
+      }}
+      className="flex-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+    >
+      <Plus className="w-3.5 h-3.5" />
+      Add
+    </button>
+  </div>
+</div>
 
                 {/* Current Active Add-ons List */}
                 {currentAddOns.length > 0 && (
@@ -2208,48 +2222,78 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* OFFICIAL PROFESSIONAL BRANDED RECEIPT MODAL */}
-      {showReceipt && (
-        <MedicalReceiptModal
-          isOpen={Boolean(showReceipt)}
-          onClose={() => setShowReceipt(null)}
-          booking={showReceipt}
-          labInfo={lab}
-          paymentDetails={{
-            paymentMethod: showReceipt.paymentMethod || paymentMethod,
-            insuranceProvider: showReceipt.insuranceProvider || insuranceProvider,
-            insurancePolicyNumber: showReceipt.insurancePolicyNumber || insurancePolicyNumber,
-            insuranceCoveragePercent: showReceipt.coPayPercent ? 100 - showReceipt.coPayPercent : undefined,
-            coPayPercent: showReceipt.coPayPercent || coPayPercent,
-            discountAmount: showReceipt.discountAmount,
-            discountType: (showReceipt as any).discountType || discountType,
-            couponCode: showReceipt.couponCode || couponCode,
-            couponSponsorName: (showReceipt.paymentDetails?.couponSponsorName) || couponSponsorName,
-            couponNotes: (showReceipt.paymentDetails?.couponNotes) || couponNotes,
-            workerStaffName: (showReceipt.paymentDetails?.workerStaffName) || workerStaffName,
-            workerStaffId: (showReceipt.paymentDetails?.workerStaffId) || workerStaffId,
-            workerDepartment: (showReceipt.paymentDetails?.workerDepartment) || workerDepartment,
-            workerBenefitType: (showReceipt.paymentDetails?.workerBenefitType) || workerBenefitType,
-            workerAuthNote: (showReceipt.paymentDetails?.workerAuthNote) || workerAuthNote,
-            momoProvider: (showReceipt.paymentDetails?.momoProvider) || momoProvider,
-            momoSenderPhone: (showReceipt.paymentDetails?.momoSenderPhone) || momoSenderPhone,
-            momoSenderName: (showReceipt.paymentDetails?.momoSenderName) || momoSenderName,
-            momoTxId: (showReceipt.paymentDetails?.momoTxId) || momoTxId,
-            bankName: (showReceipt.paymentDetails?.bankName) || bankName,
-            bankAccountName: (showReceipt.paymentDetails?.bankAccountName) || bankAccountName,
-            bankReference: (showReceipt.paymentDetails?.bankReference) || bankReference,
-            bankBranch: (showReceipt.paymentDetails?.bankBranch) || bankBranch,
-            cardScheme: (showReceipt.paymentDetails?.cardScheme) || cardScheme,
-            cardLast4: (showReceipt.paymentDetails?.cardLast4) || cardLast4,
-            cardAuthCode: (showReceipt.paymentDetails?.cardAuthCode) || cardAuthCode,
-            cashGiven: (showReceipt.paymentDetails?.cashGiven) ?? (parseFloat(cashGiven) || undefined),
-            cashChange: (showReceipt.paymentDetails?.cashChange),
-            cashierName: user?.name || 'Authorized Medical Cashier',
-            paidAt: showReceipt.paidAt || new Date().toISOString(),
-            actualPaidAmount: showReceipt.actualPaidAmount
-          }}
-        />
-      )}
+{showReceipt && (() => {
+  const receiptMethod = showReceipt.paymentMethod || paymentMethod;
+  const isInsurancePayment = receiptMethod === 'insurance';
+
+  return (
+    <MedicalReceiptModal
+      isOpen={Boolean(showReceipt)}
+      onClose={() => setShowReceipt(null)}
+      booking={showReceipt}
+      labInfo={lab}
+      paymentDetails={{
+        paymentMethod: receiptMethod,
+
+        // ONLY include insurance fields when insurance was actually selected
+        insuranceProvider: isInsurancePayment
+          ? (showReceipt.insuranceProvider || insuranceProvider || undefined)
+          : undefined,
+        insurancePolicyNumber: isInsurancePayment
+          ? (showReceipt.insurancePolicyNumber || insurancePolicyNumber || undefined)
+          : undefined,
+        insuranceCoveragePercent: isInsurancePayment
+          ? (showReceipt.coPayPercent !== undefined
+              ? 100 - showReceipt.coPayPercent
+              : (coPayPercent !== undefined ? 100 - coPayPercent : undefined))
+          : undefined,
+        coPayPercent: isInsurancePayment
+          ? (showReceipt.coPayPercent ?? coPayPercent ?? undefined)
+          : undefined,
+
+        // Discounts & Coupons
+        discountAmount: showReceipt.discountAmount,
+        discountType: (showReceipt as any).discountType || (discountType !== 'none' ? discountType : undefined),
+        couponCode: (showReceipt as any).couponCode || (couponApplied ? couponCode : undefined),
+        couponSponsorName: showReceipt.paymentDetails?.couponSponsorName || couponSponsorName || undefined,
+        couponNotes: showReceipt.paymentDetails?.couponNotes || couponNotes || undefined,
+
+        // Worker Benefits
+        workerStaffName: showReceipt.paymentDetails?.workerStaffName || workerStaffName || undefined,
+        workerStaffId: showReceipt.paymentDetails?.workerStaffId || workerStaffId || undefined,
+        workerDepartment: showReceipt.paymentDetails?.workerDepartment || workerDepartment || undefined,
+        workerBenefitType: showReceipt.paymentDetails?.workerBenefitType || workerBenefitType || undefined,
+        workerAuthNote: showReceipt.paymentDetails?.workerAuthNote || workerAuthNote || undefined,
+
+        // Mobile Money
+        momoProvider: showReceipt.paymentDetails?.momoProvider || (paymentMethod === 'mobile_money' ? momoProvider : undefined),
+        momoSenderPhone: showReceipt.paymentDetails?.momoSenderPhone || (paymentMethod === 'mobile_money' ? momoSenderPhone : undefined),
+        momoSenderName: showReceipt.paymentDetails?.momoSenderName || (paymentMethod === 'mobile_money' ? momoSenderName : undefined),
+        momoTxId: showReceipt.paymentDetails?.momoTxId || (paymentMethod === 'mobile_money' ? momoTxId : undefined),
+
+        // Bank Transfer
+        bankName: showReceipt.paymentDetails?.bankName || (paymentMethod === 'bank_transfer' ? bankName : undefined),
+        bankAccountName: showReceipt.paymentDetails?.bankAccountName || (paymentMethod === 'bank_transfer' ? bankAccountName : undefined),
+        bankReference: showReceipt.paymentDetails?.bankReference || (paymentMethod === 'bank_transfer' ? bankReference : undefined),
+        bankBranch: showReceipt.paymentDetails?.bankBranch || (paymentMethod === 'bank_transfer' ? bankBranch : undefined),
+
+        // Card
+        cardScheme: showReceipt.paymentDetails?.cardScheme || (paymentMethod === 'card' ? cardScheme : undefined),
+        cardLast4: showReceipt.paymentDetails?.cardLast4 || (paymentMethod === 'card' ? cardLast4 : undefined),
+        cardAuthCode: showReceipt.paymentDetails?.cardAuthCode || (paymentMethod === 'card' ? cardAuthCode : undefined),
+
+        // Cash
+        cashGiven: showReceipt.paymentDetails?.cashGiven ?? (paymentMethod === 'cash' ? (parseFloat(cashGiven) || undefined) : undefined),
+        cashChange: showReceipt.paymentDetails?.cashChange ?? (paymentMethod === 'cash' ? calculateSettlementDetails(showReceipt, null).changeToReturn : undefined),
+
+        // Metadata
+        cashierName: user?.name || 'Authorized Medical Cashier',
+        paidAt: showReceipt.paidAt || new Date().toISOString(),
+        actualPaidAmount: showReceipt.actualPaidAmount
+      }}
+    />
+  );
+})()}
 
     </div>
   );
