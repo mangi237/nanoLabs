@@ -15,6 +15,8 @@ import { useAuth } from '../../context/authContext';
 import { ReceptionistView } from './ReceptionistView';
 import { CashierView } from './CashierView';
 import { AnalyzerView } from './AnalyzerView';
+// import {LabTechnicianResultView}
+// import LabTechnicianResultView from './LabTechView';
 import { LabTechView } from './LabTechView';
 
 interface StaffDashboardProps {
@@ -113,7 +115,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
           <AnalyzerView />
         )}
         {selectedWorkstation === 'lab_tech' && (
-          <LabTechView />
+         // Example: Passing the required props to a component
+<LabTechView 
+  
+/>
+
         )}
       </div>
     </div>

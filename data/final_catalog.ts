@@ -1502,3 +1502,639 @@ export interface DescriptiveExamField {
       resultType: 'quantitative'
     }
   ];
+// ============================================================
+// 4. NANOLABS RESULT-ENTRY ENGINE DATA
+// ============================================================
+// The catalog above is the supplied NanoLabs source catalog. This section
+// adds the execution layer so the same data can drive the technician UI,
+// validation, calculations and report renderer.
+//
+// IMPORTANT: generated engineering parameter details are marked as
+// "engineering-draft". A qualified laboratory professional must configure
+// and approve reference intervals, methods, units, critical limits and
+// report wording for the actual analyzer/lab before clinical production use.
+// ============================================================
+
+export type NanoParameterType =
+  | 'numeric' | 'text' | 'formula' | 'heading' | 'select'
+  | 'boolean' | 'qualitative' | 'descriptive';
+
+export type NanoResultFlag =
+  | 'Normal' | 'Low' | 'High' | 'Borderline'
+  | 'Critical Low' | 'Critical High'
+  | 'Positive' | 'Negative' | 'Reactive' | 'Non-Reactive'
+  | 'Detected' | 'Not Detected' | 'Abnormal' | 'Invalid';
+
+export interface NanoReferenceRange {
+  label?: string;
+  min?: number;
+  max?: number;
+  text: string;
+  unit?: string;
+  appliesTo?: 'male' | 'female' | 'child' | 'adult' | 'all';
+  ageMinYears?: number;
+  ageMaxYears?: number;
+}
+
+export interface NanoParameter extends Omit<TestSubParameter, 'parameterType'> {
+  parameterType?: NanoParameterType;
+  required?: boolean;
+  decimals?: number;
+  placeholder?: string;
+  helpText?: string;
+  criticalLow?: number;
+  criticalHigh?: number;
+  minAccepted?: number;
+  maxAccepted?: number;
+  autoCalculate?: boolean;
+  calculatedFrom?: string[];
+  showReferenceRange?: boolean;
+  allowNegative?: boolean;
+  allowZero?: boolean;
+  reportLabel?: string;
+  shortLabel?: string;
+  aliases?: string[];
+  resultOptions?: string[];
+  referenceRanges?: NanoReferenceRange[];
+  referenceSource?: 'catalog-provided' | 'engineering-draft' | 'lab-configured';
+}
+
+export interface NanoLabResultValue {
+  parameterId: string;
+  value: string | number | boolean | null;
+  displayValue?: string;
+  unit?: string;
+  flag?: NanoResultFlag;
+  referenceRange?: string;
+  method?: string;
+  note?: string;
+}
+
+export interface NanoCultureOrganismResult {
+  organism: string;
+  identificationMethod?: string;
+  quantity?: string;
+  comments?: string;
+}
+
+export interface NanoAntibioticResult {
+  antibiotic: string;
+  discPotency?: string;
+  zoneMm?: number;
+  sensitivity?: 'S' | 'I' | 'R' | 'SDD' | 'NA';
+  comment?: string;
+}
+
+export interface NanoLabResultDraft {
+  testId: string;
+  testCode: string;
+  patientId: string;
+  technicianId?: string;
+  status: 'draft' | 'in_review' | 'validated' | 'completed' | 'cancelled';
+  values: Record<string, NanoLabResultValue>;
+  narrative?: string;
+  interpretation?: string;
+  organisms?: NanoCultureOrganismResult[];
+  antibiogram?: NanoAntibioticResult[];
+  attachments?: string[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  validatedAt?: unknown;
+  validatedBy?: string;
+}
+
+export interface NanoResultFormField {
+  id: string;
+  label: string;
+  type: NanoParameterType;
+  section: string;
+  subsection?: string;
+  unit?: string;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+  helpText?: string;
+  referenceRange?: string;
+  method?: string;
+  decimals?: number;
+  formulaIdentifier?: string;
+  autoCalculate?: boolean;
+  printOnReport: boolean;
+}
+
+export interface NanoResultFormSection {
+  id: string;
+  title: string;
+  fields: NanoResultFormField[];
+}
+
+export interface NanoLabTechnicianForm {
+  testId: string;
+  code: string;
+  title: string;
+  category: MasterTestItem['category'];
+  sampleType: string;
+  preparation?: string;
+  turnaroundTime: string;
+  resultType: NonNullable<MasterTestItem['resultType']>;
+  sections: NanoResultFormSection[];
+  hasCultureWorkflow: boolean;
+  hasAntibiogramWorkflow: boolean;
+  requiresProfessionalValidation: boolean;
+}
+
+const NP = (
+  id: string,
+  name: string,
+  unit: string,
+  male: string,
+  female: string,
+  child: string,
+  extra: Partial<NanoParameter> = {}
+): NanoParameter => ({
+  id, name, unit,
+  refRangeMale: male,
+  refRangeFemale: female,
+  refRangeChild: child,
+  parameterType: unit ? 'numeric' : 'text',
+  required: true,
+  printOnReport: true,
+  showReferenceRange: true,
+  referenceSource: 'engineering-draft',
+  ...extra,
+});
+
+const NS = (
+  id: string,
+  name: string,
+  options: string[],
+  male = 'See options',
+  female = 'See options',
+  child = 'See options',
+  extra: Partial<NanoParameter> = {}
+): NanoParameter => ({
+  id, name, unit: '',
+  refRangeMale: male,
+  refRangeFemale: female,
+  refRangeChild: child,
+  parameterType: 'select',
+  options,
+  resultOptions: options,
+  required: true,
+  printOnReport: true,
+  referenceSource: 'engineering-draft',
+  ...extra,
+});
+
+const NT = (
+  id: string,
+  name: string,
+  sectionHeader = 'RESULTAT',
+  extra: Partial<NanoParameter> = {}
+): NanoParameter => ({
+  id, name, unit: '', sectionHeader,
+  refRangeMale: '', refRangeFemale: '', refRangeChild: '',
+  parameterType: 'text', required: true, printOnReport: true,
+  referenceSource: 'engineering-draft',
+  ...extra,
+});
+
+// Detailed fields for entries that previously had only one generic result.
+// Existing descriptive templates in the source catalog are also converted
+// to structured fields automatically by getNanoDetailedTest().
+export const NANOLABS_DETAILED_PARAMETER_OVERRIDES: Record<string, NanoParameter[]> = {
+  'ESR-01': [
+    NP('esr', 'Erythrocyte Sedimentation Rate (ESR)', 'mm/1st hr', '0 - 15', '0 - 20', '0 - 10', { decimals: 0 })
+  ],
+  'HB-ELEC': [
+    NP('hb_a', 'Hemoglobin A (HbA)', '%', '>95', '>95', '>95', { decimals: 1 }),
+    NP('hb_a2', 'Hemoglobin A2 (HbA2)', '%', '<3.5', '<3.5', '<3.5', { decimals: 1 }),
+    NP('hb_f', 'Hemoglobin F (HbF)', '%', '<1', '<1', '<2', { decimals: 1 }),
+    NP('hb_s', 'Hemoglobin S (HbS)', '%', 'Not detected in HbAA pattern', 'Not detected in HbAA pattern', 'Not detected in HbAA pattern', { decimals: 1 }),
+    NP('hb_c', 'Hemoglobin C (HbC)', '%', 'Not detected in HbAA pattern', 'Not detected in HbAA pattern', 'Not detected in HbAA pattern', { decimals: 1 }),
+    NS('hb_pattern', 'Hemoglobin Pattern / Interpretation', ['AA', 'AS', 'AC', 'SS', 'SC', 'Other', 'Indeterminate'])
+  ],
+  'PT-INR': [
+    NP('pt_seconds', 'Prothrombin Time (PT)', 'seconds', '11.0 - 13.5', '11.0 - 13.5', '11.0 - 13.5', { decimals: 1 }),
+    NP('inr', 'INR', 'ratio', '0.8 - 1.2', '0.8 - 1.2', '0.8 - 1.2', { decimals: 2, helpText: 'Therapeutic targets depend on indication and should be configured by the laboratory.' }),
+    NT('isi', 'ISI', 'METHOD', { required: false }),
+    NT('pt_comment', 'Comment / anticoagulant therapy', 'INTERPRETATION', { required: false })
+  ],
+  'APTT-01': [
+    NP('aptt', 'Activated Partial Thromboplastin Time (aPTT)', 'seconds', '25.0 - 35.0', '25.0 - 35.0', '25.0 - 38.0', { decimals: 1 }),
+    NT('aptt_comment', 'Comment / anticoagulant therapy', 'INTERPRETATION', { required: false })
+  ],
+  'RETIC-01': [
+    NP('retic_percent', 'Reticulocyte Count', '%', '0.5 - 2.5', '0.5 - 2.5', '0.5 - 3.5', { decimals: 1 }),
+    NP('retic_abs', 'Absolute Reticulocyte Count', 'x10^9/L', 'Lab-configured', 'Lab-configured', 'Lab-configured', { decimals: 0, required: false }),
+    NT('retic_comment', 'Morphology / comment', 'INTERPRETATION', { required: false })
+  ],
+  'BLEED-CLOT': [
+    NP('bleeding_time', 'Bleeding Time (BT)', 'minutes', '2 - 7', '2 - 7', '2 - 7', { decimals: 1 }),
+    NP('clotting_time', 'Clotting Time (CT)', 'minutes', '4 - 10', '4 - 10', '4 - 10', { decimals: 1 })
+  ],
+  'FBS-01': [
+    NP('glucose', 'Fasting Blood Glucose', 'mg/dL', '70 - 99', '70 - 99', '60 - 100', { decimals: 1 }),
+    NP('glucose_mmol_l', 'Fasting Blood Glucose', 'mmol/L', '3.9 - 5.5', '3.9 - 5.5', '3.3 - 5.6', { decimals: 1, required: false, autoCalculate: true, formulaIdentifier: 'MGDL_TO_MMOL_L', calculatedFrom: ['glucose'] })
+  ],
+  'HBA1C-01': [
+    NP('hba1c', 'HbA1c', '%', '<5.7', '<5.7', '<5.7', { decimals: 1 }),
+    NP('estimated_avg_glucose', 'Estimated Average Glucose', 'mg/dL', 'Calculated', 'Calculated', 'Calculated', { decimals: 0, required: false, autoCalculate: true, formulaIdentifier: 'HBA1C_TO_EAG', calculatedFrom: ['hba1c'] }),
+    NS('hba1c_category', 'Interpretive Category', ['Normal', 'Prediabetes range', 'Diabetes range', 'Other / lab-defined'])
+  ],
+  'HIV-SCREEN': [
+    NS('hiv_result', 'HIV-1/2 Ag/Ab Screening Result', ['Non-Reactive', 'Reactive', 'Invalid', 'Indeterminate']),
+    NS('hiv_control', 'Test Control', ['Valid', 'Invalid']),
+    NT('hiv_kit', 'Kit / method used', 'METHOD', { required: false })
+  ],
+  'CRP-01': [
+    NP('crp', 'C-Reactive Protein (CRP)', 'mg/L', '<6.0', '<6.0', '<5.0', { decimals: 1 })
+  ],
+  'PSA-TOTAL': [
+    NP('psa_total', 'Total PSA', 'ng/mL', '<4.0; age-specific ranges apply', 'N/A (male test)', 'N/A', { decimals: 2, helpText: 'Age-specific laboratory intervals should be configured by the laboratory.' }),
+    NT('psa_comment', 'Clinical / laboratory comment', 'INTERPRETATION', { required: false })
+  ],
+  'BETA-HCG': [
+    NP('beta_hcg', 'Beta-hCG', 'mIU/mL', '<2.0', '<5.0 if non-pregnant; gestational ranges by week', '<2.0', { decimals: 1 }),
+    NT('lmp', 'Last Menstrual Period (LMP)', 'CLINICAL CONTEXT', { required: false }),
+    NT('gestational_age', 'Gestational age / week if provided', 'CLINICAL CONTEXT', { required: false })
+  ],
+  'MB-APPEND-03': [
+    NS('mf_detected', 'Microfilariae Detected', ['No', 'Yes', 'Indeterminate']),
+    NS('mf_species', 'Species', ['None seen', 'Loa loa', 'Mansonella perstans', 'Mansonella streptocerca', 'Other', 'Not identified']),
+    NP('mf_density', 'Microfilariae Density', 'mf/µL', '0 / Not detected', '0 / Not detected', '0 / Not detected', { decimals: 0, required: false }),
+    NT('mf_morphology', 'Morphological description', 'MICROSCOPY', { required: false }),
+    NT('mf_conclusion', 'Conclusion', 'CONCLUSION')
+  ],
+  'MB-APPEND-05': [
+    NS('semen_culture', 'Culture Result', ['No pathogenic growth', 'Growth detected', 'Mixed/contaminant flora', 'Invalid']),
+    NT('semen_organism', 'Organism isolated', 'IDENTIFICATION', { required: false }),
+    NT('semen_quantity', 'Quantity / colony count if reported', 'IDENTIFICATION', { required: false }),
+    NT('semen_abx', 'Antibiogram / susceptibility comment', 'ANTIBIOGRAMME', { required: false }),
+    NT('semen_conclusion', 'Conclusion', 'CONCLUSION')
+  ],
+  'MB-APPEND-06': [
+    NT('pct_timing', 'Time from intercourse to sampling', 'COLLECTION'),
+    NT('cervical_mucus', 'Cervical mucus characteristics', 'MICROSCOPY'),
+    NT('sperm_count_field', 'Sperm observed in cervical mucus', 'MICROSCOPY', { required: false }),
+    NS('sperm_motility', 'Motile sperm observed', ['Yes', 'No', 'Indeterminate', 'N/A']),
+    NT('pct_conclusion', 'Conclusion', 'CONCLUSION')
+  ],
+  'HEM-APPEND-01': [
+    NS('dat_result', 'Direct Antiglobulin Test', ['Negative', 'Positive', 'Invalid', 'Indeterminate']),
+    NS('dat_igg', 'IgG coating', ['Negative', 'Positive', 'Not performed']),
+    NS('dat_c3d', 'Complement C3d coating', ['Negative', 'Positive', 'Not performed']),
+    NT('dat_comment', 'Comment', 'INTERPRETATION', { required: false })
+  ],
+  'HEM-APPEND-02': [
+    NP('fibrinogen', 'Fibrinogen', 'g/L', '1.8 - 3.5', '1.8 - 3.5', '1.5 - 3.0', { decimals: 2 })
+  ],
+  'BIO-APPEND-01': [
+    NP('ogtt_0h', 'Glucose — 0 hour / fasting', 'mg/dL', '<100', '<100', '<100', { decimals: 1 }),
+    NP('ogtt_1h', 'Glucose — 1 hour', 'mg/dL', '<180', '<180', '<180', { decimals: 1 }),
+    NP('ogtt_2h', 'Glucose — 2 hours', 'mg/dL', '<140', '<140', '<140', { decimals: 1 }),
+    NT('ogtt_conclusion', 'Interpretation / laboratory conclusion', 'CONCLUSION', { required: false })
+  ],
+  'BIO-APPEND-02': [
+    NP('spep_albumin', 'Albumin fraction', 'g/dL', '3.5 - 5.2', '3.5 - 5.2', '3.8 - 5.4', { decimals: 2 }),
+    NP('spep_alpha1', 'Alpha-1 fraction', 'g/dL', '0.2 - 0.4', '0.2 - 0.4', '0.2 - 0.4', { decimals: 2 }),
+    NP('spep_alpha2', 'Alpha-2 fraction', 'g/dL', '0.5 - 0.9', '0.5 - 0.9', '0.5 - 0.9', { decimals: 2 }),
+    NP('spep_beta1', 'Beta-1 fraction', 'g/dL', '0.4 - 0.7', '0.4 - 0.7', '0.4 - 0.7', { decimals: 2 }),
+    NP('spep_gamma', 'Gamma fraction', 'g/dL', '0.7 - 1.7', '0.7 - 1.7', '0.7 - 1.7', { decimals: 2 }),
+    NP('spep_total', 'Total Protein', 'g/dL', 'Lab-configured', 'Lab-configured', 'Lab-configured', { decimals: 2, required: false }),
+    NS('spep_pattern', 'Electrophoretic pattern', ['Normal', 'Polyclonal increase', 'Monoclonal band', 'Other', 'Indeterminate'])
+  ],
+  'BIO-APPEND-03': [
+    NP('urine_volume_24h', 'Total 24-hour urine volume', 'mL/24h', 'Lab-configured', 'Lab-configured', 'Lab-configured', { decimals: 0 }),
+    NP('urine_protein_concentration', 'Urine protein concentration', 'mg/dL', 'Lab-configured', 'Lab-configured', 'Lab-configured', { decimals: 1 }),
+    NP('protein_24h', 'Protein excretion', 'g/24h', '<0.15', '<0.15', '<0.15', { decimals: 2, autoCalculate: true, formulaIdentifier: 'URINE_PROTEIN_24H', calculatedFrom: ['urine_volume_24h', 'urine_protein_concentration'] })
+  ],
+  'SERO-APPEND-01': [
+    NS('hcv_rna', 'HCV RNA Result', ['Not detected', 'Detected', 'Invalid', 'Below quantification limit']),
+    NP('hcv_viral_load', 'HCV Viral Load', 'IU/mL', 'Not detected', 'Not detected', 'Not detected', { decimals: 0, required: false }),
+    NP('hcv_log', 'HCV Viral Load — log10', 'log10 IU/mL', 'Calculated', 'Calculated', 'Calculated', { decimals: 2, required: false, autoCalculate: true, formulaIdentifier: 'LOG10_HCV', calculatedFrom: ['hcv_viral_load'] })
+  ],
+  'SERO-APPEND-02': [
+    NS('hbv_dna', 'HBV DNA Result', ['Not detected', 'Detected', 'Invalid', 'Below quantification limit']),
+    NP('hbv_viral_load', 'HBV Viral Load', 'IU/mL', 'Not detected', 'Not detected', 'Not detected', { decimals: 0, required: false }),
+    NP('hbv_log', 'HBV Viral Load — log10', 'log10 IU/mL', 'Calculated', 'Calculated', 'Calculated', { decimals: 2, required: false, autoCalculate: true, formulaIdentifier: 'LOG10_HBV', calculatedFrom: ['hbv_viral_load'] })
+  ],
+  'SERO-APPEND-03': [
+    NS('anticardiolipin_igg', 'Anticardiolipin IgG', ['Negative', 'Positive', 'Equivocal', 'Not performed']),
+    NS('anticardiolipin_igm', 'Anticardiolipin IgM', ['Negative', 'Positive', 'Equivocal', 'Not performed']),
+    NS('beta2_gpi', 'Anti-β2 Glycoprotein I', ['Negative', 'Positive', 'Equivocal', 'Not performed']),
+    NS('lupus_anticoagulant', 'Lupus Anticoagulant', ['Negative', 'Positive', 'Indeterminate', 'Not performed']),
+    NT('apl_comment', 'Interpretive comment', 'CONCLUSION', { required: false })
+  ],
+  'HORM-APPEND-01': [
+    NP('pct', 'Procalcitonin', 'ng/mL', '<0.5', '<0.5', '<0.5', { decimals: 2 })
+  ],
+  'HORM-APPEND-02': [
+    NP('bnp', 'BNP / NT-proBNP', 'pg/mL', '<100', '<100', '<100', { decimals: 1, helpText: 'Configure the exact analyzer-specific interval because BNP and NT-proBNP assays are not interchangeable.' }),
+    NS('bnp_assay', 'Assay', ['BNP', 'NT-proBNP'])
+  ],
+  'HORM-APPEND-03': [
+    NP('d_dimer', 'D-Dimer', 'ng/mL (DDU)', '<500', '<500', '<500', { decimals: 0, helpText: 'Use the exact assay units and cutoff configured by the laboratory.' })
+  ],
+  'HORM-APPEND-04': [
+    NP('hs_ctni', 'High-sensitivity Troponin I', 'ng/L', '<26 (99th percentile)', '<16 (99th percentile)', '<16 (99th percentile)', { decimals: 1, helpText: 'The analyzer-specific 99th percentile should be configured by the laboratory.' }),
+    NT('troponin_time', 'Collection time / clinical timing', 'CLINICAL CONTEXT', { required: false })
+  ],
+  'HORM-APPEND-05': [
+    NP('vitamin_d', 'Total 25-OH Vitamin D', 'ng/mL', '30 - 100 sufficient', '30 - 100 sufficient', '30 - 100 sufficient', { decimals: 1 }),
+    NS('vitamin_d_category', 'Interpretive Category', ['Sufficient', 'Insufficient', 'Deficient', 'Other / lab-defined'])
+  ],
+  'HORM-APPEND-06': [
+    NP('cortisol_8am', 'Serum Cortisol', 'µg/dL', '5.0 - 25.0 (8 AM)', '5.0 - 25.0 (8 AM)', '5.0 - 25.0 (8 AM)', { decimals: 2 }),
+    NT('cortisol_collection', 'Collection time', 'COLLECTION'),
+    NT('cortisol_comment', 'Clinical / laboratory comment', 'INTERPRETATION', { required: false })
+  ]
+};
+
+export const NANOLABS_COMMON_RESULT_OPTIONS = {
+  POSITIVE_NEGATIVE: ['Positive', 'Negative', 'Inconclusive', 'Invalid'],
+  REACTIVE_NON_REACTIVE: ['Reactive', 'Non-Reactive', 'Indeterminate', 'Invalid'],
+  DETECTED_NOT_DETECTED: ['Detected', 'Not Detected', 'Invalid', 'Indeterminate'],
+  PRESENT_ABSENT: ['Present', 'Absent', 'Indeterminate'],
+  YES_NO: ['Yes', 'No', 'Indeterminate'],
+  SENSITIVITY: ['S', 'I', 'R', 'SDD', 'NA'],
+  ABO: ['A', 'B', 'AB', 'O'],
+  RH: ['Positive (+)', 'Negative (-)'],
+  MALARIA_DENSITY: ['Negative (0)', '+', '++', '+++', '++++']
+} as const;
+
+export interface NanoNumericEvaluation {
+  flag?: NanoResultFlag;
+  accepted: boolean;
+  message?: string;
+}
+
+export function getNanoReferenceRange(
+  parameter: NanoParameter,
+  patientSex: 'male' | 'female' | 'other',
+  isChild: boolean
+): string {
+  if (isChild) return parameter.refRangeChild;
+  return patientSex === 'female' ? parameter.refRangeFemale : parameter.refRangeMale;
+}
+
+export function evaluateNanoNumericValue(
+  parameter: NanoParameter,
+  value: number,
+  patientSex: 'male' | 'female' | 'other',
+  isChild: boolean
+): NanoNumericEvaluation {
+  if (!Number.isFinite(value)) return { accepted: false, message: 'Enter a valid numeric result.' };
+  if (parameter.minAccepted !== undefined && value < parameter.minAccepted) {
+    return { accepted: false, message: `Value is below the laboratory's accepted input minimum (${parameter.minAccepted}).` };
+  }
+  if (parameter.maxAccepted !== undefined && value > parameter.maxAccepted) {
+    return { accepted: false, message: `Value is above the laboratory's accepted input maximum (${parameter.maxAccepted}).` };
+  }
+  const min = isChild ? parameter.childMin : patientSex === 'female' ? parameter.femaleMin : parameter.maleMin;
+  const max = isChild ? parameter.childMax : patientSex === 'female' ? parameter.femaleMax : parameter.maleMax;
+  let flag: NanoResultFlag | undefined;
+  if (min !== undefined && value < min) flag = 'Low';
+  else if (max !== undefined && value > max) flag = 'High';
+  else if (min !== undefined || max !== undefined) flag = 'Normal';
+  if (parameter.criticalLow !== undefined && value <= parameter.criticalLow) flag = 'Critical Low';
+  if (parameter.criticalHigh !== undefined && value >= parameter.criticalHigh) flag = 'Critical High';
+  return { accepted: true, flag };
+}
+
+export function calculateNanoLabsValue(
+  formulaIdentifier: string,
+  values: Record<string, string | number | null>
+): number | null {
+  const n = (id: string): number | null => {
+    const v = values[id];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string' && v.trim() !== '') {
+      const parsed = Number(v);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+  switch (formulaIdentifier) {
+    case 'MCV': {
+      const pcv = n('pcv'); const rbc = n('rbc');
+      return pcv !== null && rbc !== null && rbc !== 0 ? (pcv * 10) / rbc : null;
+    }
+    case 'MCH': {
+      const hb = n('hb'); const rbc = n('rbc');
+      return hb !== null && rbc !== null && rbc !== 0 ? (hb * 10) / rbc : null;
+    }
+    case 'MCHC': {
+      const hb = n('hb'); const pcv = n('pcv');
+      return hb !== null && pcv !== null && pcv !== 0 ? (hb * 100) / pcv : null;
+    }
+    case 'MGDL_TO_MMOL_L': {
+      const glucose = n('glucose');
+      return glucose !== null ? glucose / 18 : null;
+    }
+    case 'HBA1C_TO_EAG': {
+      const hba1c = n('hba1c');
+      return hba1c !== null ? (28.7 * hba1c) - 46.7 : null;
+    }
+    case 'URINE_PROTEIN_24H': {
+      const volumeMl = n('urine_volume_24h');
+      const concentrationMgDl = n('urine_protein_concentration');
+      if (volumeMl === null || concentrationMgDl === null) return null;
+      return (volumeMl * concentrationMgDl) / 100000;
+    }
+    case 'LOG10_HCV': {
+      const value = n('hcv_viral_load');
+      return value !== null && value > 0 ? Math.log10(value) : null;
+    }
+    case 'LOG10_HBV': {
+      const value = n('hbv_viral_load');
+      return value !== null && value > 0 ? Math.log10(value) : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function nanoDescriptiveFieldsToParameters(test: MasterTestItem): NanoParameter[] {
+  if (!test.descriptiveTemplate) return [];
+  return test.descriptiveTemplate.fields.map((field) => ({
+    id: field.id,
+    name: field.label,
+    unit: '',
+    sectionHeader: field.sectionHeader,
+    subHeader: field.subHeader,
+    refRangeMale: field.suggestedNormalWording ?? '',
+    refRangeFemale: field.suggestedNormalWording ?? '',
+    refRangeChild: field.suggestedNormalWording ?? '',
+    parameterType: 'text',
+    defaultValue: field.suggestedNormalWording,
+    required: false,
+    printOnReport: true,
+    showReferenceRange: false,
+    referenceSource: 'catalog-provided',
+    notes: 'Structured from the descriptive examination template supplied in the NanoLabs catalog.'
+  }));
+}
+
+export type NanoDetailedMasterTestItem = Omit<MasterTestItem, 'subParameters'> & {
+  subParameters?: NanoParameter[];
+  resultEntryMode: 'structured' | 'descriptive' | 'culture';
+  requiresValidation: boolean;
+  validationRole: 'biologist' | 'pathologist' | 'radiologist' | 'authorized-reviewer';
+  referenceSource: 'catalog-provided' | 'engineering-draft' | 'lab-configured';
+  version: string;
+};
+
+export function getNanoDetailedTest(testOrId: MasterTestItem | string): NanoDetailedMasterTestItem | undefined {
+  const source = typeof testOrId === 'string'
+    ? MASTER_TESTS_CATALOG.find((item) => item.id === testOrId || item.code === testOrId)
+    : testOrId;
+  if (!source) return undefined;
+
+  const override = NANOLABS_DETAILED_PARAMETER_OVERRIDES[source.code];
+  const existing = source.subParameters as NanoParameter[] | undefined;
+  const parameters = override ?? existing ?? nanoDescriptiveFieldsToParameters(source);
+  const mode: NanoDetailedMasterTestItem['resultEntryMode'] = source.descriptiveTemplate
+    ? 'descriptive'
+    : source.antibiogram || /culture|coproculture|hémoculture|mycoplasma|ureaplasma|sensibilité/i.test(source.name)
+      ? 'culture'
+      : 'structured';
+
+  return {
+    ...source,
+    subParameters: parameters.map((parameter) => ({
+      parameterType: parameter.parameterType ?? (parameter.options ? 'select' : parameter.unit ? 'numeric' : 'text'),
+      required: parameter.required ?? true,
+      printOnReport: parameter.printOnReport ?? true,
+      ...parameter,
+    })),
+    resultEntryMode: mode,
+    requiresValidation: true,
+    validationRole: 'biologist',
+    referenceSource: override ? 'engineering-draft' : 'catalog-provided',
+    version: '2026-09-11.1',
+  };
+}
+
+function groupNanoParameters(parameters: NanoParameter[]): NanoResultFormSection[] {
+  const groups = new Map<string, NanoResultFormField[]>();
+  for (const parameter of parameters) {
+    const section = parameter.sectionHeader || 'RESULTATS';
+    const field: NanoResultFormField = {
+      id: parameter.id,
+      label: parameter.name,
+      type: parameter.parameterType ?? (parameter.options ? 'select' : parameter.unit ? 'numeric' : 'text'),
+      section,
+      subsection: parameter.subHeader,
+      unit: parameter.unit || undefined,
+      required: parameter.required ?? true,
+      options: parameter.options ?? parameter.resultOptions,
+      placeholder: parameter.placeholder,
+      helpText: parameter.helpText,
+      referenceRange: parameter.showReferenceRange === false ? undefined : parameter.refRangeMale,
+      method: parameter.method,
+      decimals: parameter.decimals,
+      formulaIdentifier: parameter.formulaIdentifier,
+      autoCalculate: parameter.autoCalculate,
+      printOnReport: parameter.printOnReport ?? true,
+    };
+    if (!groups.has(section)) groups.set(section, []);
+    groups.get(section)!.push(field);
+  }
+  return Array.from(groups.entries()).map(([title, fields]) => ({
+    id: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    title,
+    fields,
+  }));
+}
+
+export function buildNanoLabTechnicianForm(testOrId: MasterTestItem | string): NanoLabTechnicianForm | undefined {
+  const test = getNanoDetailedTest(testOrId);
+  if (!test) return undefined;
+  return {
+    testId: test.id,
+    code: test.code,
+    title: test.name,
+    category: test.category,
+    sampleType: test.sampleType,
+    preparation: test.conditions,
+    turnaroundTime: test.turnaroundTime,
+    resultType: test.resultType ?? 'descriptive',
+    sections: groupNanoParameters(test.subParameters ?? []),
+    hasCultureWorkflow: test.resultEntryMode === 'culture' || Boolean(test.descriptiveTemplate),
+    hasAntibiogramWorkflow: Boolean(test.antibiogram || /antibiogram|sensibilité/i.test(test.name)),
+    requiresProfessionalValidation: test.requiresValidation,
+  };
+}
+
+export function createNanoEmptyResultDraft(
+  testOrId: MasterTestItem | string,
+  patientId: string,
+  technicianId?: string
+): NanoLabResultDraft | undefined {
+  const test = getNanoDetailedTest(testOrId);
+  if (!test) return undefined;
+  const values: Record<string, NanoLabResultValue> = {};
+  for (const parameter of test.subParameters ?? []) {
+    values[parameter.id] = {
+      parameterId: parameter.id,
+      value: parameter.defaultValue ?? null,
+      unit: parameter.unit || undefined,
+      referenceRange: parameter.refRangeMale,
+      method: parameter.method,
+    };
+  }
+  return {
+    testId: test.id,
+    testCode: test.code,
+    patientId,
+    technicianId,
+    status: 'draft',
+    values,
+  };
+}
+
+export function searchNanoLabTests(query: string): MasterTestItem[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return MASTER_TESTS_CATALOG;
+  return MASTER_TESTS_CATALOG.filter((test) => [
+    test.id, test.code, test.name, test.category, test.sampleType, test.description
+  ].some((field) => field.toLowerCase().includes(normalized)));
+}
+
+export function getNanoTestsByCategory(category: MasterTestItem['category']): MasterTestItem[] {
+  return MASTER_TESTS_CATALOG.filter((test) => test.category === category);
+}
+
+export const NANOLABS_MASTER_TEST_BY_ID: Record<string, MasterTestItem> = Object.fromEntries(
+  MASTER_TESTS_CATALOG.map((test) => [test.id, test])
+);
+
+export const NANOLABS_MASTER_TEST_BY_CODE: Record<string, MasterTestItem> = Object.fromEntries(
+  MASTER_TESTS_CATALOG.map((test) => [test.code, test])
+);
+
+export const NANOLABS_MASTER_TEST_COUNT = MASTER_TESTS_CATALOG.length;
+export const NANOLABS_EXPECTED_SOURCE_CATALOG_COUNT = 58;
+
+// ============================================================
+// 10. HOW THE FRONTEND SHOULD USE THIS FILE
+// ============================================================
+//
+// Example:
+//   const form = buildNanoLabTechnicianForm(orderedTest.code);
+//   form?.sections.map(section => ...);
+//
+// This means the frontend does NOT need 58 separate result screens.
+// It needs one reusable ResultEntryScreen that renders these definitions.
+//
+// For CBC, for example, the technician sees Hb, RBC, PCV/Hct, MCV, MCH,
+// MCHC, RDW, WBC, differential and platelets. For urinalysis they see the
+// physical, chemical and microscopic groups. For cultures the workflow can
+// continue to organism identification and susceptibility. For descriptive
+// examinations the supplied examination template becomes the entry form.
+//
+// This architecture is deliberately data-driven: adding a new examination
+// should primarily mean adding catalog/template data rather than writing a
+// new React screen.
+// ============================================================
