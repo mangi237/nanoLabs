@@ -353,10 +353,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
                   <div className="text-slate-500 text-[10px] uppercase font-bold">Médecin Prescripteur:</div>
                   <div className="text-slate-900 text-[11px] font-black">
-                    {booking.doctorName || 'Dr HAPPY LYNDA - NEPHROLOGUE'}
+                    {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
                   </div>
                   <div className="text-slate-600 text-[10px] font-medium">
-                    {booking.doctorFacility || 'Polyclinique de Poitiers / Centre Affilié'}
+                    {booking.referralHospital || booking.doctorFacility || 'La Quintinie Hospital, Douala'}
                   </div>
                 </div>
               </div>
@@ -599,11 +599,11 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Signatures & Pathologist Sign-Off Block */}
-            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center text-xs">
+            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs items-end">
               
               {/* Medical Lab Technician */}
               <div>
-                <div className="h-8 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
+                <div className="h-10 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
                   {booking.tests?.[0]?.completedBy || booking.assignedTechName || 'Technicien de Laboratoire'}
                 </div>
                 <div className="font-black text-slate-900">Technicien Analyste</div>
@@ -612,16 +612,25 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 
               {/* Head Pathologist / Lab Director */}
               <div>
-                <div className="h-8 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
+                <div className="h-10 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
                   {labDirectorName}
                 </div>
                 <div className="font-black text-slate-900">{labDirectorName}</div>
                 <div className="text-[10px] text-slate-500 font-medium">{biologistSignatureTitle}</div>
               </div>
 
+              {/* Physical Stamp Zone */}
+              <div className="space-y-1">
+                <div className="h-14 border-2 border-dashed border-teal-400 rounded-lg p-1 flex flex-col items-center justify-center bg-teal-50/30 text-teal-900/60">
+                  <span className="text-[8.5px] font-black uppercase tracking-wider">Cachet Officiel</span>
+                  <span className="text-[7px] font-mono">(Physical Stamp & Seal)</span>
+                </div>
+                <div className="font-black text-slate-900 text-[10px]">Visa du Laboratoire</div>
+              </div>
+
               {/* Quality & Accreditation Sign-off */}
               <div className="hidden sm:block">
-                <div className="h-8 flex items-center justify-center font-serif text-teal-800 italic font-bold text-sm tracking-wide">
+                <div className="h-10 flex items-center justify-center font-serif text-teal-800 italic font-bold text-sm tracking-wide">
                   {labName}
                 </div>
                 <div className="font-black text-slate-900">Contrôle Qualité & Visa</div>
