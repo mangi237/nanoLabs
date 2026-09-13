@@ -23,115 +23,112 @@
  */
 
 export function applyDOMMonkeyPatch(): void {
-    if (typeof window === 'undefined' || typeof Node === 'undefined' || !Node.prototype) {
-      return;
-    }
-  
-    // Prevent applying the patch multiple times
-    if ((window as any).__REACT_TRANSLATE_DOM_PATCH_APPLIED__) {
-      return;
-    }
-    (window as any).__REACT_TRANSLATE_DOM_PATCH_APPLIED__ = true;
-  
-    // 1. Monkey-Patch Node.prototype.removeChild
-    const originalRemoveChild = Node.prototype.removeChild;
-    Node.prototype.removeChild = function <T extends Node>(child: T): T {
-      if (!child) return child;
-      if (child.parentNode !== this) {
-        if (child.parentNode) {
-          try {
-            return child.parentNode.removeChild(child) as T;
-          } catch (e) {
-            return child;
-          }
-        }
-        return child;
-      }
-      try {
-        return originalRemoveChild.call(this, child) as T;
-      } catch (err) {
-        if (child.parentNode) {
-          try {
-            return child.parentNode.removeChild(child) as T;
-          } catch (e) {
-            return child;
-          }
-        }
-        return child;
-      }
-    };
-  
-    // 2. Monkey-Patch Node.prototype.insertBefore
-    const originalInsertBefore = Node.prototype.insertBefore;
-    Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
-      if (!newNode) return newNode;
-      if (referenceNode && referenceNode.parentNode !== this) {
-        if (referenceNode.parentNode) {
-          try {
-            return referenceNode.parentNode.insertBefore(newNode, referenceNode) as T;
-          } catch (e) {
-            // fallback
-          }
-        }
-        try {
-          return this.appendChild(newNode) as T;
-        } catch (e) {
-          return newNode;
-        }
-      }
-      try {
-        return originalInsertBefore.call(this, newNode, referenceNode) as T;
-      } catch (err) {
-        if (referenceNode && referenceNode.parentNode) {
-          try {
-            return referenceNode.parentNode.insertBefore(newNode, referenceNode) as T;
-          } catch (e) {}
-        }
-        try {
-          return this.appendChild(newNode) as T;
-        } catch (e) {
-          return newNode;
-        }
-      }
-    };
-  
-    // 3. Monkey-Patch Node.prototype.replaceChild
-    const originalReplaceChild = Node.prototype.replaceChild;
-    Node.prototype.replaceChild = function <T extends Node>(newChild: Node, oldChild: T): T {
-      if (!newChild || !oldChild) return oldChild;
-      if (oldChild.parentNode !== this) {
-        if (oldChild.parentNode) {
-          try {
-            return oldChild.parentNode.replaceChild(newChild, oldChild) as T;
-          } catch (e) {
-            // fallback
-          }
-        }
-        try {
-          return this.appendChild(newChild) as T;
-        } catch (e) {
-          return oldChild;
-        }
-      }
-      try {
-        return originalReplaceChild.call(this, newChild, oldChild) as T;
-      } catch (err) {
-        if (oldChild.parentNode) {
-          try {
-            return oldChild.parentNode.replaceChild(newChild, oldChild) as T;
-          } catch (e) {}
-        }
-        try {
-          return this.appendChild(newChild) as T;
-        } catch (e) {
-          return oldChild;
-        }
-      }
-    };
-  
-    console.log('✅ Google Translate DOM Monkey-Patch active: Protected React from DOM reconciliation crashes.');
+  if (typeof window === 'undefined' || typeof Node === 'undefined' || !Node.prototype) {
+    return;
   }
-  
-  // Auto-apply immediately when imported
-  applyDOMMonkeyPatch();
-  
+
+  // Prevent applying the patch multiple times
+  if ((window as any).__REACT_TRANSLATE_DOM_PATCH_APPLIED__) {
+    return;
+  }
+  (window as any).__REACT_TRANSLATE_DOM_PATCH_APPLIED__ = true;
+
+  // 1. Monkey-Patch Node.prototype.removeChild
+  const originalRemoveChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function <T extends Node>(child: T): T {
+    if (!child) return child;
+    if (child.parentNode !== this) {
+      if (child.parentNode) {
+        try {
+          return child.parentNode.removeChild(child) as T;
+        } catch (e) {
+          return child;
+        }
+      }
+      return child;
+    }
+    try {
+      return originalRemoveChild.call(this, child) as T;
+    } catch (err) {
+      if (child.parentNode) {
+        try {
+          return child.parentNode.removeChild(child) as T;
+        } catch (e) {
+          return child;
+        }
+      }
+      return child;
+    }
+  };
+
+  // 2. Monkey-Patch Node.prototype.insertBefore
+  const originalInsertBefore = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
+    if (!newNode) return newNode;
+    if (referenceNode && referenceNode.parentNode !== this) {
+      if (referenceNode.parentNode) {
+        try {
+          return referenceNode.parentNode.insertBefore(newNode, referenceNode) as T;
+        } catch (e) {
+          // fallback
+        }
+      }
+      try {
+        return this.appendChild(newNode) as T;
+      } catch (e) {
+        return newNode;
+      }
+    }
+    try {
+      return originalInsertBefore.call(this, newNode, referenceNode) as T;
+    } catch (err) {
+      if (referenceNode && referenceNode.parentNode) {
+        try {
+          return referenceNode.parentNode.insertBefore(newNode, referenceNode) as T;
+        } catch (e) {}
+      }
+      try {
+        return this.appendChild(newNode) as T;
+      } catch (e) {
+        return newNode;
+      }
+    }
+  };
+
+  // 3. Monkey-Patch Node.prototype.replaceChild
+  const originalReplaceChild = Node.prototype.replaceChild;
+  Node.prototype.replaceChild = function <T extends Node>(newChild: Node, oldChild: T): T {
+    if (!newChild || !oldChild) return oldChild;
+    if (oldChild.parentNode !== this) {
+      if (oldChild.parentNode) {
+        try {
+          return oldChild.parentNode.replaceChild(newChild, oldChild) as T;
+        } catch (e) {
+          // fallback
+        }
+      }
+      try {
+        return this.appendChild(newChild) as T;
+      } catch (e) {
+        return oldChild;
+      }
+    }
+    try {
+      return originalReplaceChild.call(this, newChild, oldChild) as T;
+    } catch (err) {
+      if (oldChild.parentNode) {
+        try {
+          return oldChild.parentNode.replaceChild(newChild, oldChild) as T;
+        } catch (e) {}
+      }
+      try {
+        return this.appendChild(newChild) as T;
+      } catch (e) {
+        return oldChild;
+      }
+    }
+  };
+}
+
+// Auto-apply immediately when imported
+applyDOMMonkeyPatch();

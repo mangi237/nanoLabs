@@ -20,7 +20,7 @@ import { Footer } from '../../components/website/Footer';
 import { LegalModals } from '../../components/website/LegalModals';
 
 interface LandingPageProps {
-  onGoToPortal: () => void;
+  onGoToPortal: () => void; 
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {

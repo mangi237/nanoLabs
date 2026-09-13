@@ -20,7 +20,9 @@ import {
   ChevronRight,
   Info,
   ThermometerSnowflake,
-  Filter
+  Filter,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { MEASURING_UNITS, INVENTORY_CATEGORIES, STORAGE_CONDITIONS } from '../../screens/admin/InventoryManagement';
 import { authService } from '../../services/authService';
@@ -143,6 +145,7 @@ export const BulkInventoryUploadModal: React.FC<BulkInventoryUploadModalProps> =
   const [accessCodeInput, setAccessCodeInput] = useState<string>(
     user?.accessCode || (user?.role === 'admin' || user?.role === 'superadmin' ? 'ADMIN123' : '')
   );
+  const [showAccessCodeInput, setShowAccessCodeInput] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
@@ -1136,13 +1139,23 @@ export const BulkInventoryUploadModal: React.FC<BulkInventoryUploadModalProps> =
                           <Key className="w-3.5 h-3.5 text-teal-600" />
                           Staff / Administrator Authorization Code <span className="text-rose-500">*</span>
                         </label>
-                        <input
-                          type="password"
-                          placeholder="Enter your Access PIN (e.g. ADMIN123 or TECH123)"
-                          value={accessCodeInput}
-                          onChange={(e) => setAccessCodeInput(e.target.value)}
-                          className="w-full max-w-md px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold tracking-wider text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        />
+                        <div className="relative max-w-md">
+                          <input
+                            type={showAccessCodeInput ? 'text' : 'password'}
+                            placeholder="Enter your Access PIN (e.g. ADMIN123 or TECH123)"
+                            value={accessCodeInput}
+                            onChange={(e) => setAccessCodeInput(e.target.value)}
+                            className="w-full pl-3 pr-10 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold tracking-wider text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowAccessCodeInput(!showAccessCodeInput)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title={showAccessCodeInput ? 'Hide access code' : 'Show access code'}
+                          >
+                            {showAccessCodeInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Import Action Button */}

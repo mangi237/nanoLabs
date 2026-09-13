@@ -16,11 +16,8 @@ export const uploadService = {
    */
   async uploadFile(file: File): Promise<UploadResult> {
     try {
-      console.log('📄 Preparing file for upload:', file.name, file.size, file.type);
-
       // 1. Try Vercel Backend Upload (https://ndamclinic.vercel.app/api/upload)
       try {
-        console.log('🚀 Attempting Vercel backend upload to:', VERCEL_UPLOAD_API);
         const formData = new FormData();
         formData.append('file', file);
 
@@ -29,16 +26,12 @@ export const uploadService = {
           body: formData,
         });
 
-        console.log('Vercel upload response status:', res.status);
-
         if (res.ok) {
           const contentType = res.headers.get('content-type');
           if (contentType?.includes('application/json')) {
             const data = await res.json();
-            console.log('Upload server response:', data);
             const fileUrl = data.fileUrl || data.url || data.secure_url || data.path;
             if (fileUrl) {
-              console.log('✅ Vercel backend upload successful:', fileUrl);
               return {
                 success: true,
                 fileUrl,
@@ -61,7 +54,6 @@ export const uploadService = {
 
       if (pinataApiKey && pinataSecretKey) {
         try {
-          console.log('🚀 Uploading file to Pinata IPFS via fetch...');
           const formData = new FormData();
           formData.append('file', file);
           formData.append(
@@ -85,7 +77,6 @@ export const uploadService = {
             const data = await response.json();
             if (data && data.IpfsHash) {
               const fileUrl = `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
-              console.log('✅ Pinata IPFS upload successful:', fileUrl);
               return {
                 success: true,
                 fileUrl,
@@ -103,7 +94,6 @@ export const uploadService = {
         const reader = new FileReader();
         reader.onloadend = () => {
           const resultUrl = reader.result as string;
-          console.log('✅ Local file processed successfully (Data URL fallback)');
           resolve({
             success: true,
             fileUrl: resultUrl,

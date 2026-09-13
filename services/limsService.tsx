@@ -614,7 +614,6 @@ export const limsService = {
       discountAmount?: number;
       discountType?: string;
       actualPaidAmount?: number;
-      
       insuranceDetails?: any;
       [key: string]: any;
     };
@@ -1664,7 +1663,6 @@ export const limsService = {
                 quantity: newQty,
                 updatedAt: new Date().toISOString()
               }));
-              console.log(`📉 Auto-deducted inventory reagent "${req.reagentName}": ${currentQty} ➔ ${newQty}`);
             }
           }
         }
@@ -1699,7 +1697,6 @@ export const limsService = {
             quantity: newQty,
             updatedAt: new Date().toISOString()
           }));
-          console.log(`📉 Reagent deducted "${req.reagentName}": ${currentQty} - ${req.quantity} = ${newQty}`);
         }
       }
     } catch (e) {
@@ -2525,7 +2522,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { ...existingData,id: d.id,  };
+            return {  ...existingData , id: d.id,};
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2797,7 +2794,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests .length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -2870,7 +2867,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests .length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
@@ -3056,9 +3053,6 @@ export const limsService = {
     sourceLabId: string;
     sourceLabName: string;
     destinationLabId: string;
-    yeboVerified: boolean ;
-    yeboVerificationRef: string ;
-    yeboVerificationBadge: string;
     destinationLabName: string;
     transferScope: 'all' | 'specific_batches' | 'specific_tests';
     selectedBatchIds?: string[];
@@ -3069,8 +3063,10 @@ export const limsService = {
       testNames: string[];
     }>;
     reason?: string;
-
     medicalNotes?: string;
+    yeboVerified?: boolean;
+    yeboVerificationRef?: string;
+    yeboVerificationBadge?: string;
     diagnosticHistory?: any[];
     fhirPayload?: any;
     patientAccessCodeUsed: string;

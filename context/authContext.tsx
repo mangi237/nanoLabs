@@ -4,7 +4,7 @@ import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
 import { ensureFirebaseAuth } from '../services/firebase';
 
-// Web localStorage adapter providing standard AsyncStorage API
+// Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
 const AsyncStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
@@ -27,12 +27,16 @@ const AsyncStorage = {
 
 interface AuthContextType {
   user: any;
+  currentUser: any;
   lab: any;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (accessCode: string, labId: string) => Promise<any>;
   loginDoctor: (phoneOrIdentifier: string, passwordOrCode: string) => Promise<any>;
+  loginPatient: (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => Promise<any>;
   logout: () => void;
+  hasRole: (roleOrRoles: string | string[]) => boolean;
+  refresh: () => Promise<void>;
   registerPatient: (labId: string, data: any) => Promise<any>;
   getAllLabs: () => Promise<any[]>;
   getLabDetails: (labId: string) => Promise<any>;
@@ -54,10 +58,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any>(null);
   const [lab, setLab] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Changed to false initially
+  const [isLoading, setIsLoading] = useState(true);
 
-  // REMOVED auto-checkAuthStatus on mount - we want landing page to show first
-  // Users must explicitly click "Go to Portal" to login
+  useEffect(() => {
+    checkAuthStatus();
+    
+    // Auto logout on session timeout
+    const interval = setInterval(async () => {
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      if (lastLogin) {
+        const elapsed = Date.now() - parseInt(lastLogin);
+        if (elapsed > SESSION_TIMEOUT) {
+          await clearSession();
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const setUserWithPersistence = (newUser: any) => {
+    setUser(newUser);
+    if (newUser) {
+      AsyncStorage.setItem('user', JSON.stringify(newUser));
+    } else {
+      localStorage.removeItem('user');
+    }
+  };
+
+  const checkAuthStatus = async () => {
+    try {
+      await ensureFirebaseAuth();
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedLab = await AsyncStorage.getItem('lab');
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      
+      // Check session timeout
+      if (lastLogin) {
+        const elapsed = Date.now() - parseInt(lastLogin);
+        if (elapsed > SESSION_TIMEOUT) {
+          await clearSession();
+          return;
+        }
+      }
+      
+      if (storedUser && storedLab) {
+        setUser(JSON.parse(storedUser));
+        setLab(JSON.parse(storedLab));
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (accessCode: string, labId: string) => {
     try {
@@ -115,6 +170,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginPatient = async (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => {
+    try {
+      const result = await authService.loginPatient(phoneOrIdentifier, passwordOrCode, targetLabId);
+      
+      if (result.success && result.user) {
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
+        
+        // Store session data
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', passwordOrCode);
+        await AsyncStorage.setItem('labId', result.lab?.id || targetLabId || 'lab-1');
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Patient authentication failed');
+      }
+    } catch (error: any) {
+      errorHandler.handleError(error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     await clearSession();
   };
@@ -162,21 +245,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await authService.verifyStaffActionCode(inputCode, allowedRoles, currentUserCode);
   };
 
+  const hasRole = (roleOrRoles: string | string[]): boolean => {
+    if (!user) return false;
+    const currentRoles: string[] = user.roles || (user.role ? [user.role] : []);
+    if (Array.isArray(roleOrRoles)) {
+      return roleOrRoles.some((r) => currentRoles.includes(r));
+    }
+    return currentRoles.includes(roleOrRoles);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
+      currentUser: user,
       lab,
       isAuthenticated,
       isLoading,
       login,
       loginDoctor,
+      loginPatient,
       logout,
+      hasRole,
+      refresh: refreshToken,
       registerPatient,
       getAllLabs,
       getLabDetails,
       refreshToken,
       clearSession,
-      setUser,
+      setUser: setUserWithPersistence,
       setLab,
       createStaffWithCode,
       resetStaffAccessCode,

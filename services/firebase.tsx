@@ -51,7 +51,6 @@ try {
       cacheSizeBytes: CACHE_SIZE_UNLIMITED
     })
   });
-  console.log('[nanoLabs LIMS] Offline Firestore persistence initialized (IndexedDB multi-tab cache active).');
 } catch (err: any) {
   // If Firestore was already initialized or persistence fallback is triggered
   console.warn('[nanoLabs LIMS] Persistent local cache initialization fallback:', err?.message || err);
@@ -69,7 +68,6 @@ export const ensureFirebaseAuth = async (): Promise<void> => {
   try {
     if (!auth.currentUser) {
       await signInAnonymously(auth);
-      console.log('[nanoLabs Auth] Secured Firebase session initialized.');
     }
   } catch (err: any) {
     console.warn('[nanoLabs Auth] Session note:', err?.message || err);

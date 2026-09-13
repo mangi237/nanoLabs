@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Smartphone,
   KeyRound,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { yeboVerifyService } from '../../services/yeboVerifyService';
@@ -47,6 +49,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({
   // Verification states (SMS confirmation code vs. Access Code)
   const [authMethod, setAuthMethod] = useState<'sms' | 'passcode'>('sms');
   const [patientSecurityCode, setPatientSecurityCode] = useState('');
+  const [showPatientSecurityCode, setShowPatientSecurityCode] = useState(false);
   const [smsCodeInput, setSmsCodeInput] = useState('');
   const [generatedSmsCode, setGeneratedSmsCode] = useState('');
   const [smsSending, setSmsSending] = useState(false);
@@ -179,22 +182,22 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({
         setCodeError('Please click "Send SMS Confirmation Code" to verify your identity.');
         return;
       }
-      if (smsCodeInput.trim() !== generatedSmsCode && smsCodeInput.trim() !== '123456') {
+      if (smsCodeInput.trim() !== generatedSmsCode) {
         setCodeError('Invalid SMS confirmation code. Please check your text messages.');
         return;
       }
       verifiedCode = `SMS-CONFIRMED-${generatedSmsCode}`;
     } else {
       const enteredCode = patientSecurityCode.trim().toUpperCase();
-      const userPasscode = ((user as any)?.accessCode || (user as any)?.patientCode || (user as any)?.pin || '1234').toUpperCase();
+      const userPasscode = ((user as any)?.accessCode || (user as any)?.patientCode || (user as any)?.pin || '').toUpperCase();
 
       if (!enteredCode) {
         setCodeError('Please enter your Patient Access Code to authorize transfer.');
         return;
       }
 
-      if (enteredCode !== userPasscode && enteredCode !== '1234' && enteredCode !== 'PATIENT123') {
-        setCodeError(`Invalid Patient Access Code. Please enter your portal passcode.`);
+      if (userPasscode && enteredCode !== userPasscode) {
+        setCodeError(`Invalid Patient Access Code. Please enter your registered portal passcode.`);
         return;
       }
       verifiedCode = enteredCode;
@@ -539,16 +542,26 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({
                         Quick-Fill ({(user as any)?.accessCode || (user as any)?.patientCode || '1234'})
                       </button>
                     </div>
-                    <input
-                      type="password"
-                      placeholder="Enter your Patient Portal Access Code"
-                      value={patientSecurityCode}
-                      onChange={e => {
-                        setPatientSecurityCode(e.target.value);
-                        if (codeError) setCodeError('');
-                      }}
-                      className="w-full px-3.5 py-2.5 bg-white border border-teal-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPatientSecurityCode ? 'text' : 'password'}
+                        placeholder="Enter your Patient Portal Access Code"
+                        value={patientSecurityCode}
+                        onChange={e => {
+                          setPatientSecurityCode(e.target.value);
+                          if (codeError) setCodeError('');
+                        }}
+                        className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-teal-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientSecurityCode(!showPatientSecurityCode)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-600 hover:text-teal-800 cursor-pointer"
+                        title={showPatientSecurityCode ? 'Hide code' : 'Show code'}
+                      >
+                        {showPatientSecurityCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 )}
 

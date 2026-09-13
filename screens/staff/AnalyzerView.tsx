@@ -24,7 +24,9 @@ import {
   Barcode,
   Layers,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const COMMON_SAMPLE_MATRICES = [
@@ -67,6 +69,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const [sampleBarcodeName, setSampleBarcodeName] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
   const [analyzerPasscode, setAnalyzerPasscode] = useState('');
+  const [showAnalyzerPasscode, setShowAnalyzerPasscode] = useState(false);
   const [passcodeError, setPasscodeError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -645,16 +648,26 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
                     Quick-Fill (1234)
                   </button>
                 </div>
-                <input
-                  type="password"
-                  placeholder="Enter Analyzer Security Access Code (e.g. 1234 or PHLEB123)"
-                  value={analyzerPasscode}
-                  onChange={e => {
-                    setAnalyzerPasscode(e.target.value);
-                    if (passcodeError) setPasscodeError('');
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showAnalyzerPasscode ? 'text' : 'password'}
+                    placeholder="Enter Analyzer Security Access Code (e.g. 1234 or PHLEB123)"
+                    value={analyzerPasscode}
+                    onChange={e => {
+                      setAnalyzerPasscode(e.target.value);
+                      if (passcodeError) setPasscodeError('');
+                    }}
+                    className="w-full pl-3 pr-10 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAnalyzerPasscode(!showAnalyzerPasscode)}
+                    className="absolute right-3 top-2.5 text-amber-700 hover:text-amber-900 cursor-pointer"
+                    title={showAnalyzerPasscode ? 'Hide code' : 'Show code'}
+                  >
+                    {showAnalyzerPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 {passcodeError && (
                   <p className="text-[11px] font-bold text-red-600">{passcodeError}</p>
                 )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
+import StaffHeroBanner from '../../components/common/StaffHeroBanner';
 import { useAuth } from '../../context/authContext';
 import { db, getDocs, collection, addDoc, updateDoc, deleteDoc, doc } from '../../services/firebase';
 import { authService } from '../../services/authService';
@@ -25,8 +26,8 @@ import {
   Filter,
   FileSpreadsheet,
   Upload,
-  History,
-  User as UserIcon
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import BulkInventoryUploadModal from '../../components/inventory/BulkInventoryUploadModal';
 
@@ -80,7 +81,7 @@ const SEED_INVENTORY_ITEMS = [
     quantity: 12,
     initialQuantity: 20,
     reorderLevel: 5,
-    expiryDate: new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0],
+    expiryDate: new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0], // 6 months
     supplier: 'MedChem Lab Supplies',
     storageCondition: 'Dark & Dry Cabinet',
     batchNumber: 'LOT-GMS-9021',
@@ -93,7 +94,7 @@ const SEED_INVENTORY_ITEMS = [
     quantity: 350,
     initialQuantity: 500,
     reorderLevel: 100,
-    expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
+    expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0], // 1 year
     supplier: 'BD Diagnostics Global',
     storageCondition: 'Room Temp (15°C - 25°C)',
     batchNumber: 'LOT-EDTA-4412',
@@ -106,7 +107,7 @@ const SEED_INVENTORY_ITEMS = [
     quantity: 3,
     initialQuantity: 25,
     reorderLevel: 8,
-    expiryDate: new Date(Date.now() + 18 * 86400000).toISOString().split('T')[0],
+    expiryDate: new Date(Date.now() + 18 * 86400000).toISOString().split('T')[0], // Expiring in 18 days (Amber alert)
     supplier: 'Roche Diagnostics Africa',
     storageCondition: 'Refrigerated (2°C - 8°C)',
     batchNumber: 'LOT-GLU-7721',
@@ -132,7 +133,7 @@ const SEED_INVENTORY_ITEMS = [
     quantity: 1,
     initialQuantity: 15,
     reorderLevel: 4,
-    expiryDate: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0],
+    expiryDate: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0], // EXPIRED (Red alert)
     supplier: 'Siemens Healthcare',
     storageCondition: 'Room Temp (15°C - 25°C)',
     batchNumber: 'LOT-URI-3381',
@@ -145,21 +146,13 @@ const SEED_INVENTORY_ITEMS = [
     quantity: 18,
     initialQuantity: 30,
     reorderLevel: 6,
-    expiryDate: new Date(Date.now() + 65 * 86400000).toISOString().split('T')[0],
+    expiryDate: new Date(Date.now() + 65 * 86400000).toISOString().split('T')[0], // Expiring in 65 days
     supplier: 'Mindray Reagents',
     storageCondition: 'Refrigerated (2°C - 8°C)',
     batchNumber: 'LOT-CHOD-8823',
     description: 'Enzymatic photometric test for Total Cholesterol assay.'
   }
 ];
-
-// Define the ReagentUsage interface (must match the one in limsService)
-export interface ReagentUsage {
-  reagentName: string;
-  quantity: number;
-  testName: string;
-  reagentId?: string;
-}
 
 export const InventoryManagement: React.FC<InventoryManagementProps> = ({
   embedded = false,
@@ -179,12 +172,9 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [showAccessCodeInput, setShowAccessCodeInput] = useState(false);
   const [verifyError, setVerifyError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Reagent usage history state
-  const [selectedItemHistory, setSelectedItemHistory] = useState<any | null>(null);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -207,31 +197,20 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
       const targetLabId = lab?.id || 'lab-1';
       const invRef = collection(db, 'labs', targetLabId, 'inventory');
       const snap = await getDocs(invRef);
-      
-      // Use type assertion to handle the dynamic nature of Firestore data
-      let list = snap.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data() 
-      })) as any[];
-  
+      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
       // Auto-seed demo items if inventory is empty
       if (list.length === 0) {
-        console.log('Seeding initial lab inventory items...');
         for (const seed of SEED_INVENTORY_ITEMS) {
-          const seedData = {
+          const docRef = await addDoc(invRef, {
             ...seed,
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            usageHistory: [] // usageHistory is now part of the seed data
-          };
-          const docRef = await addDoc(invRef, seedData);
-          list.push({ 
-            id: docRef.id, 
-            ...seedData 
+            updatedAt: new Date().toISOString()
           });
+          list.push({ id: docRef.id, ...seed });
         }
       }
-  
+
       setItems(list);
     } catch (e) {
       console.error('Inventory fetch error:', e);
@@ -259,7 +238,7 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
       batchNumber: `LOT-${Math.floor(1000 + Math.random() * 9000)}`,
       description: ''
     });
-    setAccessCodeInput(user?.accessCode || '');
+    setAccessCodeInput(user?.accessCode || (user?.role === 'admin' || user?.role === 'superadmin' ? 'ADMIN123' : ''));
     setVerifyError('');
     setShowModal(true);
   };
@@ -279,14 +258,9 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
       batchNumber: item.batchNumber || '',
       description: item.description || ''
     });
-    setAccessCodeInput(user?.accessCode || '');
+    setAccessCodeInput(user?.accessCode || (user?.role === 'admin' || user?.role === 'superadmin' ? 'ADMIN123' : ''));
     setVerifyError('');
     setShowModal(true);
-  };
-
-  const handleViewHistory = (item: any) => {
-    setSelectedItemHistory(item);
-    setShowHistoryModal(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -336,8 +310,7 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
       } else {
         await addDoc(collection(db, 'labs', targetLabId, 'inventory'), {
           ...payload,
-          createdAt: new Date().toISOString(),
-          usageHistory: []
+          createdAt: new Date().toISOString()
         });
       }
 
@@ -485,66 +458,6 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
   const lowStockCount = items.filter(i => getQuantityStats(i).status === 'danger').length;
   const expiringCount = items.filter(i => getExpiryStatus(i.expiryDate).isDanger).length;
 
-  // History Modal
-  const HistoryModal = () => {
-    if (!selectedItemHistory) return null;
-    const history = selectedItemHistory.usageHistory || [];
-    
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-        <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-h-[80vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-800 to-slate-900 text-white">
-            <div className="flex items-center gap-2.5">
-              <History className="w-5 h-5 text-teal-300" />
-              <div>
-                <h3 className="font-bold text-base">Reagent Usage History</h3>
-                <p className="text-slate-300 text-xs">{selectedItemHistory.name}</p>
-              </div>
-            </div>
-            <button onClick={() => setShowHistoryModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4">
-            {history.length === 0 ? (
-              <div className="text-center text-slate-500 py-8">
-                <Package className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                <p>No usage records for this reagent yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {history.map((entry: any, idx: number) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-bold text-slate-900">{entry.reagentName}</span>
-                        <span className="text-slate-500 ml-2">× {entry.quantity}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-slate-600">
-                      <UserIcon className="w-3 h-3" />
-                      <span>By: {entry.usedBy || 'Unknown'}</span>
-                      <span>•</span>
-                      <span>Test: {entry.testName || 'N/A'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <div className="p-4 border-t border-slate-200 flex justify-end">
-            <button onClick={() => setShowHistoryModal(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const content = (
     <div className="space-y-6">
       {onBack && !embedded && (
@@ -557,280 +470,267 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
         </button>
       )}
 
-      {/* Top Header Card */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-teal-50 text-teal-700 rounded-xl border border-teal-200">
-            <FlaskConical className="w-6 h-6" />
+      {/* Staff Hero Banner */}
+      <StaffHeroBanner
+        workstationNumber="Workstation 05"
+        workstationTitle="Reagents & Supply Chain Manager Desk"
+        description="Track chemical reagents, vacutainer tubes, expiry date alerts, measuring units, and auto-deduction logs."
+        gradientFrom="from-teal-950"
+        gradientVia="from-slate-900"
+        gradientTo="to-emerald-950"
+        borderColor="border-teal-800"
+        badgeBg="bg-teal-400 text-slate-950"
+        actions={
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setShowBulkUploadModal(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-teal-400" />
+              <span>CSV Bulk Import</span>
+            </button>
+
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-teal-500/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              + Add New Reagent SKU
+            </button>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Chemicals, Reagents & Consumables Register</h2>
-            <p className="text-xs text-slate-500">
-              Track exact stock quantities, measuring units (Liters, Bottles, Vials, Tubes), expiration alerts & access authorization
-            </p>
+        }
+      />
+
+        {/* Overview Stat Counters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900">{totalItemsCount}</div>
+              <div className="text-xs font-bold text-slate-700">Total Tracked Items</div>
+              <p className="text-[11px] text-slate-400 mt-0.5">Substances & clinical supplies</p>
+            </div>
+          </div>
+
+          <div className="bg-rose-50/80 border border-rose-200/80 p-5 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-rose-900">{lowStockCount}</div>
+              <div className="text-xs font-bold text-rose-800">Critical Low Stock</div>
+              <p className="text-[11px] text-rose-700/80 mt-0.5">Below threshold & danger limit</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50/80 border border-amber-200/80 p-5 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200">
+              <Calendar className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-amber-950">{expiringCount}</div>
+              <div className="text-xs font-bold text-amber-900">Expiring / Expired Items</div>
+              <p className="text-[11px] text-amber-800/80 mt-0.5">Within 30 days or past shelf-life</p>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setShowBulkUploadModal(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md shadow-slate-900/10 transition-all cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-teal-400" />
-            <span>CSV / Excel Bulk Upload</span>
-          </button>
+        {/* Search & Filter Controls */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Search by chemical name, category, LOT number or supplier..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+              />
+            </div>
 
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Chemical / Reagent
-          </button>
-        </div>
-      </div>
-
-      {/* Overview Stat Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200">
-            <Package className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{totalItemsCount}</div>
-            <div className="text-xs font-bold text-slate-700">Total Tracked Items</div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Substances & clinical supplies</p>
-          </div>
-        </div>
-
-        <div className="bg-rose-50/80 border border-rose-200/80 p-5 rounded-2xl flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-rose-900">{lowStockCount}</div>
-            <div className="text-xs font-bold text-rose-800">Critical Low Stock</div>
-            <p className="text-[11px] text-rose-700/80 mt-0.5">Below threshold & danger limit</p>
-          </div>
-        </div>
-
-        <div className="bg-amber-50/80 border border-amber-200/80 p-5 rounded-2xl flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200">
-            <Calendar className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-amber-950">{expiringCount}</div>
-            <div className="text-xs font-bold text-amber-900">Expiring / Expired Items</div>
-            <p className="text-[11px] text-amber-800/80 mt-0.5">Within 30 days or past shelf-life</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Search & Filter Controls */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              placeholder="Search by chemical name, category, LOT number or supplier..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-            />
+            {/* Quick Status Filter Buttons */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: 'all', label: 'All Items' },
+                { id: 'low', label: `🚨 Low Stock (${lowStockCount})` },
+                { id: 'expired', label: `⏳ Expiry Alert (${expiringCount})` },
+                { id: 'healthy', label: '✅ Healthy' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setStockStatusFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer shrink-0 ${
+                    stockStatusFilter === f.id
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Quick Status Filter Buttons */}
+          {/* Category Filter Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            {[
-              { id: 'all', label: 'All Items' },
-              { id: 'low', label: `🚨 Low Stock (${lowStockCount})` },
-              { id: 'expired', label: `⏳ Expiry Alert (${expiringCount})` },
-              { id: 'healthy', label: '✅ Healthy' }
-            ].map(f => (
+            <span className="text-slate-400 font-semibold text-[11px] shrink-0">Category:</span>
+            <button
+              onClick={() => setSelectedCategoryFilter('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
+                selectedCategoryFilter === 'all'
+                  ? 'bg-teal-700 text-white'
+                  : 'bg-slate-200/60 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              All Categories
+            </button>
+            {INVENTORY_CATEGORIES.map(cat => (
               <button
-                key={f.id}
-                onClick={() => setStockStatusFilter(f.id)}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer shrink-0 ${
-                  stockStatusFilter === f.id
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                key={cat}
+                onClick={() => setSelectedCategoryFilter(cat)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer shrink-0 ${
+                  selectedCategoryFilter === cat
+                    ? 'bg-teal-700 text-white'
+                    : 'bg-slate-200/60 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {f.label}
+                {cat}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-400 font-semibold text-[11px] shrink-0">Category:</span>
-          <button
-            onClick={() => setSelectedCategoryFilter('all')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-              selectedCategoryFilter === 'all'
-                ? 'bg-teal-700 text-white'
-                : 'bg-slate-200/60 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            All Categories
-          </button>
-          {INVENTORY_CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategoryFilter(cat)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer shrink-0 ${
-                selectedCategoryFilter === cat
-                  ? 'bg-teal-700 text-white'
-                  : 'bg-slate-200/60 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
+        {/* Inventory List / Table */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          {loading ? (
+            <div className="py-16 text-center text-slate-500">
+              <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+              Loading laboratory inventory register...
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="py-16 text-center px-4 space-y-2">
+              <FlaskConical className="w-10 h-10 text-slate-300 mx-auto" />
+              <p className="font-bold text-slate-700 text-sm">No inventory records found</p>
+              <p className="text-xs text-slate-500">Try adjusting your search criteria or add a new chemical substance.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100">
+                  <tr>
+                    <th className="px-5 py-3.5">Substance / Reagent</th>
+                    <th className="px-4 py-3.5">Category & Storage</th>
+                    <th className="px-5 py-3.5">Quantity & Stock Health</th>
+                    <th className="px-4 py-3.5">Measuring Unit</th>
+                    <th className="px-5 py-3.5">Expiration Status</th>
+                    <th className="px-4 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {filteredItems.map(item => {
+                    const qStats = getQuantityStats(item);
+                    const expStats = getExpiryStatus(item.expiryDate);
 
-      {/* Inventory List / Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-slate-500">
-            <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-            Loading laboratory inventory register...
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="py-16 text-center px-4 space-y-2">
-            <FlaskConical className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="font-bold text-slate-700 text-sm">No inventory records found</p>
-            <p className="text-xs text-slate-500">Try adjusting your search criteria or add a new chemical substance.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100">
-                <tr>
-                  <th className="px-5 py-3.5">Substance / Reagent</th>
-                  <th className="px-4 py-3.5">Category & Storage</th>
-                  <th className="px-5 py-3.5">Quantity & Stock Health</th>
-                  <th className="px-4 py-3.5">Measuring Unit</th>
-                  <th className="px-5 py-3.5">Expiration Status</th>
-                  <th className="px-4 py-3.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {filteredItems.map(item => {
-                  const qStats = getQuantityStats(item);
-                  const expStats = getExpiryStatus(item.expiryDate);
-                  const usageCount = (item.usageHistory || []).length;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Substance Name & LOT */}
-                      <td className="px-5 py-4 min-w-[200px]">
-                        <div className="font-bold text-slate-900 text-sm">{item.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
-                          {item.batchNumber && (
-                            <span className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {item.batchNumber}
-                            </span>
-                          )}
-                          {item.supplier && <span>Vendor: {item.supplier}</span>}
-                          {usageCount > 0 && (
-                            <span className="text-teal-600 font-semibold">{usageCount} uses</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Category & Storage */}
-                      <td className="px-4 py-4 min-w-[150px]">
-                        <span className="px-2.5 py-0.5 rounded-md bg-teal-50 text-teal-800 text-[10px] font-bold border border-teal-200 block w-fit mb-1">
-                          {item.category || 'Reagent'}
-                        </span>
-                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                          <ThermometerSnowflake className="w-3 h-3 text-cyan-600" />
-                          {item.storageCondition || 'Room Temp'}
-                        </span>
-                      </td>
-
-                      {/* Quantity Level & Estimated Percentage with Color Bar */}
-                      <td className="px-5 py-4 min-w-[220px]">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-black text-slate-900 text-sm">
-                              {qStats.qty} <span className="text-xs font-semibold text-slate-600">{item.unit || 'units'} left</span>
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] border ${qStats.badgeClass}`}>
-                              {qStats.label}
-                            </span>
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        {/* Substance Name & LOT */}
+                        <td className="px-5 py-4 min-w-[200px]">
+                          <div className="font-bold text-slate-900 text-sm">{item.name}</div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
+                            {item.batchNumber && (
+                              <span className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {item.batchNumber}
+                              </span>
+                            )}
+                            {item.supplier && <span>Vendor: {item.supplier}</span>}
                           </div>
+                        </td>
 
-                          {/* Estimated Percentage Progress Bar */}
-                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full transition-all duration-300 ${qStats.barColor}`}
-                              style={{ width: `${qStats.percentage}%` }}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between text-[10px] text-slate-400">
-                            <span>Min Threshold: {item.reorderLevel || 5}</span>
-                            <span>Capacity: {qStats.initial}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Measuring Type Unit */}
-                      <td className="px-4 py-4 min-w-[110px]">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-bold text-slate-800 text-xs border border-slate-200">
-                          {item.unit || 'Bottles'}
-                        </span>
-                      </td>
-
-                      {/* Expiry Date Alert */}
-                      <td className="px-5 py-4 min-w-[160px]">
-                        <div className="space-y-1">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] border ${expStats.colorClass}`}>
-                            {expStats.label}
+                        {/* Category & Storage */}
+                        <td className="px-4 py-4 min-w-[150px]">
+                          <span className="px-2.5 py-0.5 rounded-md bg-teal-50 text-teal-800 text-[10px] font-bold border border-teal-200 block w-fit mb-1">
+                            {item.category || 'Reagent'}
                           </span>
-                          <div className="text-[10px] text-slate-400">
-                            Expiry: {item.expiryDate || 'N/A'}
-                          </div>
-                        </div>
-                      </td>
+                          <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <ThermometerSnowflake className="w-3 h-3 text-cyan-600" />
+                            {item.storageCondition || 'Room Temp'}
+                          </span>
+                        </td>
 
-                      {/* Action Buttons */}
-                      <td className="px-4 py-4 text-right space-x-1 shrink-0 min-w-[120px]">
-                        <button
-                          onClick={() => handleViewHistory(item)}
-                          title="View Usage History"
-                          className="p-2 text-slate-500 hover:text-indigo-700 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer"
-                        >
-                          <History className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          title="Edit Chemical / Update Quantity"
-                          className="p-2 text-slate-500 hover:text-teal-700 rounded-xl hover:bg-teal-50 transition-colors cursor-pointer"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id, item.name)}
-                          title="Delete Item"
-                          className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        {/* Quantity Level & Estimated Percentage with Color Bar */}
+                        <td className="px-5 py-4 min-w-[220px]">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-black text-slate-900 text-sm">
+                                {qStats.qty} <span className="text-xs font-semibold text-slate-600">{item.unit || 'units'} left</span>
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] border ${qStats.badgeClass}`}>
+                                {qStats.label}
+                              </span>
+                            </div>
+
+                            {/* Estimated Percentage Progress Bar */}
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-300 ${qStats.barColor}`}
+                                style={{ width: `${qStats.percentage}%` }}
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-slate-400">
+                              <span>Min Threshold: {item.reorderLevel || 5}</span>
+                              <span>Capacity: {qStats.initial}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Measuring Type Unit */}
+                        <td className="px-4 py-4 min-w-[110px]">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-bold text-slate-800 text-xs border border-slate-200">
+                            {item.unit || 'Bottles'}
+                          </span>
+                        </td>
+
+                        {/* Expiry Date Alert */}
+                        <td className="px-5 py-4 min-w-[160px]">
+                          <div className="space-y-1">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] border ${expStats.colorClass}`}>
+                              {expStats.label}
+                            </span>
+                            <div className="text-[10px] text-slate-400">
+                              Expiry: {item.expiryDate || 'N/A'}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Action Buttons */}
+                        <td className="px-4 py-4 text-right space-x-1 shrink-0 min-w-[90px]">
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            title="Edit Chemical / Update Quantity"
+                            className="p-2 text-slate-500 hover:text-teal-700 rounded-xl hover:bg-teal-50 transition-colors cursor-pointer"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id, item.name)}
+                            title="Delete Item"
+                            className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
       {/* Add / Edit Substance Modal */}
       {showModal && (
@@ -1029,14 +929,24 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
                   <Key className="w-3.5 h-3.5 text-teal-600" />
                   Staff / Manager Access Code Authorization <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter access code (e.g. ADMIN123 or TECH123)"
-                  value={accessCodeInput}
-                  onChange={e => setAccessCodeInput(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
+                <div className="relative">
+                  <input
+                    type={showAccessCodeInput ? 'text' : 'password'}
+                    required
+                    placeholder="Enter access code (e.g. ADMIN123 or TECH123)"
+                    value={accessCodeInput}
+                    onChange={e => setAccessCodeInput(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessCodeInput(!showAccessCodeInput)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    title={showAccessCodeInput ? 'Hide access code' : 'Show access code'}
+                  >
+                    {showAccessCodeInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <p className="text-[10px] text-slate-400 mt-1">
                   Required to verify and audit inventory modifications.
                 </p>
@@ -1064,9 +974,6 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
           </div>
         </div>
       )}
-
-      {/* History Modal */}
-      {showHistoryModal && <HistoryModal />}
 
       {/* Bulk CSV / Excel Upload Modal */}
       <BulkInventoryUploadModal
@@ -1099,3 +1006,4 @@ export const InventoryManagement: React.FC<InventoryManagementProps> = ({
 };
 
 export default InventoryManagement;
+

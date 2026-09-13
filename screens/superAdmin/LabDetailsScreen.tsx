@@ -17,7 +17,9 @@ import {
   Calendar,
   Key,
   AlertTriangle,
-  Lock
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc, updateDoc, db } from '../../services/firebase';
 import { useAuth } from '../../context/authContext';
@@ -43,6 +45,7 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [superAdminCode, setSuperAdminCode] = useState('');
+  const [showSuperAdminCode, setShowSuperAdminCode] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
   // Edit form state
@@ -530,17 +533,27 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                   <Key className="w-3.5 h-3.5 text-amber-400" />
                   Enter Super Admin Access Code to Confirm
                 </label>
-                <input
-                  type="password"
-                  placeholder="e.g. SUPER123"
-                  value={superAdminCode}
-                  onChange={(e) => {
-                    setSuperAdminCode(e.target.value);
-                    setDeleteError('');
-                  }}
-                  autoFocus
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-wider focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                />
+                <div className="relative">
+                  <input
+                    type={showSuperAdminCode ? 'text' : 'password'}
+                    placeholder="e.g. SUPER123"
+                    value={superAdminCode}
+                    onChange={(e) => {
+                      setSuperAdminCode(e.target.value);
+                      setDeleteError('');
+                    }}
+                    autoFocus
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-wider focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSuperAdminCode(!showSuperAdminCode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    title={showSuperAdminCode ? 'Hide code' : 'Show code'}
+                  >
+                    {showSuperAdminCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 {deleteError && (
                   <p className="text-rose-400 text-xs font-medium mt-1.5 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />

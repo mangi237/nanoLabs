@@ -18,6 +18,7 @@ import {
   Sparkles,  
   Printer, 
   Eye, 
+  EyeOff,
   Lock, 
   Check, 
   X, 
@@ -59,6 +60,7 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
   // Biologist Sign & Release Access Code Modal State
   const [showSignModal, setShowSignModal] = useState(false);
   const [biologistCode, setBiologistCode] = useState('');
+  const [showBiologistCode, setShowBiologistCode] = useState(false);
   const [signError, setSignError] = useState('');
   const [isReleasing, setIsReleasing] = useState(false);
   const [releaseSuccessMsg, setReleaseSuccessMsg] = useState('');
@@ -618,14 +620,22 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                 <div className="relative">
                   <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showBiologistCode ? 'text' : 'password'}
                     value={biologistCode}
                     onChange={e => setBiologistCode(e.target.value)}
                     required
                     autoFocus
                     placeholder="Enter Biologist PIN (e.g. BIO-1234 or staff code)"
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono tracking-wider"
+                    className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono tracking-wider"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowBiologistCode(!showBiologistCode)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    title={showBiologistCode ? 'Hide PIN' : 'Show PIN'}
+                  >
+                    {showBiologistCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 {signError && (
                   <div className="flex items-center gap-1.5 text-xs text-rose-600 font-bold pt-1">

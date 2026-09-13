@@ -24,6 +24,7 @@ import {
   MapPin, 
   Info, 
   Eye, 
+  EyeOff,
   X, 
   Sparkles,
   ChevronRight,
@@ -103,7 +104,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [selectedPatientForTest, setSelectedPatientForTest] = useState<any | null>(null);
   const [selectedMasterTestIds, setSelectedMasterTestIds] = useState<string[]>([]);
   const [attendingDoctor, setAttendingDoctor] = useState('Self-Referred / General Outpatient');
-  const [customDoctorName, setCustomDoctorName] = useState('');
+  const [orderCustomDoctorName, setOrderCustomDoctorName] = useState('');
   const [registeredStaffList, setRegisteredStaffList] = useState<any[]>([]);
   const [referringDoctorsList, setReferringDoctorsList] = useState<any[]>([]);
   const [selectedRegisteredStaffMember, setSelectedRegisteredStaffMember] = useState<any | null>(null);
@@ -133,9 +134,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
 
   // Referral Fields
-  const [referringDoctor, setReferringDoctor] = useState('');
+  const [referringDoctorSelect, setReferringDoctorSelect] = useState('');
+  const [customDoctorName, setCustomDoctorName] = useState('');
   const [referralHospital, setReferralHospital] = useState('');
   const [referralNotes, setReferralNotes] = useState('');
+  const [employer, setEmployer] = useState('');
 
   // Staff Member Exemption Fields
   const [isStaffMember, setIsStaffMember] = useState(false);
@@ -168,6 +171,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
   const [activationModalPatient, setActivationModalPatient] = useState<any | null>(null);
   const [activationBookingIds, setActivationBookingIds] = useState<string[]>([]);
   const [receptionistCode, setReceptionistCode] = useState('');
+  const [showReceptionistCode, setShowReceptionistCode] = useState(false);
   const [activationError, setActivationError] = useState('');
   const [isActivating, setIsActivating] = useState(false);
 
@@ -241,7 +245,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt: any ) => {
+    directLabTests.forEach((dt:any) => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -451,7 +455,9 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         insurancePolicyNumber: chosenPolicy,
         insuranceCoveragePercent: hasInsurance ? insuranceCoveragePercent : 0,
         insuranceCardUrl: hasInsurance && insuranceCardUrl ? insuranceCardUrl : null,
-        referringDoctor: referringDoctor.trim() || 'None / Self-Referred',
+        employer: employer.trim() || 'N/A',
+        society: employer.trim() || 'N/A',
+        referringDoctor: (referringDoctorSelect === 'CUSTOM_ENTRY' ? customDoctorName.trim() : referringDoctorSelect.trim()) || 'None / Self-Referred',
         referralHospital: referralHospital.trim() || 'N/A',
         referralNotes: referralNotes.trim() || '',
         isStaffMember,
@@ -498,9 +504,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         setInsuranceProvider('Ascoma Health');
         setInsurancePolicyNumber('');
         setInsuranceCardUrl('');
-        setReferringDoctor('');
+        setReferringDoctorSelect('');
+        setCustomDoctorName('');
         setReferralHospital('');
         setReferralNotes('');
+        setEmployer('');
         setIsStaffMember(false);
         setStaffDesignation('');
         setAllergies('');
@@ -527,7 +535,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }
 
     const doctorToUse = attendingDoctor === 'Other' 
-      ? (customDoctorName.trim() || 'External Attending Physician')
+      ? (orderCustomDoctorName.trim() || 'External Attending Physician')
       : attendingDoctor;
 
     setIsOrderingTest(true);
@@ -563,7 +571,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       setSelectedPatientForTest(null);
       setSelectedMasterTestIds([]);
       setTestOrderNotes('');
-      setCustomDoctorName('');
+      setOrderCustomDoctorName('');
       await fetchData();
     } catch (err) {
       console.error('Error creating test order:', err);
@@ -1048,8 +1056,8 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                   {attendingDoctor === 'Other' && (
                     <input
                       type="text"
-                      value={customDoctorName}
-                      onChange={e => setCustomDoctorName(e.target.value)}
+                      value={orderCustomDoctorName}
+                      onChange={e => setOrderCustomDoctorName(e.target.value)}
                       required
                       placeholder="Enter Doctor / Hospital Name"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1407,13 +1415,15 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                         )}
                       </label>
                       <select
-                        value={referringDoctor}
+                        value={referringDoctorSelect}
                         onChange={e => {
                           const val = e.target.value;
-                          setReferringDoctor(val);
-                          const docObj = referringDoctorsList.find(d => d.doctorName === val);
-                          if (docObj && docObj.hospital) {
-                            setReferralHospital(docObj.hospital);
+                          setReferringDoctorSelect(val);
+                          if (val !== 'CUSTOM_ENTRY') {
+                            const docObj = referringDoctorsList.find(d => d.doctorName === val);
+                            if (docObj && docObj.hospital) {
+                              setReferralHospital(docObj.hospital);
+                            }
                           }
                         }}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
@@ -1426,14 +1436,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                         ))}
                         <option value="CUSTOM_ENTRY">+ Add External Doctor Manually...</option>
                       </select>
-                      {referringDoctor === 'CUSTOM_ENTRY' && (
+                      {referringDoctorSelect === 'CUSTOM_ENTRY' && (
                         <div className="mt-2">
                           <input
                             type="text"
                             placeholder="Enter Doctor Full Name (e.g. Dr. Samuel M.)"
-                            onChange={e => setReferringDoctor(e.target.value)}
-                            autoFocus
-                            className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            value={customDoctorName}
+                            onChange={e => setCustomDoctorName(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs"
                           />
                         </div>
                       )}
@@ -1449,15 +1459,27 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Referral Indication / Clinical Notes</label>
-                    <input
-                      type="text"
-                      value={referralNotes}
-                      onChange={e => setReferralNotes(e.target.value)}
-                      placeholder="e.g. Suspected urinary infection / Routine corporate health check"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Referral Indication / Clinical Notes</label>
+                      <input
+                        type="text"
+                        value={referralNotes}
+                        onChange={e => setReferralNotes(e.target.value)}
+                        placeholder="e.g. Suspected urinary infection / Routine check"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Patient Employer / Workplace (Optional)</label>
+                      <input
+                        type="text"
+                        value={employer}
+                        onChange={e => setEmployer(e.target.value)}
+                        placeholder="e.g. CIBLE RH EMPLOI SARL, MTN, SNH"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1823,15 +1845,25 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 <label className="block text-xs font-bold text-slate-300 mb-1">
                   Receptionist Authorization PIN / Code:
                 </label>
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  placeholder="Enter authorized access PIN or code..."
-                  value={receptionistCode}
-                  onChange={(e) => setReceptionistCode(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
-                />
+                <div className="relative">
+                  <input
+                    type={showReceptionistCode ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Enter authorized access PIN or code..."
+                    value={receptionistCode}
+                    onChange={(e) => setReceptionistCode(e.target.value)}
+                    className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowReceptionistCode(!showReceptionistCode)}
+                    className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white cursor-pointer"
+                    title={showReceptionistCode ? 'Hide PIN' : 'Show PIN'}
+                  >
+                    {showReceptionistCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 {activationError && (
                   <p className="text-xs font-bold text-red-400 mt-1 flex items-center gap-1">
                     <Info className="w-3.5 h-3.5" />

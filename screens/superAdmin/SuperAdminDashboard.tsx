@@ -22,7 +22,11 @@ import {
   X,
   AlertTriangle,
   Lock,
-  Calendar
+  Calendar,
+  Stethoscope,
+  Eye,
+  EyeOff,
+  Award
 } from 'lucide-react';
 import { collection, getDocs, deleteDoc, updateDoc, doc, db } from '../../services/firebase';
 import { useAuth } from '../../context/authContext';
@@ -47,13 +51,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showRegModal, setShowRegModal] = useState(false);
   const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'plan_requests'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'plan_requests' | 'doctors'>('active');
+
+  // Doctor Verification Queue
+  const [doctorsList, setDoctorsList] = useState<any[]>([]);
+  const [viewingDoctorCredentials, setViewingDoctorCredentials] = useState<any | null>(null);
 
   // SuperAdmin Access Code Confirmation Modals
   const [confirmingLab, setConfirmingLab] = useState<any | null>(null);
   const [confirmingPlanRequestLab, setConfirmingPlanRequestLab] = useState<any | null>(null);
   const [deletingLab, setDeletingLab] = useState<any | null>(null);
   const [superAdminCode, setSuperAdminCode] = useState('');
+  const [showSuperAdminCode, setShowSuperAdminCode] = useState(false);
   const [codeError, setCodeError] = useState('');
   const [processingAction, setProcessingAction] = useState(false);
 
@@ -144,6 +153,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       }
 
       setLabs(labsData);
+
+      // Also fetch doctors for verification review
+      try {
+        const doctorsSnap = await getDocs(collection(db, 'doctors'));
+        const docsData: any[] = doctorsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setDoctorsList(docsData);
+      } catch (docErr) {
+        console.error('Error fetching doctors:', docErr);
+      }
     } catch (err) {
       console.error('Error fetching network labs:', err);
     } finally {
@@ -242,6 +260,48 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     } catch (err) {
       console.error('Error approving plan change:', err);
       setCodeError('Failed to update lab pricing plan.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const handleApproveDoctor = async (doctorId: string) => {
+    setProcessingAction(true);
+    try {
+      await updateDoc(doc(db, 'doctors', doctorId), {
+        verificationStatus: 'verified',
+        verifiedBy: 'SuperAdmin',
+        verifiedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      fetchNetworkStats();
+      if (viewingDoctorCredentials?.id === doctorId) {
+        setViewingDoctorCredentials((prev:any) => prev ? ({ ...prev, verificationStatus: 'verified' }) : null);
+      }
+    } catch (err) {
+      console.error('Error approving doctor:', err);
+      alert('Failed to approve doctor verification.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const handleRejectDoctor = async (doctorId: string) => {
+    setProcessingAction(true);
+    try {
+      await updateDoc(doc(db, 'doctors', doctorId), {
+        verificationStatus: 'rejected',
+        rejectedBy: 'SuperAdmin',
+        rejectedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      fetchNetworkStats();
+      if (viewingDoctorCredentials?.id === doctorId) {
+        setViewingDoctorCredentials((prev: any) => prev ? ({ ...prev, verificationStatus: 'rejected' }) : null);
+      }
+    } catch (err) {
+      console.error('Error rejecting doctor:', err);
+      alert('Failed to update doctor verification status.');
     } finally {
       setProcessingAction(false);
     }
@@ -419,6 +479,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <Sparkles className="w-4 h-4" />
               <span>Plan Requests ({planRequestLabs.length})</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('doctors')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+                activeTab === 'doctors'
+                  ? 'bg-teal-700 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>Doctor Verifications ({doctorsList.filter(d => d.verificationStatus === 'pending_verification' || d.licensePhoto).length})</span>
+              {doctorsList.some(d => d.verificationStatus === 'pending_verification') && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              )}
+            </button>
           </div>
 
           <div className="relative w-full sm:w-64">
@@ -436,7 +511,107 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         {loading ? (
           <div className="py-16 text-center text-slate-500">
             <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-            Loading network laboratory centers...
+            Loading network data...
+          </div>
+        ) : activeTab === 'doctors' ? (
+          <div className="p-4 space-y-4">
+            {doctorsList.length === 0 ? (
+              <div className="py-16 text-center">
+                <Stethoscope className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="font-semibold text-slate-700">No registered doctors found</p>
+                <p className="text-xs text-slate-500 mt-1">Practitioners who register through the portal will appear here.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {doctorsList.map((docItem) => {
+                  const isPending = docItem.verificationStatus === 'pending_verification';
+                  const isVerified = docItem.verificationStatus === 'verified' || (!docItem.verificationStatus && !docItem.licensePhoto);
+                  const isRejected = docItem.verificationStatus === 'rejected';
+
+                  return (
+                    <div key={docItem.id} className="p-4 hover:bg-slate-50/80 rounded-xl transition flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-slate-900">{docItem.name}</span>
+                          <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                            {docItem.specialty || 'General Practitioner'}
+                          </span>
+                          {isPending && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> Pending Review
+                            </span>
+                          )}
+                          {isVerified && (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Verified Practitioner
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-md">
+                              Rejected
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
+                          <span>Hospital: <strong className="text-slate-700">{docItem.hospital || 'Private Clinic'}</strong></span>
+                          <span>License (ONMC): <strong className="font-mono text-slate-800">{docItem.licenseNumber || 'N/A'}</strong></span>
+                          <span>Phone: <strong className="text-slate-800">{docItem.phone}</strong></span>
+                        </div>
+
+                        {/* Credential Photos Indicators */}
+                        <div className="flex items-center gap-2 pt-1 text-[11px]">
+                          <span className="text-slate-400">Credentials:</span>
+                          <span className={`px-2 py-0.5 rounded-md font-medium text-[10px] ${docItem.licensePhoto ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-400'}`}>
+                            License Photo: {docItem.licensePhoto ? 'Attached' : 'None'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md font-medium text-[10px] ${docItem.diplomaPhoto ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-400'}`}>
+                            Diploma Photo: {docItem.diplomaPhoto ? 'Attached' : 'None'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md font-medium text-[10px] ${docItem.annualRenewalPhoto ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-400'}`}>
+                            Renewal Photo: {docItem.annualRenewalPhoto ? 'Attached' : 'None'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setViewingDoctorCredentials(docItem)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Credentials</span>
+                        </button>
+
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={processingAction}
+                              onClick={() => handleApproveDoctor(docItem.id)}
+                              className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={processingAction}
+                              onClick={() => handleRejectDoctor(docItem.id)}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1 transition cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : filteredLabs.length === 0 ? (
           <div className="py-16 text-center px-4">
@@ -500,7 +675,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
                         {labItem.pricingModel === 'flat_subscription' 
                           ? `Monthly SaaS (${(labItem.subscriptionTier || 'small').toUpperCase()})` 
-                          : 'Pay-Per-Test (500 FCFA Commission)'}
+                          : '5% Record Fee (Patient portion only)'}
                       </span>
 
                       {/* 30-day countdown indicator */}
@@ -635,17 +810,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <Key className="w-3.5 h-3.5 text-amber-400" />
                   Enter Super Admin Access Code to Confirm
                 </label>
-                <input
-                  type="password"
-                  placeholder="e.g. SUPER123"
-                  value={superAdminCode}
-                  onChange={(e) => {
-                    setSuperAdminCode(e.target.value);
-                    setCodeError('');
-                  }}
-                  autoFocus
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-wider focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                />
+                <div className="relative">
+                  <input
+                    type={showSuperAdminCode ? 'text' : 'password'}
+                    placeholder="e.g. SUPER123"
+                    value={superAdminCode}
+                    onChange={(e) => {
+                      setSuperAdminCode(e.target.value);
+                      setCodeError('');
+                    }}
+                    autoFocus
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-wider focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSuperAdminCode(!showSuperAdminCode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    title={showSuperAdminCode ? 'Hide code' : 'Show code'}
+                  >
+                    {showSuperAdminCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 {codeError && (
                   <p className="text-rose-400 text-xs font-medium mt-1.5 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -703,7 +888,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <div className="font-bold text-teal-300 text-sm">{confirmingLab.name}</div>
               <div className="text-slate-400">{confirmingLab.location || 'Central Facility'} • {confirmingLab.phone || 'Standard Line'}</div>
               <div className="text-slate-300">
-                Selected Pricing Model: <strong className="text-white">{confirmingLab.pricingModel === 'flat_subscription' ? `Monthly Subscription (${confirmingLab.subscriptionTier || 'Small'})` : 'Pay-Per-Test Commission (500 FCFA/test)'}</strong>
+                Selected Pricing Model: <strong className="text-white">{confirmingLab.pricingModel === 'flat_subscription' ? `Monthly Subscription (${confirmingLab.subscriptionTier || 'Small'})` : '5% Record Management Fee (Patient portion only)'}</strong>
               </div>
             </div>
 
@@ -775,6 +960,112 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <Check className="w-4 h-4" />
                 <span>{processingAction ? 'Updating...' : 'Confirm Plan Switch'}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Doctor Credentials Inspector Modal */}
+      {viewingDoctorCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">{viewingDoctorCredentials.name}</h3>
+                  <p className="text-[11px] text-teal-400 font-semibold">{viewingDoctorCredentials.specialty} • {viewingDoctorCredentials.hospital}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setViewingDoctorCredentials(null)}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div>License (ONMC): <strong className="font-mono text-teal-300">{viewingDoctorCredentials.licenseNumber || 'N/A'}</strong></div>
+                <div>Phone: <strong className="text-slate-200">{viewingDoctorCredentials.phone}</strong></div>
+                <div>Email: <strong className="text-slate-200">{viewingDoctorCredentials.email}</strong></div>
+                <div>Status: <span className="uppercase font-bold text-teal-400">{viewingDoctorCredentials.verificationStatus || 'Pending'}</span></div>
+              </div>
+
+              {/* Photos Gallery */}
+              <div className="space-y-3">
+                <div className="font-bold text-slate-300">Uploaded Official Credential Photos:</div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 block">ONMC Medical License</span>
+                    {viewingDoctorCredentials.licensePhoto ? (
+                      <a href={viewingDoctorCredentials.licensePhoto} target="_blank" rel="noopener noreferrer">
+                        <img src={viewingDoctorCredentials.licensePhoto} alt="ONMC License" className="w-full h-32 object-cover rounded-lg border border-slate-700 hover:border-teal-400 transition" />
+                      </a>
+                    ) : (
+                      <div className="h-32 bg-slate-900 rounded-lg border border-dashed border-slate-800 flex items-center justify-center text-slate-500 text-[10px]">No photo attached</div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 block">Medical Diploma / Degree</span>
+                    {viewingDoctorCredentials.diplomaPhoto ? (
+                      <a href={viewingDoctorCredentials.diplomaPhoto} target="_blank" rel="noopener noreferrer">
+                        <img src={viewingDoctorCredentials.diplomaPhoto} alt="Diploma" className="w-full h-32 object-cover rounded-lg border border-slate-700 hover:border-teal-400 transition" />
+                      </a>
+                    ) : (
+                      <div className="h-32 bg-slate-900 rounded-lg border border-dashed border-slate-800 flex items-center justify-center text-slate-500 text-[10px]">No photo attached</div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 block">Annual Renewal Card</span>
+                    {viewingDoctorCredentials.annualRenewalPhoto ? (
+                      <a href={viewingDoctorCredentials.annualRenewalPhoto} target="_blank" rel="noopener noreferrer">
+                        <img src={viewingDoctorCredentials.annualRenewalPhoto} alt="Renewal Card" className="w-full h-32 object-cover rounded-lg border border-slate-700 hover:border-teal-400 transition" />
+                      </a>
+                    ) : (
+                      <div className="h-32 bg-slate-900 rounded-lg border border-dashed border-slate-800 flex items-center justify-center text-slate-500 text-[10px]">No photo attached</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setViewingDoctorCredentials(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+              {viewingDoctorCredentials.verificationStatus === 'pending_verification' && (
+                <>
+                  <button
+                    type="button"
+                    disabled={processingAction}
+                    onClick={() => handleRejectDoctor(viewingDoctorCredentials.id)}
+                    className="px-4 py-2 bg-rose-900/60 hover:bg-rose-800 text-rose-200 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Reject Credentials
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingAction}
+                    onClick={() => handleApproveDoctor(viewingDoctorCredentials.id)}
+                    className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Approve & Verify Doctor</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
