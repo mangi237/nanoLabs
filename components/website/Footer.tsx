@@ -21,7 +21,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpenPrivacy }) => {
   return (
     <footer className="bg-[#050C16] text-[#AAB7C7] border-t border-white/10 pt-16 pb-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-white/10">
           {/* Col 1: Brand & Slogan */}
           <div className="lg:col-span-2 space-y-4">
@@ -31,48 +31,26 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                   <Activity className="w-4 h-4 text-[#20C997] stroke-[2.5]" />
                 </div>
               </div>
-              <span className="text-xl font-black text-white">
-                nano<span className="text-[#20C997]">Labs</span>
-              </span>
+              <div>
+                <span className="text-xl font-black text-white">
+                  nano<span className="text-[#20C997]">Labs</span>
+                </span>
+                <span className="block text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
+                  by OMEVISION LTD
+                </span>
+              </div>
             </div>
 
             <p className="text-xs text-[#AAB7C7] max-w-sm leading-relaxed">
-              Building connected laboratory infrastructure from Cameroon. Connecting laboratories, patients, doctors and results through one digital ecosystem.
+              The Connected Laboratory Operating System & Diagnostic Care Network. Built in Cameroon, scaling precision healthcare infrastructure across Africa.
             </p>
 
             <div className="flex items-center gap-3 pt-2">
               <a
-                href={siteConfig.founder.socials.linkedin || '#'}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-[#1677FF] transition-colors"
-                aria-label="LinkedIn"
-              >
-            
-              </a>
-              <a
-                href={siteConfig.founder.socials.x || '#'}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                aria-label="X / Twitter"
-              >
-               
-              </a>
-              <a
-                href={siteConfig.founder.socials.github || '#'}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                aria-label="GitHub"
-              >
-            
-              </a>
-              <a
                 href={siteConfig.founder.socials.substack || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-amber-600 transition-colors"
+                className="p-2 rounded-lg bg-[#0B1F3A] text-slate-400 hover:text-white hover:bg-emerald-600 transition-colors"
                 aria-label="Substack"
               >
                 <BookOpen className="w-4 h-4" />
@@ -88,6 +66,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
             <ul className="space-y-2 text-xs">
               <li><a href="#product" className="hover:text-white transition-colors">Clinical Suite</a></li>
               <li><a href="#ecosystem" className="hover:text-white transition-colors">Connected Ecosystem</a></li>
+              <li><a href="#how-to-use" className="hover:text-white transition-colors">Interactive Guide</a></li>
               <li><a href="#workflow" className="hover:text-white transition-colors">How It Works</a></li>
               <li><a href="#impact" className="hover:text-white transition-colors">Impact & Turnaround</a></li>
               <li>
@@ -139,7 +118,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
                 </button>
               </li>
               <li><span className="text-[#20C997]">AES-256 Envelope Security</span></li>
-              <li><span className="text-slate-400">HL7 FHIR Interoperability</span></li>
+              <li><span className="text-slate-400">HIPAA & OMEVISION Compliant</span></li>
             </ul>
           </div>
         </div>
@@ -147,7 +126,7 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
         {/* Bottom Credits & Cameroon Pride */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="text-slate-400">
-            © {new Date().getFullYear()} NanoLabs HealthCare Inc. All rights reserved.
+            © {new Date().getFullYear()} nanoLabs by OMEVISION LTD. All rights reserved.
           </div>
 
           <div className="flex items-center gap-2 font-bold text-white bg-[#0B1F3A] px-3 py-1 rounded-full border border-white/10">
@@ -157,6 +136,20 @@ export const Footer: React.FC<FooterProps> = ({ onGoToPortal, onOpenTerms, onOpe
             <span className="text-[#20C997]">Designed for Africa</span>
           </div>
         </div>
+      </div>
+
+      {/* Massive subtle background watermark typography */}
+      <div 
+        className="w-full overflow-hidden pointer-events-none select-none flex justify-center items-center mt-6 -mb-6"
+        aria-hidden="true"
+      >
+        <span className="text-[12vw] font-black uppercase tracking-widest text-transparent opacity-10 leading-none whitespace-nowrap"
+          style={{
+            WebkitTextStroke: '2px rgba(255, 255, 255, 0.4)'
+          }}
+        >
+          NANOLABS
+        </span>
       </div>
     </footer>
   );
