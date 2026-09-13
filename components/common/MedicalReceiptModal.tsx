@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
-import {
-  Printer,
-  X,
-  CheckCircle2,
-  CreditCard,
-  Smartphone,
-  Building2,
-  Percent,
-  ShieldCheck,
+import { 
+  Printer, 
+  X, 
+  CheckCircle2, 
+  CreditCard, 
+  Smartphone, 
+  Building2, 
+  Percent, 
+  ShieldCheck, 
   Receipt,
   FileText,
   Clock,
@@ -63,21 +63,6 @@ interface MedicalReceiptModalProps {
     paidAt?: string;
     currency?: string;
     allOrderedBookings?: PatientBooking[];
-
-    // Co-pay settlement channel
-    coPayPaymentMethod?: string;
-    coPayMomoProvider?: string;
-    coPayMomoSenderPhone?: string;
-    coPayMomoSenderName?: string;
-    coPayMomoTxId?: string;
-    coPayBankName?: string;
-    coPayBankAccountName?: string;
-    coPayBankReference?: string;
-    coPayCardScheme?: string;
-    coPayCardLast4?: string;
-    coPayCardAuthCode?: string;
-    coPayCashGiven?: number;
-    coPayCashChange?: number;
   };
 }
 
@@ -92,6 +77,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
 
+  // Security: Restrict template customization and upload actions strictly to staff/admin
   const canCustomizeTemplates = user?.role && !['patient'].includes(user.role.toLowerCase());
 
   const headerFileInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +146,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const tplConfig = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
+  // Lab metadata from real lab configuration
   const labName = tplConfig.labName || labInfo?.name || booking.labName || 'NANOLABS CLINICAL DIAGNOSTIC CENTER';
   const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE';
   const labAddress = tplConfig.address || labInfo?.address || 'Akwa Boulevard de la Liberté, Douala - Cameroun';
@@ -184,116 +171,66 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const couponCode = paymentDetails?.couponCode || booking.couponCode || pDetails.couponCode || '';
   const couponSponsorName = paymentDetails?.couponSponsorName || booking.couponSponsorName || pDetails.couponSponsorName || '';
   const couponNotes = paymentDetails?.couponNotes || booking.couponNotes || pDetails.couponNotes || '';
-
+  
+  // Worker Benefit fields
   const workerStaffName = paymentDetails?.workerStaffName || booking.workerStaffName || pDetails.workerStaffName || '';
   const workerStaffId = paymentDetails?.workerStaffId || booking.workerStaffId || pDetails.workerStaffId || '';
   const workerDepartment = paymentDetails?.workerDepartment || booking.workerDepartment || pDetails.workerDepartment || '';
   const workerBenefitType = paymentDetails?.workerBenefitType || booking.workerBenefitType || pDetails.workerBenefitType || '';
   const workerAuthNote = paymentDetails?.workerAuthNote || booking.workerAuthNote || pDetails.workerAuthNote || '';
 
+  // Mobile Money fields
   const momoProvider = paymentDetails?.momoProvider || booking.momoProvider || pDetails.momoProvider || (paymentMethod.includes('orange') ? 'ORANGE' : 'MTN');
   const momoSenderPhone = paymentDetails?.momoSenderPhone || booking.momoSenderPhone || pDetails.momoSenderPhone || pDetails.momoNumber || '';
   const momoSenderName = paymentDetails?.momoSenderName || booking.momoSenderName || pDetails.momoSenderName || '';
   const momoTxId = paymentDetails?.momoTxId || booking.momoTxId || pDetails.momoTxId || pDetails.transactionRef || '';
 
+  // Bank Transfer fields
   const bankName = paymentDetails?.bankName || booking.bankName || pDetails.bankName || '';
   const bankAccountName = paymentDetails?.bankAccountName || booking.bankAccountName || pDetails.bankAccountName || '';
   const bankReference = paymentDetails?.bankReference || booking.bankReference || pDetails.bankReference || pDetails.transactionRef || '';
   const bankBranch = paymentDetails?.bankBranch || booking.bankBranch || pDetails.bankBranch || '';
 
+  // Card fields
   const cardScheme = paymentDetails?.cardScheme || booking.cardScheme || pDetails.cardScheme || pDetails.cardType || 'Visa / Mastercard';
   const cardLast4 = paymentDetails?.cardLast4 || booking.cardLast4 || pDetails.cardLast4 || '';
   const cardAuthCode = paymentDetails?.cardAuthCode || booking.cardAuthCode || pDetails.cardAuthCode || '';
 
+  // Cash fields
   const cashGiven = paymentDetails?.cashGiven ?? pDetails.cashGiven;
   const cashChange = paymentDetails?.cashChange ?? pDetails.cashChange;
 
-  // ---------------------------------------------------------------------------
-  // STRICT INSURANCE DETECTION
-  // ---------------------------------------------------------------------------
-  const rawPaymentMethod = (
-    paymentDetails?.paymentMethod ||
-    booking.paymentMethod ||
-    pDetails.paymentMethod ||
-    'cash'
-  ).toLowerCase();
+  // Insurance details
+  const insuranceProviderName = paymentDetails?.insuranceProvider || booking.insuranceProvider || pDetails.insuranceProvider || pDetails.insuranceDetails?.provider || 'ASCOMA CAMEROUN S.A.';
+  const insurancePolicyNumber = paymentDetails?.insurancePolicyNumber || booking.insurancePolicyNumber || pDetails.insurancePolicyNumber || pDetails.insuranceDetails?.policyNumber || 'CSA-8812';
+  
+  // Find matched insurance provider metadata
+  const matchedInsurance = CAMEROON_INSURANCE_PROVIDERS.find(
+    i => i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) || 
+         i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
+  ) || CAMEROON_INSURANCE_PROVIDERS[0];
 
-  const isInsurancePayment =
-    rawPaymentMethod === 'insurance' ||
-    rawPaymentMethod.includes('insurance') ||
-    rawPaymentMethod.includes('hmo') ||
-    rawPaymentMethod.includes('assurance');
+  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent !== undefined 
+    ? paymentDetails.insuranceCoveragePercent 
+    : booking.insuranceCoveragePercent !== undefined 
+      ? booking.insuranceCoveragePercent 
+      : pDetails.insuranceCoveragePercent !== undefined
+        ? pDetails.insuranceCoveragePercent
+        : booking.coPayPercent !== undefined 
+          ? (100 - booking.coPayPercent) 
+          : pDetails.coPayPercent !== undefined 
+            ? (100 - pDetails.coPayPercent) 
+            : (matchedInsurance.defaultCoveragePercent ?? 80);
 
-  const insuranceProviderName = isInsurancePayment
-    ? (paymentDetails?.insuranceProvider ||
-       booking.insuranceProvider ||
-       pDetails.insuranceProvider ||
-       pDetails.insuranceDetails?.provider ||
-       '')
-    : '';
+  const coPayPercent = paymentDetails?.coPayPercent !== undefined
+    ? paymentDetails.coPayPercent
+    : booking.coPayPercent !== undefined
+      ? booking.coPayPercent
+      : pDetails.coPayPercent !== undefined
+        ? pDetails.coPayPercent
+        : (100 - insuranceCoveragePercent);
 
-  const insurancePolicyNumber = isInsurancePayment
-    ? (paymentDetails?.insurancePolicyNumber ||
-       booking.insurancePolicyNumber ||
-       pDetails.insurancePolicyNumber ||
-       pDetails.insuranceDetails?.policyNumber ||
-       '')
-    : '';
-
-  const matchedInsurance = isInsurancePayment && insuranceProviderName
-    ? (CAMEROON_INSURANCE_PROVIDERS.find(
-        i =>
-          i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) ||
-          i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
-      ) || null)
-    : null;
-
-  const insuranceCoveragePercent = isInsurancePayment
-    ? (paymentDetails?.insuranceCoveragePercent !== undefined
-        ? paymentDetails.insuranceCoveragePercent
-        : booking.insuranceCoveragePercent !== undefined
-          ? booking.insuranceCoveragePercent
-          : pDetails.insuranceCoveragePercent !== undefined
-            ? pDetails.insuranceCoveragePercent
-            : booking.coPayPercent !== undefined
-              ? 100 - booking.coPayPercent
-              : pDetails.coPayPercent !== undefined
-                ? 100 - pDetails.coPayPercent
-                : (matchedInsurance?.defaultCoveragePercent ?? 80))
-    : 0;
-
-  const coPayPercent = isInsurancePayment
-    ? (paymentDetails?.coPayPercent !== undefined
-        ? paymentDetails.coPayPercent
-        : booking.coPayPercent !== undefined
-          ? booking.coPayPercent
-          : pDetails.coPayPercent !== undefined
-            ? pDetails.coPayPercent
-            : 100 - insuranceCoveragePercent)
-    : 0;
-
-  // Co-pay settlement channel
-  const coPayPaymentMethod = (
-    paymentDetails?.coPayPaymentMethod ||
-    booking.coPayPaymentMethod ||
-    pDetails.coPayPaymentMethod ||
-    'cash'
-  ).toLowerCase();
-
-  const coPayMomoProvider = paymentDetails?.coPayMomoProvider || booking.coPayMomoProvider || pDetails.coPayMomoProvider || '';
-  const coPayMomoSenderPhone = paymentDetails?.coPayMomoSenderPhone || booking.coPayMomoSenderPhone || pDetails.coPayMomoSenderPhone || '';
-  const coPayMomoSenderName = paymentDetails?.coPayMomoSenderName || booking.coPayMomoSenderName || pDetails.coPayMomoSenderName || '';
-  const coPayMomoTxId = paymentDetails?.coPayMomoTxId || booking.coPayMomoTxId || pDetails.coPayMomoTxId || '';
-  const coPayBankName = paymentDetails?.coPayBankName || booking.coPayBankName || pDetails.coPayBankName || '';
-  const coPayBankAccountName = paymentDetails?.coPayBankAccountName || booking.coPayBankAccountName || pDetails.coPayBankAccountName || '';
-  const coPayBankReference = paymentDetails?.coPayBankReference || booking.coPayBankReference || pDetails.coPayBankReference || '';
-  const coPayCardScheme = paymentDetails?.coPayCardScheme || booking.coPayCardScheme || pDetails.coPayCardScheme || '';
-  const coPayCardLast4 = paymentDetails?.coPayCardLast4 || booking.coPayCardLast4 || pDetails.coPayCardLast4 || '';
-  const coPayCardAuthCode = paymentDetails?.coPayCardAuthCode || booking.coPayCardAuthCode || pDetails.coPayCardAuthCode || '';
-  const coPayCashGiven = paymentDetails?.coPayCashGiven ?? pDetails.coPayCashGiven;
-  const coPayCashChange = paymentDetails?.coPayCashChange ?? pDetails.coPayCashChange;
-
-  // Patient demographic
+  // Patient Demographic Fields
   const patientName = booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS';
   const beneficiaryName = (booking as any).insuredBeneficiaryName || (booking as any).beneficiaryName || patientName;
   const matricule = (booking as any).matricule || (booking as any).insurancePolicyNumber || booking.insurancePolicyNumber || '004071';
@@ -304,15 +241,33 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const bpcNumber = (booking as any).bpcNumber || (booking as any).bpc || 'CSA';
   const dossierNumber = (booking as any).dossierNumber || (booking as any).dosNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '').slice(-2) : '58');
   const invoiceNum = (booking.invoiceNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '') : '000060')).padStart(6, '0');
+  const referringDoctorDisplay = (booking as any).referringDoctor 
+    ? `${(booking as any).referringDoctor}${(booking as any).referralHospital ? ` — ${(booking as any).referralHospital}` : ''}`
+    : (booking.doctorName || 'Dr. Emmanuel Nkuo — La Quintinie Hospital');
 
+  // Ordered and Paid Tests
   const testsList = booking.tests && booking.tests.length > 0 ? booking.tests : [
-    { id: 't-gly', testName: 'GLYP# DOSAGE DU GLUCOSE PLASMATIQUE', cote: 'B10', price: 520, sampleTypeRequired: 'Plasma fluoré' },
-    { id: 't-iono', testName: 'IONOC# IONOGRAMME PLASMATIQUE COMPLET', cote: 'B95', price: 4940, sampleTypeRequired: 'Sérum / Sang total' }
+    {
+      id: 't-gly',
+      testName: 'GLYP# DOSAGE DU GLUCOSE PLASMATIQUE',
+      cote: 'B10',
+      price: 520,
+      sampleTypeRequired: 'Plasma fluoré'
+    },
+    {
+      id: 't-iono',
+      testName: 'IONOC# IONOGRAMME PLASMATIQUE COMPLET',
+      cote: 'B95',
+      price: 4940,
+      sampleTypeRequired: 'Sérum / Sang total'
+    }
   ];
 
-  const bUnitRate = matchedInsurance?.baseRateB ?? 260;
-  const kbUnitRate = matchedInsurance?.baseRateKB ?? 1200;
+  // Helper to determine COTE code & base rate for a test
+  const bUnitRate = matchedInsurance.baseRateB || 260;
+  const kbUnitRate = matchedInsurance.baseRateKB || 1200;
 
+  // Process Line Items with Granular Insurance Breakdown
   interface LineItemBilling {
     designation: string;
     cote: string;
@@ -325,11 +280,13 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const lineItems: LineItemBilling[] = [];
 
+  // 1. Process diagnostic tests with their Test Name AND Test Code
   testsList.forEach((t: any) => {
     let cote = t.cote || 'B10';
     let lineTotal = t.price || t.totalPrice || 520;
     let coeffStr = (bUnitRate).toLocaleString();
 
+    // If test has explicit COTE e.g. B95, B10, KB1,0
     if (t.testName?.includes('IONO') || t.testName?.includes('IONOC')) {
       cote = 'B95';
       lineTotal = 4940;
@@ -344,10 +301,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
       lineTotal = 1560;
     }
 
-    const insShare = isInsurancePayment
-      ? Math.round(lineTotal * (insuranceCoveragePercent / 100))
-      : 0;
-    const patShare = isInsurancePayment ? lineTotal - insShare : lineTotal;
+    const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
+    const patShare = lineTotal - insShare;
     const testCodeLabel = t.testCode || t.code ? `[${t.testCode || t.code}]` : '';
 
     lineItems.push({
@@ -361,14 +316,13 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     });
   });
 
+  // 2. Explicit Billable Add-ons & Phlebotomy Acts
   const explicitAddOns = booking.addOns || pDetails?.addOns || [];
   if (Array.isArray(explicitAddOns) && explicitAddOns.length > 0) {
     explicitAddOns.forEach((ao: any) => {
       const lineTotal = (ao.price || 1000) * (ao.quantity || 1);
-      const insShare = isInsurancePayment
-        ? Math.round(lineTotal * (insuranceCoveragePercent / 100))
-        : 0;
-      const patShare = isInsurancePayment ? lineTotal - insShare : lineTotal;
+      const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
+      const patShare = lineTotal - insShare;
       lineItems.push({
         designation: `${ao.name} ${ao.code ? `[${ao.code}]` : ''}`.trim(),
         cote: ao.code || 'ACT-PREL',
@@ -380,13 +334,14 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
       });
     });
   } else {
+    // Standard automatic prelevement fallback if no explicit add-ons and blood/stool present
     const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
     const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
 
     if (hasStool && !testsList.some((t: any) => (t.testName || '').includes('PK#'))) {
       const pkPrice = Math.round(1.0 * (kbUnitRate / 5));
-      const pkIns = isInsurancePayment ? Math.round(pkPrice * (insuranceCoveragePercent / 100)) : 0;
-      const pkPat = isInsurancePayment ? pkPrice - pkIns : pkPrice;
+      const pkIns = Math.round(pkPrice * (insuranceCoveragePercent / 100));
+      const pkPat = pkPrice - pkIns;
       lineItems.push({
         designation: 'PK# ACTE PRELEVEMENT SELLES',
         cote: 'KB1,0',
@@ -400,8 +355,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
     if (hasBlood && !testsList.some((t: any) => (t.testName || '').includes('PSE#'))) {
       const psePrice = Math.round(1.5 * (kbUnitRate / 5));
-      const pseIns = isInsurancePayment ? Math.round(psePrice * (insuranceCoveragePercent / 100)) : 0;
-      const psePat = isInsurancePayment ? psePrice - pseIns : psePrice;
+      const pseIns = Math.round(psePrice * (insuranceCoveragePercent / 100));
+      const psePat = psePrice - pseIns;
       lineItems.push({
         designation: 'PSE# ACTE DE PRELEVEMENT DE SANG ES',
         cote: 'KB1,5',
@@ -414,6 +369,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     }
   }
 
+  // Calculate Cumulative Financial Breakdown
   const totalExamensLabo = lineItems.reduce((acc, item) => acc + item.totalPrice, 0);
   const totalHT = totalExamensLabo;
   const totalTTC = totalHT;
@@ -421,15 +377,16 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const totalPatientTicketModerateur = lineItems.reduce((acc, item) => acc + item.patientAmount, 0);
   const totalNetAPayerAssurance = lineItems.reduce((acc, item) => acc + item.insuranceAmount, 0);
 
-  const amountInWords = numberToFrenchWords(isInsurancePayment ? totalNetAPayerAssurance : totalTTC);
+  // Convert Insurance / Final Amount to French Words
+  const amountInWords = numberToFrenchWords(totalNetAPayerAssurance);
 
   const isWorkerBenefit = paymentMethod === 'workers_benefit' || discountType === 'workers_benefit' || Boolean(workerStaffName);
   const isGiftCoupon = paymentMethod === 'gift_coupon' || discountType === 'coupon' || Boolean(couponCode);
-  const isInsurance = isInsurancePayment;
+  const isInsurance = paymentMethod === 'insurance' || Boolean(insuranceProviderName);
   const isMoMo = paymentMethod === 'mobile_money' || paymentMethod.includes('momo') || paymentMethod.includes('orange');
   const isBank = paymentMethod === 'bank_transfer' || paymentMethod.includes('bank');
 
-  const receiptDateFormatted = booking.paidAt
+  const receiptDateFormatted = booking.paidAt 
     ? new Date(booking.paidAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -438,10 +395,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
-
-        {/* Top Control Bar */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:p-0 print:m-0 print:bg-white print:static">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:max-w-none print:w-full print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:max-h-none print:rounded-none">
+        
+        {/* Top Control Bar (Non-printable) */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-teal-400 animate-pulse"></div>
@@ -451,6 +408,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Template Selector & Uploads (Staff/Admin Only) */}
             {canCustomizeTemplates && (
               <>
                 <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
@@ -470,29 +428,31 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   ))}
                 </div>
 
-                <input
-                  type="file"
-                  ref={headerFileInputRef}
-                  accept="image/*"
-                  className="hidden"
+                {/* Direct Upload Buttons for Header and Footer */}
+                <input 
+                  type="file" 
+                  ref={headerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
                   onChange={(e) => {
                     if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
-                  }}
+                  }} 
                 />
-                <input
-                  type="file"
-                  ref={footerFileInputRef}
-                  accept="image/*"
-                  className="hidden"
+                <input 
+                  type="file" 
+                  ref={footerFileInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
                   onChange={(e) => {
                     if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
-                  }}
+                  }} 
                 />
 
                 <button
                   type="button"
                   onClick={() => headerFileInputRef.current?.click()}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom top letterhead image"
                 >
                   <Upload className="w-3.5 h-3.5 text-teal-400" />
                   <span>Upload Header</span>
@@ -502,6 +462,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   type="button"
                   onClick={() => footerFileInputRef.current?.click()}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
+                  title="Upload custom footer image"
                 >
                   <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
                   <span>Upload Footer</span>
@@ -527,29 +488,31 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
         {/* Printable Paper Document Container */}
         <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
-
-          <div
+          
+          <div 
             id="medical-receipt-sheet"
             className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs"
           >
-
+            
+            {/* Custom Uploaded Header Image if provided */}
             {tplConfig.headerImageUrl && (
               <div className="border-b-2 border-slate-900 pb-2">
-                <img
-                  src={tplConfig.headerImageUrl}
-                  alt={labName}
+                <img 
+                  src={tplConfig.headerImageUrl} 
+                  alt={labName} 
                   style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
                   className="w-full object-contain mx-auto"
                 />
               </div>
             )}
 
-            {/* ============================================= */}
-            {/* TEMPLATE 2                                      */}
-            {/* ============================================= */}
+            {/* ========================================================================= */}
+            {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}
+            {/* ========================================================================= */}
             {selectedTemplateIndex % 2 === 1 || selectedTemplateIndex === 1 ? (
               <div className="space-y-4">
-
+                
+                {/* 1. OFFICIAL LETTERHEAD HEADER (if no custom header image) */}
                 {!tplConfig.headerImageUrl && (
                   <div className="border-b-2 border-slate-900 pb-3 space-y-2">
                     <div className="flex items-center justify-between gap-3">
@@ -577,7 +540,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
                       <div className="w-16 hidden sm:block"></div>
                     </div>
-
+                    
                     <div className="text-center space-y-0.5">
                       <div className="text-xs font-bold text-slate-900 pt-1">
                         {directorName}
@@ -599,6 +562,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </div>
                 )}
 
+                {/* 2. INVOICE TITLE & DATE BAR */}
                 <div className="flex items-center justify-between font-black text-sm border-b border-slate-300 pb-2">
                   <span className="uppercase text-slate-950">
                     FACTURE EXTERNE n° : <strong className="font-mono text-base">[{invoiceNum}]</strong>
@@ -608,9 +572,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </span>
                 </div>
 
+                {/* 3. DUAL IDENTIFICATION & INSURANCE SUMMARY BOXES */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px]">
-
-                  {/* Left: Patient Box */}
+                  
+                  {/* Left: Patient Demographic Box */}
                   <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
                     <div className="font-black uppercase text-slate-950 pb-1 border-b border-slate-200">
                       IDENTIFICATION DU PATIENT
@@ -624,57 +589,33 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                       Sexe: <strong>{patientGender === 'Female' ? 'F' : 'M'}</strong> • Tél: <strong className="font-mono">{patientPhone}</strong>
                     </div>
                     <div>Société: <strong className="font-bold">{society}</strong></div>
+                    <div>Médecin Prescripteur: <strong className="font-bold text-slate-950">{referringDoctorDisplay}</strong></div>
                     <div className="pt-1 border-t border-slate-200/80 flex items-center justify-between font-mono font-bold text-slate-800 text-[10px]">
                       <span>N° BPC: {bpcNumber}</span>
                       <span>N° Dos: {dossierNumber}</span>
                     </div>
                   </div>
 
-                  {/* Right: Insurance OR Payment Method Box */}
-                  {isInsurancePayment && matchedInsurance ? (
-                    <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
-                      <div className="font-black uppercase text-indigo-950 pb-1 border-b border-slate-200 flex items-center justify-between">
-                        <span>{matchedInsurance.name}</span>
-                        <span className="text-[9px] bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-bold">
-                          {insuranceCoveragePercent}% Prise en Charge
-                        </span>
-                      </div>
-                      <div>Adresse: <strong className="font-semibold">{matchedInsurance.address}</strong></div>
-                      <div>B.P.: <strong className="font-mono">{matchedInsurance.bp}</strong></div>
-                      <div>Tél: <strong className="font-mono">{matchedInsurance.phone}</strong></div>
-                      <div className="pt-1 border-t border-slate-200/80 flex flex-col font-mono text-[9.5px] text-slate-700">
-                        <span>N.I.U.: <strong>{matchedInsurance.taxId || '—'}</strong></span>
-                        <span>R.C.: <strong>{matchedInsurance.rcNumber || '—'}</strong></span>
-                      </div>
+                  {/* Right: Insurance Provider Box */}
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
+                    <div className="font-black uppercase text-indigo-950 pb-1 border-b border-slate-200 flex items-center justify-between">
+                      <span>{matchedInsurance.name}</span>
+                      <span className="text-[9px] bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-bold">
+                        {insuranceCoveragePercent}% Prise en Charge
+                      </span>
                     </div>
-                  ) : (
-                    <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
-                      <div className="font-black uppercase text-emerald-950 pb-1 border-b border-slate-200 flex items-center justify-between">
-                        <span>Mode de Paiement</span>
-                        <span className="text-[9px] bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold uppercase">
-                          {paymentMethod.replace('_', ' ')}
-                        </span>
-                      </div>
-                      {cashGiven !== undefined && cashGiven !== null && (
-                        <div>Espèces reçues: <strong className="font-mono">{cashGiven.toLocaleString()} FCFA</strong></div>
-                      )}
-                      {cashChange !== undefined && cashChange !== null && cashChange > 0 && (
-                        <div>Monnaie rendue: <strong className="font-mono">{cashChange.toLocaleString()} FCFA</strong></div>
-                      )}
-                      {momoTxId && <div>Réf. MoMo: <strong className="font-mono">{momoTxId}</strong></div>}
-                      {bankReference && <div>Réf. Banque: <strong className="font-mono">{bankReference}</strong></div>}
-                      {cardAuthCode && <div>Auth. Carte: <strong className="font-mono">{cardAuthCode}</strong></div>}
-                      {isGiftCoupon && couponCode && (
-                        <div>Coupon: <strong className="font-mono">{couponCode}</strong></div>
-                      )}
-                      {isWorkerBenefit && workerStaffName && (
-                        <div>Bénéfice Employé: <strong>{workerStaffName}</strong> ({workerStaffId})</div>
-                      )}
+                    <div>Adresse: <strong className="font-semibold">{matchedInsurance.address}</strong></div>
+                    <div>B.P.: <strong className="font-mono">{matchedInsurance.bp}</strong></div>
+                    <div>Tél: <strong className="font-mono">{matchedInsurance.phone}</strong></div>
+                    <div className="pt-1 border-t border-slate-200/80 flex flex-col font-mono text-[9.5px] text-slate-700">
+                      <span>N.I.U.: <strong>{matchedInsurance.taxId || 'M025300001665C'}</strong></span>
+                      <span>R.C.: <strong>{matchedInsurance.rcNumber || 'RC/DLA/1953/B/166'}</strong></span>
                     </div>
-                  )}
+                  </div>
+
                 </div>
 
-                {/* Itemized Billing Table */}
+                {/* 4. GRANULAR COTE ITEMIZED BILLING TABLE */}
                 <div className="border border-slate-400 rounded-lg overflow-hidden text-[10px]">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 font-extrabold text-slate-900 border-b border-slate-400 text-[9.5px] uppercase">
@@ -684,14 +625,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                         <th className="p-2 text-right">VALEUR</th>
                         <th className="p-2 text-center">QTE</th>
                         <th className="p-2 text-right font-black">PRIX TOTAL</th>
-                        {isInsurancePayment ? (
-                          <>
-                            <th className="p-2 text-right text-indigo-950 font-black">ASSU ({insuranceCoveragePercent}%)</th>
-                            <th className="p-2 text-right text-emerald-950 font-black">PATIENT ({coPayPercent}%)</th>
-                          </>
-                        ) : (
-                          <th className="p-2 text-right text-emerald-950 font-black">MONTANT</th>
-                        )}
+                        <th className="p-2 text-right text-indigo-950 font-black">ASSU ({insuranceCoveragePercent}%)</th>
+                        <th className="p-2 text-right text-emerald-950 font-black">PATIENT ({coPayPercent}%)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 font-medium">
@@ -702,22 +637,18 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                           <td className="p-2 text-right font-mono text-slate-700">{item.valeurCoeff}</td>
                           <td className="p-2 text-center font-mono font-bold">{item.qty}</td>
                           <td className="p-2 text-right font-mono font-black text-slate-950">{item.totalPrice.toLocaleString()}</td>
-                          {isInsurancePayment ? (
-                            <>
-                              <td className="p-2 text-right font-mono font-black text-indigo-900">{item.insuranceAmount.toLocaleString()}</td>
-                              <td className="p-2 text-right font-mono font-black text-emerald-900">{item.patientAmount.toLocaleString()}</td>
-                            </>
-                          ) : (
-                            <td className="p-2 text-right font-mono font-black text-emerald-900">{item.totalPrice.toLocaleString()}</td>
-                          )}
+                          <td className="p-2 text-right font-mono font-black text-indigo-900">{item.insuranceAmount.toLocaleString()}</td>
+                          <td className="p-2 text-right font-mono font-black text-emerald-900">{item.patientAmount.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Financial Recap */}
+                {/* 5. SUMMARY FINANCIAL RECAPITULATION TABLE */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                  
+                  {/* Left Column: Taxes & Exoneration info (7 cols) */}
                   <div className="sm:col-span-6 space-y-2 text-[10px] text-slate-700">
                     <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 space-y-1">
                       <div className="flex justify-between">
@@ -743,184 +674,74 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Column: Payment Summary */}
+                  {/* Right Column: Ticket Moderateur & Net A Payer (5 cols) */}
                   <div className="sm:col-span-6 space-y-2">
-                    {isInsurancePayment ? (
-                      <>
-                        <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
-                          <div>
-                            <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
-                              TICKET MODÉRATEUR (PATIENT)
-                            </div>
-                            <div className="text-[9px] text-emerald-700 font-semibold">
-                              {coPayPercent}% Quote-part à la charge du patient
-                            </div>
-                          </div>
-                          <div className="text-base font-black font-mono text-emerald-900">
-                            {totalPatientTicketModerateur.toLocaleString()} FCFA
-                          </div>
-                        </div>
-
-                        <div className="border-2 border-indigo-700 bg-indigo-50/90 rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
-                          <div>
-                            <div className="text-[10px] font-black uppercase tracking-wider text-indigo-900">
-                              NET À PAYER (ASSURANCE)
-                            </div>
-                            <div className="text-[9px] text-indigo-700 font-semibold">
-                              {insuranceCoveragePercent}% Prise en charge officielle
-                            </div>
-                          </div>
-                          <div className="text-base font-black font-mono text-indigo-900">
-                            {totalNetAPayerAssurance.toLocaleString()} FCFA
-                          </div>
-                        </div>
-
-                        <div className="border border-emerald-500 bg-emerald-50/60 rounded-lg p-3 text-[10.5px] space-y-1">
-                          <div className="font-black uppercase text-emerald-900 border-b border-emerald-200 pb-1 flex items-center justify-between">
-                            <span>Règlement du Ticket Modérateur Patient</span>
-                            <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded font-bold uppercase">
-                              {coPayPaymentMethod.replace('_', ' ')}
-                            </span>
-                          </div>
-
-                          <div className="flex justify-between">
-                            <span>Montant payé par le patient:</span>
-                            <strong className="font-mono text-emerald-900">
-                              {totalPatientTicketModerateur.toLocaleString()} FCFA
-                            </strong>
-                          </div>
-
-                          {coPayPaymentMethod === 'cash' && (
-                            <>
-                              {coPayCashGiven !== undefined && coPayCashGiven !== null && (
-                                <div className="flex justify-between">
-                                  <span>Espèces reçues:</span>
-                                  <strong className="font-mono">{coPayCashGiven.toLocaleString()} FCFA</strong>
-                                </div>
-                              )}
-                              {coPayCashChange !== undefined && coPayCashChange !== null && coPayCashChange > 0 && (
-                                <div className="flex justify-between">
-                                  <span>Monnaie rendue:</span>
-                                  <strong className="font-mono text-amber-700">{coPayCashChange.toLocaleString()} FCFA</strong>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {coPayPaymentMethod === 'mobile_money' && (
-                            <>
-                              <div className="flex justify-between">
-                                <span>Opérateur:</span>
-                                <strong>{coPayMomoProvider === 'ORANGE' ? 'Orange Money' : 'MTN Mobile Money'}</strong>
-                              </div>
-                              {coPayMomoSenderName && (
-                                <div className="flex justify-between">
-                                  <span>Titulaire:</span>
-                                  <strong>{coPayMomoSenderName}</strong>
-                                </div>
-                              )}
-                              {coPayMomoSenderPhone && (
-                                <div className="flex justify-between">
-                                  <span>Téléphone:</span>
-                                  <strong className="font-mono">{coPayMomoSenderPhone}</strong>
-                                </div>
-                              )}
-                              {coPayMomoTxId && (
-                                <div className="flex justify-between">
-                                  <span>Réf. Transaction:</span>
-                                  <strong className="font-mono">{coPayMomoTxId}</strong>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {coPayPaymentMethod === 'bank_transfer' && (
-                            <>
-                              {coPayBankName && (
-                                <div className="flex justify-between">
-                                  <span>Banque:</span>
-                                  <strong>{coPayBankName}</strong>
-                                </div>
-                              )}
-                              {coPayBankAccountName && (
-                                <div className="flex justify-between">
-                                  <span>Titulaire:</span>
-                                  <strong>{coPayBankAccountName}</strong>
-                                </div>
-                              )}
-                              {coPayBankReference && (
-                                <div className="flex justify-between">
-                                  <span>Réf. Virement:</span>
-                                  <strong className="font-mono">{coPayBankReference}</strong>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {coPayPaymentMethod === 'card' && (
-                            <>
-                              {coPayCardScheme && (
-                                <div className="flex justify-between">
-                                  <span>Carte:</span>
-                                  <strong>{coPayCardScheme} •••• {coPayCardLast4}</strong>
-                                </div>
-                              )}
-                              {coPayCardAuthCode && (
-                                <div className="flex justify-between">
-                                  <span>Code Autorisation:</span>
-                                  <strong className="font-mono">{coPayCardAuthCode}</strong>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-3 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
-                            NET À PAYER (PATIENT)
-                          </div>
-                          <div className="text-[9px] text-emerald-700 font-semibold">
-                            Payé via {paymentMethod.replace('_', ' ')}
-                          </div>
-                        </div>
-                        <div className="text-xl font-black font-mono text-emerald-900">
-                          {totalTTC.toLocaleString()} FCFA
-                        </div>
+                    <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">TICKET MODÉRATEUR (PATIENT)</div>
+                        <div className="text-[9px] text-emerald-700 font-semibold">{coPayPercent}% Quote-part à la charge du patient</div>
                       </div>
-                    )}
+                      <div className="text-base font-black font-mono text-emerald-900">
+                        {totalPatientTicketModerateur.toLocaleString()} FCFA
+                      </div>
+                    </div>
+
+                    <div className="border-2 border-indigo-700 bg-indigo-50/90 rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-900">NET À PAYER (ASSURANCE)</div>
+                        <div className="text-[9px] text-indigo-700 font-semibold">{insuranceCoveragePercent}% Prise en charge officielle</div>
+                      </div>
+                      <div className="text-base font-black font-mono text-indigo-900">
+                        {totalNetAPayerAssurance.toLocaleString()} FCFA
+                      </div>
+                    </div>
                   </div>
+
                 </div>
 
+                {/* 6. VERBAL CERTIFICATION IN FRENCH */}
                 <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
                   ARRÊTÉ LA PRÉSENTE FACTURE À LA SOMME DE : <span className="underline">{amountInWords} FRANCS CFA</span>
                 </div>
 
-                <div className="pt-4 flex items-end justify-between text-[10px]">
+                {/* 7. DUAL SIGNATURE STAMPS & OFFICIAL LABORATORY SEAL */}
+                <div className="pt-4 grid grid-cols-3 gap-4 text-[10px] items-end border-t border-slate-200">
                   <div className="space-y-1">
-                    <div className="font-bold text-slate-900 uppercase">Signature / Date / Tél Assuré(e) :</div>
-                    <div className="h-12 w-48 border-b border-slate-400 flex items-end pb-1 italic text-slate-400 text-[9px]">
-                      Lu et approuvé ({patientPhone})
+                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">Signature / Date Assuré(e) :</div>
+                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col justify-between bg-slate-50/40">
+                      <span className="text-[8.5px] text-slate-400">Emplacement signature patient</span>
+                      <span className="italic text-slate-500 text-[9px]">Lu et approuvé ({patientPhone})</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-center">
+                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">Cachet Officiel du Laboratoire :</div>
+                    <div className="h-16 border-2 border-dashed border-teal-300 rounded-lg p-1 flex flex-col items-center justify-center bg-teal-50/20 text-teal-900/60">
+                      <span className="text-[9px] font-black uppercase tracking-wider">Zone Cachet Humide</span>
+                      <span className="text-[7.5px] font-mono">(Physical Official Stamp & Seal)</span>
                     </div>
                   </div>
 
                   <div className="text-right space-y-1">
-                    <div className="font-bold text-slate-900 uppercase">{biologistSignatureTitle} :</div>
-                    <div className="h-12 flex flex-col items-end justify-end font-serif font-black text-blue-950 italic text-xs">
-                      <div>{directorName}</div>
-                      <div className="text-[8px] font-sans font-normal text-slate-500 not-italic">Biologiste-Clinicien Agréé</div>
+                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">{biologistSignatureTitle} :</div>
+                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col items-end justify-between bg-slate-50/40">
+                      <span className="text-[8.5px] text-slate-400">Signature Biologiste</span>
+                      <div className="font-serif font-black text-blue-950 italic text-xs leading-none">
+                        <div>{directorName}</div>
+                        <div className="text-[8px] font-sans font-normal text-slate-500 not-italic pt-0.5">Biologiste-Clinicien Agréé</div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
               </div>
             ) : (
-              /* ============================================= */
-              /* TEMPLATE 1                                     */
-              /* ============================================= */
+              /* ========================================================================= */
+              /* TEMPLATE 1: MODERN ACCREDITED EMERALD LETTERHEAD                          */
+              /* ========================================================================= */
               <div className="space-y-4">
-
+                
+                {/* Header */}
                 <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3 gap-3">
                   <div className="flex items-center gap-3">
                     {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
@@ -949,6 +770,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </div>
                 </div>
 
+                {/* Title */}
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <h2 className="text-base font-black text-slate-900 uppercase">
                     Facture / Diagnostic Service Receipt #{invoiceNum}
@@ -956,6 +778,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   <span className="text-slate-600 font-medium">{receiptDateFormatted}</span>
                 </div>
 
+                {/* Patient Summary */}
                 <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px]">
                   <div>
                     <div>Patient: <strong className="text-slate-950">{patientName}</strong></div>
@@ -964,17 +787,12 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </div>
                   <div className="text-right">
                     <div>Prescripteur: <strong>{booking.doctorName || 'Dr. Attending Physician'}</strong></div>
-                    {isInsurancePayment ? (
-                      <>
-                        <div>Organisme: <strong>{insuranceProviderName}</strong></div>
-                        <div>Couverture: <strong className="text-teal-800">{insuranceCoveragePercent}%</strong></div>
-                      </>
-                    ) : (
-                      <div>Mode de paiement: <strong className="uppercase">{paymentMethod.replace('_', ' ')}</strong></div>
-                    )}
+                    <div>Organisme: <strong>{insuranceProviderName}</strong></div>
+                    <div>Couverture: <strong className="text-teal-800">{insuranceCoveragePercent}%</strong></div>
                   </div>
                 </div>
 
+                {/* Table */}
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-[10px]">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 font-bold border-b border-slate-200">
@@ -982,14 +800,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                         <th className="p-2">Description</th>
                         <th className="p-2 text-center">COTE</th>
                         <th className="p-2 text-right">Total HT</th>
-                        {isInsurancePayment ? (
-                          <>
-                            <th className="p-2 text-right text-teal-900">Assurance ({insuranceCoveragePercent}%)</th>
-                            <th className="p-2 text-right text-emerald-900">Patient ({coPayPercent}%)</th>
-                          </>
-                        ) : (
-                          <th className="p-2 text-right text-emerald-900">Montant</th>
-                        )}
+                        <th className="p-2 text-right text-teal-900">Assurance ({insuranceCoveragePercent}%)</th>
+                        <th className="p-2 text-right text-emerald-900">Patient ({coPayPercent}%)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -998,140 +810,27 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                           <td className="p-2 font-bold text-slate-900">{item.designation}</td>
                           <td className="p-2 text-center font-mono">{item.cote}</td>
                           <td className="p-2 text-right font-mono font-bold">{item.totalPrice.toLocaleString()} FCFA</td>
-                          {isInsurancePayment ? (
-                            <>
-                              <td className="p-2 text-right font-mono font-black text-indigo-900">{item.insuranceAmount.toLocaleString()}</td>
-                              <td className="p-2 text-right font-mono font-black text-emerald-900">{item.patientAmount.toLocaleString()}</td>
-                            </>
-                          ) : (
-                            <td className="p-2 text-right font-mono font-black text-emerald-900">{item.totalPrice.toLocaleString()}</td>
-                          )}
+                          <td className="p-2 text-right font-mono font-bold text-teal-900">{item.insuranceAmount.toLocaleString()} FCFA</td>
+                          <td className="p-2 text-right font-mono font-bold text-emerald-900">{item.patientAmount.toLocaleString()} FCFA</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {isInsurancePayment ? (
-                  <div className="space-y-2 pt-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                        <div className="text-[10px] uppercase font-bold text-emerald-800">Part Patient (Ticket Modérateur)</div>
-                        <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} FCFA</div>
-                      </div>
-                      <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-right">
-                        <div className="text-[10px] uppercase font-bold text-teal-800">Part Assureur (Net à Payer)</div>
-                        <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} FCFA</div>
-                      </div>
-                    </div>
-
-                    <div className="border border-emerald-500 bg-emerald-50/60 rounded-lg p-3 text-[10.5px] space-y-1">
-                      <div className="font-black uppercase text-emerald-900 border-b border-emerald-200 pb-1 flex items-center justify-between">
-                        <span>Règlement du Ticket Modérateur Patient</span>
-                        <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded font-bold uppercase">
-                          {coPayPaymentMethod.replace('_', ' ')}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between">
-                        <span>Montant payé par le patient:</span>
-                        <strong className="font-mono text-emerald-900">
-                          {totalPatientTicketModerateur.toLocaleString()} FCFA
-                        </strong>
-                      </div>
-
-                      {coPayPaymentMethod === 'cash' && (
-                        <>
-                          {coPayCashGiven !== undefined && coPayCashGiven !== null && (
-                            <div className="flex justify-between">
-                              <span>Espèces reçues:</span>
-                              <strong className="font-mono">{coPayCashGiven.toLocaleString()} FCFA</strong>
-                            </div>
-                          )}
-                          {coPayCashChange !== undefined && coPayCashChange !== null && coPayCashChange > 0 && (
-                            <div className="flex justify-between">
-                              <span>Monnaie rendue:</span>
-                              <strong className="font-mono text-amber-700">{coPayCashChange.toLocaleString()} FCFA</strong>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {coPayPaymentMethod === 'mobile_money' && (
-                        <>
-                          <div className="flex justify-between">
-                            <span>Opérateur:</span>
-                            <strong>{coPayMomoProvider === 'ORANGE' ? 'Orange Money' : 'MTN Mobile Money'}</strong>
-                          </div>
-                          {coPayMomoSenderName && (
-                            <div className="flex justify-between">
-                              <span>Titulaire:</span>
-                              <strong>{coPayMomoSenderName}</strong>
-                            </div>
-                          )}
-                          {coPayMomoSenderPhone && (
-                            <div className="flex justify-between">
-                              <span>Téléphone:</span>
-                              <strong className="font-mono">{coPayMomoSenderPhone}</strong>
-                            </div>
-                          )}
-                          {coPayMomoTxId && (
-                            <div className="flex justify-between">
-                              <span>Réf. Transaction:</span>
-                              <strong className="font-mono">{coPayMomoTxId}</strong>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {coPayPaymentMethod === 'bank_transfer' && (
-                        <>
-                          {coPayBankName && (
-                            <div className="flex justify-between">
-                              <span>Banque:</span>
-                              <strong>{coPayBankName}</strong>
-                            </div>
-                          )}
-                          {coPayBankAccountName && (
-                            <div className="flex justify-between">
-                              <span>Titulaire:</span>
-                              <strong>{coPayBankAccountName}</strong>
-                            </div>
-                          )}
-                          {coPayBankReference && (
-                            <div className="flex justify-between">
-                              <span>Réf. Virement:</span>
-                              <strong className="font-mono">{coPayBankReference}</strong>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {coPayPaymentMethod === 'card' && (
-                        <>
-                          {coPayCardScheme && (
-                            <div className="flex justify-between">
-                              <span>Carte:</span>
-                              <strong>{coPayCardScheme} •••• {coPayCardLast4}</strong>
-                            </div>
-                          )}
-                          {coPayCardAuthCode && (
-                            <div className="flex justify-between">
-                              <span>Code Autorisation:</span>
-                              <strong className="font-mono">{coPayCardAuthCode}</strong>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+                {/* Totals Box */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="text-[10px] uppercase font-bold text-emerald-800">Part Patient (Ticket Modérateur)</div>
+                    <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} FCFA</div>
                   </div>
-                ) : (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                    <div className="text-[10px] uppercase font-bold text-emerald-800">Net à Payer (Patient)</div>
-                    <div className="text-xl font-black font-mono text-emerald-900">{totalTTC.toLocaleString()} FCFA</div>
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-right">
+                    <div className="text-[10px] uppercase font-bold text-teal-800">Part Assureur (Net à Payer)</div>
+                    <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} FCFA</div>
                   </div>
-                )}
+                </div>
 
+                {/* Footer Signatures */}
                 <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px]">
                   <div>
                     <div className="text-slate-500">Signature Bénéficiaire:</div>
@@ -1149,6 +848,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
         </div>
 
+        {/* Modal Bottom Footer (Non-printable) */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800 print:hidden shrink-0">
           <button
             onClick={onClose}
