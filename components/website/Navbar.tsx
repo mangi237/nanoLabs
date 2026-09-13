@@ -93,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGoToPortal, onOpenTerms, onOpe
             ))}
           </nav>
 
-          {/* Right Action: Clean Portal Entrance Buttons */}
+          {/* Right Action: Clean Portal Entrance Buttons with glowing GO TO PORTAL CTA */}
           <div className="hidden sm:flex items-center gap-2">
             <button
               onClick={() => onGoToPortal('patient')}
@@ -108,13 +108,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onGoToPortal, onOpenTerms, onOpe
               Doctor Portal
             </button>
             <button
-              onClick={() => onGoToPortal('lab')}
+              onClick={() => onGoToPortal()}
               id="nav-go-to-portal-btn"
-              className="relative group px-4 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
+              className="relative group px-4 py-2 rounded-xl bg-gradient-to-r from-[#0D3B38] via-[#0F766E] to-[#14B8A6] hover:from-[#082624] hover:to-[#0F766E] text-white text-xs font-black shadow-lg shadow-teal-500/25 ring-2 ring-teal-400/40 hover:ring-teal-400 flex items-center gap-2 cursor-pointer transition-all animate-pulse"
             >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Lab & Staff Login</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <Sparkles className="w-3.5 h-3.5 text-teal-200" />
+              <span className="tracking-wide">GO TO PORTAL</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
 
