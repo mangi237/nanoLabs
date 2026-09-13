@@ -6,6 +6,7 @@ import { EcosystemSection } from '../../components/website/EcosystemSection';
 import { ProblemSection } from '../../components/website/ProblemSection';
 import { ProductShowcase } from '../../components/website/ProductShowcase';
 import { WorkflowSection } from '../../components/website/WorkflowSection';
+// import { HowToUseSection } from '../../components/website/HowToUseSection';
 import { CameroonAfricaSection } from '../../components/website/CameroonAfricaSection';
 import { ImpactSection } from '../../components/website/ImpactSection';
 import { TractionSection } from '../../components/website/TractionSection';
@@ -20,89 +21,95 @@ import { Footer } from '../../components/website/Footer';
 import { LegalModals } from '../../components/website/LegalModals';
 
 interface LandingPageProps {
-  onGoToPortal: () => void; 
+  onGoToPortal: (roleHint?: 'patient' | 'doctor' | 'lab') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
-  const scrollToContact = () => {
-    const el = document.getElementById('contact');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+  const handlePartnerClick = () => {
+    const contactEl = document.getElementById('contact');
+    if (contactEl) {
+      contactEl.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#07111F] text-white font-sans selection:bg-[#20C997] selection:text-slate-950">
-      {/* 1. Sticky Navigation Bar with Direct Portal Access */}
-      <Navbar onGoToPortal={onGoToPortal} />
-
-      <main>
-        {/* 2. Main Hero with Dynamic Visuals & Prominent "Go to Portal" Action */}
-        <Hero onGoToPortal={onGoToPortal} />
-
-        {/* 3. Strategic Quick Portal Entrance Banner */}
-        <PortalEntranceBanner onGoToPortal={onGoToPortal} />
-
-        {/* 4. One Connected Laboratory Ecosystem Section */}
-        <EcosystemSection onGoToPortal={onGoToPortal} />
-
-        {/* 5. Fragmented vs Unified Operational Challenge & Solution */}
-        <ProblemSection onGoToPortal={onGoToPortal} />
-
-        {/* 6. Comprehensive Product Showcase with 8 Interactive Clinical Workspaces */}
-        <ProductShowcase onGoToPortal={onGoToPortal} />
-
-        {/* 7. End-to-End Diagnostic 6-Step Workflow */}
-        <WorkflowSection onGoToPortal={onGoToPortal} />
-
-        {/* 8. Built around local reality: Cameroon & Africa Diagnostic Network */}
-        <CameroonAfricaSection />
-
-        {/* 9. Tangible Clinical & Operational Impact */}
-        <ImpactSection />
-
-        {/* 10. Startup Traction & Milestones */}
-        <TractionSection />
-
-        {/* 11. Founder Story & Philosophy */}
-        <FounderSection />
-
-        {/* 12. Team & Clinical Advisory Board */}
-        <TeamSection />
-
-        {/* 13. Why NanoLabs Section */}
-        <WhyNanoLabsSection onGoToPortal={onGoToPortal} />
-
-        {/* 14. Investor & Strategic Growth Section */}
-        <InvestorSection onPartnerClick={scrollToContact} />
-
-        {/* 15. Frequently Asked Questions */}
-        <FAQSection onGoToPortal={onGoToPortal} />
-
-        {/* 16. Contact & Partnership Section */}
-        <ContactSection />
-
-        {/* 17. Final Dramatic Portal Gateway */}
-        <FinalPortalCTA onGoToPortal={onGoToPortal} />
-      </main>
-
-      {/* 18. Complete Footer with Cameroon Badge */}
-      <Footer
-        onGoToPortal={onGoToPortal}
-        onOpenPrivacy={() => setLegalModal('privacy')}
+    <div className="min-h-screen bg-[#F8FAF9] text-[#0B1F1D] font-sans flex flex-col selection:bg-[#14B8A6]/20 selection:text-[#0D3B38]">
+      {/* 1. Top Navbar with smooth section anchor links and Portal Access */}
+      <Navbar 
+        onGoToPortal={() => onGoToPortal()}
         onOpenTerms={() => setLegalModal('terms')}
+        onOpenPrivacy={() => setLegalModal('privacy')}
       />
 
-      {/* Legal Modals */}
+      {/* 2. Hero with Modern Chic UI & Sleek iPhone Frame for Search, Lab Selection & Split */}
+      <Hero onGoToPortal={() => onGoToPortal()} />
+
+      {/* 3. Portal Entrance Banner */}
+      <PortalEntranceBanner onGoToPortal={() => onGoToPortal()} />
+
+      {/* 4. Ecosystem Interconnection Section */}
+      <EcosystemSection onGoToPortal={() => onGoToPortal()} />
+
+      {/* 5. Cameroon & African Diagnostic Challenges / Problem Section */}
+      <ProblemSection onGoToPortal={() => onGoToPortal()} />
+
+      {/* 6. Comprehensive Product Showcase */}
+      <ProductShowcase onGoToPortal={() => onGoToPortal()} />
+
+      {/* 7. Core 6-Step Diagnostic Movement Workflow (Search -> See Labs -> Select & Split -> Dispatch -> Report) */}
+      <WorkflowSection onGoToPortal={() => onGoToPortal()} />
+
+      {/* 7.5 Interactive How-To-Use Guide with Step-by-Step Cards & Quick Help Widget */}
+      {/* <HowToUseSection onGoToPortal={onGoToPortal} /> */}
+
+      {/* 8. Built for Cameroon & African Clinical Realities */}
+      <CameroonAfricaSection />
+
+      {/* 9. Multi-Stakeholder Healthcare Impact */}
+      <ImpactSection />
+
+      {/* 10. Startup Traction, Milestones & Roadmap */}
+      <TractionSection />
+
+      {/* 11. Founder Story & Vision */}
+      <FounderSection />
+
+      {/* 12. Multidisciplinary Technical & Clinical Governance Team */}
+      <TeamSection />
+
+      {/* 13. Why Choose NanoLabs */}
+      <WhyNanoLabsSection onGoToPortal={() => onGoToPortal()} />
+
+      {/* 14. Investor & Strategic Partnerships */}
+      <InvestorSection onPartnerClick={handlePartnerClick} />
+
+      {/* 15. Frequently Asked Questions */}
+      <FAQSection onGoToPortal={() => onGoToPortal()} />
+
+      {/* 16. Contact & Laboratory Onboarding Inquiry */}
+      <ContactSection />
+
+      {/* 17. Final High-Impact Portal Call-to-Action */}
+      <FinalPortalCTA onGoToPortal={() => onGoToPortal()} />
+
+      {/* 18. Website Footer */}
+      <Footer 
+        onGoToPortal={() => onGoToPortal()}
+        onOpenTerms={() => setLegalModal('terms')}
+        onOpenPrivacy={() => setLegalModal('privacy')}
+      />
+
+      {/* 19. Legal Terms & Privacy Modals */}
       <LegalModals
         isOpen={legalModal !== null}
         onClose={() => setLegalModal(null)}
-        type={legalModal || 'privacy'}
+        type={legalModal || 'terms'}
       />
     </div>
   );
 };
 
 export default LandingPage;
+
