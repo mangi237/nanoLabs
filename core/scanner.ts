@@ -32,7 +32,7 @@ export interface MatchedPrescriptionTest {
   export interface TestCatalogEntry {
     code: string;
     name: string;
-    frenchName?: string;
+    frenchName: string;
     category: string;
     basePrice: number;
     fasting: string;
