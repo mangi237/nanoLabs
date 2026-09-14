@@ -1,83 +1,79 @@
 import React from 'react';
-import { 
-  Building2, 
-  Users, 
-  Stethoscope, 
-  HeartHandshake, 
-  TrendingUp, 
-  Sparkles 
+import {
+  Building2,
+  Users,
+  Stethoscope,
+  ShieldCheck,
 } from 'lucide-react';
 import { siteConfig } from '../../data/siteConfig';
 
 export const ImpactSection: React.FC = () => {
   const impacts = [
     {
-      title: 'For Laboratories',
-      subtitle: 'More organized operations and better visibility.',
-      desc: 'Automated sample tracking, error-free barcoding, unified test pricing, and instant financial revenue reconciliation.',
-      icon: Building2,
-      color: '#1677FF'
-    },
-    {
-      title: 'For Laboratory Teams',
-      subtitle: 'Clearer workflows and less fragmented work.',
-      desc: 'Purpose-built screens for receptionists, bench technicians, and medical biologists without confusing clutter.',
+      title: 'For Patients',
+      subtitle: 'From queue to one tap.',
+      desc: 'AI prescription scan, lab comparison by real distance, MoMo payment, live sample tracking, and share with a doctor in one tap.',
       icon: Users,
-      color: '#20C997'
+      color: '#0F766E'
     },
     {
       title: 'For Doctors',
-      subtitle: 'Better connection with laboratory processes and results.',
-      desc: 'Real-time diagnostic access, electronic test requests, and historical trend comparison without lost paper files.',
+      subtitle: 'Finally in the loop.',
+      desc: 'Two-way connections, e-prescriptions, test recommendations, and signed reports the moment they are ready.',
       icon: Stethoscope,
-      color: '#00A6A6'
+      color: '#1677FF'
     },
     {
-      title: 'For Patients',
-      subtitle: 'A more accessible and connected laboratory experience.',
-      desc: 'Instant WhatsApp results, tactile sealed digital envelope unsealing, and verified signed PDF copies on demand.',
-      icon: HeartHandshake,
-      color: '#7C5CFC'
+      title: 'For Laboratories',
+      subtitle: 'Digital front door, without losing the brand.',
+      desc: 'Keep your name, prices, and staff. Add bookings, verified payments, auto-invoices, branded reports, and audit.',
+      icon: Building2,
+      color: '#0D3B38'
+    },
+    {
+      title: 'For Insurers',
+      subtitle: 'Audit-ready claims.',
+      desc: 'Per-line insurance columns on every invoice, manual verification at intake, and a hash-chained trail behind every claim.',
+      icon: ShieldCheck,
+      color: '#14B8A6'
     }
   ];
 
   return (
-    <section id="impact" className="py-24 bg-[#0B1F3A]/40 relative overflow-hidden border-t border-white/5">
+    <section id="impact" className="py-24 bg-[#F8FAF9] relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold text-[#1677FF] uppercase tracking-wider bg-[#1677FF]/10 px-3.5 py-1 rounded-full border border-[#1677FF]/20">
-            Real Healthcare Transformation
+          <span className="text-xs font-bold text-[#1677FF] uppercase tracking-wider bg-blue-50 px-3.5 py-1 rounded-full border border-blue-100">
+            Better infrastructure, better care
           </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Better laboratory infrastructure creates better healthcare experiences.
+          <h2 className="text-3xl sm:text-5xl font-black text-[#0B1F1D] tracking-tight">
+            Tangible impact, on every side.
           </h2>
-          <p className="text-sm sm:text-base text-[#AAB7C7] leading-relaxed">
-            Delivering tangible improvements across every stage of the diagnostic care journey.
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+            Patients, doctors, labs, and insurers each gain something they don\u2019t have today.
           </p>
         </div>
 
-        {/* 4 Impact Pillars */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {impacts.map((imp, idx) => {
+          {impacts.map((imp, i) => {
             const Icon = imp.icon;
             return (
               <div
-                key={idx}
-                className="p-6 rounded-3xl bg-[#07111F] border border-white/10 hover:border-white/20 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4"
+                key={i}
+                className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-teal-300 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                    style={{ backgroundColor: `${imp.color}20`, color: imp.color }}
+                    style={{ backgroundColor: `${imp.color}15`, color: imp.color }}
                   >
                     <Icon className="w-6 h-6 stroke-[2.2]" />
                   </div>
-                  <h3 className="text-base font-black text-white">{imp.title}</h3>
-                  <div className="text-xs font-bold text-[#20C997] leading-tight">
+                  <h3 className="text-base font-black text-[#0B1F1D]">{imp.title}</h3>
+                  <div className="text-xs font-bold text-[#0F766E] leading-tight">
                     {imp.subtitle}
                   </div>
-                  <p className="text-xs text-[#AAB7C7] leading-relaxed">
+                  <p className="text-xs text-slate-600 leading-relaxed">
                     {imp.desc}
                   </p>
                 </div>
@@ -86,18 +82,17 @@ export const ImpactSection: React.FC = () => {
           })}
         </div>
 
-        {/* Verified Impact Telemetry Strip */}
         <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {siteConfig.impactStats.map((stat, sIdx) => (
+          {siteConfig.impactStats.map((stat, i) => (
             <div
-              key={sIdx}
-              className="p-5 rounded-2xl bg-[#07111F]/80 border border-white/10 text-center space-y-1"
+              key={i}
+              className="p-5 rounded-2xl bg-white border border-slate-200 text-center space-y-1"
             >
-              <div className="text-2xl sm:text-3xl font-black text-white font-mono">
+              <div className="text-2xl sm:text-3xl font-black text-[#0B1F1D] font-mono">
                 {stat.value}
               </div>
-              <div className="text-xs font-bold text-[#20C997]">{stat.label}</div>
-              <p className="text-[11px] text-[#AAB7C7]">{stat.description}</p>
+              <div className="text-xs font-bold text-[#0F766E]">{stat.label}</div>
+              <p className="text-[11px] text-slate-500">{stat.description}</p>
             </div>
           ))}
         </div>
