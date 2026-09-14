@@ -1,243 +1,213 @@
 export interface SiteConfig {
+  name: string;
+  category: string;
+  industry: string;
+  tagline: string;
+  supportingTagline: string;
+  description: string;
+  portalUrl: string;
+  email: string;
+  phone: string;
+  location: string;
+  cities: { name: string; region: string; coordinates: [number, number]; status: string }[];
+  founder: {
     name: string;
-    category: string;
-    industry: string;
-    tagline: string;
-    supportingTagline: string;
-    description: string;
-    portalUrl: string;
-    email: string;
-    phone: string;
-    location: string;
-    cities: { name: string; region: string; coordinates: [number, number]; status: string }[];
-    founder: {
-      name: string;
-      role: string;
-      quote: string;
-      bio: string;
-      socials: {
-        linkedin?: string;
-        x?: string;
-        github?: string;
-        substack?: string;
-        email?: string;
-      };
-      image: string;
+    role: string;
+    quote: string;
+    bio: string;
+    socials: {
+      linkedin?: string;
+      x?: string;
+      github?: string;
+      substack?: string;
+      email?: string;
     };
-    milestones: { year: string; date?: string; title: string; description: string; badge?: string }[];
-    faqs: { question: string; answer: string; category?: string }[];
-    impactStats: { label: string; value: string; description: string; change?: string }[];
-    productTabs: {
-      id: string;
-      label: string;
-      tagline: string;
-      description: string;
-      keyHighlights: string[];
-      roleAttribution: string;
-      mockupType: 'dashboard' | 'patients' | 'tests' | 'results' | 'staff' | 'physicians' | 'patient_portal' | 'audit';
-    }[];
-  }
-  
-  export const siteConfig: SiteConfig = {
-    name: 'NanoLabs',
-    category: 'Laboratory Information Management System (LIMS)',
-    industry: 'HealthTech / Digital Health / Medical Diagnostics',
-    tagline: 'The Operating System for Modern Laboratories.',
-    supportingTagline: 'Built in Cameroon. Designed for Africa.',
-    description: 'NanoLabs connects patients, tests, results, laboratory teams and doctors through one modern digital ecosystem.',
-    portalUrl: '/?view=portal',
-    email: 'nanolabsolutions26@gmail.com',
-    phone: '+237 670 000 000',
-    location: 'Douala & Yaoundé, Cameroon',
-  
-    cities: [
-      { name: 'Douala', region: 'Littoral', coordinates: [4.0511, 9.7679], status: 'Active Hub' },
-      { name: 'Yaoundé', region: 'Centre', coordinates: [3.8480, 11.5021], status: 'Clinical Deployment' },
-      { name: 'Bafoussam', region: 'West', coordinates: [5.4778, 10.4176], status: 'Regional Node' },
-      { name: 'Garoua', region: 'North', coordinates: [9.3014, 13.3977], status: 'Planned Expansion' },
-      { name: 'Bamenda', region: 'North West', coordinates: [5.9631, 10.1591], status: 'Partner Network' },
-      { name: 'Buea', region: 'South West', coordinates: [4.1560, 9.2415], status: 'Innovation Node' }
-    ],
-  
-    founder: {
-      name: 'Mangi Lerine Laslie Jr.',
-      role: 'Founder & Product Architect, NanoLabs',
-      quote: "The difficult part isn't building software. It's building something that survives contact with reality.",
-      bio: 'NanoLabs began after Mangi observed inefficiencies around laboratory healthcare during a hospital experience in Cameroon. As a software engineer, he set out to build a connected laboratory system designed around real African clinical workflows and operational realities.',
-      socials: {
-        linkedin: 'https://linkedin.com/in/mangi-lerine',
-        x: 'https://x.com/mangilerine',
-        github: 'https://github.com/mangilerine',
-        substack: 'https://nanolabs.substack.com',
-        email: 'nanolabsolutions26@gmail.com'
-      },
-      image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
-    },
-  
-    milestones: [
-      {
-        year: '2024',
-        title: 'Problem First Identified',
-        description: 'First-hand observation of fragmented paper test results, prolonged turnaround times, and lost reports in Cameroonian clinics sparked the vision for NanoLabs.',
-        badge: 'Discovery'
-      },
-      {
-        year: '2025',
-        title: 'Architecture & Engine Design',
-        description: 'Engineered the multi-tenant LIMS core, integrating offline-first data caching, HL7 FHIR standards, multi-role clinical permissions, and sealed digital envelopes.',
-        badge: 'Engineering'
-      },
-      {
-        year: '2026',
-        date: 'Early 2026',
-        title: 'Real-World Laboratory Deployment',
-        description: 'Deployed initial pilot versions with clinical laboratory partners across Douala and Yaoundé, gathering live feedback from lab technicians and biologists.',
-        badge: 'Deployment'
-      },
-      {
-        year: '2026',
-        date: 'September 2026',
-        title: 'Active Expansion & Clinical Learning',
-        description: 'Expanding public digital result verification, physician connectivity, WhatsApp consolidated batch delivery, and standardized African laboratory operations.',
-        badge: 'Current Phase'
-      }
-    ],
-  
-    faqs: [
-      {
-        question: 'What is NanoLabs?',
-        answer: 'NanoLabs is a modern Laboratory Information Management System (LIMS) designed to help medical laboratories streamline patient registration, sample barcoding, test processing, results validation, and secure patient & physician communication through one connected digital ecosystem.'
-      },
-      {
-        question: 'Who can use NanoLabs?',
-        answer: 'NanoLabs is primarily designed for medical laboratories, hospital diagnostic centers, lab technicians, biologists, pathologists, and receptionists. Patients and referring physicians also access dedicated portals for real-time tracking and encrypted digital result receipts.'
-      },
-      {
-        question: 'Is NanoLabs already available?',
-        answer: 'Yes. NanoLabs is actively moving through its operational deployment phase with medical laboratories and diagnostic centers in Cameroon, with ongoing customer onboarding.'
-      },
-      {
-        question: 'Where is NanoLabs based?',
-        answer: 'NanoLabs is proudly built in Cameroon, with initial deployment hubs in Douala and Yaoundé.'
-      },
-      {
-        question: 'Can my laboratory join NanoLabs?',
-        answer: 'Yes! Interested medical laboratories, polyclinics, and diagnostic centers can request an onboarding consultation or directly enter the portal to configure their laboratory workspace.'
-      },
-      {
-        question: 'How do I access the portal?',
-        answer: 'Click any "Continue to Portal" or "Go to Portal" button on this website to instantly access the live NanoLabs authentication and management environment.'
-      },
-      {
-        question: 'Is NanoLabs only for Cameroon?',
-        answer: 'Cameroon is NanoLabs’ primary launching market. The platform architecture is engineered from the ground up for scalable deployment across Central and West Africa.'
-      },
-      {
-        question: 'Can investors and strategic partners contact NanoLabs?',
-        answer: 'Yes. Investors, health-tech partners, and institutional stakeholders can submit a partnership enquiry through the Contact section or reach out directly to nanolabsolutions26@gmail.com.'
-      },
-      {
-        question: 'Does NanoLabs replace medical professionals?',
-        answer: 'No. NanoLabs is specialized clinical infrastructure software designed to empower medical biologists, technicians, and physicians with greater precision, organization, and traceability. Diagnostic validation remains under licensed medical authority.'
-      }
-    ],
-  
-    impactStats: [
-      {
-        label: 'Turnaround Time Reduction',
-        value: 'Up to 65%',
-        description: 'Faster result delivery from specimen collection to validated patient receipt.'
-      },
-      {
-        label: 'Consolidated Batches',
-        value: '100% Digital',
-        description: 'Multi-test panels delivered as verified, tamper-proof signed PDF records.'
-      },
-      {
-        label: 'Zero Lost Reports',
-        value: 'Traceable Audit',
-        description: 'End-to-end specimen chain of custody with encrypted archival.'
-      },
-      {
-        label: 'Physician Connectivity',
-        value: 'Real-Time',
-        description: 'Direct referral routing and instant diagnostic access for attending doctors.'
-      }
-    ],
-  
-    productTabs: [
-      {
-        id: 'dashboard',
-        label: 'Laboratory Dashboard',
-        tagline: 'See your laboratory at a glance',
-        description: 'Centralized live overview of daily patient throughput, urgent stat tests, pending biologist validations, sample queues, and revenue metrics.',
-        keyHighlights: ['Live turnaround time monitors', 'Urgent specimen alert indicators', 'Daily throughput & financial reconciliation'],
-        roleAttribution: 'Laboratory Directors & Shift Supervisors',
-        mockupType: 'dashboard'
-      },
-      {
-        id: 'patients',
-        label: 'Patient Management',
-        tagline: 'Keep patient records organized',
-        description: 'Instant national ID / PID lookup, visit history, emergency contacts, insurance eligibility, and multi-visit diagnostic timeline.',
-        keyHighlights: ['Instant PID lookup', 'Cameroon insurance coverage matching', 'Complete diagnostic history archives'],
-        roleAttribution: 'Receptionists & Front Desk Staff',
-        mockupType: 'patients'
-      },
-      {
-        id: 'tests',
-        label: 'Test Catalog & Processing',
-        tagline: 'Manage examinations with clarity',
-        description: 'Pre-configured African clinical test catalog spanning Hematology, Biochemistry, Microbiology, Serology, Hormonology, and Antibiograms.',
-        keyHighlights: ['Automated tube color & specimen guidance', 'Antibiogram zone diameter matrix', 'Batch barcode generation'],
-        roleAttribution: 'Medical Laboratory Technicians',
-        mockupType: 'tests'
-      },
-      {
-        id: 'results',
-        label: 'Results & Biologist Validation',
-        tagline: 'From result entry to validation',
-        description: 'Structured parameter data entry, automated reference interval delta-checking, critical value alerts, and digital biologist sign-off.',
-        keyHighlights: ['Age/gender-adjusted reference intervals', 'Critical value flag highlights', 'ONMC digital signature stamp'],
-        roleAttribution: 'Medical Biologists & Pathologists',
-        mockupType: 'results'
-      },
-      {
-        id: 'staff',
-        label: 'Staff & Role Permissions',
-        tagline: 'Give every team member the right workspace',
-        description: 'Granular role-based access control separating Reception, Phlebotomy, Technical Bench, Biologist Sign-Off, Cashier, and Administration.',
-        keyHighlights: ['Strict role separation', 'Audit-logged specimen handoffs', 'Multi-shift handover notes'],
-        roleAttribution: 'Human Resources & Lab Management',
-        mockupType: 'staff'
-      },
-      {
-        id: 'physicians',
-        label: 'Physicians & Referrals',
-        tagline: 'Connect laboratories and physicians',
-        description: 'Seamless referral network connecting outside clinics and attending physicians directly to real-time diagnostic findings.',
-        keyHighlights: ['Doctor referral commission ledgers', 'Instant e-prescription ingestion', 'Confidential doctor portal access'],
-        roleAttribution: 'Attending Doctors & Partner Clinics',
-        mockupType: 'physicians'
-      },
-      {
-        id: 'patient_portal',
-        label: 'Patient Portal & Sealed Envelope',
-        tagline: 'Bring the patient experience forward',
-        description: 'Patients receive instant WhatsApp / SMS notifications to view tactile sealed digital envelopes and download consolidated signed PDF results.',
-        keyHighlights: ['Tactile digital wax-seal envelope', 'Direct WhatsApp signed batch PDF share', 'Yebo KYC mobile identity sign-off'],
-        roleAttribution: 'Patients & Family Members',
-        mockupType: 'patient_portal'
-      },
-      {
-        id: 'audit',
-        label: 'Audit & Traceability',
-        tagline: 'Know what happens inside your system',
-        description: 'Comprehensive, immutable timestamped audit trail tracking every specimen collection, parameter modification, and result release.',
-        keyHighlights: ['SHA-256 cryptographic hashes', 'Immutable access logs', 'Regulatory compliance audit readiness'],
-        roleAttribution: 'Quality Assurance & Regulatory Auditors',
-        mockupType: 'audit'
-      }
-    ]
+    image: string;
   };
-  
+  milestones: { year: string; date?: string; title: string; description: string; badge?: string }[];
+  faqs: { question: string; answer: string; category?: string }[];
+  impactStats: { label: string; value: string; description: string; change?: string }[];
+  productTabs: {
+    id: string;
+    label: string;
+    tagline: string;
+    description: string;
+    keyHighlights: string[];
+    roleAttribution: string;
+    mockupType: 'dashboard' | 'patients' | 'tests' | 'results' | 'staff' | 'physicians' | 'patient_portal' | 'audit';
+  }[];
+}
+
+export const siteConfig: SiteConfig = {
+  name: 'nanoLabs',
+  category: 'B2B2C Diagnostic Hub',
+  industry: 'HealthTech / Digital Health / Medical Diagnostics',
+  tagline: 'One hub. Every test. Every lab. Every result.',
+  supportingTagline: 'Built in Cameroon. Connecting patients, doctors, and laboratories.',
+  description: 'nanoLabs connects patients, doctors, and laboratories on one mobile-first platform — from AI prescription scan and multi-lab booking to live sample tracking and lab-branded reports.',
+  portalUrl: '/?view=portal',
+  email: 'nanolabsolutions26@gmail.com',
+  phone: '+237 670 000 000',
+  location: 'Douala & Yaoundé, Cameroon',
+
+  cities: [
+    { name: 'Douala', region: 'Littoral', coordinates: [4.0511, 9.7679], status: 'Active Hub' },
+    { name: 'Yaoundé', region: 'Centre', coordinates: [3.8480, 11.5021], status: 'Active Hub' },
+    { name: 'Bafoussam', region: 'West', coordinates: [5.4778, 10.4176], status: 'Regional Node' },
+    { name: 'Buea', region: 'South West', coordinates: [4.1560, 9.2415], status: 'Innovation Node' },
+    { name: 'Bamenda', region: 'North West', coordinates: [5.9631, 10.1591], status: 'Partner Network' },
+    { name: 'Garoua', region: 'North', coordinates: [9.3014, 13.3977], status: 'Planned Expansion' }
+  ],
+
+  founder: {
+    name: 'Mangi Lerine Laslie Jr.',
+    role: 'Founder & Product Architect, nanoLabs',
+    quote: "The difficult part isn't building software. It's building something that survives contact with reality.",
+    bio: 'nanoLabs began after Mangi observed inefficiencies around laboratory healthcare during a hospital experience in Cameroon. As a software engineer, he set out to build a connected diagnostic hub designed around real African clinical workflows — patients, doctors, and laboratories on one platform.',
+    socials: {
+      linkedin: 'https://linkedin.com/in/mangi-lerine',
+      x: 'https://x.com/mangilerine',
+      github: 'https://github.com/mangilerine',
+      substack: 'https://nanolabs.substack.com',
+      email: 'nanolabsolutions26@gmail.com'
+    },
+    image: '[SOURCE IMAGE: portrait of Cameroonian founder, warm light, 4:5]'
+  },
+
+  milestones: [
+    {
+      year: '2024',
+      title: 'Problem First Identified',
+      description: 'First-hand observation of fragmented paper test results, prolonged turnaround times, and lost reports in Cameroonian clinics sparked the vision for nanoLabs.',
+      badge: 'Discovery'
+    },
+    {
+      year: '2025',
+      title: 'Architecture & Engine Design',
+      description: 'Engineered the multi-lab booking core, batch-based invoicing, live sample tracking, lab-branded reports, and the append-only audit chain.',
+      badge: 'Engineering'
+    },
+    {
+      year: '2026',
+      date: 'Early 2026',
+      title: 'Real-World Laboratory Deployment',
+      description: 'Deployed pilot versions with clinical laboratory partners across Douala and Yaoundé, gathering live feedback from lab technicians, cashiers, and biologists.',
+      badge: 'Deployment'
+    },
+    {
+      year: '2026',
+      date: 'September 2026',
+      title: 'B2B2C Transition',
+      description: 'Transitioning to the full B2B2C hub: patients, doctors, and labs on one platform, with monthly settlement, live tracking, and automatic patient audit.',
+      badge: 'Current Phase'
+    }
+  ],
+
+  faqs: [
+    {
+      question: 'What is nanoLabs?',
+      answer: 'nanoLabs is a B2B2C diagnostic hub. It connects patients, doctors, and laboratories on one mobile-first platform — from AI prescription scan and multi-lab booking, to payment verification, live sample tracking, and lab-branded reports.'
+    },
+    {
+      question: 'Who is nanoLabs for?',
+      answer: 'Three audiences. Patients book tests, scan prescriptions, pay via MTN MoMo or Orange Money, and track their sample live. Doctors connect with patients, send e-prescriptions, and get credited for referrals. Laboratories keep their own brand, prices, and staff while gaining bookings, verified payments, branded reports, and an audit trail.'
+    },
+    {
+      question: 'How does nanoLabs make money?',
+      answer: 'A 5% record management fee is added to the patient portion of each invoice, and charged only when the lab cashier verifies payment. The insurance portion is never touched. nanoLabs never holds money — every payment goes directly to the lab. Labs settle with nanoLabs monthly through the Super Admin dashboard.'
+    },
+    {
+      question: 'Does nanoLabs handle payments?',
+      answer: 'No. All money moves from the patient directly to the lab — cash, MTN MoMo, or Orange Money. nanoLabs never touches payment rails. The cashier verifies payment manually at intake, and monthly settlement happens between nanoLabs and the lab.'
+    },
+    {
+      question: 'How do I log in?',
+      answer: 'Phone number plus access code. Every role uses the same flow. There are no passwords on nanoLabs. A separate cashier security access code exists for payment verification, rotatable by the lab admin.'
+    },
+    {
+      question: 'How does insurance work?',
+      answer: 'You add your insurer, policy number, policyholder name, and coverage % at signup. When you pay with insurance, that data flows to the lab. The cashier verifies your policy manually at intake using the Prestataires Agréés portal, then marks it "Verified at lab intake."'
+    },
+    {
+      question: 'Can I book at more than one lab?',
+      answer: 'Yes. Multi-lab bookings produce separate batches, separate invoices, and separate reports. Nothing is merged. Each lab sees its own batch and issues its own report with its own branding.'
+    },
+    {
+      question: 'What is live tracking?',
+      answer: 'Every sample goes through seven stages: intake, collected, in-transit, received, analysis, validation, signed and ready. When collection happens at home, you can watch the phlebotomist move on a live map, with ETA updates and a "last seen" fallback if they go offline.'
+    },
+    {
+      question: 'Where is nanoLabs available?',
+      answer: 'Cameroon is the launch market, with active hubs in Douala and Yaoundé and regional nodes across Bafoussam, Buea, Bamenda, and Garoua. The architecture is built for expansion across CEMAC and West Africa.'
+    },
+    {
+      question: 'How do laboratories join?',
+      answer: 'Through the portal. Lab admins configure branding, per-insurer price lists, B-code fees, home collection rates, MTN MoMo and Orange Money numbers, and cashier access codes. Onboarding is instant.'
+    }
+  ],
+
+  impactStats: [
+    {
+      label: 'Batch-Based Invoicing',
+      value: '100%',
+      description: 'One invoice per collection event, never per test.'
+    },
+    {
+      label: 'Live Sample Tracking',
+      value: '7 Stages',
+      description: 'From intake to signed and ready, visible to the patient.'
+    },
+    {
+      label: 'Audit Chain',
+      value: 'Append-Only',
+      description: 'Hash-chained. Tamper attempts rejected at the database level.'
+    },
+    {
+      label: 'Platform Fee',
+      value: '5%',
+      description: 'On the patient portion only, charged when payment is verified.'
+    }
+  ],
+
+  productTabs: [
+    {
+      id: 'dashboard',
+      label: 'Patient App',
+      tagline: 'Everything from symptom to signed report',
+      description: 'Search 80+ tests, scan a handwritten prescription with AI, compare nearby labs, book at one or several, choose walk-in or home collection, pay with MoMo, watch the sample move, and share the report with your doctor.',
+      keyHighlights: [
+        'AI prescription scanner for handwritten and printed sheets',
+        'Lab comparison by real GPS distance, TAT, price, and accreditation',
+        'Home collection with live phlebotomist map and ETA'
+      ],
+      roleAttribution: 'Patients & Family Members',
+      mockupType: 'patient_portal'
+    },
+    {
+      id: 'physicians',
+      label: 'Doctor App',
+      tagline: 'Prescribe. Connect. Get results.',
+      description: 'Connect with patients, send e-prescriptions and test recommendations straight to their account, receive signed reports the moment they are ready, and get credited for every referral.',
+      keyHighlights: [
+        'Two-way patient connections',
+        'E-prescriptions with one-tap convert to a lab booking',
+        'Referral ledger with per-doctor credits'
+      ],
+      roleAttribution: 'Attending Doctors & Partner Clinics',
+      mockupType: 'physicians'
+    },
+    {
+      id: 'dashboard',
+      label: 'Lab App',
+      tagline: 'Your lab. Your brand. Digitally front-doored.',
+      description: 'Configure your per-insurer price list, B-code fees, home collection rate, MoMo and Orange Money numbers, and cashier access codes. Receive auto-generated invoices, verify payments, and issue lab-branded reports with dynamic biologist signatures.',
+      keyHighlights: [
+        'Auto-generated batch invoices with insurance columns',
+        'Cashier payment verification with a dedicated access code',
+        'Lab-branded reports with QR to the audit chain'
+      ],
+      roleAttribution: 'Laboratory Owners & Directors',
+      mockupType: 'dashboard'
+    }
+  ]
+};
