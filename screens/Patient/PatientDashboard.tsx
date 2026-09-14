@@ -9,11 +9,15 @@ import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
 import BatchConsolidatedReportModal from '../../components/patient/BatchConsolidatedReportModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
+import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
 import { 
   Calendar, 
   FileText, 
   Share2, 
-  ArrowRightLeft, 
+  Camera,
+  Truck,
+  Navigation,
+  MapPin,
   Plus, 
   Clock, 
   CheckCircle2, 
@@ -34,7 +38,13 @@ import {
   Sparkles,
   Search,
   ExternalLink,
-  Laptop
+  Laptop,
+  Shield,
+  CreditCard,
+  Users,
+  Home,
+  BookOpen,
+  User
 } from 'lucide-react';
 
 interface PatientDashboardProps {
@@ -59,10 +69,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [patientRecordId, setPatientRecordId] = useState<string>(user?.id || 'pat-1');
   const [patientFullName, setPatientFullName] = useState<string>(user?.name || 'Patient Record');
   const [patientDocData, setPatientDocData] = useState<any>(null);
+  const [activeFamilyProfile, setActiveFamilyProfile] = useState<any | null>(null);
   
   // Modals
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showBookletModal, setShowBookletModal] = useState(false);
+  const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [batchReportBooking, setBatchReportBooking] = useState<PatientBooking | null>(null);
   const [receiptModalBooking, setReceiptModalBooking] = useState<PatientBooking | null>(null);
   const [envelopeModalTest, setEnvelopeModalTest] = useState<any | null>(null);
@@ -153,7 +165,20 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     };
   }, [user?.id, user?.email, user?.accessCode, (user as any)?.patientId, lab?.id]);
 
-  const filterPatientBookings = (allBookings: PatientBooking[], patDoc: any, currentUser: any) => {
+  const filterPatientBookings = (allBookings: PatientBooking[], patDoc: any, currentUser: any, activeProfile?: any) => {
+    // If a specific sub-profile / family member is selected (not Self), filter by that member
+    if (activeProfile && activeProfile.relationship !== 'Self') {
+      const targetName = (activeProfile.name || '').trim().toLowerCase();
+      const targetId = (activeProfile.id || '').trim().toLowerCase();
+      return allBookings.filter(b => {
+        const bName = String(b.patientName || '').trim().toLowerCase();
+        const bPid = String(b.patientId || b.patientPid || '').trim().toLowerCase();
+        if (targetId && (bPid === targetId || b.id === targetId)) return true;
+        if (targetName && bName && bName === targetName) return true;
+        return false;
+      });
+    }
+
     const validIds = [
       currentUser?.id,
       (currentUser as any)?.patientId,
@@ -265,16 +290,32 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       action: () => onNavigateTab ? onNavigateTab('share') : null
     },
     {
-      id: 'transfer',
-      label: 'Transfer Records',
-      desc: 'Transfer medical file to another lab',
-      icon: ArrowRightLeft,
+      id: 'scan',
+      label: 'Scan Prescription',
+      desc: 'Real device camera Rx scanner',
+      icon: Camera,
       color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400',
-      action: () => onNavigateTab ? onNavigateTab('transfer') : null
+      action: () => onNavigateTab ? onNavigateTab('scan') : null
     }
   ];
 
+  // Active home phlebotomist pickup tracking
+  const activeHomePickupBooking = bookings.find(b => 
+    (b as any).sampleMode === 'home_collection' && 
+    ((b.overallStatus as any) === 'Sample_Collected' || 
+     (b.overallStatus as any) === 'In_Transit' || 
+     (b as any).status === 'In_Transit' || 
+     (b.overallStatus as any) === 'Sample Picked Up / En Route to Lab' || 
+     (b.overallStatus as any) === 'Pending_Validation')
+  );
+
   const filteredBookings = bookings.filter(b => {
+    const isCompleted = b.overallStatus === 'Completed' || 
+      (b.tests && b.tests.length > 0 && b.tests.every(t => t.status === 'Completed' || t.status === 'Ready_For_Pickup'));
+    
+    if (testStatusFilter === 'completed' && !isCompleted) return false;
+    if (testStatusFilter === 'in_testing' && isCompleted) return false;
+
     if (!searchFilter) return true;
     const q = searchFilter.toLowerCase();
     return (
@@ -293,7 +334,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         onProfilePress={onProfilePress}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 pb-28 space-y-6">
         
         {/* Patient Welcome Card */}
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-7 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -315,9 +356,31 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
               <span>Diagnostic Center: <strong className="text-slate-800">{lab?.name || 'nanoLabs Central Diagnostics'}</strong></span>
             </p>
+
+            {patientDocData?.hasInsurance && (
+              <div className="pt-1 flex items-center gap-2 flex-wrap text-xs">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 font-semibold">
+                  <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Insurance: {patientDocData.insuranceProvider || 'HMO Policy'}</span>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-[11px]">
+                  <span>No: {patientDocData.insurancePolicyNumber || 'INS-VERIFIED'}</span>
+                  <span className="text-indigo-600 font-bold">({patientDocData.insuranceCoveragePercent || 80}% Covered)</span>
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => setShowFamilyModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
+              title="Switch between family members and child accounts"
+            >
+              <Users className="w-4 h-4 text-indigo-600" />
+              <span>Family Accounts ({user?.familyProfiles?.length || 1})</span>
+            </button>
+
             <button
               onClick={() => onNavigateTab ? onNavigateTab('book') : null}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
@@ -403,9 +466,62 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         </div>
 
+        {/* Phlebotomist Live GPS & Pickup Verification Card */}
+        {activeHomePickupBooking && (
+          <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white p-5 rounded-2xl border border-teal-500/30 shadow-md space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
+                  Live Phlebotomist Dispatch & Chain-of-Custody Tracking
+                </span>
+              </div>
+              <span className="text-[10px] font-mono bg-teal-500/20 text-teal-200 px-2 py-0.5 rounded border border-teal-500/40">
+                Order #{activeHomePickupBooking.bookingCode}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white">Nurse Alain Kemajou</div>
+                  <div className="text-[11px] text-teal-200/80">Accredited Phlebotomist &bull; Badge #PHL-237</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white">
+                    {(activeHomePickupBooking.overallStatus as any) === 'In_Transit' || (activeHomePickupBooking.overallStatus as any) === 'Sample Picked Up / En Route to Lab'
+                      ? 'Sample Picked Up / En Route to Lab'
+                      : 'Phlebotomist Dispatched to Address'}
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    {(activeHomePickupBooking.overallStatus as any) === 'In_Transit' || (activeHomePickupBooking.overallStatus as any) === 'Sample Picked Up / En Route to Lab'
+                      ? 'Biochemical cold chain verified (4°C active cooler)'
+                      : 'En route with sterile sampling kit'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-start md:justify-end gap-2">
+                <span className="text-xs font-medium text-teal-200">
+                  Destination: <strong className="text-white">{lab?.name || 'Central Laboratory'}</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab Selector & Search */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveSegmentTab('tests')}
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
@@ -436,18 +552,58 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </button>
           </div>
 
-          {activeSegmentTab === 'tests' && bookings.length > 1 && (
-            <div className="relative max-w-xs w-full">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Search batches, tests..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {activeSegmentTab === 'tests' && (
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setTestStatusFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer transition-all ${
+                    testStatusFilter === 'all'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All ({bookings.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestStatusFilter('completed')}
+                  className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer transition-all ${
+                    testStatusFilter === 'completed'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-emerald-700 hover:text-emerald-900'
+                  }`}
+                >
+                  Completed ({completedBatchesCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestStatusFilter('in_testing')}
+                  className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer transition-all ${
+                    testStatusFilter === 'in_testing'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-amber-700 hover:text-amber-900'
+                  }`}
+                >
+                  In Progress ({bookings.length - completedBatchesCount})
+                </button>
+              </div>
+            )}
+
+            {activeSegmentTab === 'tests' && bookings.length > 1 && (
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Search batches, tests..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* TAB 1: DIAGNOSTIC TEST BATCHES */}
@@ -801,6 +957,70 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
       </main>
 
+      {/* Modern Mobile-First Sticky Bottom Navigation Bar */}
+      <nav 
+        id="patient-sticky-bottom-nav"
+        aria-label="Patient Mobile Navigation"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3 py-2 shadow-xl flex items-center justify-around md:hidden"
+      >
+        <button
+          id="btn-nav-home"
+          type="button"
+          onClick={() => {
+            setActiveSegmentTab('tests');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeSegmentTab === 'tests' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Home className="w-5 h-5" />
+          <span className="text-[10px]">Home</span>
+        </button>
+
+        <button
+          id="btn-nav-book"
+          type="button"
+          onClick={() => onNavigateTab ? onNavigateTab('book-appointment') : null}
+          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-teal-600 font-bold cursor-pointer group"
+        >
+          <div className="w-10 h-10 -mt-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/30 group-hover:bg-teal-700 transition-all scale-105">
+            <Plus className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] text-teal-700 font-extrabold">Book Test</span>
+        </button>
+
+        <button
+          id="btn-nav-booklet"
+          type="button"
+          onClick={() => setShowBookletModal(true)}
+          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Booklet</span>
+        </button>
+
+        <button
+          id="btn-nav-family"
+          type="button"
+          onClick={() => setShowFamilyModal(true)}
+          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Family</span>
+        </button>
+
+        <button
+          id="btn-nav-profile"
+          type="button"
+          onClick={() => onProfilePress?.()}
+          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Profile</span>
+        </button>
+      </nav>
+
       {/* Official Consolidated Batch Diagnostic Report Modal */}
       <BatchConsolidatedReportModal
         isOpen={Boolean(batchReportBooking)}
@@ -890,6 +1110,70 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           setEnvelopeModalTest(null);
         }}
       />
+
+      {/* Family & Dependent Profile Switcher Modal */}
+      <FamilyProfileSwitcherModal
+        isOpen={showFamilyModal}
+        onClose={() => setShowFamilyModal(false)}
+        onProfileSwitched={async (profile) => {
+          setActiveFamilyProfile(profile);
+          setPatientFullName(profile.name);
+          try {
+            const targetLabId = lab?.id || 'lab-1';
+            const allBookings = await limsService.fetchAllBookings(targetLabId);
+            const filtered = filterPatientBookings(allBookings, patientDocData, user, profile);
+            setBookings(filtered);
+          } catch (e) {
+            console.error('Error switching family profile view:', e);
+          }
+        }}
+      />
+      {/* Sticky Bottom Mobile Navigation Bar (Mobile-App-First UX) */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 flex items-center justify-around shadow-lg">
+        <button
+          onClick={() => setActiveSegmentTab('tests')}
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg cursor-pointer ${
+            activeSegmentTab === 'tests' ? 'text-teal-600 font-bold' : 'text-slate-500'
+          }`}
+        >
+          <Home className="w-4 h-4" />
+          <span className="text-[10px]">Dashboard</span>
+        </button>
+
+        <button
+          onClick={() => onNavigateTab ? onNavigateTab('book') : null}
+          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
+        >
+          <Calendar className="w-4 h-4" />
+          <span className="text-[10px]">Book Test</span>
+        </button>
+
+        <button
+          onClick={() => onNavigateTab ? onNavigateTab('scan') : null}
+          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
+        >
+          <Camera className="w-4 h-4" />
+          <span className="text-[10px]">Scan Rx</span>
+        </button>
+
+        <button
+          onClick={() => setShowBookletModal(true)}
+          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
+        >
+          <BookOpen className="w-4 h-4" />
+          <span className="text-[10px]">Booklet</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSegmentTab('receipts')}
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg cursor-pointer ${
+            activeSegmentTab === 'receipts' ? 'text-teal-600 font-bold' : 'text-slate-500'
+          }`}
+        >
+          <Receipt className="w-4 h-4" />
+          <span className="text-[10px]">Receipts</span>
+        </button>
+      </nav>
     </div>
   );
 };

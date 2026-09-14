@@ -7,6 +7,7 @@ import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '..
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditorModal';
 import { 
   TestTube, 
   Search, 
@@ -181,6 +182,29 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
 
   // PDF Preview Modal
   const [showPdfModal, setShowPdfModal] = useState(false);
+
+  // Result Template Editor Modal
+  const [showResultTemplateModal, setShowResultTemplateModal] = useState(false);
+
+  const handleApplyCustomTemplate = (template: CustomResultTemplate) => {
+    const newParams = template.parameters.map((p, idx) => ({
+      id: p.id || `param-${Date.now()}-${idx}`,
+      name: p.name,
+      unit: p.unit,
+      refRangeMale: p.refRange || 'Normal',
+      refRangeFemale: p.refRange || 'Normal',
+      refRangeChild: p.refRange || 'Normal',
+      method: template.methodology || '',
+      defaultValue: p.defaultValue || ''
+    }));
+    setActiveTestSubParameters(prev => [...prev, ...newParams]);
+    const newVals: Record<string, string> = {};
+    newParams.forEach(p => {
+      if (p.defaultValue) newVals[p.id] = p.defaultValue;
+    });
+    setActiveSubParamValues(prev => ({ ...prev, ...newVals }));
+    setShowResultTemplateModal(false);
+  };
 
   // 1. Fetch Bookings and Live Inventory from Firestore
   const fetchData = async () => {
@@ -1132,16 +1156,28 @@ CLINICAL REAGENTS USED:
           ))}
         </div>
 
-        {/* Search Field */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search patient, PID, booking code or test..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+        {/* Search Field & Template Builder Button */}
+        <div className="flex items-center gap-2.5 w-full md:w-auto">
+          <div className="relative flex-1 md:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search patient, PID, booking code or test..."
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowResultTemplateModal(true)}
+            className="px-3.5 py-2.5 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-2xs"
+            title="Open Result Template Builder & Custom Grid Library"
+          >
+            <FileCode2 className="w-4 h-4 text-teal-600" />
+            <span className="hidden sm:inline">Result Templates</span>
+          </button>
         </div>
       </div>
 
@@ -2114,178 +2150,207 @@ CLINICAL REAGENTS USED:
                                 </span>
                               </div>
 
-                              <div className="space-y-3">
-                                {activeTestSubParameters.map((sp, spIdx) => {
-                                  // Heading / Sub-Header Row
-                                  if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
-                                    return (
-                                      <div
-                                        key={sp.id || spIdx}
-                                        className="bg-slate-800 text-white px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-xs mt-4"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <span className="w-2 h-2 rounded-full bg-teal-400" />
-                                          <span className="text-xs font-extrabold tracking-wide uppercase">{sp.name}</span>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveCustomParam(sp.id)}
-                                          className="text-slate-400 hover:text-rose-400 p-1"
-                                          title="Remove Section Header"
+                              {/* Responsive Grid / Column Result Editor */}
+                              <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs bg-white">
+                                <table className="w-full text-left text-xs border-collapse">
+                                  <thead className="bg-slate-50 text-slate-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-slate-200">
+                                    <tr>
+                                      <th className="py-3 px-3 w-[26%]">Parameter / Analyte Name</th>
+                                      <th className="py-3 px-3 w-[22%]">Result Value</th>
+                                      <th className="py-3 px-2 w-[12%] text-center">Unit</th>
+                                      <th className="py-3 px-3 w-[16%]">Biological Ref Range</th>
+                                      <th className="py-3 px-3 w-[24%]">Interpretation / Pathologist Remarks</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {activeTestSubParameters.map((sp, spIdx) => {
+                                      // Heading / Sub-Header Row
+                                      if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
+                                        return (
+                                          <tr key={sp.id || spIdx} className="bg-slate-800 text-white font-black">
+                                            <td colSpan={5} className="py-2.5 px-3">
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="w-2 h-2 rounded-full bg-teal-400" />
+                                                  <span className="text-xs tracking-wide uppercase">{sp.name}</span>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveCustomParam(sp.id)}
+                                                  className="text-slate-400 hover:text-rose-400 p-1"
+                                                  title="Remove Section Header"
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      }
+
+                                      const valStr = activeSubParamValues[sp.id] || '';
+                                      const obsStr = activeParamObservations[sp.id] || '';
+                                      const currentFlag = activeParamFlags[sp.id] || 'Normal';
+                                      const shouldPrint = activeParamPrintToggles[sp.id] !== false;
+
+                                      const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
+                                      const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
+                                      const refDisplay = activeBooking.patientGender === 'Female' 
+                                        ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
+                                        : sp.refRangeMale || `${min || 0} - ${max || 100}`;
+
+                                      const isHighLow = currentFlag === 'High' || currentFlag === 'Low' || currentFlag === 'Critical';
+                                      const isNormal = currentFlag === 'Normal' && valStr.trim() !== '';
+
+                                      return (
+                                        <tr 
+                                          key={sp.id || spIdx} 
+                                          className={`hover:bg-slate-50/80 transition-colors ${
+                                            isHighLow ? 'bg-rose-50/30' : ''
+                                          }`}
                                         >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    );
-                                  }
+                                          {/* Column 1: Test Parameter / Analyte Name */}
+                                          <td className="py-3 px-3 align-top">
+                                            <div className="space-y-1">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-xs font-black text-slate-900">{sp.name}</span>
+                                                {sp.method && (
+                                                  <span className="text-[9px] font-mono text-slate-400">
+                                                    ({sp.method})
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 cursor-pointer">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={shouldPrint}
+                                                    onChange={e => {
+                                                      setActiveParamPrintToggles({
+                                                        ...activeParamPrintToggles,
+                                                        [sp.id]: e.target.checked
+                                                      });
+                                                    }}
+                                                    className="rounded text-teal-600 focus:ring-teal-500 w-3 h-3"
+                                                  />
+                                                  <span>Print</span>
+                                                </label>
+                                                {sp.id.startsWith('custom-p-') && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveCustomParam(sp.id)}
+                                                    className="text-slate-300 hover:text-rose-600 p-0.5"
+                                                    title="Remove parameter"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </td>
 
-                                  const valStr = activeSubParamValues[sp.id] || '';
-                                  const obsStr = activeParamObservations[sp.id] || '';
-                                  const currentFlag = activeParamFlags[sp.id] || 'Normal';
-                                  const shouldPrint = activeParamPrintToggles[sp.id] !== false;
+                                          {/* Column 2: Result Value with real-time color coding */}
+                                          <td className="py-3 px-3 align-top">
+                                            <div className="space-y-1.5">
+                                              <input
+                                                type="text"
+                                                value={valStr}
+                                                onChange={e => {
+                                                  const newVals = {
+                                                    ...activeSubParamValues,
+                                                    [sp.id]: e.target.value
+                                                  };
+                                                  const calculated = computeFormulas(newVals, activeTestSubParameters);
+                                                  setActiveSubParamValues(calculated);
 
-                                  const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
-                                  const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
-                                  const refDisplay = activeBooking.patientGender === 'Female' 
-                                    ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
-                                    : sp.refRangeMale || `${min || 0} - ${max || 100}`;
+                                                  // Auto-flag calculation
+                                                  const numVal = parseFloat(e.target.value);
+                                                  if (!isNaN(numVal) && min !== undefined && max !== undefined) {
+                                                    if (numVal < min) {
+                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Low' }));
+                                                    } else if (numVal > max) {
+                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'High' }));
+                                                    } else {
+                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Normal' }));
+                                                    }
+                                                  }
+                                                }}
+                                                placeholder="Value..."
+                                                className={`w-full px-3 py-2 rounded-xl text-xs font-mono font-bold transition-all border ${
+                                                  isHighLow 
+                                                    ? 'border-rose-400 bg-rose-50/90 text-rose-950 ring-1 ring-rose-300' 
+                                                    : isNormal 
+                                                    ? 'border-emerald-300 bg-emerald-50/60 text-emerald-950 ring-1 ring-emerald-300' 
+                                                    : 'border-slate-200 bg-slate-50 text-slate-900 focus:bg-white'
+                                                } focus:outline-none focus:ring-2 focus:ring-teal-500`}
+                                              />
+                                              {/* Out-of-range status indicator & Quick Manual Flag Pills */}
+                                              <div className="flex items-center gap-1">
+                                                {(['Normal', 'Low', 'High'] as const).map(f => (
+                                                  <button
+                                                    key={f}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setActiveParamFlags({
+                                                        ...activeParamFlags,
+                                                        [sp.id]: f
+                                                      });
+                                                    }}
+                                                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                                                      currentFlag === f
+                                                        ? f === 'High'
+                                                          ? 'bg-rose-600 text-white shadow-2xs'
+                                                          : f === 'Low'
+                                                          ? 'bg-amber-500 text-white shadow-2xs'
+                                                          : 'bg-emerald-600 text-white shadow-2xs'
+                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                    }`}
+                                                  >
+                                                    {f === 'Normal' ? 'Norm' : f}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </td>
 
-                                  return (
-                                    <div
-                                      key={sp.id || spIdx}
-                                      className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 hover:border-teal-300 transition-all space-y-2.5 shadow-xs"
-                                    >
-                                      {/* Top Row: Parameter Name, Unit, Method, Ref Range & Actions */}
-                                      <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs font-black text-slate-900">{sp.name}</span>
-                                          {sp.unit && (
-                                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">
-                                              {sp.unit}
+                                          {/* Column 3: Unit */}
+                                          <td className="py-3 px-2 align-middle text-center">
+                                            {sp.unit ? (
+                                              <span className="inline-block text-[11px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-md">
+                                                {sp.unit}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-300 text-xs font-mono">-</span>
+                                            )}
+                                          </td>
+
+                                          {/* Column 4: Biological Reference Range */}
+                                          <td className="py-3 px-3 align-middle">
+                                            <span className="text-xs font-mono text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 inline-block">
+                                              {refDisplay}
                                             </span>
-                                          )}
-                                          {sp.method && (
-                                            <span className="text-[9px] font-mono text-slate-400">
-                                              ({sp.method})
-                                            </span>
-                                          )}
-                                        </div>
+                                          </td>
 
-                                        <div className="flex items-center gap-3">
-                                          <span className="text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                                            Ref: <strong>{refDisplay}</strong>
-                                          </span>
-
-                                          {/* Print on Report Toggle */}
-                                          <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 cursor-pointer">
+                                          {/* Column 5: Interpretation / Pathologist Remarks */}
+                                          <td className="py-3 px-3 align-top">
                                             <input
-                                              type="checkbox"
-                                              checked={shouldPrint}
+                                              type="text"
+                                              value={obsStr}
                                               onChange={e => {
-                                                setActiveParamPrintToggles({
-                                                  ...activeParamPrintToggles,
-                                                  [sp.id]: e.target.checked
+                                                setActiveParamObservations({
+                                                  ...activeParamObservations,
+                                                  [sp.id]: e.target.value
                                                 });
                                               }}
-                                              className="rounded text-teal-600 focus:ring-teal-500"
+                                              placeholder="Remarks / morphology..."
+                                              className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                             />
-                                            <span>Print</span>
-                                          </label>
-
-                                          {sp.id.startsWith('custom-p-') && (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRemoveCustomParam(sp.id)}
-                                              className="text-slate-300 hover:text-rose-600 p-1"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Bottom Row: Roomy Long Input Fields (Measured Value + Qualitative Observation + Flags) */}
-                                      <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
-                                        
-                                        {/* Measured Value Field (Long Roomy Input) */}
-                                        <div className="md:col-span-4">
-                                          <input
-                                            type="text"
-                                            value={valStr}
-                                            onChange={e => {
-                                              const newVals = {
-                                                ...activeSubParamValues,
-                                                [sp.id]: e.target.value
-                                              };
-                                              const calculated = computeFormulas(newVals, activeTestSubParameters);
-                                              setActiveSubParamValues(calculated);
-
-                                              // Auto-flag calculation
-                                              const numVal = parseFloat(e.target.value);
-                                              if (!isNaN(numVal) && min !== undefined && max !== undefined) {
-                                                if (numVal < min) {
-                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Low' }));
-                                                } else if (numVal > max) {
-                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'High' }));
-                                                } else {
-                                                  setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Normal' }));
-                                                }
-                                              }
-                                            }}
-                                            placeholder="Measured Value (e.g. 14.2)..."
-                                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                          />
-                                        </div>
-
-                                        {/* Qualitative Finding / Morphology Remarks (Long Input Field) */}
-                                        <div className="md:col-span-5">
-                                          <input
-                                            type="text"
-                                            value={obsStr}
-                                            onChange={e => {
-                                              setActiveParamObservations({
-                                                ...activeParamObservations,
-                                                [sp.id]: e.target.value
-                                              });
-                                            }}
-                                            placeholder="Qualitative remark / morphology (e.g. Normocytic normochromic)..."
-                                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-sans text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                          />
-                                        </div>
-
-                                        {/* One-Click Flag Selector Pills */}
-                                        <div className="md:col-span-3 flex items-center justify-end gap-1">
-                                          {(['Normal', 'Low', 'High', 'Borderline'] as const).map(f => (
-                                            <button
-                                              key={f}
-                                              type="button"
-                                              onClick={() => {
-                                                setActiveParamFlags({
-                                                  ...activeParamFlags,
-                                                  [sp.id]: f
-                                                });
-                                              }}
-                                              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
-                                                currentFlag === f
-                                                  ? f === 'High'
-                                                    ? 'bg-rose-600 text-white shadow-xs'
-                                                    : f === 'Low'
-                                                    ? 'bg-amber-500 text-white shadow-xs'
-                                                    : f === 'Borderline'
-                                                    ? 'bg-purple-600 text-white shadow-xs'
-                                                    : 'bg-emerald-600 text-white shadow-xs'
-                                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                              }`}
-                                            >
-                                              {f === 'Normal' ? 'Norm' : f}
-                                            </button>
-                                          ))}
-                                        </div>
-
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
                             </div>
                           )}
@@ -3392,6 +3457,13 @@ CLINICAL REAGENTS USED:
           </div>
         </div>
       )}
+
+      {/* RESULT TEMPLATE BUILDER / CUSTOM PARAMETER GRID MODAL */}
+      <ResultTemplateEditorModal
+        isOpen={showResultTemplateModal}
+        onClose={() => setShowResultTemplateModal(false)}
+        onApplyTemplate={handleApplyCustomTemplate}
+      />
 
     </div>
   );
