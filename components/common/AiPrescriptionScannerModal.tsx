@@ -59,7 +59,7 @@ export const AiPrescriptionScannerModal: React.FC<AiPrescriptionScannerModalProp
       const result = await scanPrescriptionDocument(fileOrText || '');
       setScanResult(result);
       // Pre-select all matched tests by default
-      const initialSet = new Set<string>(result.matchedTests.map((t) => t.code));
+      const initialSet = new Set<string>(result.matchedTests.map((t:any) => t.code));
       setSelectedCodes(initialSet);
     } catch (err) {
       console.error('Prescription scanning failed:', err);
