@@ -580,16 +580,16 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     <div className="font-black uppercase text-slate-950 pb-1 border-b border-slate-200">
                       IDENTIFICATION DU PATIENT
                     </div>
-                    <div>Assuré Principal: <strong className="font-bold text-slate-950">{patientName}</strong></div>
-                    <div>Bénéficiaire: <strong className="font-semibold">{beneficiaryName}</strong></div>
+                    <div>Assuré Principal: <strong className="font-bold text-slate-950 notranslate" translate="no">{patientName}</strong></div>
+                    <div>Bénéficiaire: <strong className="font-semibold notranslate" translate="no">{beneficiaryName}</strong></div>
                     <div className="font-mono text-[10px]">
                       Matricule: <strong>{matricule}</strong> • Né(e) le: <strong>{formatDOBDisplay(patientDob)}</strong>
                     </div>
                     <div>
                       Sexe: <strong>{patientGender === 'Female' ? 'F' : 'M'}</strong> • Tél: <strong className="font-mono">{patientPhone}</strong>
                     </div>
-                    <div>Société: <strong className="font-bold">{society}</strong></div>
-                    <div>Médecin Prescripteur: <strong className="font-bold text-slate-950">{referringDoctorDisplay}</strong></div>
+                    <div>Société: <strong className="font-bold notranslate" translate="no">{society}</strong></div>
+                    <div>Prescribing Physician: <strong className="font-bold text-slate-950 notranslate" translate="no">Ref. Doctor: {referringDoctorDisplay}</strong></div>
                     <div className="pt-1 border-t border-slate-200/80 flex items-center justify-between font-mono font-bold text-slate-800 text-[10px]">
                       <span>N° BPC: {bpcNumber}</span>
                       <span>N° Dos: {dossierNumber}</span>
@@ -781,13 +781,13 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 {/* Patient Summary */}
                 <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px]">
                   <div>
-                    <div>Patient: <strong className="text-slate-950">{patientName}</strong></div>
+                    <div>Patient: <strong className="text-slate-950 notranslate" translate="no">{patientName}</strong></div>
                     <div>PID: <strong className="font-mono text-teal-700">{booking.patientPid || 'P-555'}</strong></div>
                     <div>Contact: <strong className="font-mono">{patientPhone}</strong></div>
                   </div>
                   <div className="text-right">
-                    <div>Prescripteur: <strong>{booking.doctorName || 'Dr. Attending Physician'}</strong></div>
-                    <div>Organisme: <strong>{insuranceProviderName}</strong></div>
+                    <div>Prescripteur: <strong className="notranslate" translate="no">Ref. Doctor: {booking.doctorName || referringDoctorDisplay || 'Dr. Emmanuel Nkuo'}</strong></div>
+                    <div>Organisme: <strong className="notranslate" translate="no">{insuranceProviderName}</strong></div>
                     <div>Couverture: <strong className="text-teal-800">{insuranceCoveragePercent}%</strong></div>
                   </div>
                 </div>
