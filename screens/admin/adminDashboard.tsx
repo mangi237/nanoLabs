@@ -10,6 +10,7 @@ import PatientManagement from './PatientManagement';
 import ReferringDoctorsManagement from './ReferringDoctorsManagement';
 import HeaderFooterTemplateManager from '../../components/admin/HeaderFooterTemplateManager';
 import InsuranceRatesManager from '../../components/admin/InsuranceRatesManager';
+import PaymentConfigManager from '../../components/admin/PaymentConfigManager';
 import LabProfileModal from '../../components/admin/LabProfileModal';
 import { 
   LayoutDashboard, 
@@ -24,7 +25,8 @@ import {
   Camera,
   Stethoscope,
   Layers,
-  Percent
+  Percent,
+  CreditCard
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 
@@ -44,13 +46,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { lab } = useAuth();
   const [showLabProfileModal, setShowLabProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'templates' | 'insurance' | 'analytics' | 'reports' | 'patients'
+    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'templates' | 'insurance' | 'payments' | 'analytics' | 'reports' | 'patients'
   >('overview');
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'templates', label: 'Header & Footer Templates', icon: Layers, badge: 'Dual Styles' },
     { id: 'insurance', label: 'Insurance & COTE Config', icon: Percent, badge: 'Cameroon' },
+    { id: 'payments', label: 'Payment Gateway Config', icon: CreditCard, badge: 'MOMO/OM/Cash' },
     { id: 'doctors', label: 'Referring Doctors', icon: Stethoscope },
     { id: 'inventory', label: 'Inventory Manager', icon: Package, badge: 'Reagents' },
     { id: 'catalog', label: 'Test Catalog', icon: FlaskConical },
@@ -142,6 +145,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {activeTab === 'insurance' && (
           <InsuranceRatesManager />
+        )}
+
+        {activeTab === 'payments' && (
+          <PaymentConfigManager />
         )}
 
         {activeTab === 'doctors' && (
