@@ -34,7 +34,7 @@ export interface SiteConfig {
     description: string;
     keyHighlights: string[];
     roleAttribution: string;
-    mockupType: 'dashboard' | 'patients' | 'tests' | 'results' | 'staff' | 'physicians' | 'patient_portal' | 'audit';
+    mockupImage: string;
   }[];
 }
 
@@ -44,7 +44,7 @@ export const siteConfig: SiteConfig = {
   industry: 'HealthTech / Digital Health / Medical Diagnostics',
   tagline: 'One hub. Every test. Every lab. Every result.',
   supportingTagline: 'Built in Cameroon. Connecting patients, doctors, and laboratories.',
-  description: 'nanoLabs connects patients, doctors, and laboratories on one mobile-first platform — from AI prescription scan and multi-lab booking to live sample tracking and lab-branded reports.',
+  description: 'nanoLabs connects patients, doctors, and laboratories on one mobile-first platform — from AI prescription scan and multi-lab booking, to live sample tracking and lab-branded reports.',
   portalUrl: '/?view=portal',
   email: 'nanolabsolutions26@gmail.com',
   phone: '+237 670 000 000',
@@ -71,7 +71,7 @@ export const siteConfig: SiteConfig = {
       substack: 'https://nanolabs.substack.com',
       email: 'nanolabsolutions26@gmail.com'
     },
-    image: '[SOURCE IMAGE: portrait of Cameroonian founder, warm light, 4:5]'
+    image: '/assets/doctors-team.png'
   },
 
   milestones: [
@@ -147,45 +147,29 @@ export const siteConfig: SiteConfig = {
   ],
 
   impactStats: [
-    {
-      label: 'Batch-Based Invoicing',
-      value: '100%',
-      description: 'One invoice per collection event, never per test.'
-    },
-    {
-      label: 'Live Sample Tracking',
-      value: '7 Stages',
-      description: 'From intake to signed and ready, visible to the patient.'
-    },
-    {
-      label: 'Audit Chain',
-      value: 'Append-Only',
-      description: 'Hash-chained. Tamper attempts rejected at the database level.'
-    },
-    {
-      label: 'Platform Fee',
-      value: '5%',
-      description: 'On the patient portion only, charged when payment is verified.'
-    }
+    { label: 'Batch-based invoicing', value: '100%', description: 'One invoice per collection event, never per test.' },
+    { label: 'Live sample tracking', value: '7', description: 'From intake to signed and ready, visible to the patient.' },
+    { label: 'Audit chain', value: 'SHA-256', description: 'Append-only. Tamper attempts rejected at the database level.' },
+    { label: 'Platform fee', value: '5%', description: 'On the patient portion only, charged when payment is verified.' }
   ],
 
   productTabs: [
     {
-      id: 'dashboard',
-      label: 'Patient App',
-      tagline: 'Everything from symptom to signed report',
-      description: 'Search 80+ tests, scan a handwritten prescription with AI, compare nearby labs, book at one or several, choose walk-in or home collection, pay with MoMo, watch the sample move, and share the report with your doctor.',
+      id: 'patient',
+      label: 'Patient app',
+      tagline: 'Symptom to signed report, in one tap.',
+      description: 'Search 80+ tests, scan a handwritten prescription with AI, compare nearby labs on real distance and price, book at one or several, choose walk-in or home collection, pay with MoMo, and watch the sample move.',
       keyHighlights: [
         'AI prescription scanner for handwritten and printed sheets',
         'Lab comparison by real GPS distance, TAT, price, and accreditation',
         'Home collection with live phlebotomist map and ETA'
       ],
       roleAttribution: 'Patients & Family Members',
-      mockupType: 'patient_portal'
+      mockupImage: '/assets/phone-nanoscan-result.png'
     },
     {
-      id: 'physicians',
-      label: 'Doctor App',
+      id: 'doctor',
+      label: 'Doctor app',
       tagline: 'Prescribe. Connect. Get results.',
       description: 'Connect with patients, send e-prescriptions and test recommendations straight to their account, receive signed reports the moment they are ready, and get credited for every referral.',
       keyHighlights: [
@@ -194,20 +178,20 @@ export const siteConfig: SiteConfig = {
         'Referral ledger with per-doctor credits'
       ],
       roleAttribution: 'Attending Doctors & Partner Clinics',
-      mockupType: 'physicians'
+      mockupImage: '/assets/tablet-lab-dashboard.png'
     },
     {
-      id: 'dashboard',
-      label: 'Lab App',
+      id: 'lab',
+      label: 'Lab app',
       tagline: 'Your lab. Your brand. Digitally front-doored.',
-      description: 'Configure your per-insurer price list, B-code fees, home collection rate, MoMo and Orange Money numbers, and cashier access codes. Receive auto-generated invoices, verify payments, and issue lab-branded reports with dynamic biologist signatures.',
+      description: 'Configure your per-insurer price list, B-code fees, home collection rate, MoMo and Orange Money numbers, and cashier access codes. Receive auto-generated invoices, verify payments, and issue lab-branded reports.',
       keyHighlights: [
         'Auto-generated batch invoices with insurance columns',
         'Cashier payment verification with a dedicated access code',
         'Lab-branded reports with QR to the audit chain'
       ],
       roleAttribution: 'Laboratory Owners & Directors',
-      mockupType: 'dashboard'
+      mockupImage: '/assets/tablet-report.png'
     }
   ]
 };
