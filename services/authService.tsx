@@ -1,4 +1,3 @@
-
 // services/authService.ts
 import { 
   collection, 
@@ -209,46 +208,27 @@ export const authService = {
           };
         }
 
+        // STRICT ROLE CHECK: If code matches a patient record, explicitly reject staff login!
         const foundPatientDoc = patientsSnap.docs.find(d => matchesPatient(d, d.data()));
         if (foundPatientDoc) {
-          const patientData = foundPatientDoc.data();
-
           return {
-            success: true,
-            user: {
-              id: foundPatientDoc.id,
-              ...patientData,
-              role: 'patient',
-              roles: ['patient'],
-              mustChangePassword: false
-            },
-            lab: { id: targetLabId, name: patientData.labName || 'Laboratory Center' },
-            role: 'patient',
-            mustChangePassword: false
+            success: false,
+            error: 'Invalid staff credentials. This access code belongs to a patient account. Please log in via the Patient Portal.'
           };
         }
       } catch (authErr) {
         console.warn('Error during laboratory credential verification:', authErr);
       }
 
-      // 5. Check local client fallback cache (only if for the targeted laboratory)
+      // Check local patient cache - reject with patient error if it matches
       try {
         const localPatientRaw = localStorage.getItem('last_registered_patient');
         if (localPatientRaw) {
           const localPatient = JSON.parse(localPatientRaw);
           if ((!localPatient.labId || localPatient.labId === targetLabId) && matchesPatient({ id: localPatient.id }, localPatient)) {
             return {
-              success: true,
-              user: {
-                id: localPatient.id || localPatient.patientId,
-                ...localPatient,
-                role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false
-              },
-              lab: { id: targetLabId, name: localPatient.labName || 'Laboratory Center' },
-              role: 'patient',
-              mustChangePassword: false
+              success: false,
+              error: 'Invalid staff credentials. This access code belongs to a patient account. Please log in via the Patient Portal.'
             };
           }
         }
@@ -258,7 +238,7 @@ export const authService = {
 
       return {
         success: false,
-        error: 'Invalid access code for the selected laboratory. The code entered does not match any registered staff or patient record at this facility.'
+        error: 'Invalid access code for the selected laboratory. The code entered does not match any registered staff record at this facility.'
       };
     } catch (error: any) {
       console.error('❌ Error in verifyAccessCode:', error);
@@ -773,6 +753,20 @@ export const authService = {
       const lowerId = cleanIdentifier.toLowerCase();
       const cleanIdDigits = cleanIdentifier.replace(/\D/g, '');
       const upperPass = cleanPassword.toUpperCase();
+
+      // STRICT ROLE CHECK: Reject staff credentials on Patient Portal login
+      if (DEFAULT_STAFF_MAP[upperPass] && DEFAULT_STAFF_MAP[upperPass].role !== 'patient') {
+        return {
+          success: false,
+          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
+        };
+      }
+      if (['SUPER123', 'ADMIN123', 'TECH123', 'LABTECH123', 'CASH123', 'CASHIER123', 'REC123', 'RECEPTION123', 'ANALYZER123', 'PHLEB123', 'SAMPLE123'].includes(upperPass)) {
+        return {
+          success: false,
+          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
+        };
+      }
 
       // 1. Check local storage cache for recently registered patients
       try {
