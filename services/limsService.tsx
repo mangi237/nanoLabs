@@ -3049,6 +3049,15 @@ export const limsService = {
     hasInsurance?: boolean;
     insuranceProvider?: string;
     insurancePolicyNumber?: string;
+    insuranceCoveragePercent?: number;
+    coPayPercent?: number;
+    isStaffExemption?: boolean;
+    staffMemberName?: string;
+    staffDesignation?: string;
+    doctorName?: string;
+    selectedMasterTestIds?: string[];
+    clinicalNotes?: string;
+    creatorName?: string;
     allergies?: string[];
     chronicConditions?: string[];
     sourceLabId: string;
@@ -3075,9 +3084,24 @@ export const limsService = {
     const timestamp = new Date().toISOString();
     const transferId = `TRF-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
 
+    // Destructure properties to enforce fallback data layout mirrors matching the createBooking service logic
+    const {
+      hasInsurance = false,
+      isStaffExemption = false,
+      patientAge = 30,
+      patientGender = 'Male',
+      creatorName = 'Front Desk Receptionist',
+      ...restParams
+    } = params;
+
     const transferPayload = cleanFirestoreData({
       id: transferId,
-      ...params,
+      ...restParams,
+      patientAge,
+      patientGender,
+      hasInsurance,
+      isStaffExemption,
+      creatorName,
       status: 'pending_receptionist_confirmation',
       transferredAt: timestamp,
       updatedAt: timestamp
@@ -3119,7 +3143,8 @@ export const limsService = {
       console.error('Error creating patient transfer request:', e);
       return { success: false, transferId, message: e.message || 'Failed to dispatch transfer request' };
     }
-  },
+  }
+,
 
   /**
    * Fetch all incoming transferred patients for a specific laboratory's receptionist

@@ -10,6 +10,7 @@ import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/of
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
 import { uploadService } from '../../api/upload';
 import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
+import { DoctorCardSelect, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { 
   Search, 
   UserPlus, 
@@ -44,7 +45,8 @@ import {
   Upload,
   AlertCircle,
   FileCheck,
-  Stethoscope
+  Stethoscope,
+  Globe
 } from 'lucide-react';
 
 const BLOOD_GROUPS = [
@@ -494,14 +496,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         setFullName('');
         setPhone('');
         setEmail('');
-        setDob('1996-05-15');
-        setAge('28');
-        setGender('Male');
-        setCity('Douala');
+        setDob('');
+        setAge('');
+        setGender('');
+        setCity('');
         setNationalId('');
-        setBloodType('O+');
+        setBloodType('');
         setHasInsurance(false);
-        setInsuranceProvider('Ascoma Health');
+        setInsuranceProvider('');
         setInsurancePolicyNumber('');
         setInsuranceCardUrl('');
         setReferringDoctorSelect('');
@@ -553,6 +555,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         referringDoctor: doctorToUse || selectedPatientForTest.referringDoctor,
         referralHospital: selectedPatientForTest.referralHospital,
         referralNotes: selectedPatientForTest.referralNotes,
+        hasInsurance: Boolean(selectedPatientForTest.hasInsurance),
+        insuranceProvider: selectedPatientForTest.hasInsurance ? selectedPatientForTest.insuranceProvider : undefined,
+        insurancePolicyNumber: selectedPatientForTest.hasInsurance ? selectedPatientForTest.insurancePolicyNumber : undefined,
+        insuranceCoveragePercent: selectedPatientForTest.hasInsurance && selectedPatientForTest.insuranceCoveragePercent !== undefined ? Number(selectedPatientForTest.insuranceCoveragePercent) : undefined,
+        coPayPercent: selectedPatientForTest.hasInsurance && selectedPatientForTest.insuranceCoveragePercent !== undefined ? (100 - Number(selectedPatientForTest.insuranceCoveragePercent)) : undefined,
         isStaffExemption: Boolean(selectedPatientForTest.isStaffMember),
         staffMemberName: selectedPatientForTest.isStaffMember ? selectedPatientForTest.name : undefined,
         staffDesignation: selectedPatientForTest.staffDesignation,
@@ -560,7 +567,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         selectedMasterTestIds,
         clinicalNotes: testOrderNotes.trim() || undefined,
         creatorName: user?.name || 'Front Desk Receptionist'
-      });
+      } as any);
 
       if (selectedPatientForTest.isStaffMember) {
         alert(`Staff Free Test Exemption Applied for ${selectedPatientForTest.name}! Billed at 0 FCFA with instant Admin Alert triggered.`);
@@ -679,7 +686,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
             {pendingBookings.map(b => (
               <div key={b.id} className="p-3.5 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-3 shadow-xs">
                 <div>
-                  <div className="font-extrabold text-xs text-slate-900">{b.patientName}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-extrabold text-xs text-slate-900">{b.patientName}</div>
+                    {(b.isOnlineBooking || b.registrationType === 'online') && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                        <Globe className="w-2.5 h-2.5" /> Online Patient
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
                     <span className="font-mono font-bold text-teal-700">{b.bookingCode}</span>
                     <span>• {b.tests?.map(t => t.testName).join(', ')}</span>
@@ -750,9 +764,9 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                         <td className="py-3 px-4">
                           <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
                             <span>{patient.name}</span>
-                            {!isWalkIn && (
-                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200 text-[9px] font-extrabold">
-                                ONLINE USER
+                            {(!isWalkIn || patient.registrationType === 'online') && (
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200 text-[9px] font-extrabold flex items-center gap-1">
+                                <Globe className="w-2.5 h-2.5" /> ONLINE PATIENT
                               </span>
                             )}
                           </div>
@@ -1401,64 +1415,28 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
                 {/* Referring Doctor & Medical Center */}
                 <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                    2. Referral & Clinical Recommendation
-                  </h4>
+                  <DoctorCardSelect
+                    value={referringDoctorSelect === 'CUSTOM_ENTRY' ? customDoctorName : referringDoctorSelect}
+                    hospitalValue={referralHospital}
+                    onChange={(docName, hosp) => {
+                      setReferringDoctorSelect(docName);
+                      setCustomDoctorName(docName);
+                      if (hosp) {
+                        setReferralHospital(hosp);
+                      }
+                    }}
+                    connectedDoctors={referringDoctorsList.map((d: any) => ({
+                      id: d.id || d.doctorName,
+                      name: d.doctorName,
+                      specialty: d.specialty || 'General Medicine',
+                      hospital: d.hospital || 'Partner Clinic',
+                      verified: true,
+                      phone: d.phone
+                    }))}
+                    label="Referring Doctor / Prescribing Clinician"
+                    placeholder="Search accredited doctors or enter custom physician name..."
+                  />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
-                        <span>Referring Doctor / Clinician</span>
-                        {referringDoctorsList.length > 0 && (
-                          <span className="text-[10px] text-teal-700 font-semibold">{referringDoctorsList.length} Partner Doctors</span>
-                        )}
-                      </label>
-                      <select
-                        value={referringDoctorSelect}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setReferringDoctorSelect(val);
-                          if (val !== 'CUSTOM_ENTRY') {
-                            const docObj = referringDoctorsList.find(d => d.doctorName === val);
-                            if (docObj && docObj.hospital) {
-                              setReferralHospital(docObj.hospital);
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                      >
-                        <option value="">-- Self-Referred / Outpatient --</option>
-                        {referringDoctorsList.map((doc: any) => (
-                          <option key={doc.id || doc.doctorName} value={doc.doctorName}>
-                            {doc.doctorName} {doc.specialty ? `(${doc.specialty})` : ''} {doc.hospital ? `- ${doc.hospital}` : ''}
-                          </option>
-                        ))}
-                        <option value="CUSTOM_ENTRY">+ Add External Doctor Manually...</option>
-                      </select>
-                      {referringDoctorSelect === 'CUSTOM_ENTRY' && (
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            placeholder="Enter Doctor Full Name (e.g. Dr. Samuel M.)"
-                            value={customDoctorName}
-                            onChange={e => setCustomDoctorName(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs"
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Hospital / Medical Center</label>
-                      <input
-                        type="text"
-                        value={referralHospital}
-                        onChange={e => setReferralHospital(e.target.value)}
-                        placeholder="e.g. Central Hospital / PolyClinic"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      />
-                    </div>
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Referral Indication / Clinical Notes</label>
