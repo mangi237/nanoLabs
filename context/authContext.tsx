@@ -118,7 +118,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await authService.verifyAccessCode(accessCode, labId);
       
-      if (result.success) {
+      if (result.success && result.user) {
+        if (result.user.role === 'patient') {
+          throw new Error('Invalid Staff Access Code. Patient codes cannot authenticate on the Laboratory Staff portal.');
+        }
         setUser(result.user);
         setLab(result.lab);
         setIsAuthenticated(true);
