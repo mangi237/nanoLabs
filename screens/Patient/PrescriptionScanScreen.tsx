@@ -82,7 +82,8 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
       basePriceXaf: test.basePrice,
       confidenceScore: 100,
       confidencePct: 100,
-      extractedSnippet: 'Manually selected'
+      extractedSnippet: 'Manually selected',
+      matchedPhrase: test.name,
     };
     if (!selectedTests.some((t) => t.code === item.code)) {
       setSelectedTests([...selectedTests, item]);
