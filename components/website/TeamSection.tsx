@@ -1,5 +1,4 @@
 import React from 'react';
-import { Users, Code, Stethoscope, Sparkles } from 'lucide-react';
 import { siteConfig } from '../../data/siteConfig';
 
 export const TeamSection: React.FC = () => {
@@ -7,34 +6,34 @@ export const TeamSection: React.FC = () => {
     {
       name: siteConfig.founder.name,
       role: 'Founder & System Architect',
-      bio: 'Leading product architecture, multi-tenant LIMS core, offline-sync protocols, and developer operations.',
+      bio: 'Leading product architecture, the multi-lab booking engine, batch-based invoicing, live tracking, and the append-only audit chain.',
       badge: 'Engineering & Product'
     },
     {
       name: 'Clinical Advisory Board',
       role: 'Medical Biologists & Pathologists',
-      bio: 'Practicing laboratory directors ensuring ONMC compliance, validation workflows, reference ranges, and quality standards.',
+      bio: 'Practicing laboratory directors ensuring ONMC compliance, validation workflows, reference ranges, and report signing standards.',
       badge: 'Clinical Governance'
     },
     {
       name: 'Operations & Lab Success',
       role: 'Deployment & Training',
-      bio: 'Supporting on-site laboratory staff onboarding, barcode scanner integrations, and customer satisfaction.',
+      bio: 'Supporting on-site laboratory staff onboarding, cashier verification flows, phlebotomist transit training, and customer satisfaction.',
       badge: 'Lab Operations'
     }
   ];
 
   return (
-    <section className="py-20 bg-[#07111F] relative overflow-hidden border-t border-white/5">
+    <section className="py-20 bg-white relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-3 max-w-2xl mx-auto mb-14">
-          <span className="text-xs font-bold text-[#20C997] uppercase tracking-wider bg-[#20C997]/10 px-3.5 py-1 rounded-full border border-[#20C997]/20">
-            People Behind The Mission
+          <span className="text-xs font-bold text-[#0F766E] uppercase tracking-wider bg-teal-50 px-3.5 py-1 rounded-full border border-teal-200">
+            People behind the mission
           </span>
-          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            The people building NanoLabs.
+          <h2 className="text-2xl sm:text-4xl font-black text-[#0B1F1D] tracking-tight">
+            The people building nanoLabs.
           </h2>
-          <p className="text-xs sm:text-sm text-[#AAB7C7]">
+          <p className="text-xs sm:text-sm text-slate-600">
             Combining software craftsmanship with deep clinical and operational expertise.
           </p>
         </div>
@@ -43,14 +42,14 @@ export const TeamSection: React.FC = () => {
           {teamMembers.map((member, idx) => (
             <div
               key={idx}
-              className="p-6 rounded-3xl bg-[#0B1F3A]/50 border border-white/10 hover:border-white/20 transition-all duration-300 hover:shadow-xl space-y-3"
+              className="p-6 rounded-3xl bg-[#F8FAF9] border border-slate-200 hover:border-teal-300 transition-all duration-300 hover:shadow-xl space-y-3"
             >
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-[#20C997]">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-[#0F766E]">
                 {member.badge}
               </span>
-              <h3 className="text-base font-black text-white">{member.name}</h3>
+              <h3 className="text-base font-black text-[#0B1F1D]">{member.name}</h3>
               <div className="text-xs font-bold text-[#1677FF]">{member.role}</div>
-              <p className="text-xs text-[#AAB7C7] leading-relaxed">
+              <p className="text-xs text-slate-600 leading-relaxed">
                 {member.bio}
               </p>
             </div>
