@@ -93,7 +93,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
       </main>
     </div>
   );
-
 };
 
 export default NotificationsScreen;
