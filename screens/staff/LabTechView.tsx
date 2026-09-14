@@ -7,7 +7,7 @@ import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '..
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
-import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditorModal';
+import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
 import { 
   TestTube, 
   Search, 
