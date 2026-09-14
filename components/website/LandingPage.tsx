@@ -25,7 +25,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
   return (
-    <div className="min-h-screen bg-white text-[#0B1F1D] font-sans flex flex-col">
+    <div className="min-h-screen bg-nl-black text-white font-sans flex flex-col selection:bg-nl-glow/30 selection:text-white">
       <Navbar
         onGoToPortal={onGoToPortal}
         onOpenTerms={() => setLegalModal('terms')}
