@@ -71,7 +71,7 @@ export const siteConfig: SiteConfig = {
       substack: 'https://nanolabs.substack.com',
       email: 'nanolabsolutions26@gmail.com'
     },
-    image: '/assets/doctors-team.png'
+    image: 'assets/images/founder.jpg'
   },
 
   milestones: [
