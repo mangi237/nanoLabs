@@ -25,7 +25,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
   return (
-    <div className="min-h-screen bg-nl-black text-white font-sans flex flex-col selection:bg-nl-glow/30 selection:text-white">
+    <div className="min-h-screen bg-white text-nl-ink font-sans flex flex-col selection:bg-nl-mint selection:text-nl-deep">
       <Navbar
         onGoToPortal={onGoToPortal}
         onOpenTerms={() => setLegalModal('terms')}
@@ -58,7 +58,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
       <LegalModals
         isOpen={legalModal !== null}
         onClose={() => setLegalModal(null)}
-        type={legalModal || 'privacy'}
+        type={legalModal || 'terms'}
       />
     </div>
   );

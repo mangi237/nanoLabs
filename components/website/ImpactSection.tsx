@@ -4,10 +4,10 @@ import { Building2, Users, Stethoscope, ShieldCheck } from 'lucide-react';
 import { siteConfig } from '../../data/siteConfig';
 
 const impacts = [
-  { title: 'For patients', subtitle: 'From queue to one tap.', desc: 'AI prescription scan, lab comparison by real distance, MoMo payment, live sample tracking, and share with a doctor in one tap.', Icon: Users, color: '#14B8A6' },
+  { title: 'For patients', subtitle: 'From queue to one tap.', desc: 'AI prescription scan, lab comparison by real distance, MoMo payment, live sample tracking, and share with a doctor in one tap.', Icon: Users, color: '#0F766E' },
   { title: 'For doctors', subtitle: 'Finally in the loop.', desc: 'Two-way connections, e-prescriptions, test recommendations, and signed reports the moment they are ready.', Icon: Stethoscope, color: '#1677FF' },
-  { title: 'For laboratories', subtitle: 'Digital front door, without losing the brand.', desc: 'Keep your name, prices, and staff. Add bookings, verified payments, auto-invoices, branded reports, and audit.', Icon: Building2, color: '#0F766E' },
-  { title: 'For insurers', subtitle: 'Audit-ready claims.', desc: 'Per-line insurance columns on every invoice, manual verification at intake, and a hash-chained trail behind every claim.', Icon: ShieldCheck, color: '#2DD4BF' },
+  { title: 'For laboratories', subtitle: 'Digital front door, without losing the brand.', desc: 'Keep your name, prices, and staff. Add bookings, verified payments, auto-invoices, branded reports, and audit.', Icon: Building2, color: '#0D3B38' },
+  { title: 'For insurers', subtitle: 'Audit-ready claims.', desc: 'Per-line insurance columns on every invoice, manual verification at intake, and a hash-chained trail behind every claim.', Icon: ShieldCheck, color: '#14B8A6' },
 ];
 
 const Counter: React.FC<{ value: string; className?: string }> = ({ value, className }) => {
@@ -41,16 +41,16 @@ const Counter: React.FC<{ value: string; className?: string }> = ({ value, class
 
 export const ImpactSection: React.FC = () => {
   return (
-    <section id="impact" className="py-24 bg-nl-ink relative overflow-hidden">
+    <section id="impact" className="py-24 bg-white relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold text-nl-glow uppercase tracking-wider bg-nl-glow/10 px-3.5 py-1 rounded-full border border-nl-glow/20">
+          <span className="text-xs font-bold text-nl-teal uppercase tracking-wider bg-nl-mint px-3.5 py-1 rounded-full border border-nl-light/30">
             Better infrastructure, better care
           </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight font-display">
+          <h2 className="text-3xl sm:text-5xl font-black text-nl-ink tracking-tight font-display">
             Tangible impact, on every side.
           </h2>
-          <p className="text-sm sm:text-base text-white/60 leading-relaxed">
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
             Patients, doctors, labs, and insurers each gain something they do not have today.
           </p>
         </div>
@@ -64,15 +64,15 @@ export const ImpactSection: React.FC = () => {
               viewport={{ once: true }}
               transition={{ delay: i * 0.08 }}
               whileHover={{ y: -6 }}
-              className="p-6 rounded-3xl bg-nl-black border border-white/10 hover:border-nl-glow/40 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4"
+              className="p-6 rounded-3xl bg-nl-off border border-slate-200 hover:border-nl-teal/40 transition-all duration-300 hover:shadow-xl flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${imp.color}20`, color: imp.color }}>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${imp.color}15`, color: imp.color }}>
                   <imp.Icon className="w-6 h-6" strokeWidth={2.2} />
                 </div>
-                <h3 className="text-base font-black text-white font-display">{imp.title}</h3>
-                <div className="text-xs font-bold text-nl-glow leading-tight">{imp.subtitle}</div>
-                <p className="text-xs text-white/60 leading-relaxed">{imp.desc}</p>
+                <h3 className="text-base font-black text-nl-ink font-display">{imp.title}</h3>
+                <div className="text-xs font-bold text-nl-teal leading-tight">{imp.subtitle}</div>
+                <p className="text-xs text-slate-600 leading-relaxed">{imp.desc}</p>
               </div>
             </motion.div>
           ))}
@@ -86,13 +86,13 @@ export const ImpactSection: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.06 }}
-              className="p-5 rounded-2xl bg-nl-black border border-white/10 text-center space-y-1"
+              className="p-5 rounded-2xl bg-nl-off border border-slate-200 text-center space-y-1"
             >
-              <div className="text-2xl sm:text-3xl font-black font-display text-white">
+              <div className="text-2xl sm:text-3xl font-black font-display text-nl-ink">
                 <Counter value={stat.value} />
               </div>
-              <div className="text-xs font-bold text-nl-glow">{stat.label}</div>
-              <p className="text-[11px] text-white/50">{stat.description}</p>
+              <div className="text-xs font-bold text-nl-teal">{stat.label}</div>
+              <p className="text-[11px] text-slate-500">{stat.description}</p>
             </motion.div>
           ))}
         </div>

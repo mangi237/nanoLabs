@@ -20,22 +20,22 @@ export const PortalEntranceBanner: React.FC<PortalEntranceBannerProps> = ({ onGo
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="rounded-3xl bg-nl-ink/90 backdrop-blur-xl border border-white/10 p-5 sm:p-7 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6"
+        className="rounded-3xl bg-white border border-slate-200 p-5 sm:p-7 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6"
       >
         <div className="flex items-center gap-4 text-left">
-          <div className="w-12 h-12 rounded-2xl bg-nl-glow/10 border border-nl-glow/30 flex items-center justify-center text-nl-glow shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-nl-mint border border-nl-light/40 flex items-center justify-center text-nl-deep shrink-0">
             <ShieldCheck className="w-6 h-6" strokeWidth={2.2} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-nl-glow/15 text-nl-glow border border-nl-glow/30">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-nl-mint text-nl-deep border border-nl-light/30">
                 Three doors, one hub
               </span>
             </div>
-            <h4 className="text-base sm:text-lg font-black text-white mt-1 font-display">
+            <h4 className="text-base sm:text-lg font-black text-nl-ink mt-1 font-display">
               Access your nanoLabs workspace
             </h4>
-            <p className="text-xs text-white/60 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Patients, doctors, and laboratories each have their own portal.
             </p>
           </div>
@@ -51,24 +51,24 @@ export const PortalEntranceBanner: React.FC<PortalEntranceBannerProps> = ({ onGo
               transition={{ duration: 0.4, delay: i * 0.08 }}
               whileHover={{ y: -3 }}
               onClick={() => onGoToPortal(r.id)}
-              className={`p-3.5 rounded-2xl text-left transition-all group cursor-pointer ${
+              className={`p-3.5 rounded-2xl text-left transition-all group cursor-pointer border ${
                 r.id === 'lab'
-                  ? 'bg-gradient-to-br from-nl-teal to-nl-deep text-white shadow-lg shadow-nl-teal/30'
-                  : 'bg-white/5 border border-white/10 hover:border-nl-glow/40'
+                  ? 'bg-gradient-to-br from-nl-deep to-nl-teal text-white border-transparent shadow-md shadow-teal-900/20'
+                  : 'bg-nl-off border-slate-200 hover:border-nl-teal/40'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                  r.id === 'lab' ? 'bg-white/20 text-white' : 'bg-nl-glow/10 text-nl-glow'
+                  r.id === 'lab' ? 'bg-white/20 text-white' : 'bg-nl-mint text-nl-deep'
                 }`}>
                   <r.Icon className="w-4 h-4" />
                 </div>
                 <ArrowRight className={`w-3.5 h-3.5 transition-all group-hover:translate-x-0.5 ${
-                  r.id === 'lab' ? 'text-white' : 'text-white/50 group-hover:text-nl-glow'
+                  r.id === 'lab' ? 'text-white' : 'text-slate-400 group-hover:text-nl-teal'
                 }`} />
               </div>
-              <div className={`text-xs font-bold ${r.id === 'lab' ? 'text-white' : 'text-white'}`}>{r.label}</div>
-              <div className={`text-[11px] ${r.id === 'lab' ? 'text-white/80' : 'text-white/50'}`}>{r.sub}</div>
+              <div className="text-xs font-bold text-nl-ink">{r.label}</div>
+              <div className={`text-[11px] ${r.id === 'lab' ? 'text-white/80' : 'text-slate-500'}`}>{r.sub}</div>
             </motion.button>
           ))}
         </div>
