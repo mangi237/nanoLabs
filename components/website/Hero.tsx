@@ -41,7 +41,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
   }, []);
 
   return (
-    <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-24 overflow-hidden bg-nl-black">
+    <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-24 overflow-hidden bg-nl-white">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[700px] bg-gradient-to-br from-nl-teal/25 via-nl-light/15 to-nl-glow/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#2DD4BF 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
 
@@ -52,7 +52,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
         className="hidden lg:flex absolute top-40 left-12 p-3 rounded-2xl bg-white/5 border border-nl-glow/20 backdrop-blur-md items-center gap-2"
       >
         <FlaskConical className="w-4 h-4 text-nl-glow" />
-        <span className="text-[10px] font-bold text-white/80">Sample tracking</span>
+        <span className="text-[15px] font-bold text-black/80">Sample tracking</span>
       </motion.div>
 
       <motion.div
@@ -77,14 +77,14 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nl-glow opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-nl-glow" />
               </span>
-              <span>Live in Douala & Yaoundé</span>
+              <span>Available In Cameroon</span>
             </motion.div>
 
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.05] font-display"
+              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-black leading-[1.05] font-display"
             >
               One hub. Every test.
               <br />
@@ -97,7 +97,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-base sm:text-lg text-white/70 leading-relaxed max-w-xl"
+              className="text-base sm:text-lg text-black/70 leading-relaxed max-w-xl"
             >
               Book a lab test from your phone. Scan your prescription with AI. Compare nearby labs. Pay with MTN MoMo or Orange Money. Watch your sample move. Get a lab-branded report the moment it is signed.
             </motion.p>
@@ -117,7 +117,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
               </button>
               <a
                 href="#product"
-                className="px-6 py-4 rounded-2xl bg-white/5 border border-white/15 text-white font-semibold text-sm hover:border-nl-glow/40 hover:bg-white/10 transition-all flex items-center justify-center gap-2 backdrop-blur-md"
+                className="px-6 py-4 rounded-2xl bg-white/5 border border-teal/15 text-black font-semibold text-sm hover:border-nl-glow/40 hover:bg-teal/10 transition-all flex items-center justify-center gap-2 backdrop-blur-md"
               >
                 <span>See how it works</span>
                 <ChevronDown className="w-4 h-4 text-nl-glow" />
@@ -128,7 +128,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.5 }}
-              className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 text-xs font-medium text-white/60"
+              className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 text-xs font-bold text-black/60"
             >
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-nl-glow" />
@@ -161,21 +161,21 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                   className={`w-full p-3 rounded-2xl border text-left transition-all ${
                     activeLab === i
                       ? 'bg-white/10 border-nl-glow/50 shadow-lg shadow-nl-glow/10'
-                      : 'bg-white/[0.03] border-white/10 hover:border-white/20'
+                      : 'bg-white/[0.03] border-teal/10 hover:border-teal/20'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">{lab.name}</span>
+                    <span className="text-xs font-bold text-black">{lab.name}</span>
                     {activeLab === i && <CheckCircle2 className="w-4 h-4 text-nl-glow" />}
                   </div>
-                  <div className="flex items-center justify-between mt-1.5 text-[10px] text-white/60">
+                  <div className="flex items-center justify-between mt-1.5 text-[10px] text-black/60">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3 text-nl-glow" /> {lab.dist}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-nl-glow" /> {lab.tat}
                     </span>
-                    <span className="font-bold text-white">{lab.price}</span>
+                    <span className="font-bold text-black">{lab.price}</span>
                   </div>
                 </button>
               ))}
@@ -227,7 +227,7 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
                   <ShieldCheck className="w-4 h-4 text-nl-glow" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-white">Insurance split</div>
+                  <div className="text-[10px] font-bold text-white">Auto Insurance split</div>
                   <div className="text-[10px] text-white/60">80% / 20% copay</div>
                 </div>
               </motion.div>
