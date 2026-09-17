@@ -37,8 +37,9 @@ import ProfileScreen from './screens/ProfileScreen';
 import { Activity, RefreshCw } from 'lucide-react';
 
 // Define all possible screens
+
 type ScreenType =
-  | 'landing'
+  | 'website'
   | 'login'
   | 'register'
   | 'registration-complete'
@@ -66,9 +67,6 @@ type ScreenType =
   | 'role-switcher'
   | 'receptionist';
 
-
-
-
 const MainAppContent: React.FC = () => {
   const { user, setUser, lab, isLoading, logout } = useAuth();
   const [screen, setScreen] = useState<ScreenType>(() => {
@@ -76,15 +74,15 @@ const MainAppContent: React.FC = () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('portal') === 'login' || urlParams.get('screen') === 'login') return 'login';
       if (urlParams.get('screen') === 'register') return 'register';
-      if (urlParams.get('screen') === 'landing') return 'landing';
+      if (urlParams.get('screen') === 'website') return 'website';
     }
-    return user ? 'dashboard' : 'landing';
+    return user ? 'dashboard' : 'website';
   });
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [selectedTest, setSelectedTest] = useState<any>(null);
   const [registeredPatient, setRegisteredPatient] = useState<any>(null);
   const [loginPortal, setLoginPortal] = useState<'lab' | 'patient' | 'doctor'>('lab');
-
+   
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white select-none">
@@ -167,18 +165,24 @@ const MainAppContent: React.FC = () => {
             if (typeof window !== 'undefined' && window.history?.pushState) {
               window.history.pushState({}, document.title, window.location.pathname);
             }
-            setScreen('landing');
+            setScreen('website');
           }}
         />
       );
     }
 
     // Public Global Website
-    if (screen === 'landing') {
+    if (screen === 'website') {
       return (
         <LandingPage
-          onGoToPortal={() => {
-            
+          onGoToPortal={(roleHint) => {
+            if (roleHint === 'patient') {
+              setLoginPortal('patient');
+            } else if (roleHint === 'doctor') {
+              setLoginPortal('doctor');
+            } else {
+              setLoginPortal('lab');
+            }
             setScreen('login');
           }}
         />
@@ -209,7 +213,7 @@ const MainAppContent: React.FC = () => {
           onLoginSuccess={() => setScreen(getDefaultDashboard())}
           onNavigateRegister={() => setScreen('register')}
           onNavigateSelectLab={() => setScreen('select-lab')}
-          onNavigateWebsite={() => setScreen('landing')}
+          onNavigateWebsite={() => setScreen('website')}
         />
       );
     }
@@ -222,7 +226,7 @@ const MainAppContent: React.FC = () => {
             onLoginSuccess={() => setScreen(getDefaultDashboard())}
             onNavigateRegister={() => setScreen('register')}
             onNavigateSelectLab={() => setScreen('select-lab')}
-            onNavigateWebsite={() => setScreen('landing')}
+            onNavigateWebsite={() => setScreen('website')}
           />
         );
 
@@ -357,7 +361,6 @@ const MainAppContent: React.FC = () => {
           />
         );
 
-      
 
       case 'book-appointment':
         return (
@@ -503,6 +506,9 @@ const MainAppContent: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
       {/* Offline and Network Sync Status Indicator */}
       <OfflineStatusIndicator />
+
+      {/* Global Database Error Toast (Zero Mock Data Enforcement) */}
+      {/* <DatabaseErrorToast /> */}
 
       {renderScreen()}
     </div>

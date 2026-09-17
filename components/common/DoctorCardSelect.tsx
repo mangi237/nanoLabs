@@ -107,17 +107,24 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
   const [customHospital, setCustomHospital] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Combine accredited and connected doctors
+  // Combine accredited and connected doctors safely
+  const safeConnected = Array.isArray(connectedDoctors) ? connectedDoctors : [];
   const allDoctors = [
-    ...connectedDoctors,
-    ...ACCREDITED_DOCTORS.filter(d => !connectedDoctors.some(cd => cd.id === d.id || cd.name.toLowerCase() === d.name.toLowerCase()))
+    ...safeConnected,
+    ...ACCREDITED_DOCTORS.filter(d => !safeConnected.some(cd => 
+      (cd.id && d.id && cd.id === d.id) || 
+      (cd.name && d.name && cd.name.toLowerCase() === d.name.toLowerCase())
+    ))
   ];
 
-  const filteredDoctors = allDoctors.filter(doc => 
-    doc.name.toLowerCase().includes(search.toLowerCase()) ||
-    doc.specialty.toLowerCase().includes(search.toLowerCase()) ||
-    doc.hospital.toLowerCase().includes(search.toLowerCase())
-  );
+  const searchLower = (search || '').toLowerCase().trim();
+  const filteredDoctors = allDoctors.filter(doc => {
+    if (!doc) return false;
+    const name = (doc.name || '').toLowerCase();
+    const specialty = (doc.specialty || '').toLowerCase();
+    const hospital = (doc.hospital || '').toLowerCase();
+    return name.includes(searchLower) || specialty.includes(searchLower) || hospital.includes(searchLower);
+  });
 
   // Close when clicking outside
   useEffect(() => {
@@ -300,7 +307,7 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
                   </div>
                 ) : (
                   filteredDoctors.map((doc) => {
-                    const isSelected = value.toLowerCase() === doc.name.toLowerCase();
+                    const isSelected = Boolean(value && doc?.name && value.toLowerCase().trim() === doc.name.toLowerCase().trim());
                     return (
                       <div
                         key={doc.id}

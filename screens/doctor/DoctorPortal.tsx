@@ -5,6 +5,9 @@ import { useLanguage } from '../../context/languageContext';
 import { db, collection, getDocs, doc, setDoc, updateDoc } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescriptionModal';
+import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { 
   Stethoscope, 
   Users, 
@@ -35,7 +38,10 @@ import {
   Upload,
   Edit3,
   UserCheck,
-  Loader2
+  Loader2,
+  Pill,
+  Video,
+  User
 } from 'lucide-react';
 
 interface DoctorPortalProps {
@@ -85,6 +91,8 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const [referredBookings, setReferredBookings] = useState<PatientBooking[]>([]);
   const [sharedInboxReports, setSharedInboxReports] = useState<any[]>([]);
   const [selectedBookingForReport, setSelectedBookingForReport] = useState<PatientBooking | null>(null);
+  const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState<any | null>(null);
+  const [selectedPatientForAppointment, setSelectedPatientForAppointment] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -240,6 +248,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       setSharedInboxReports(allSharedInbox);
     } catch (e) {
       console.error('Error in fetchDoctorEcosystemData:', e);
+      // dispatchDatabaseFetchError({
+      //   message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
+      //   tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
+      //   rawError: e
+      // });
     } finally {
       setLoading(false);
     }
@@ -415,7 +428,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 space-y-6">
         
         {/* Doctor Identity & Quick Profile Hero Banner */}
         <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
@@ -909,13 +922,47 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-right">
-                              <button
-                                onClick={() => setSelectedBookingForReport(b)}
-                                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto shadow-sm cursor-pointer"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>View Report</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedBookingForReport(b)}
+                                  className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                                  title="View Test Report"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Report</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPatientForAppointment({
+                                    id: b.patientId || (b as any).patientPid || b.id,
+                                    name: b.patientName,
+                                    phone: b.patientPhone,
+                                    bookingId: b.id
+                                  })}
+                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Schedule Clinic or Video Appointment"
+                                >
+                                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Consult</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPatientForPrescription({
+                                    id: b.patientId || (b as any).patientPid || b.id,
+                                    name: b.patientName,
+                                    phone: b.patientPhone,
+                                    bookingId: b.id
+                                  })}
+                                  className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Issue E-Prescription & Dosage Timing"
+                                >
+                                  <Pill className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Rx</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1111,12 +1158,128 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         )}
       </main>
 
+      {/* Modern Mobile-First Sticky Bottom Navigation Bar for Doctor */}
+      <nav 
+        id="doctor-sticky-bottom-nav"
+        aria-label="Doctor Mobile Navigation"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3 py-2 shadow-xl flex items-center justify-around md:hidden"
+      >
+        <button
+          id="btn-doc-nav-overview"
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'overview' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Activity className="w-5 h-5" />
+          <span className="text-[10px]">Overview</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-patients"
+          type="button"
+          onClick={() => {
+            setActiveTab('patients');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'patients' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px]">Patients</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-inbox"
+          type="button"
+          onClick={() => {
+            setActiveTab('inbox');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'inbox' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Inbox className="w-5 h-5" />
+          <span className="text-[10px]">Inbox</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-labs"
+          type="button"
+          onClick={() => {
+            setActiveTab('labs');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'labs' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Building2 className="w-5 h-5" />
+          <span className="text-[10px]">Labs</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-profile"
+          type="button"
+          onClick={() => onProfilePress ? onProfilePress() : setIsEditProfileOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Profile</span>
+        </button>
+      </nav>
+
       {/* PDF LAB REPORT MODAL */}
       {selectedBookingForReport && (
         <LabReportPdfViewModal
           isOpen={!!selectedBookingForReport}
           booking={selectedBookingForReport}
           onClose={() => setSelectedBookingForReport(null)}
+        />
+      )}
+
+      {/* DOCTOR E-PRESCRIPTION MODAL */}
+      {selectedPatientForPrescription && (
+        <DoctorPrescriptionModal
+          isOpen={Boolean(selectedPatientForPrescription)}
+          onClose={() => setSelectedPatientForPrescription(null)}
+          patient={selectedPatientForPrescription}
+          doctor={{
+            id: user?.id || 'doc-1',
+            name: user?.name || doctorProfile.name,
+            specialty: doctorProfile.specialty,
+            licenseNumber: doctorProfile.licenseNumber,
+            hospital: doctorProfile.hospital
+          }}
+          relatedBookingId={selectedPatientForPrescription.bookingId}
+          onPrescriptionCreated={() => {
+            showToast('E-Prescription successfully transmitted to patient profile.');
+          }}
+        />
+      )}
+
+      {/* DOCTOR APPOINTMENT MODAL */}
+      {selectedPatientForAppointment && (
+        <DoctorAppointmentModal
+          isOpen={Boolean(selectedPatientForAppointment)}
+          onClose={() => setSelectedPatientForAppointment(null)}
+          patient={selectedPatientForAppointment}
+          doctor={{
+            id: user?.id || 'doc-1',
+            name: user?.name || doctorProfile.name,
+            specialty: doctorProfile.specialty,
+            hospital: doctorProfile.hospital
+          }}
+          relatedBookingId={selectedPatientForAppointment.bookingId}
+          onAppointmentScheduled={() => {
+            showToast('Consultation appointment successfully scheduled and confirmed.');
+          }}
         />
       )}
 

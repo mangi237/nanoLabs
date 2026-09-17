@@ -65,3 +65,5 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
 };
 
 export default LandingPage;
+
+

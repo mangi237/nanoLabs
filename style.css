@@ -3,32 +3,38 @@
 @tailwind utilities;
 
 @import "tailwindcss";
-
 @layer utilities {
   @media print {
-    body {
+    @page {
+      size: A4 portrait;
+      margin: 6mm 8mm;
+    }
+
+    html, body {
+      background: #ffffff !important;
       background-color: #ffffff !important;
       color: #000000 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
     }
 
-    .print\:hidden,
-    header,
-    nav,
-    .no-print {
-      display: none !important;
+    /* Isolate print document: Hide all general UI by default */
+    body * {
+      visibility: hidden !important;
     }
 
-    .print-avoid-break,
-    .avoid-break {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+    /* Make printable containers and their children visible */
+    #medical-receipt-sheet,
+    #medical-receipt-sheet *,
+    #medical-report-sheet,
+    #medical-report-sheet *,
+    .printable-sheet,
+    .printable-sheet *,
+    .printable-document,
+    .printable-document * {
+      visibility: visible !important;
     }
-
-    .print-page-break {
-      page-break-before: always !important;
-      break-before: page !important;
-    }
-  }
-}
+  }}

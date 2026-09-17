@@ -76,7 +76,7 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
     }
     const cleanPass = formData.passcode.trim();
     if (!cleanPass || cleanPass.length < 4) {
-      setError('Please set a secure 4 to 6 digit passcode / PIN for your patient account.');
+      setError('Please set a secure password or PIN (minimum 4 characters).');
       return;
     }
 
@@ -349,18 +349,17 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
               {/* Account Passcode / PIN */}
               <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl space-y-2">
                 <label className="block text-xs font-bold text-teal-950 uppercase tracking-wider">
-                  Create Secret Passcode / PIN (4 - 6 Digits) *
+                  Create Secret Password / PIN *
                 </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-teal-600 absolute left-3.5 top-3.5" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    maxLength={8}
-                    placeholder="e.g. 1234 or your private code"
+                    placeholder="Enter your private password or PIN"
                     value={formData.passcode}
                     onChange={e => setFormData({ ...formData, passcode: e.target.value })}
-                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-teal-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono tracking-widest font-bold"
+                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-teal-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono font-bold"
                   />
                   <button
                     type="button"
@@ -371,7 +370,7 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
                   </button>
                 </div>
                 <p className="text-[11px] text-teal-800">
-                  You will use your Phone Number and this Passcode to sign in securely anytime.
+                  You will use your Phone Number and this Password to sign in securely anytime.
                 </p>
               </div>
 

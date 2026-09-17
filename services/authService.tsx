@@ -213,7 +213,7 @@ export const authService = {
         if (foundPatientDoc) {
           return {
             success: false,
-            error: 'Invalid staff credentials. This access code belongs to a patient account. Please log in via the Patient Portal.'
+            error: 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.'
           };
         }
       } catch (authErr) {
@@ -228,7 +228,7 @@ export const authService = {
           if ((!localPatient.labId || localPatient.labId === targetLabId) && matchesPatient({ id: localPatient.id }, localPatient)) {
             return {
               success: false,
-              error: 'Invalid staff credentials. This access code belongs to a patient account. Please log in via the Patient Portal.'
+              error: 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.'
             };
           }
         }
@@ -645,52 +645,28 @@ export const authService = {
         labs = labs.filter(l => (l as any).status !== 'pending_approval' && (l as any).status !== 'suspended' && (l as any).status !== 'rejected');
       }
 
-      if (labs.length === 0 && !options?.includePending) {
-        return [
-          { 
-            id: 'lab-1', 
-            name: 'nanoLabs Central Diagnostics', 
-            location: 'Douala City Hub',
-            logoUrl: null,
-            primaryColor: '#0D9488',
-            status: 'active',
-            confirmed: true
-          },
-          { 
-            id: 'lab-2', 
-            name: 'St. Jude Clinical Laboratory', 
-            location: 'Yaounde Metro',
-            logoUrl: null,
-            primaryColor: '#0284C7',
-            status: 'active',
-            confirmed: true
+      // Also check local cache for registered laboratory
+      try {
+        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
+        if (cachedLabRaw) {
+          const cLab = JSON.parse(cachedLabRaw);
+          if (cLab && cLab.id && !labs.some(l => l.id === cLab.id)) {
+            labs.unshift(cLab);
           }
-        ];
-      }
+        }
+      } catch {}
 
       return labs;
     } catch (error) {
       console.error('Error fetching labs:', error);
-      return [
-        { 
-          id: 'lab-1', 
-          name: 'nanoLabs Central Diagnostics', 
-          location: 'Douala City Hub',
-          logoUrl: null,
-          primaryColor: '#0D9488',
-          status: 'active',
-          confirmed: true
-        },
-        { 
-          id: 'lab-2', 
-          name: 'St. Jude Clinical Laboratory', 
-          location: 'Yaounde Metro',
-          logoUrl: null,
-          primaryColor: '#0284C7',
-          status: 'active',
-          confirmed: true
+      try {
+        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
+        if (cachedLabRaw) {
+          const cLab = JSON.parse(cachedLabRaw);
+          if (cLab && cLab.id) return [cLab];
         }
-      ];
+      } catch {}
+      return [];
     }
   },
 
@@ -809,13 +785,15 @@ export const authService = {
             const dPhone = (data.phone || data.phoneNumber || '').replace(/\D/g, '');
             const dPid = (data.patientId || data.pid || d.id || '').toUpperCase();
             const dEmail = (data.email || '').toLowerCase();
-            const dAccess = (data.accessCode || data.passcode || data.pin || data.code || '').toUpperCase();
+            const rawPass = (data.passcode || data.accessCode || data.pin || data.code || '').trim();
+            const dAccess = rawPass.toUpperCase();
 
             const isId = (cleanIdDigits.length >= 7 && (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
                          dPid === upperId ||
                          (dEmail && dEmail === lowerId);
 
-            const isPass = dAccess === upperPass ||
+            const isPass = rawPass === cleanPassword ||
+                           dAccess === upperPass ||
                            upperPass === '1234' ||
                            upperPass === 'PAT123' ||
                            upperPass === 'PATIENT123';

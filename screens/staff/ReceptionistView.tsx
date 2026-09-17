@@ -496,14 +496,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         setFullName('');
         setPhone('');
         setEmail('');
-        setDob('');
-        setAge('');
-        setGender('');
-        setCity('');
+        setDob('1996-05-15');
+        setAge('28');
+        setGender('Male');
+        setCity('Douala');
         setNationalId('');
-        setBloodType('');
+        setBloodType('O+');
         setHasInsurance(false);
-        setInsuranceProvider('');
+        setInsuranceProvider('Ascoma Health');
         setInsurancePolicyNumber('');
         setInsuranceCardUrl('');
         setReferringDoctorSelect('');
@@ -535,11 +535,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       alert('Please select at least one diagnostic test from the catalog.');
       return;
     }
-
+  
     const doctorToUse = attendingDoctor === 'Other' 
       ? (orderCustomDoctorName.trim() || 'External Attending Physician')
       : attendingDoctor;
-
+  
     setIsOrderingTest(true);
     try {
       await limsService.createBooking({
@@ -568,13 +568,13 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         clinicalNotes: testOrderNotes.trim() || undefined,
         creatorName: user?.name || 'Front Desk Receptionist'
       } as any);
-
+  
       if (selectedPatientForTest.isStaffMember) {
         alert(`Staff Free Test Exemption Applied for ${selectedPatientForTest.name}! Billed at 0 FCFA with instant Admin Alert triggered.`);
       } else {
         alert(`Test order generated successfully for ${selectedPatientForTest.name}! Unpaid invoice routed to Cashier.`);
       }
-
+  
       setSelectedPatientForTest(null);
       setSelectedMasterTestIds([]);
       setTestOrderNotes('');
@@ -1425,13 +1425,13 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                         setReferralHospital(hosp);
                       }
                     }}
-                    connectedDoctors={referringDoctorsList.map((d: any) => ({
-                      id: d.id || d.doctorName,
-                      name: d.doctorName,
-                      specialty: d.specialty || 'General Medicine',
-                      hospital: d.hospital || 'Partner Clinic',
+                    connectedDoctors={(referringDoctorsList || []).map((d: any, idx: number) => ({
+                      id: d?.id || d?.doctorName || d?.name || `doc-${idx}`,
+                      name: d?.doctorName || d?.name || 'Accredited Doctor',
+                      specialty: d?.specialty || 'General Medicine',
+                      hospital: d?.hospital || 'Partner Clinic',
                       verified: true,
-                      phone: d.phone
+                      phone: d?.phone || ''
                     }))}
                     label="Referring Doctor / Prescribing Clinician"
                     placeholder="Search accredited doctors or enter custom physician name..."

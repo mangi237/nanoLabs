@@ -116,19 +116,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       const result = await login(labCode.trim(), labId);
       if (result.success && result.user) {
         if (result.user.role === 'patient') {
-          setErrorMessage('Invalid Staff Access Code. Patient codes cannot authenticate on the Laboratory Staff portal.');
+          setErrorMessage('Invalid Staff Access Code. Please enter a valid laboratory staff credential.');
           return;
         }
         if (onLoginSuccess) onLoginSuccess(result.user);
       } else {
-        setErrorMessage(result.error || 'Invalid Staff Access Code.');
+        setErrorMessage(result.error || 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.');
       }
     } catch (err: any) {
       const msg = err?.message || '';
-      if (msg.toLowerCase().includes('patient')) {
-        setErrorMessage('Invalid Staff Access Code. This code belongs to a patient account.');
+      if (msg.toLowerCase().includes('patient') || msg.toLowerCase().includes('staff')) {
+        setErrorMessage('Invalid Staff Access Code. Please enter a valid laboratory staff credential.');
       } else {
-        setErrorMessage(msg || 'Invalid Staff Access Code.');
+        setErrorMessage('Invalid Staff Access Code. Please enter a valid laboratory staff credential.');
       }
     } finally {
       setIsSubmitting(false);

@@ -10,6 +10,11 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
+import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
+import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
+import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { 
   Calendar, 
   FileText, 
@@ -79,6 +84,35 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [receiptModalBooking, setReceiptModalBooking] = useState<PatientBooking | null>(null);
   const [envelopeModalTest, setEnvelopeModalTest] = useState<any | null>(null);
   
+  // Design Reference Modals (from UI screenshots)
+  const [showPrescriptionScannerModal, setShowPrescriptionScannerModal] = useState(false);
+  const [showPhlebTransitModal, setShowPhlebTransitModal] = useState(false);
+  const [showAppointmentDetailModal, setShowAppointmentDetailModal] = useState(false);
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [activeScheduleRecord, setActiveScheduleRecord] = useState<DoctorAppointmentRecord>({
+    id: 'RSV-10102',
+    reservationCode: 'RSV10102',
+    doctorName: 'Dr. Lisa Tran',
+    specialty: 'Clinical Diagnostic Consult & ENT',
+    facilityName: 'Centre Médical Laquintinie',
+    distanceKm: '1.2 km',
+    rating: 4.9,
+    reviewsCount: 120,
+    address: 'Boulevard de la Liberté, Akwa, Douala',
+    treatmentName: 'Comprehensive Diagnostic Follow-up & Lab Review',
+    treatmentCategory: 'SINGLE',
+    durationHours: 1,
+    clinicalNote: 'Patient presenting with recurrent asthenia, fever, and abnormal complete blood count profile.',
+    date: 'Jun 15, 2026',
+    time: '10:00 AM',
+    status: 'Registered',
+    mode: 'in_person',
+    billAmount: 35000,
+    copayAmount: 7000,
+    paymentStatus: 'Paid'
+  });
+  
   // UI State
   const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
   const [testStatusFilter, setTestStatusFilter] = useState<'all' | 'completed' | 'in_testing'>('all');
@@ -90,9 +124,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
     const initDashboardData = async () => {
       setLoading(true);
+      const targetLabId = lab?.id || 'lab-1';
       try {
-        const targetLabId = lab?.id || 'lab-1';
-
         // 1. Fetch Patient Document
         const snap = await getDocs(collection(db, 'labs', targetLabId, 'patients'));
         const found = snap.docs.find(d => {
@@ -151,6 +184,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
+       
       } finally {
         setLoading(false);
       }
@@ -282,12 +316,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       action: () => onNavigateTab ? onNavigateTab('history') : null
     },
     {
-      id: 'share',
-      label: 'Share with Doctor',
-      desc: 'Send records securely to physician',
-      icon: Share2,
-      color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:border-indigo-400',
-      action: () => onNavigateTab ? onNavigateTab('share') : null
+      id: 'transit',
+      label: 'Phlebotomist Transit',
+      desc: 'Live GPS & Cold-Chain Tracking',
+      icon: Truck,
+      color: 'bg-slate-900 text-white border-slate-700 hover:border-teal-400',
+      action: () => setShowPhlebTransitModal(true)
     },
     {
       id: 'scan',
@@ -295,7 +329,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       desc: 'Real device camera Rx scanner',
       icon: Camera,
       color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400',
-      action: () => onNavigateTab ? onNavigateTab('scan') : null
+      action: () => setShowPrescriptionScannerModal(true)
     }
   ];
 
@@ -431,6 +465,110 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </button>
             );
           })}
+        </div>
+
+        {/* Select Diagnostic Category (from patientdashboarduireference.webp) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <span>Select Category</span>
+              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                LIMS Accredited
+              </span>
+            </h3>
+            <button 
+              onClick={() => onNavigateTab ? onNavigateTab('book') : null}
+              className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer"
+            >
+              See All
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 no-scrollbar">
+            {[
+              { id: 'All', label: 'All Panels', icon: '🧪' },
+              { id: 'Pediatrics', label: 'Pediatrics', icon: '👶' },
+              { id: 'Cardiology', label: 'Cardiology', icon: '🫀' },
+              { id: 'Hematology', label: 'Hematology', icon: '🩸' },
+              { id: 'Neurology', label: 'Neurology', icon: '🧠' },
+              { id: 'Oncology', label: 'Oncology', icon: '🎗️' },
+              { id: 'Gynecology', label: 'Gynecology', icon: '🤰' },
+              { id: 'Radiology', label: 'Radiology', icon: '🩻' },
+              { id: 'ENT', label: 'ENT', icon: '👂' },
+              { id: 'Dentistry', label: 'Dentistry', icon: '🦷' }
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer border ${
+                  selectedCategory === cat.id
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                    : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Your Upcoming Appointments Card (from patientdashboarduireference.webp) */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white p-5 sm:p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
+              <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-teal-300">
+                Your Upcoming Appointments
+              </h3>
+            </div>
+            <span className="text-[11px] font-bold bg-teal-500/20 text-teal-200 px-2.5 py-1 rounded-full border border-teal-500/30">
+              {activeScheduleRecord.date} &bull; {activeScheduleRecord.time}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-teal-400 text-white flex items-center justify-center font-black text-base shadow-lg">
+                LT
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>{activeScheduleRecord.doctorName}</span>
+                  <span className="text-amber-400 text-xs font-semibold">★ {activeScheduleRecord.rating}</span>
+                </h4>
+                <p className="text-xs text-slate-300">
+                  {activeScheduleRecord.specialty} &bull; {activeScheduleRecord.facilityName}
+                </p>
+                <p className="text-[11px] text-teal-300 mt-0.5">
+                  Treatment: {activeScheduleRecord.treatmentName}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowAppointmentDetailModal(true)}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Schedule Detail
+              </button>
+
+              <button
+                onClick={() => setShowRoadmapModal(true)}
+                className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-colors cursor-pointer"
+              >
+                Audit Roadmap
+              </button>
+
+              <button
+                onClick={() => setShowPhlebTransitModal(true)}
+                className="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Track Phlebotomist
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Status Summary Strip */}
@@ -1128,6 +1266,46 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           }
         }}
       />
+
+      {/* AI Prescription Scanner Modal (Aligned with nanoaiscannerui.webp) */}
+      <AiPrescriptionScannerModal
+        isOpen={showPrescriptionScannerModal}
+        onClose={() => setShowPrescriptionScannerModal(false)}
+        onProceedWithTests={(_selected, _detectedDoctor) => {
+          setShowPrescriptionScannerModal(false);
+          if (onNavigateTab) {
+            onNavigateTab('book');
+          }
+        }}
+      />
+
+      {/* Live Phlebotomist Tracking & Handover Modal (Aligned with livephlebtracking.webp) */}
+      <LivePhlebotomistTrackingModal
+        isOpen={showPhlebTransitModal}
+        onClose={() => setShowPhlebTransitModal(false)}
+        batchId={activeHomePickupBooking?.id || 'BAT-2026-081'}
+        batchNumber={activeHomePickupBooking?.bookingCode || 'BAT-2026-081'}
+        patientName={patientFullName}
+        onSampleIntakeCompleted={() => {
+          setShowPhlebTransitModal(false);
+          setShowRoadmapModal(true);
+        }}
+      />
+
+      {/* Doctor Appointment Schedule Detail Modal (Aligned with doctorAppointmentui.webp) */}
+      <DoctorAppointmentDetailModal
+        isOpen={showAppointmentDetailModal}
+        onClose={() => setShowAppointmentDetailModal(false)}
+        appointment={activeScheduleRecord}
+        onRescheduleSuccess={(updated) => setActiveScheduleRecord(updated)}
+      />
+
+      {/* Live Audit Roadmap Modal (Aligned with auditingandtrackingstatus.webp) */}
+      <LiveAuditRoadmapModal
+        isOpen={showRoadmapModal}
+        onClose={() => setShowRoadmapModal(false)}
+      />
+
       {/* Sticky Bottom Mobile Navigation Bar (Mobile-App-First UX) */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 flex items-center justify-around shadow-lg">
         <button

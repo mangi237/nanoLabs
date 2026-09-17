@@ -1,3 +1,286 @@
+// Canonical Enums
+export type AccountType = 'patient' | 'doctor' | 'lab_staff' | 'superadmin';
+
+export type SampleMode = 'walk_in' | 'home_collection';
+
+export type BatchStatus = 
+  | 'intake' 
+  | 'collected' 
+  | 'in_transit' 
+  | 'received' 
+  | 'analysis' 
+  | 'validation' 
+  | 'signed' 
+  | 'ready';
+
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+
+export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
+
+export type ConsultationType = 'video' | 'in_person' | 'waspito';
+
+// Master Test & Catalog
+export interface Test {
+  id: string;
+  code: string;
+  name: string;
+  frenchName?: string;
+  category: 'hematology' | 'biochemistry' | 'parasitology' | 'microbiology' | 'serology' | 'hormones' | 'toxicology' | 'other';
+  sampleType: string;
+  turnaroundTimeHours: number;
+  fastingRequirement: string;
+  basePrice: number;
+  bCode?: string;
+  description?: string;
+  referenceRanges?: {
+    male?: string;
+    female?: string;
+    pediatric?: string;
+    unit?: string;
+  };
+}
+
+export interface MasterTestCatalog {
+  version: string;
+  lastUpdated: string;
+  tests: Test[];
+}
+
+// Test Batch Item
+export interface BatchTestItem {
+  testId: string;
+  code: string;
+  name: string;
+  category: string;
+  sampleType: string;
+  basePrice: number;
+  resultValue?: string;
+  referenceRange?: string;
+  unit?: string;
+  flag?: 'normal' | 'low' | 'high' | 'critical';
+  status: 'pending' | 'in_analysis' | 'validated';
+}
+
+// Canonical TestBatch
+export interface TestBatch {
+  id: string;
+  batchNumber: string;
+  patientId: string;
+  patientName: string;
+  familyProfileId?: string;
+  familyRelationship?: string;
+  patientPhone?: string;
+  patientAge?: number;
+  patientGender?: string;
+  labId: string;
+  labName: string;
+  sampleMode: SampleMode;
+  status: BatchStatus;
+  tests: BatchTestItem[];
+  recommendingDoctorId?: string;
+  recommendingDoctorName?: string;
+  sampleTubeBarcode?: string;
+  collectedAt?: string;
+  receivedAt?: string;
+  signedAt?: string;
+  biologistName?: string;
+  biologistLicense?: string;
+  qrAuditHash?: string;
+  reportUrl?: string;
+  invoiceId?: string;
+  paymentStatus: PaymentStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Financial Invoices
+export interface InvoiceLine {
+  id: string;
+  testId: string;
+  testCode: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  batchId: string;
+  batchNumber?: string;
+  patientId: string;
+  patientName: string;
+  familyProfileId?: string;
+  beneficiaryName?: string;
+  policyHolderName?: string;
+  patientPhone?: string;
+  labId: string;
+  labName: string;
+  lines?: InvoiceLine[];
+  items?: Array<{ testId: string; code: string; name: string; price: number }>;
+  subtotal?: number;
+  homeCollectionFee?: number;
+  grossTotal: number;
+  // Insurance split
+  insuranceProviderName?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent: number;
+  insuranceCoveredAmount: number;
+  patientShare: number;
+  // Platform fee on patient share only
+  platformFeePercent: number; // 5
+  platformFeeAmount: number; // 5% of patientShare
+  // Final patient amount due at cashier
+  totalPatientDue: number; // patientShare + platformFeeAmount
+  tvaRatePercent?: number; // 0 (exempt)
+  tvaExemptAmount?: number;
+  paymentMethod?: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  paymentVerifiedAt?: string;
+  verifiedByCashierName?: string;
+  transactionRef?: string;
+  payerPhone?: string;
+  payerName?: string;
+  createdAt: string;
+}
+
+export interface PaymentConfirmation {
+  invoiceId: string;
+  batchId: string;
+  amountPaid: number;
+  paymentMethod: PaymentMethod;
+  transactionRef?: string;
+  cashierId: string;
+  cashierName: string;
+  accessCodeVerified: boolean;
+  verifiedAt: string;
+}
+
+// Monthly Lab Settlement for Super Admin
+export interface LabSettlement {
+  id: string;
+  settlementMonth: string; // "2026-09"
+  monthYear?: string;
+  labId: string;
+  labName: string;
+  totalBatches: number;
+  totalTestsCount?: number;
+  grossRevenue: number;
+  grossTestsRevenue?: number;
+  totalInsuranceBilled: number;
+  totalPatientCollected: number;
+  totalPatientShareRevenue?: number;
+  totalPlatformFeeOwed: number; // 5% on patient share
+  platformFeeTotalDue?: number;
+  settlementStatus: 'pending' | 'invoiced' | 'settled' | 'paid';
+  settledAt?: string;
+  paidAt?: string;
+  settledBy?: string;
+  paymentReceiptRef?: string;
+  paymentTransactionRef?: string;
+}
+
+export type MonthlySettlementRecord = LabSettlement;
+
+// Immutable Hash-Chained Audit Logs
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  eventType?: string;
+  index?: number;
+  targetType: 'batch' | 'invoice' | 'report' | 'patient' | 'system';
+  targetId: string;
+  details: Record<string, any>;
+  metadata?: Record<string, any>;
+  previousHash: string;
+  hash: string;
+  entryHash?: string;
+}
+
+export type AuditLogEntry = AuditLog;
+
+export interface PatientActivityLog {
+  id: string;
+  patientId: string;
+  timestamp: string;
+  title: string;
+  description: string;
+  actionType: 'login' | 'booking_created' | 'sample_collected' | 'analysis_started' | 'report_signed' | 'report_shared' | 'payment_verified';
+  relatedBatchId?: string;
+}
+
+// Live Phlebotomist Transit
+export interface TransitSession {
+  id: string;
+  batchId: string;
+  batchNumber?: string;
+  status?: string;
+  tubeBarcodeScanned?: string;
+  phlebotomistId: string;
+  phlebotomistName: string;
+  phlebotomistPhone: string;
+  patientAddress?: string;
+  patientLat?: number;
+  patientLng?: number;
+  currentLat?: number;
+  currentLng?: number;
+  currentLocation?: { lat: number; lng: number };
+  targetLocation?: { lat: number; lng: number };
+  etaMinutes: number;
+  coldChainTemperatureCelsius: number;
+  isActive?: boolean;
+  lastPingAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+// CEMAC Health Insurers
+export interface InsuranceProvider {
+  id: string;
+  code: string;
+  name: string;
+  fullName: string;
+  coverageTiers: { tier: string; defaultPercent: number }[];
+  requiresPriorAuthorization: boolean;
+  contactEmail?: string;
+  contactPhone?: string;
+  logoUrl?: string;
+}
+
+// Doctor Referral & Collaboration
+export interface ReferralLedger {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  batchId: string;
+  patientId: string;
+  patientName: string;
+  labId: string;
+  labName: string;
+  testCodes: string[];
+  referralDate: string;
+  status: 'pending' | 'completed';
+  notes?: string;
+}
+
+export interface ConnectionRequest {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty?: string;
+  initiatedBy: 'patient' | 'doctor';
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
 export interface ReferringDoctor {
   id: string;
   labId: string;
@@ -23,7 +306,8 @@ export interface ReferringDoctor {
   updatedAt?: string;
 }
 
-export type RoleType = 'admin' | 'receptionist' | 'cashier' | 'analyzer' | 'lab_tech' | 'biologist' | 'patient' | 'matron' | 'doctor' | 'nurse' | 'pharmacy' | 'lab' | 'superadmin' | 'inventory_manager';
+export type RoleType = 'admin' | 'receptionist' | 'cashier' | 'analyzer' | 'lab_tech' | 'biologist' | 'patient' | 'matron' | 'doctor' | 'nurse' | 'pharmacy' | 'lab' | 'superadmin' | 'super_admin' | 'lab_staff' | 'phlebotomist' | 'technician' | 'lab_admin' | 'inventory_manager';
+export type UserRole = RoleType;
 
 export interface User {
   id: string;
@@ -316,3 +600,39 @@ export interface Doctor {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Multi-Profile Family & Dependent Account Types
+export type FamilyRelationship = 
+  | 'self'
+  | 'mother'
+  | 'father'
+  | 'child'
+  | 'daughter'
+  | 'son'
+  | 'spouse'
+  | 'sibling'
+  | 'grandparent'
+  | 'other';
+
+export interface FamilyMemberProfile {
+  id: string;
+  primaryAccountId: string;
+  fullName: string;
+  relationship: FamilyRelationship;
+  relationshipLabel: string;
+  dateOfBirth?: string;
+  age: number;
+  gender: 'female' | 'male' | 'other';
+  bloodGroup?: string;
+  nationalId?: string;
+  allergies?: string[];
+  chronicConditions?: string[];
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent?: number;
+  isDependentOnPrimaryInsurance?: boolean;
+  notes?: string;
+  createdAt: string;
+  avatarColor?: string;
+}
+

@@ -78,6 +78,7 @@ export interface BookingTestItem {
   resultValue?: string;
   resultFlag?: 'Normal' | 'Low' | 'High' | 'Borderline';
   labNotes?: string;
+  richReportHtml?: string;
   completedAt?: string;
   completedBy?: string;
   pdfReportUrl?: string;
@@ -141,6 +142,7 @@ export interface PatientBooking {
   insuranceCoveragePercent?: number; // e.g. 80 for 80% coverage
   coPayPercent?: number; // Patient direct co-payment percentage
   insuranceCoveredAmount?: number; // Amount covered by insurance
+  insuranceClaimAmount?: number; // Claim amount submitted to insurer
   patientCoPayAmount?: number; // Patient direct co-payment balance
   discountType?: 'percentage' | 'percent' | 'fixed' | 'coupon' | 'staff_exemption' | 'workers_benefit' | string;
   discountValue?: number;
@@ -168,7 +170,12 @@ export interface PatientBooking {
   validatedBy?: string;
   validatedAt?: string;
   registrationType?: 'online' | 'walk_in';
+  registeredBy?: string;
   isOnlineBooking?: boolean;
+  prescriptionType?: string;
+  prescriptionImageUrl?: string;
+  yeboKycVerified?: boolean;
+  yeboReferenceId?: string;
   virtualRequested?: boolean;
   virtualRequestedAt?: string;
 
@@ -304,6 +311,21 @@ export const limsService = {
     creatorName: string;
     clinicalNotes?: string;
     receptionistValidated?: boolean;
+    isOnlineBooking?: boolean;
+    registrationType?: 'online' | 'walk_in';
+    registeredBy?: string;
+    hasInsurance?: boolean;
+    insuranceProvider?: string;
+    insurancePolicyNumber?: string;
+    insuranceCoveragePercent?: number;
+    coPayPercent?: number;
+    insuranceCoveredAmount?: number;
+    insuranceClaimAmount?: number;
+    patientCoPayAmount?: number;
+    prescriptionType?: string;
+    prescriptionImageUrl?: string;
+    yeboKycVerified?: boolean;
+    yeboReferenceId?: string;
   }): Promise<PatientBooking> {
     const {
       labId = 'lab-1',
@@ -328,7 +350,22 @@ export const limsService = {
       selectedTests = [],
       creatorName,
       clinicalNotes,
-      receptionistValidated
+      receptionistValidated,
+      isOnlineBooking,
+      registrationType,
+      registeredBy,
+      hasInsurance,
+      insuranceProvider,
+      insurancePolicyNumber,
+      insuranceCoveragePercent,
+      coPayPercent,
+      insuranceCoveredAmount,
+      insuranceClaimAmount,
+      patientCoPayAmount,
+      prescriptionType,
+      prescriptionImageUrl,
+      yeboKycVerified,
+      yeboReferenceId
     } = params;
 
     const isStaffCreator = creatorName.toLowerCase().includes('reception') ||
@@ -451,7 +488,6 @@ export const limsService = {
       referringDoctor,
       referralHospital,
       referralNotes,
-    
       isStaffExemption,
       staffMemberName: staffMemberName || (isStaffExemption ? patientName : undefined),
       staffDesignation: staffDesignation || (isStaffExemption ? 'Clinical Staff' : undefined),
@@ -470,6 +506,21 @@ export const limsService = {
       receptionistValidated: isValidated,
       validatedBy: isValidated ? creatorName : '',
       validatedAt: isValidated ? timestamp : '',
+      registrationType: registrationType || (isOnlineBooking ? 'online' : 'walk_in'),
+      registeredBy: registeredBy || (isOnlineBooking ? 'Online Patient' : creatorName),
+      isOnlineBooking: isOnlineBooking !== undefined ? isOnlineBooking : (registrationType === 'online'),
+      hasInsurance: hasInsurance !== undefined ? hasInsurance : Boolean(insuranceProvider),
+      insuranceProvider,
+      insurancePolicyNumber,
+      insuranceCoveragePercent,
+      coPayPercent,
+      insuranceCoveredAmount,
+      insuranceClaimAmount,
+      patientCoPayAmount,
+      prescriptionType,
+      prescriptionImageUrl,
+      yeboKycVerified,
+      yeboReferenceId,
       collectedSamples: [],
       tests: testItems.map(t => ({
         ...t,
@@ -2523,7 +2574,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData , id: d.id,};
+            return { ...existingData,  id: d.id,  };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -2795,7 +2846,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -2868,7 +2919,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
@@ -3049,15 +3100,6 @@ export const limsService = {
     hasInsurance?: boolean;
     insuranceProvider?: string;
     insurancePolicyNumber?: string;
-    insuranceCoveragePercent?: number;
-    coPayPercent?: number;
-    isStaffExemption?: boolean;
-    staffMemberName?: string;
-    staffDesignation?: string;
-    doctorName?: string;
-    selectedMasterTestIds?: string[];
-    clinicalNotes?: string;
-    creatorName?: string;
     allergies?: string[];
     chronicConditions?: string[];
     sourceLabId: string;
@@ -3084,24 +3126,9 @@ export const limsService = {
     const timestamp = new Date().toISOString();
     const transferId = `TRF-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
 
-    // Destructure properties to enforce fallback data layout mirrors matching the createBooking service logic
-    const {
-      hasInsurance = false,
-      isStaffExemption = false,
-      patientAge = 30,
-      patientGender = 'Male',
-      creatorName = 'Front Desk Receptionist',
-      ...restParams
-    } = params;
-
     const transferPayload = cleanFirestoreData({
       id: transferId,
-      ...restParams,
-      patientAge,
-      patientGender,
-      hasInsurance,
-      isStaffExemption,
-      creatorName,
+      ...params,
       status: 'pending_receptionist_confirmation',
       transferredAt: timestamp,
       updatedAt: timestamp
@@ -3143,8 +3170,7 @@ export const limsService = {
       console.error('Error creating patient transfer request:', e);
       return { success: false, transferId, message: e.message || 'Failed to dispatch transfer request' };
     }
-  }
-,
+  },
 
   /**
    * Fetch all incoming transferred patients for a specific laboratory's receptionist

@@ -1,7 +1,6 @@
 {
-    "name": "nanoLabs Healthcare",
-    "description": "Modern Medical Laboratory & Hospital Management System with multi-role access, patient management, analytics, and billing.",
-    "requestFramePermissions": [],
-    "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-  }
-  
+  "name": "nanoLabs Healthcare",
+  "description": "Central African B2B2C Diagnostic Hub orchestrating multi-account Family medical profiles, Patient test bookings, Doctor e-prescriptions, and accredited Laboratory LIMS management.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

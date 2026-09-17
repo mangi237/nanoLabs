@@ -8,6 +8,9 @@ import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
+import { SplitScreenResultEntry } from '../../components/results/SplitScreenResultEntry';
+import { A4CanvasResultEditor } from '../../components/results/A4CanvasResultEditor';
+import { PatientExamResult } from '../../types/examTemplate';
 import { 
   TestTube, 
   Search, 
@@ -104,7 +107,8 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Selected Patient Booklet Modal State
   const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
   const [selectedTestIndex, setSelectedTestIndex] = useState<number>(0);
-  const [activeOptionMode, setActiveOptionMode] = useState<'form' | 'template_editor' | 'upload' | 'physical_pickup'>('form');
+  const [activeOptionMode, setActiveOptionMode] = useState<'a4_canvas' | 'dual_mode' | 'form' | 'template_editor' | 'upload' | 'physical_pickup'>('a4_canvas');
+  const [showA4BatchModal, setShowA4BatchModal] = useState<boolean>(false);
 
   // Two-Column Template & Rich Result Text States
   const [templateText, setTemplateText] = useState<string>('');
@@ -554,12 +558,13 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Add Section Sub-Header Dynamically
   const handleAddSectionHeader = () => {
     if (!newSectionTitle.trim()) return;
+    const title = newSectionTitle.trim();
     const newId = `section-${Date.now()}`;
     const newSectionParam: any = {
       id: newId,
-      name: newSectionTitle.trim(),
+      name: title,
       unit: '',
-      sectionHeader: newSectionTitle.trim(),
+      sectionHeader: title,
       refRangeMale: '',
       refRangeFemale: '',
       refRangeChild: '',
@@ -568,17 +573,112 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
     };
 
     setActiveTestSubParameters([...activeTestSubParameters, newSectionParam]);
+
+    // Also support Guided Mode hierarchical params if active
+    const currentTest = activeBooking?.tests?.[selectedTestIndex];
+    if (currentTest) {
+      const currentHier = (currentTest.hierarchicalParams && currentTest.hierarchicalParams.length > 0)
+        ? currentTest.hierarchicalParams
+        : (catalog.find(c => c.name?.toLowerCase() === currentTest.testName?.toLowerCase() || c.id === currentTest.testId)?.hierarchicalParams || []);
+
+      const newHierItem = {
+        name: `Observation ${title}`,
+        section: title,
+        defaultValue: 'Normal',
+        unit: '',
+        refRange: 'Negative / Normal'
+      };
+
+      setActiveBooking(prev => {
+        if (!prev || !prev.tests) return prev;
+        const updatedTests = [...prev.tests];
+        if (updatedTests[selectedTestIndex]) {
+          updatedTests[selectedTestIndex] = {
+            ...updatedTests[selectedTestIndex],
+            hierarchicalParams: [...currentHier, newHierItem]
+          };
+        }
+        return { ...prev, tests: updatedTests };
+      });
+    }
+
     setNewSectionTitle('');
     setShowAddSectionModal(false);
-    setActionSuccessMessage(`✅ Added section header "${newSectionParam.name}".`);
+    setActionSuccessMessage(`✅ Added section "${title}".`);
   };
 
-  // Remove Parameter
+  // Remove Single Custom Parameter
   const handleRemoveCustomParam = (paramId: string) => {
     setActiveTestSubParameters(activeTestSubParameters.filter(p => p.id !== paramId));
     const newVals = { ...activeSubParamValues };
     delete newVals[paramId];
     setActiveSubParamValues(newVals);
+  };
+
+  // Remove Section Header AND all parameters assigned to that section
+  const handleRemoveSection = (sectionId: string, sectionName: string) => {
+    const toDeleteIds = new Set<string>([sectionId]);
+    activeTestSubParameters.forEach(p => {
+      if (p.sectionHeader === sectionName || p.section === sectionName) {
+        toDeleteIds.add(p.id);
+      }
+    });
+
+    setActiveTestSubParameters(prev => prev.filter(p => !toDeleteIds.has(p.id)));
+
+    const newVals = { ...activeSubParamValues };
+    const newObs = { ...activeParamObservations };
+    const newFlags = { ...activeParamFlags };
+    toDeleteIds.forEach(id => {
+      delete newVals[id];
+      delete newObs[id];
+      delete newFlags[id];
+    });
+
+    setActiveSubParamValues(newVals);
+    setActiveParamObservations(newObs);
+    setActiveParamFlags(newFlags);
+
+    const deletedCount = toDeleteIds.size - 1;
+    setActionSuccessMessage(
+      deletedCount > 0
+        ? `🗑️ Deleted section "${sectionName}" and its ${deletedCount} parameter(s).`
+        : `🗑️ Deleted section "${sectionName}".`
+    );
+  };
+
+  // Delete Section from Hierarchical Observations in Guided Mode
+  const handleDeleteHierarchicalSection = (sectionName: string) => {
+    const currentTest = activeBooking?.tests?.[selectedTestIndex];
+    if (!currentTest) return;
+    const currentHier = (currentTest.hierarchicalParams && currentTest.hierarchicalParams.length > 0)
+      ? currentTest.hierarchicalParams
+      : (catalog.find(c => c.name?.toLowerCase() === currentTest.testName?.toLowerCase() || c.id === currentTest.testId)?.hierarchicalParams || []);
+
+    const updatedHier = currentHier.filter((p: any) => (p.section || 'Observation Template') !== sectionName);
+
+    setActiveBooking(prev => {
+      if (!prev || !prev.tests) return prev;
+      const updatedTests = [...prev.tests];
+      if (updatedTests[selectedTestIndex]) {
+        updatedTests[selectedTestIndex] = {
+          ...updatedTests[selectedTestIndex],
+          hierarchicalParams: updatedHier
+        };
+      }
+      return { ...prev, tests: updatedTests };
+    });
+
+    const newHierVals = { ...activeHierarchicalValues };
+    currentHier.forEach((p: any, idx: number) => {
+      if ((p.section || 'Observation Template') === sectionName) {
+        const key = p.name || `hp-${idx}`;
+        delete newHierVals[key];
+      }
+    });
+    setActiveHierarchicalValues(newHierVals);
+
+    setActionSuccessMessage(`🗑️ Deleted section "${sectionName}".`);
   };
 
   // Add Antibiotic Row to Antibiogram
@@ -891,6 +991,81 @@ CLINICAL REAGENTS USED:
       }
     } catch (err) {
       console.error('Error saving individual test result:', err);
+    } finally {
+      setIsSavingTest(false);
+    }
+  };
+
+  // Save Result from Dual-Mode MS Access/Excel Split-Screen Clinical Entry Module
+  const handleSaveFromSplitScreenResult = async (result: PatientExamResult) => {
+    if (!activeBooking || !activeBooking.tests) return;
+    const currentTest = activeBooking.tests[selectedTestIndex];
+    if (!currentTest) return;
+
+    setIsSavingTest(true);
+    try {
+      const techName = user?.name || 'Medical Technologist';
+
+      const paramEntries = Object.entries(result.parameterValues || {});
+      const subParamsMap: Record<string, string> = {};
+      const fullSubParameters = paramEntries.map(([key, val]) => {
+        const valStr = String(val || '');
+        subParamsMap[key] = valStr;
+        return {
+          id: key,
+          name: key.replace(/_/g, ' '),
+          value: valStr,
+          unit: '',
+          refRangeMale: 'Normal',
+          refRangeFemale: 'Normal',
+          refRangeChild: 'Normal',
+          flag: 'Normal' as const,
+          printOnReport: true
+        };
+      });
+
+      const primaryVal: string = (result.clinicalInterpretation && result.clinicalInterpretation.trim())
+        ? result.clinicalInterpretation
+        : (fullSubParameters.length > 0 ? fullSubParameters[0].value : 'Normal');
+
+      const success = await limsService.submitIndividualTestResult({
+        labId: targetLabId,
+        bookingId: activeBooking.id,
+        testId: currentTest.id || currentTest.testId || '',
+        resultValue: primaryVal,
+        resultFlag: 'Normal',
+        subParams: subParamsMap,
+        fullSubParameters,
+        notes: result.technicianNotes || '',
+        techName,
+        reagentsUsed: activeReagentsUsed
+      });
+
+      if (success) {
+        setActionSuccessMessage(`✅ Clinical examination "${currentTest.testName}" recorded & locked successfully via Dual-Mode Workstation.`);
+
+        const updatedTests = [...activeBooking.tests];
+        updatedTests[selectedTestIndex] = {
+          ...currentTest,
+          resultValue: primaryVal,
+          status: 'Completed',
+          subParameters: fullSubParameters,
+          labNotes: result.technicianNotes,
+          completedAt: new Date().toISOString(),
+          completedBy: techName
+        };
+
+        const allDone = updatedTests.every(t => t.status === 'Completed');
+        const updatedBooking = {
+          ...activeBooking,
+          tests: updatedTests,
+          overallStatus: allDone ? ('Completed' as const) : ('In_Lab_Testing' as const)
+        };
+        setActiveBooking(updatedBooking);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error saving split-screen exam result:', err);
     } finally {
       setIsSavingTest(false);
     }
@@ -1471,12 +1646,24 @@ CLINICAL REAGENTS USED:
                           </div>
                         </div>
 
-                        {masterDef?.turnaroundTime && (
-                          <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-teal-600" />
-                            TAT: {masterDef.turnaroundTime}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowA4BatchModal(true)}
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-teal-700 to-teal-600 hover:from-teal-800 hover:to-teal-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                            title="Open A4 Letter / Canva Blank Canvas for this test and batch"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>A4 Canvas (Canva Style)</span>
+                          </button>
+
+                          {masterDef?.turnaroundTime && (
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-xl hidden sm:flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-teal-600" />
+                              TAT: {masterDef.turnaroundTime}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {masterDef?.description && (
@@ -1491,7 +1678,33 @@ CLINICAL REAGENTS USED:
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Choose Response Method:
                       </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-slate-100 rounded-2xl">
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 p-1 bg-slate-100 rounded-2xl">
+                        <button
+                          onClick={() => setActiveOptionMode('a4_canvas')}
+                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            activeOptionMode === 'a4_canvas'
+                              ? 'bg-teal-700 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900 bg-white/70'
+                          }`}
+                          title="Pre-Built Blank Canvas A4 Letter style (Locked Header, Locked Footer, Free-form Middle Box)"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>1. A4 Canva Canvas</span>
+                        </button>
+
+                        <button
+                          onClick={() => setActiveOptionMode('dual_mode')}
+                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            activeOptionMode === 'dual_mode'
+                              ? 'bg-teal-700 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                          title="Dual-Mode Split-Screen MS Access/Excel style clinical results entry"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-teal-600" />
+                          <span>2. Clinical Split</span>
+                        </button>
+
                         <button
                           onClick={() => setActiveOptionMode('form')}
                           className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -1501,7 +1714,7 @@ CLINICAL REAGENTS USED:
                           }`}
                         >
                           <FileText className="w-3.5 h-3.5 text-teal-600" />
-                          <span>1. Fill In Result</span>
+                          <span>3. Standard Table</span>
                         </button>
 
                         <button
@@ -1514,7 +1727,7 @@ CLINICAL REAGENTS USED:
                           title="Two-column template and free-form rich text editor"
                         >
                           <Columns className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>2. Template Editor</span>
+                          <span>4. Template Text</span>
                         </button>
 
                         <button
@@ -1526,7 +1739,7 @@ CLINICAL REAGENTS USED:
                           }`}
                         >
                           <Upload className="w-3.5 h-3.5 text-teal-600" />
-                          <span>3. Upload PDF / File</span>
+                          <span>5. Upload PDF</span>
                         </button>
 
                         <button
@@ -1538,10 +1751,77 @@ CLINICAL REAGENTS USED:
                           }`}
                         >
                           <Bell className="w-3.5 h-3.5 text-teal-600" />
-                          <span>4. Physical Alert</span>
+                          <span>6. Physical Alert</span>
                         </button>
                       </div>
                     </div>
+
+                    {/* ======================================================== */}
+                    {/* MODE 1: SINGLE-PAGE A4 CANVA / LETTER STYLE CANVAS       */}
+                    {/* ======================================================== */}
+                    {activeOptionMode === 'a4_canvas' && (
+                      <div className="rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+                        <A4CanvasResultEditor
+                          booking={activeBooking}
+                          initialTestIndex={selectedTestIndex}
+                          onSaveIndividualTest={(idx, html, summary) => {
+                            setActiveBooking(prev => {
+                              if (!prev) return null;
+                              const updatedTests = [...prev.tests];
+                              if (updatedTests[idx]) {
+                                updatedTests[idx] = {
+                                  ...updatedTests[idx],
+                                  richReportHtml: html,
+                                  resultValue: summary,
+                                  status: 'Completed',
+                                  completedAt: new Date().toISOString()
+                                };
+                              }
+                              return { ...prev, tests: updatedTests };
+                            });
+                          }}
+                          onSaveAllTests={(allTests) => {
+                            setActiveBooking(prev => {
+                              if (!prev) return null;
+                              const updatedTests = [...prev.tests];
+                              allTests.forEach(({ testIndex, richHtml, summary }) => {
+                                if (updatedTests[testIndex]) {
+                                  updatedTests[testIndex] = {
+                                    ...updatedTests[testIndex],
+                                    richReportHtml: richHtml,
+                                    resultValue: summary,
+                                    status: 'Completed',
+                                    completedAt: new Date().toISOString()
+                                  };
+                                }
+                              });
+                              return { ...prev, tests: updatedTests, status: 'Completed' };
+                            });
+                          }}
+                          onPrintPreview={() => setShowPdfModal(true)}
+                        />
+                      </div>
+                    )}
+
+                    {/* ======================================================== */}
+                    {/* MODE 2: DUAL-MODE CLINICAL SPLIT-SCREEN WORKSTATION       */}
+                    {/* ======================================================== */}
+                    {activeOptionMode === 'dual_mode' && (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                        <SplitScreenResultEntry
+                          bookingId={activeBooking.id}
+                          patientId={activeBooking.patientPid || activeBooking.patientId}
+                          patientName={activeBooking.patientName}
+                          examCode={currentTestInModal.testCode || currentTestInModal.id || 'PV_EXAM'}
+                          testName={currentTestInModal.testName}
+                          category={currentTestInModal.category}
+                          onSaveAndLock={handleSaveFromSplitScreenResult}
+                          onPrintPreview={(result, tpl) => {
+                            setShowPdfModal(true);
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {/* Worksheet View Mode Toggle (Guided Smart vs Manual Structured Sheet) */}
                     {activeOptionMode === 'form' && (
@@ -1649,8 +1929,9 @@ CLINICAL REAGENTS USED:
                                         </div>
                                         <button
                                           type="button"
-                                          onClick={() => handleRemoveCustomParam(sp.id)}
-                                          className="text-slate-500 hover:text-rose-400 p-0.5"
+                                          onClick={() => handleRemoveSection(sp.id, sp.name)}
+                                          className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
+                                          title={`Delete Section "${sp.name}"`}
                                         >
                                           <Trash2 className="w-3 h-3" />
                                         </button>
@@ -1752,13 +2033,17 @@ CLINICAL REAGENTS USED:
                                           <span className="w-2.5 h-2.5 rounded-full bg-teal-400" />
                                           <span className="text-xs font-black tracking-wide uppercase">{sp.name}</span>
                                         </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveCustomParam(sp.id)}
-                                          className="text-slate-400 hover:text-rose-400 p-1"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveSection(sp.id, sp.name)}
+                                            className="text-xs font-bold text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-700 border border-rose-700/50 px-2.5 py-1 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                                            title={`Delete Section "${sp.name}"`}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            <span>Delete Section</span>
+                                          </button>
+                                        </div>
                                       </div>
                                     );
                                   }
@@ -2176,11 +2461,12 @@ CLINICAL REAGENTS USED:
                                                 </div>
                                                 <button
                                                   type="button"
-                                                  onClick={() => handleRemoveCustomParam(sp.id)}
-                                                  className="text-slate-400 hover:text-rose-400 p-1"
-                                                  title="Remove Section Header"
+                                                  onClick={() => handleRemoveSection(sp.id, sp.name)}
+                                                  className="text-xs font-bold text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-700 border border-rose-700/50 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                                                  title={`Delete Section "${sp.name}"`}
                                                 >
-                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                  <Trash2 className="w-3 h-3" />
+                                                  <span>Delete Section</span>
                                                 </button>
                                               </div>
                                             </td>
@@ -2481,16 +2767,40 @@ CLINICAL REAGENTS USED:
                                     <Layers className="w-4 h-4 text-teal-600" />
                                     Structured Template Observations
                                   </h4>
-                                  <span className="text-[10px] font-mono text-slate-500 font-bold">
-                                    {effHier.length} parameters configured
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono text-slate-500 font-bold">
+                                      {effHier.length} parameters configured
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAddSectionModal(true)}
+                                      className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add Section</span>
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {Object.entries(grouped).map(([sectionName, params]) => (
                                   <div key={sectionName} className="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-200">
                                     <div className="text-[11px] font-black uppercase tracking-wider text-teal-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
-                                      <span>{sectionName}</span>
-                                      <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-teal-600" />
+                                        <span>{sectionName}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteHierarchicalSection(sectionName)}
+                                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                          title={`Delete section "${sectionName}"`}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                          <span>Delete Section</span>
+                                        </button>
+                                      </div>
                                     </div>
                                     <div className="space-y-2 pt-1">
                                       {params.map((param: any, pIdx: number) => {
@@ -3464,6 +3774,52 @@ CLINICAL REAGENTS USED:
         onClose={() => setShowResultTemplateModal(false)}
         onApplyTemplate={handleApplyCustomTemplate}
       />
+
+      {/* FULL-SCREEN A4 CANVA / LETTER BATCH WORKSPACE MODAL */}
+      {showA4BatchModal && activeBooking && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <A4CanvasResultEditor
+            booking={activeBooking}
+            initialTestIndex={selectedTestIndex}
+            onClose={() => setShowA4BatchModal(false)}
+            onSaveIndividualTest={(idx, html, summary) => {
+              setActiveBooking(prev => {
+                if (!prev) return null;
+                const updatedTests = [...prev.tests];
+                if (updatedTests[idx]) {
+                  updatedTests[idx] = {
+                    ...updatedTests[idx],
+                    richReportHtml: html,
+                    resultValue: summary,
+                    status: 'Completed',
+                    completedAt: new Date().toISOString()
+                  };
+                }
+                return { ...prev, tests: updatedTests };
+              });
+            }}
+            onSaveAllTests={(allTests) => {
+              setActiveBooking(prev => {
+                if (!prev) return null;
+                const updatedTests = [...prev.tests];
+                allTests.forEach(({ testIndex, richHtml, summary }) => {
+                  if (updatedTests[testIndex]) {
+                    updatedTests[testIndex] = {
+                      ...updatedTests[testIndex],
+                      richReportHtml: richHtml,
+                      resultValue: summary,
+                      status: 'Completed',
+                      completedAt: new Date().toISOString()
+                    };
+                  }
+                });
+                return { ...prev, tests: updatedTests, status: 'Completed' };
+              });
+            }}
+            onPrintPreview={() => setShowPdfModal(true)}
+          />
+        </div>
+      )}
 
     </div>
   );

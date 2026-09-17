@@ -667,17 +667,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-            {onNavigateRoleSwitcher && user?.role !== 'superadmin' && (
-              <button
-                onClick={onNavigateRoleSwitcher}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-semibold border border-teal-200 transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Switch Active Role
-              </button>
-            )}
-
+          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-3">
             <button
               onClick={handleLogoutAction}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold border border-rose-200 transition-all cursor-pointer"

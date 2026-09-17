@@ -102,33 +102,35 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-teal-600 animate-pulse" />
             </button>
 
-            {/* User Profile Pill */}
-            <button
-              onClick={handleProfileClick}
-              className="flex items-center gap-2.5 p-1.5 pl-3 rounded-xl border border-slate-200 hover:border-teal-400 hover:bg-teal-50/50 transition-all bg-white cursor-pointer shadow-2xs hover:shadow-xs"
-              title="Click to view profile & switch role"
-            >
-              <div className="text-right hidden sm:block">
-                <div className="text-xs font-semibold text-slate-900 leading-tight">
-                  {user?.name || 'Authorized User'}
+            {/* User Profile Pill for non-staff (patients / doctors) */}
+            {user?.role && !['admin', 'superadmin', 'receptionist', 'cashier', 'analyzer', 'lab_tech', 'labtech', 'biologist', 'inventory_manager', 'staff'].includes(user.role) && (
+              <button
+                onClick={handleProfileClick}
+                className="flex items-center gap-2.5 p-1.5 pl-3 rounded-xl border border-slate-200 hover:border-teal-400 hover:bg-teal-50/50 transition-all bg-white cursor-pointer shadow-2xs hover:shadow-xs"
+                title="Account Profile"
+              >
+                <div className="text-right hidden sm:block">
+                  <div className="text-xs font-semibold text-slate-900 leading-tight">
+                    {user?.name || 'Authorized User'}
+                  </div>
+                  <div className="text-[11px] text-teal-700 font-medium capitalize flex items-center justify-end gap-1">
+                    <span>{user?.role?.replace('_', ' ') || 'User'}</span>
+                  </div>
                 </div>
-                <div className="text-[11px] text-teal-700 font-medium capitalize flex items-center justify-end gap-1">
-                  <span>{user?.role?.replace('_', ' ') || 'User'}</span>
-                </div>
-              </div>
-              {user?.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.name || 'User'}
-                  referrerPolicy="no-referrer"
-                  className="w-8 h-8 rounded-lg object-cover border border-teal-200 shadow-2xs"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center font-bold text-xs border border-teal-800">
-                  {user?.name ? user.name.slice(0, 2).toUpperCase() : 'NL'}
-                </div>
-              )}
-            </button>
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.name || 'User'}
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 rounded-lg object-cover border border-teal-200 shadow-2xs"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center font-bold text-xs border border-teal-800">
+                    {user?.name ? user.name.slice(0, 2).toUpperCase() : 'NL'}
+                  </div>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>

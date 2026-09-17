@@ -72,24 +72,36 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden divide-y divide-slate-100">
-          {notifications.map(n => (
-            <div key={n.id} className="p-5 flex items-start gap-4 hover:bg-slate-50 transition-colors">
-              <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0">
-                {getIcon(n.type)}
-              </div>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-900 text-sm">{n.title}</h3>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    {n.timestamp ? new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">{n.message}</p>
-              </div>
+        {notifications.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center mx-auto">
+              <Bell className="w-6 h-6 stroke-[1.5]" />
             </div>
-          ))}
-        </div>
+            <h3 className="font-bold text-slate-800 text-sm">No new notifications</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              You are all caught up. System alerts, clinical updates, and patient notifications will appear here in real time.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden divide-y divide-slate-100">
+            {notifications.map(n => (
+              <div key={n.id} className="p-5 flex items-start gap-4 hover:bg-slate-50 transition-colors">
+                <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0">
+                  {getIcon(n.type)}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-slate-900 text-sm">{n.title}</h3>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {n.timestamp ? new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">{n.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

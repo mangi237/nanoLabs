@@ -11,6 +11,7 @@ import { BiologistView } from './staff/BiologistView';
 import { SuperAdminDashboard } from './superAdmin/SuperAdminDashboard';
 import InventoryManagement from './admin/InventoryManagement';
 import { DoctorPortal } from './doctor/DoctorPortal';
+import StaffSidebar from '../components/common/StaffSidebar';
 
 interface UnifiedDashboardProps {
   onNavigateTab: (tab: string) => void;
@@ -29,17 +30,6 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
 }) => {
   const { user } = useAuth();
   const currentRole = user?.role || 'patient';
-
-  if (currentRole === 'inventory_manager' || currentRole === 'inventory') {
-    return (
-      <InventoryManagement
-        embedded={false}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onBack={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
 
   if (currentRole === 'doctor' || currentRole === 'referring_doctor' || currentRole === 'physician') {
     return (
@@ -70,117 +60,100 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
     );
   }
 
-  if (currentRole === 'receptionist') {
-    return (
-      <ReceptionistView
-        onNavigateRegister={() => onNavigateTab('register')}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
+  // Render Staff View Content
+  const renderStaffContent = () => {
+    switch (currentRole) {
+      case 'inventory_manager':
+      case 'inventory':
+        return (
+          <InventoryManagement
+            embedded={false}
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+            onBack={() => onNavigateTab('overview')}
+          />
+        );
 
-  if (currentRole === 'cashier') {
-    return (
-      <CashierView
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
+      case 'receptionist':
+        return (
+          <ReceptionistView
+            onNavigateRegister={() => onNavigateTab('register')}
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
 
-  if (currentRole === 'analyzer') {
-    return (
-      <AnalyzerView
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
+      case 'cashier':
+        return (
+          <CashierView
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
 
-  if (currentRole === 'lab_tech' || currentRole === 'labtech') {
-    return (
-      <LabTechView
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
+      case 'analyzer':
+        return (
+          <AnalyzerView
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
 
-  if (currentRole === 'staff') {
-    return (
-      <StaffDashboard 
-        onNavigate={(screen, params) => {
-          if (screen === 'PatientDetailsScreen') {
-            onSelectPatient?.(params);
-          }
-        }}
-        onOpenRoleSwitcher={() => onNavigateTab('role-switcher')}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-      />
-    );
-  }
+      case 'lab_tech':
+      case 'labtech':
+        return (
+          <LabTechView
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
 
-  if (currentRole === 'biologist') {
-    return (
-      <BiologistView
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onRoleSwitcherPress={() => onNavigateTab('role-switcher')}
-      />
-    );
-  }
+      case 'biologist':
+        return (
+          <BiologistView
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
 
-  if (currentRole === 'admin' || currentRole === 'administrator' || currentRole === 'lab_admin' || currentRole === 'manager') {
-    return (
-      <AdminDashboard
-        onNavigateTab={onNavigateTab}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onSelectPatient={onSelectPatient}
-      />
-    );
-  }
+      case 'admin':
+      case 'administrator':
+      case 'lab_admin':
+      case 'manager':
+        return (
+          <AdminDashboard
+            onNavigateTab={onNavigateTab}
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+            onSelectPatient={onSelectPatient}
+          />
+        );
 
-  // Explicit Unauthorized / Access Denied Fallback for unrecognized roles
+      case 'staff':
+      default:
+        return (
+          <StaffDashboard 
+            onNavigate={(screen, params) => {
+              if (screen === 'PatientDetailsScreen') {
+                onSelectPatient?.(params);
+              }
+            }}
+            onNotificationPress={onNotificationPress}
+            onProfilePress={onProfilePress}
+          />
+        );
+    }
+  };
+
+  // Staff Unified Layout with Left Sidebar
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center">
-      <div className="max-w-md w-full p-8 bg-slate-900 border border-slate-800 rounded-3xl space-y-5 shadow-2xl">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto text-2xl font-black">
-          🔒
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-black text-white tracking-tight">Access Restricted</h2>
-          <p className="text-xs text-slate-400">
-            Your current role (<span className="font-mono text-rose-300 font-bold">{currentRole}</span>) is not authorized to access this department portal.
-          </p>
-        </div>
-
-        <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-[11px] text-slate-400 text-left font-mono">
-          <div>Status: <strong className="text-rose-400">403_FORBIDDEN</strong></div>
-          <div>User: <strong className="text-slate-200">{user?.name || 'Unknown'}</strong></div>
-          <div>Security Rule: <strong className="text-emerald-400">LIMS_STRICT_RBAC</strong></div>
-        </div>
-
-        <div className="flex flex-col gap-2 pt-2">
-          <button
-            onClick={() => onNavigateTab('role-switcher')}
-            className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            Switch to Authorized Role
-          </button>
-          <button
-            onClick={() => onNavigateTab('overview')}
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
-          >
-            Return to My Home
-          </button>
-        </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+      <StaffSidebar
+        onNotificationPress={onNotificationPress}
+        onNavigateTab={onNavigateTab}
+      />
+      <div className="flex-1 min-w-0 overflow-x-hidden">
+        {renderStaffContent()}
       </div>
     </div>
   );

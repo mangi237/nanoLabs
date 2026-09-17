@@ -9,7 +9,8 @@ import { GoogleGenAI } from '@google/genai';
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Initialize Google Gemini AI lazily/safely
 let geminiClient: GoogleGenAI | null = null;
@@ -968,6 +969,103 @@ async function sendInvitationEmail(
 // 1. Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// 1.1 Clinical OCR Prescription Scanner Endpoint (Multimodal Gemini AI)
+app.post('/api/ocr/prescription', async (req: Request, res: Response) => {
+  try {
+    const { imageBase64, mimeType, text } = req.body;
+
+    if (text && typeof text === 'string' && text.trim()) {
+      return res.json({
+        success: true,
+        rawText: text.trim(),
+        detectedDoctorName: undefined,
+        prescriptionDate: new Date().toLocaleDateString()
+      });
+    }
+
+    if (!imageBase64) {
+      return res.json({
+        success: true,
+        rawText: '',
+        detectedDoctorName: undefined,
+        message: 'No text visible. Please upload a clearer image or select tests manually.'
+      });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.json({
+        success: true,
+        rawText: '',
+        detectedDoctorName: undefined,
+        message: 'No text visible. Please upload a clearer image or select tests manually.'
+      });
+    }
+
+    const ai = getGeminiClient();
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+    const cleanMime = mimeType || 'image/jpeg';
+
+    const prompt = `You are an expert clinical laboratory OCR scanner analyzing medical prescriptions in Cameroon/Africa.
+Read the handwriting and printed text on this doctor prescription.
+Extract the verbatim medical test names, analyses, or biological workup requested.
+If a prescribing doctor or health facility is explicitly written or stamped, extract the name.
+If a date is written, extract it.
+DO NOT hallucinate or guess. If no medical text or handwriting is readable, return rawText as "".
+
+Return strict JSON with this schema:
+{
+  "rawText": "all extracted text or empty string",
+  "detectedDoctorName": "doctor name if found or null",
+  "prescriptionDate": "prescription date if found or null"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: cleanBase64,
+                mimeType: cleanMime
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const contentText = response.text || '{}';
+    let parsed: any = { rawText: '', detectedDoctorName: null, prescriptionDate: null };
+    try {
+      parsed = JSON.parse(contentText);
+    } catch {
+      parsed.rawText = contentText;
+    }
+
+    return res.json({
+      success: true,
+      rawText: parsed.rawText || '',
+      detectedDoctorName: parsed.detectedDoctorName || undefined,
+      prescriptionDate: parsed.prescriptionDate || undefined
+    });
+  } catch (err: any) {
+    console.error('Prescription OCR error:', err);
+    return res.json({
+      success: true,
+      rawText: '',
+      detectedDoctorName: undefined,
+      message: 'No text visible. Please upload a clearer image or select tests manually.'
+    });
+  }
 });
 
 // 2. Admin creates staff member with direct access code (No mandatory email dependency)

@@ -6,6 +6,8 @@ import { limsService } from '../../services/limsService';
 import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { DoctorCardSelect, DoctorOption, ACCREDITED_DOCTORS } from '../../components/common/DoctorCardSelect';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
+import { YeboKycVerificationModal } from '../../components/auth/YeboKycVerificationModal';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { MatchedPrescriptionTest } from '../../core/scanner';
 import { PARTNER_LABS_LOCATIONS, PartnerLabLocation } from '../../core/gps';
 import { 
@@ -58,8 +60,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   onNotificationPress,
   onProfilePress
 }) => {
-  const { user, lab } = useAuth();
-  const currentLabId = lab?.id || user?.labId || 'lab-akwa';
+  const { user, lab, getAllLabs } = useAuth();
+  const currentLabId = lab?.id || user?.labId || 'lab-1';
 
   // --------------------------------------------------------------------------
   // STEPPING STATE: 1 = Tests, 2 = Labs & Pricing, 3 = Doctor & Identity
@@ -79,20 +81,112 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Step 2: Lab Selection & Batch Strategy
-  const [availableLabs] = useState<PartnerLabLocation[]>(PARTNER_LABS_LOCATIONS);
-  const [selectedPrimaryLabId, setSelectedPrimaryLabId] = useState<string>(currentLabId || 'lab-akwa');
+  const [availableLabs, setAvailableLabs] = useState<PartnerLabLocation[]>([]);
+  const [selectedPrimaryLabId, setSelectedPrimaryLabId] = useState<string>(currentLabId || '');
   const [batchStrategy, setBatchStrategy] = useState<'single' | 'split' | 'compare'>('single');
   // In split mode, map testId -> labId
   const [testLabAssignments, setTestLabAssignments] = useState<Record<string, string>>({});
   // In compare mode, second lab ID
-  const [comparisonLabId, setComparisonLabId] = useState<string>('lab-bonanjo');
+  const [comparisonLabId, setComparisonLabId] = useState<string>('');
 
-  // Step 3: Referring Doctor
-  const [referringDoctorName, setReferringDoctorName] = useState<string>('Dr. Emmanuel Nkuo');
-  const [referringHospital, setReferringHospital] = useState<string>('La Quintinie Hospital, Douala');
-  const [referringDoctorPhone, setReferringDoctorPhone] = useState<string>('+237 677 12 34 56');
-  const [referringSpecialty, setReferringSpecialty] = useState<string>('Internal Medicine & Infectious Diseases');
+  // Step 3: Referring Doctor (Default to clean empty state, filled manually or auto-detected by scanner)
+  const [referringDoctorName, setReferringDoctorName] = useState<string>('');
+  const [referringHospital, setReferringHospital] = useState<string>('');
+  const [referringDoctorPhone, setReferringDoctorPhone] = useState<string>('');
+  const [referringSpecialty, setReferringSpecialty] = useState<string>('');
   const [referralNotes, setReferralNotes] = useState<string>('');
+
+  // Yebo KYC Verification (PRD Step 1 & Principle 3)
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [isKycVerified, setIsKycVerified] = useState(false);
+
+  // Load real accredited laboratories from Firestore / Auth Service
+  useEffect(() => {
+    let isMounted = true;
+    const loadRealLabs = async () => {
+      try {
+        const fetched = await getAllLabs();
+        if (!isMounted) return;
+
+        const mapped: PartnerLabLocation[] = (fetched || []).map((l: any) => ({
+          id: l.id,
+          name: l.name || l.labName || 'nanoLabs Partner Diagnostic',
+          city: l.city || l.location || 'Douala',
+          district: l.district || l.quarter || l.location || 'Central District',
+          address: l.address || l.location || 'Boulevard de la Liberté, Douala',
+          coordinates: l.coordinates || { latitude: 4.0511, longitude: 9.7042 },
+          lat: l.lat || 4.0511,
+          lng: l.lng || 9.7042,
+          phone: l.phone || l.telephone || '+237 699 00 11 22',
+          tatHours: l.tatHours || 2,
+          tatDisplay: l.tatDisplay || '2 hrs TAT',
+          averageTurnaroundHours: l.averageTurnaroundHours || 2,
+          accredited: l.accredited !== false,
+          baseTestPrice: l.baseTestPrice || 4500,
+          rating: l.rating || 4.9,
+          sampleCollectionFee: l.sampleCollectionFee || 1500,
+          pricingMultiplier: l.pricingMultiplier || 1.0,
+          logoUrl: l.logoUrl || l.logo || undefined
+        }));
+
+        if (lab && lab.id && !mapped.some(m => m.id === lab.id)) {
+          mapped.unshift({
+            id: lab.id,
+            name: lab.name || 'nanoLabs Central Diagnostics',
+            city: (lab as any).city || 'Douala',
+            district: (lab as any).district || 'Central District',
+            address: (lab as any).address || (lab as any).location || 'Douala Hub',
+            coordinates: { latitude: 4.0511, longitude: 9.7042 },
+            lat: 4.0511,
+            lng: 9.7042,
+            phone: (lab as any).phone || '+237 699 00 11 22',
+            tatHours: 2,
+            tatDisplay: '2 hrs TAT',
+            averageTurnaroundHours: 2,
+            accredited: true,
+            baseTestPrice: 4500,
+            rating: 5.0,
+            sampleCollectionFee: 1500,
+            pricingMultiplier: 1.0,
+            logoUrl: (lab as any).logoUrl || undefined
+          });
+        }
+
+        if (mapped.length === 0) {
+          mapped.push({
+            id: currentLabId || 'lab-1',
+            name: lab?.name || 'nanoLabs Central Diagnostics',
+            city: 'Douala',
+            district: 'Akwa',
+            address: 'Boulevard de la Liberté, Douala',
+            coordinates: { latitude: 4.0511, longitude: 9.7042 },
+            lat: 4.0511,
+            lng: 9.7042,
+            phone: '+237 699 00 11 22',
+            tatHours: 2,
+            tatDisplay: '2 hrs TAT',
+            averageTurnaroundHours: 2,
+            accredited: true,
+            baseTestPrice: 4500,
+            rating: 5.0,
+            sampleCollectionFee: 1500,
+            pricingMultiplier: 1.0,
+            logoUrl: undefined
+          });
+        }
+
+        setAvailableLabs(mapped);
+        setSelectedPrimaryLabId(prev => (prev && mapped.some(m => m.id === prev) ? prev : mapped[0].id));
+        if (mapped.length > 1) {
+          setComparisonLabId(mapped[1].id);
+        }
+      } catch (err) {
+        console.error('Error loading laboratories:', err);
+      }
+    };
+    loadRealLabs();
+    return () => { isMounted = false; };
+  }, [getAllLabs, lab, currentLabId]);
 
   // Step 3: Patient Identity & Insurance (Default to +237 phone prefix, no permanent lab affiliation)
   const [patientFullName, setPatientFullName] = useState<string>(user?.name || '');
@@ -154,7 +248,10 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   };
 
   // Handle proceed from AI Prescription Scanner
-  const handleProceedFromScanner = (matched: MatchedPrescriptionTest[]) => {
+  const handleProceedFromScanner = (matched: MatchedPrescriptionTest[], detectedDoctor?: string) => {
+    if (detectedDoctor && detectedDoctor.trim()) {
+      setReferringDoctorName(detectedDoctor.trim());
+    }
     const newTests: any[] = [];
     matched.forEach(m => {
       const testKey = m.testId || m.code;
@@ -194,7 +291,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   };
 
   // Handle final submission in Step 3
-  const handleConfirmBooking = async () => {
+  const handleConfirmBooking = async (overrideKycCheck = false) => {
     if (!patientFullName.trim()) {
       setErrorMessage('Please enter your full name.');
       return;
@@ -206,6 +303,12 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     if (selectedTests.length === 0) {
       setErrorMessage('Please select at least one test.');
       setCurrentStep(1);
+      return;
+    }
+
+    // Yebo KYC verification barrier (PRD Principle 3: SMS/OTP verification before test booking)
+    if (!overrideKycCheck && !isKycVerified) {
+      setShowKycModal(true);
       return;
     }
 
@@ -348,10 +451,21 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     } catch (err: any) {
       console.error('Booking submission error:', err);
+      // dispatchDatabaseFetchError({
+      //   message: 'Database write failed during diagnostic booking order registration.',
+      //   tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
+      //   rawError: err
+      // });
       setErrorMessage(err.message || 'Failed to submit booking. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleKycSuccess = (_verificationData: { referenceId: string; verified: boolean }) => {
+    setIsKycVerified(true);
+    setShowKycModal(false);
+    handleConfirmBooking(true);
   };
 
   // --------------------------------------------------------------------------
@@ -1301,7 +1415,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               <button
                 type="button"
                 disabled={loading}
-                onClick={handleConfirmBooking}
+                onClick={() => handleConfirmBooking(false)}
                 className="min-h-[48px] px-8 py-3 bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-teal-900/15 transition-all cursor-pointer"
               >
                 {loading ? (
@@ -1326,6 +1440,15 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onProceedWithTests={handleProceedFromScanner}
+      />
+
+      {/* Yebo KYC Identity Verification Modal (PRD Principle 3) */}
+      <YeboKycVerificationModal
+        isOpen={showKycModal}
+        onClose={() => setShowKycModal(false)}
+        onVerificationSuccess={handleKycSuccess}
+        phone={patientPhone}
+        patientName={patientFullName}
       />
     </div>
   );
