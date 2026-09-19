@@ -468,7 +468,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
 
         {/* Select Diagnostic Category (from patientdashboarduireference.webp) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+        {/* <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <span>Select Category</span>
@@ -511,7 +511,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </button>
             ))}
           </div>
-        </div>
+        </div> */}
 
         {/* Your Upcoming Appointments Card (from patientdashboarduireference.webp) */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white p-5 sm:p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">

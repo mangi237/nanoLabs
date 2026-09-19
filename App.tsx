@@ -27,7 +27,7 @@ import TransferScreen from './screens/Patient/TransferScreen';
 import ShareResultsScreen from './screens/Patient/ShareResultsScreen';
 import ResultViewScreen from './screens/Patient/ResultViewScreen';
 import RegistrationCompleteScreen from './screens/Patient/RegistrationCompleteScreen';
-
+import PatientApp from './screens/Patient/PatientApp';
 import ReceptionistView from './screens/staff/ReceptionistView';
 import RoleSwitcher from './screens/staff/RoleSwitcher';
 import NotificationsScreen from './screens/NotificationScreen';
@@ -52,9 +52,10 @@ type ScreenType =
   | 'analytics'
   | 'inventory'
   | 'catalog'
+  | 'patientApp'
   | 'patient-list'
   | 'reports'
-  | 'patient-dashboard'
+  // | 'patient-dashboard'
   | 'book-appointment'
   | 'appointment'
   | 'test-history'
@@ -120,9 +121,10 @@ const MainAppContent: React.FC = () => {
       case 'overview': setScreen('dashboard'); break;
       case 'admin':
       case 'admin-dashboard': setScreen('admin-dashboard'); break;
-      case 'patient-dashboard': setScreen('patient-dashboard'); break;
+      // case 'patient-dashboard': setScreen('patient-dashboard'); break;
       case 'staff': setScreen('staff'); break;
       case 'analytics': setScreen('analytics'); break;
+      case 'PatientApp':setScreen('patientApp'); break;
       case 'inventory': setScreen('inventory'); break;
       case 'catalog': setScreen('catalog'); break;
       case 'reports': setScreen('reports'); break;
@@ -202,7 +204,7 @@ const MainAppContent: React.FC = () => {
     }
 
     const getDefaultDashboard = () => {
-      if (user?.role === 'patient') return 'patient-dashboard';
+      if (user?.role === 'patient') return 'patientApp';
       return 'dashboard';
     };
 
@@ -259,7 +261,7 @@ const MainAppContent: React.FC = () => {
                   roles: ['patient']
                 });
               }
-              setScreen('patient-dashboard');
+              setScreen('patientApp');
             }}
           />
         );
@@ -273,7 +275,7 @@ const MainAppContent: React.FC = () => {
         );
 
       case 'dashboard':
-      case 'patient-dashboard':
+    
         return (
           <UnifiedDashboard
             onNavigateTab={handleNavigateTab}
@@ -289,8 +291,10 @@ const MainAppContent: React.FC = () => {
             }}
           />
         );
-
-      case 'admin-dashboard':
+   
+  
+    
+        case 'admin-dashboard':
         return (
           <AdminDashboard
             onNavigateTab={handleNavigateTab}
@@ -320,7 +324,10 @@ const MainAppContent: React.FC = () => {
             onProfilePress={() => setScreen('profile')}
           />
         );
-
+case 'patientApp': 
+return(
+  <PatientApp />
+);
       case 'inventory':
         return (
           <InventoryManagement
@@ -476,7 +483,7 @@ const MainAppContent: React.FC = () => {
           <RoleSwitcher
             onBack={() => setScreen(getDefaultDashboard())}
             onRoleSwitched={(newRole) => {
-              setScreen(newRole === 'patient' ? 'patient-dashboard' : 'dashboard');
+              setScreen(newRole === 'patient' ? 'patientApp' : 'dashboard');
             }}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}

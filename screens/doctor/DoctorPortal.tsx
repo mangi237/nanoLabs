@@ -7,7 +7,8 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescriptionModal';
 import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
-// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
+import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { 
   Stethoscope, 
   Users, 
@@ -41,7 +42,8 @@ import {
   Loader2,
   Pill,
   Video,
-  User
+  User,
+  MessageSquare
 } from 'lucide-react';
 
 interface DoctorPortalProps {
@@ -58,7 +60,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const { user, lab, getAllLabs } = useAuth();
   const { t } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs' | 'chat'>('overview');
   const [timeFilter, setTimeFilter] = useState<'day' | 'week' | 'month' | 'all'>('month');
   const [loading, setLoading] = useState(true);
   
@@ -248,11 +250,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       setSharedInboxReports(allSharedInbox);
     } catch (e) {
       console.error('Error in fetchDoctorEcosystemData:', e);
-      // dispatchDatabaseFetchError({
-      //   message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
-      //   tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
-      //   rawError: e
-      // });
+      dispatchDatabaseFetchError({
+        message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
+        tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
+        rawError: e
+      });
     } finally {
       setLoading(false);
     }
@@ -716,6 +718,18 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
             <Building2 className="w-4 h-4" />
             <span>Partnered Diagnostic Labs ({partneredLabs.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'chat'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Patient Tele-Chat & Orders</span>
+          </button>
         </div>
 
         {/* TAB 1: OVERVIEW */}
@@ -1156,6 +1170,17 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
             </div>
           </div>
         )}
+
+        {/* TAB 5: PATIENT TELE-CHAT & PRESCRIPTIONS */}
+        {activeTab === 'chat' && (
+          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm animate-in fade-in duration-200">
+            <DoctorPatientChatHub
+              currentRole="doctor"
+              currentDoctorId={user?.id || 'doc_kamga_101'}
+              currentDoctorName={doctorProfile.name}
+            />
+          </div>
+        )}
       </main>
 
       {/* Modern Mobile-First Sticky Bottom Navigation Bar for Doctor */}
@@ -1192,6 +1217,21 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         >
           <Users className="w-5 h-5" />
           <span className="text-[10px]">Patients</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-chat"
+          type="button"
+          onClick={() => {
+            setActiveTab('chat');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'chat' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MessageSquare className="w-5 h-5" />
+          <span className="text-[10px]">Chat</span>
         </button>
 
         <button

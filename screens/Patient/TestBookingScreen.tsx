@@ -16,7 +16,11 @@ import {
   HelpCircle,
   Users,
   UserPlus,
-  Heart
+  Heart,
+  LocateFixed,
+  Compass,
+  Filter,
+  CheckCircle
 } from 'lucide-react';
 import { MASTER_TEST_DICTIONARY } from '../../core/scanner';
 import { PARTNER_LABS, calculateDistanceKm } from '../../core/gps';
@@ -24,6 +28,7 @@ import { CEMAC_INSURERS, InsuranceSetupScreen } from '../auth/InsuranceSetupScre
 import { groupIntoBatch } from '../../shared/batchGrouping';
 import { generateInvoiceForBatch } from '../../services/invoiceService';
 import { saveBatch } from '../../services/batchService';
+import { limsService } from '../../services/limsService';
 import { formatXAF, splitInsurance, applyPlatformFee } from '../../shared/money';
 import { PLATFORM_FEE_PCT } from '../../shared/percentage';
 import { SampleMode, FamilyMemberProfile } from '../../types';
@@ -98,6 +103,52 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
     lat: 4.0511,
     lng: 9.7085
   });
+
+  // Lab Search & Filter
+  const [labSearchQuery, setLabSearchQuery] = useState('');
+  const [labSortFilter, setLabSortFilter] = useState<'nearest' | 'fastest' | 'price' | 'all'>('nearest');
+
+  // Location Search & GPS
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [locationSuccessMsg, setLocationSuccessMsg] = useState('');
+
+  const LOCATION_PRESETS = [
+    { name: 'Akwa, Douala', landmark: 'Direction MTN / Boulevard de la Liberté', lat: 4.0511, lng: 9.7085 },
+    { name: 'Bonanjo, Douala', landmark: 'Place du Gouvernement / Quartier Administratif', lat: 4.0435, lng: 9.6890 },
+    { name: 'Bonapriso, Douala', landmark: 'Rue Tobie Kuoh / Clinique Soppo', lat: 4.0321, lng: 9.7012 },
+    { name: 'Deido, Douala', landmark: 'Rond-Point Deido / Rue de la Joie', lat: 4.0682, lng: 9.7150 },
+    { name: 'Makepe / Logpom, Douala', landmark: 'Carrefour Rhône-Poulenc / Tradex', lat: 4.0812, lng: 9.7420 },
+    { name: 'Bastos, Yaoundé', landmark: 'Rond-point Bastos / Ambassades', lat: 3.8821, lng: 11.5124 },
+    { name: 'Omnisports, Yaoundé', landmark: 'Stade Ahmadou Ahidjo / Mobil', lat: 3.8745, lng: 11.5312 },
+    { name: 'Biyem-Assi, Yaoundé', landmark: 'Rond-point Express / Acacia', lat: 3.8340, lng: 11.4870 }
+  ];
+
+  const handleUseCurrentLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setLocationSuccessMsg('Geolocation not supported by device');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserCoords({ lat: latitude, lng: longitude });
+        setHomeAddress(`GPS Pinpointed: [${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E] (Patient Verified Location)`);
+        setLocationSuccessMsg('GPS Location Acquired & Pinpointed');
+        setIsLocating(false);
+        setTimeout(() => setLocationSuccessMsg(''), 4000);
+      },
+      (error) => {
+        console.warn('Geolocation error:', error);
+        setIsLocating(false);
+        setLocationSuccessMsg('Could not acquire GPS automatically; please select below.');
+        setTimeout(() => setLocationSuccessMsg(''), 4000);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
 
   const categories = [
     { id: 'all', label: 'All Specialties' },
@@ -186,6 +237,32 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
 
     batch.invoiceId = invoice.id;
     saveBatch(batch);
+
+    // Sync to LIMS service so Receptionist, Cashier, and Lab Tech see the booking live
+    try {
+      limsService.createBooking({
+        labId: selectedLab.id,
+        patientId: patientInfo.id,
+        patientName: patientInfo.name,
+        patientPhone: patientInfo.phone,
+        patientAge: activeProfile?.age || (user as any)?.age || 35,
+        patientGender: activeProfile?.gender === 'female' ? 'Female' : 'Male',
+        homeCollection: sampleMode === 'home_collection',
+        pickupLocation: sampleMode === 'home_collection' ? homeAddress : undefined,
+        tests: selectedTests.map((t, idx) => ({
+          id: `test_${batch.id}_${idx}`,
+          testId: t.code || `T-${idx}`,
+          testCode: t.code,
+          testName: t.name,
+          category: t.category,
+          sampleTypeRequired: t.sampleType || 'Whole Blood (EDTA)',
+          price: t.basePrice || t.price || 5000,
+          status: 'Pending_Validation'
+        }))
+      }).catch(err => console.warn('LIMS sync background warning:', err));
+    } catch (e) {
+      console.warn('LIMS booking error:', e);
+    }
 
     if (onBookingSuccess) {
       onBookingSuccess(batch.id);
@@ -358,38 +435,136 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
             </div>
 
             {sampleMode === 'home_collection' && (
-              <div className="pt-2 space-y-2">
-                <label className="block text-[11px] font-bold text-slate-700">
-                  Phlebotomist Dispatch Address & Landmark *
-                </label>
+              <div className="pt-2 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                    Phlebotomist Pickup Location & Landmark *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    disabled={isLocating}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all cursor-pointer shadow-xs"
+                  >
+                    <LocateFixed className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                    <span>{isLocating ? 'Locating...' : 'Use Current Location'}</span>
+                  </button>
+                </div>
+
+                {locationSuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>{locationSuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Live Location Search Input */}
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <MapPin className="w-4 h-4 text-teal-600 absolute left-3.5 top-3" />
                   <input
                     type="text"
                     value={homeAddress}
-                    onChange={(e) => setHomeAddress(e.target.value)}
-                    placeholder="Enter residence address and landmark..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden focus:border-teal-500"
+                    onChange={(e) => {
+                      setHomeAddress(e.target.value);
+                      setShowLocationDropdown(true);
+                    }}
+                    onFocus={() => setShowLocationDropdown(true)}
+                    placeholder="Search district, avenue, hospital, or enter landmark..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
                   />
                 </div>
+
+                {/* Location Suggestions Dropdown */}
+                {showLocationDropdown && (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-md p-2 space-y-1 z-10 max-h-48 overflow-y-auto">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between">
+                      <span>Quick Select Neighborhood & Coordinates:</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowLocationDropdown(false)}
+                        className="text-slate-500 hover:text-slate-800 font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {LOCATION_PRESETS.map((loc) => (
+                      <button
+                        key={loc.name}
+                        type="button"
+                        onClick={() => {
+                          setHomeAddress(`${loc.name} (${loc.landmark})`);
+                          setUserCoords({ lat: loc.lat, lng: loc.lng });
+                          setShowLocationDropdown(false);
+                          setLocationSuccessMsg(`Location set to ${loc.name}`);
+                          setTimeout(() => setLocationSuccessMsg(''), 3000);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-teal-50/80 transition-colors text-xs flex items-center justify-between group cursor-pointer"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-800 group-hover:text-teal-900">{loc.name}</div>
+                          <div className="text-[10px] text-slate-500">{loc.landmark}</div>
+                        </div>
+                        <span className="text-[10px] font-mono text-teal-600 font-bold">
+                          {loc.lat.toFixed(2)}°N, {loc.lng.toFixed(2)}°E
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-500">
+                  Phlebotomist dispatch uses GPS routing to ensure cold-box transit within 45 minutes of sample draw.
+                </p>
               </div>
             )}
           </div>
 
           {/* Partner Lab Selection */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="block text-xs font-bold text-[#0B1F1D] uppercase tracking-wide">
-                2. Select Performing Laboratory
+                2. Select Performing Laboratory ({filteredAndSortedLabs.length} Available)
               </label>
-              <span className="text-[11px] text-teal-700 font-bold flex items-center gap-1">
-                <Navigation className="w-3 h-3" />
-                <span>Ranked by GPS Distance</span>
-              </span>
+              <div className="relative min-w-[200px]">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search labs by name or city..."
+                  value={labSearchQuery}
+                  onChange={(e) => setLabSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              {PARTNER_LABS.map((lab) => {
+            {/* Filter & Sort Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase mr-1 flex items-center gap-1 shrink-0">
+                <Filter className="w-3 h-3 text-slate-500" />
+                Sort:
+              </span>
+              {[
+                { id: 'nearest', label: 'Nearest (GPS)' },
+                { id: 'fastest', label: 'Fastest TAT' },
+                { id: 'price', label: 'Affordable First' },
+                { id: 'all', label: 'All Labs' }
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setLabSortFilter(filter.id as any)}
+                  className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                    labSortFilter === filter.id
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {filteredAndSortedLabs.map((lab) => {
                 const labLat = lab.lat ?? lab.coordinates?.latitude ?? 4.0511;
                 const labLng = lab.lng ?? lab.coordinates?.longitude ?? 9.7042;
                 const dist = calculateDistanceKm(userCoords.lat, userCoords.lng, labLat, labLng);
@@ -400,18 +575,25 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
                     onClick={() => setSelectedLabId(lab.id)}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                       isSelected
-                        ? 'border-[#0F766E] bg-teal-50/40 shadow-xs'
+                        ? 'border-[#0F766E] bg-teal-50/50 ring-2 ring-teal-500/20 shadow-xs'
                         : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        isSelected ? 'bg-[#0F766E] text-white' : 'bg-slate-100 text-slate-600'
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        isSelected ? 'bg-[#0F766E] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
                       }`}>
                         <Building2 className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs font-bold text-[#0B1F1D] truncate">{lab.name}</div>
+                        <div className="text-xs font-bold text-[#0B1F1D] truncate flex items-center gap-1.5">
+                          <span>{lab.name}</span>
+                          {lab.tier === 'budget' && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                              Economical
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-[#6B7F7D] truncate">
                           {lab.city} &bull; {lab.address}
                         </div>

@@ -9,7 +9,7 @@ import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
 import { SplitScreenResultEntry } from '../../components/results/SplitScreenResultEntry';
-import { A4CanvasResultEditor } from '../../components/results/A4CanvasResultEditor';
+import { A4CanvasResultEditor, A4_CLINICAL_TEMPLATES } from '../../components/results/A4CanvasResultEditor';
 import { PatientExamResult } from '../../types/examTemplate';
 import { 
   TestTube, 
@@ -31,6 +31,8 @@ import {
   UserCheck, 
   Layers, 
   Sparkles,
+  Microscope,
+  Link as LinkIcon,
   ChevronRight,
   ArrowRight,
   BookOpen,
@@ -107,8 +109,19 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Selected Patient Booklet Modal State
   const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
   const [selectedTestIndex, setSelectedTestIndex] = useState<number>(0);
-  const [activeOptionMode, setActiveOptionMode] = useState<'a4_canvas' | 'dual_mode' | 'form' | 'template_editor' | 'upload' | 'physical_pickup'>('a4_canvas');
+  const [activeOptionMode, setActiveOptionMode] = useState<"a4_canvas" | "document" | "form">("document");
   const [showA4BatchModal, setShowA4BatchModal] = useState<boolean>(false);
+
+  // Analyzer & Document Result States
+  const [analyzerName, setAnalyzerName] = useState<string>('Mindray BC-5000');
+  const [analyzerLink, setAnalyzerLink] = useState<string>('');
+  const [analyzerFindings, setAnalyzerFindings] = useState<string>('');
+  const [savedPrompt, setSavedPrompt] = useState<{
+    isOpen: boolean;
+    testIndex: number;
+    testName: string;
+  } | null>(null);
+  const [selectedTestIndexForPdf, setSelectedTestIndexForPdf] = useState<number | null>(null);
 
   // Two-Column Template & Rich Result Text States
   const [templateText, setTemplateText] = useState<string>('');
@@ -1673,1678 +1686,456 @@ CLINICAL REAGENTS USED:
                       )}
                     </div>
 
-                    {/* Response Method Tabs */}
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Choose Response Method:
-                      </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 p-1 bg-slate-100 rounded-2xl">
+                    {/* Response Method Tabs - STRICTLY TWO TABS */}
+                    <div className="space-y-4">
+                      {/* Sample & Specimen Info Header Box (Available for both methods) */}
+                      <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border border-slate-800 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-teal-500/20 text-teal-300">
+                              <TestTube className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Specimen & Sample Information</div>
+                              <div className="text-xs font-black text-white flex items-center gap-1.5">
+                                <span>{masterDef?.sampleType || currentTestInModal.sampleType || 'Venous Whole Blood'}</span>
+                                <span className="text-slate-500">•</span>
+                                <span className="text-teal-400 font-mono">{activeBooking.bookingCode || `Tube #ST-${activeBooking.bookingCode || '01'}-${selectedTestIndex + 1}`}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-right">
+                            <div>
+                              <div className="text-[10px] text-slate-400 uppercase font-bold">Patient / Order</div>
+                              <div className="text-xs font-semibold text-white">
+                                {activeBooking.patientName} <span className="text-slate-400">({activeBooking.patientGender || 'Adult'}, {activeBooking.patientAge || '32'}y)</span>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-lg text-[10px] font-bold">
+                              {currentTestInModal.status || 'In Testing'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick Clinical Template Selector Bar */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+                              Select Clinical Template:
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Click to pre-fill {activeOptionMode === 'a4_canvas' ? 'Canvas' : 'Analyzer Findings'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                            {A4_CLINICAL_TEMPLATES.map((tpl) => (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                onClick={() => {
+                                  if (activeOptionMode === 'a4_canvas') {
+                                    setActiveBooking(prev => {
+                                      if (!prev) return null;
+                                      const updatedTests = [...prev.tests];
+                                      if (updatedTests[selectedTestIndex]) {
+                                        updatedTests[selectedTestIndex] = {
+                                          ...updatedTests[selectedTestIndex],
+                                          richReportHtml: tpl.html,
+                                        };
+                                      }
+                                      return { ...prev, tests: updatedTests };
+                                    });
+                                    setActionSuccessMessage(`📋 Template "${tpl.name}" applied to Canvas!`);
+                                    setTimeout(() => setActionSuccessMessage(''), 3000);
+                                  } else {
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = tpl.html;
+                                    const cleanText = tempDiv.innerText || tempDiv.textContent || '';
+                                    setAnalyzerFindings(cleanText.trim());
+                                    setActionSuccessMessage(`📋 Template "${tpl.name}" loaded into Analyzer Findings!`);
+                                    setTimeout(() => setActionSuccessMessage(''), 3000);
+                                  }
+                                }}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-teal-900/60 text-slate-200 hover:text-teal-200 border border-slate-700 hover:border-teal-500/50 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5"
+                                title={tpl.name}
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-400" />
+                                <span>{tpl.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* TWO TABS TOGGLE */}
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                         <button
+                          type="button"
                           onClick={() => setActiveOptionMode('a4_canvas')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
                             activeOptionMode === 'a4_canvas'
-                              ? 'bg-teal-700 text-white shadow-xs'
+                              ? 'bg-teal-700 text-white shadow-sm'
                               : 'text-slate-600 hover:text-slate-900 bg-white/70'
                           }`}
-                          title="Pre-Built Blank Canvas A4 Letter style (Locked Header, Locked Footer, Free-form Middle Box)"
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                          <span>1. A4 Canva Canvas</span>
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>1. Result by Canvas (A4 Sheet)</span>
                         </button>
 
                         <button
-                          onClick={() => setActiveOptionMode('dual_mode')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            activeOptionMode === 'dual_mode'
-                              ? 'bg-teal-700 text-white shadow-xs'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                          title="Dual-Mode Split-Screen MS Access/Excel style clinical results entry"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-teal-600" />
-                          <span>2. Clinical Split</span>
-                        </button>
-
-                        <button
-                          onClick={() => setActiveOptionMode('form')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            activeOptionMode === 'form'
-                              ? 'bg-white text-teal-900 shadow-xs border border-slate-200'
-                              : 'text-slate-600 hover:text-slate-900'
+                          type="button"
+                          onClick={() => setActiveOptionMode('document')}
+                          className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            activeOptionMode === 'document'
+                              ? 'bg-teal-700 text-white shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900 bg-white/70'
                           }`}
                         >
-                          <FileText className="w-3.5 h-3.5 text-teal-600" />
-                          <span>3. Standard Table</span>
-                        </button>
-
-                        <button
-                          onClick={() => setActiveOptionMode('template_editor')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            activeOptionMode === 'template_editor'
-                              ? 'bg-white text-teal-900 shadow-xs border border-slate-200'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                          title="Two-column template and free-form rich text editor"
-                        >
-                          <Columns className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>4. Template Text</span>
-                        </button>
-
-                        <button
-                          onClick={() => setActiveOptionMode('upload')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            activeOptionMode === 'upload'
-                              ? 'bg-white text-teal-900 shadow-xs border border-slate-200'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          <Upload className="w-3.5 h-3.5 text-teal-600" />
-                          <span>5. Upload PDF</span>
-                        </button>
-
-                        <button
-                          onClick={() => setActiveOptionMode('physical_pickup')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            activeOptionMode === 'physical_pickup'
-                              ? 'bg-white text-teal-900 shadow-xs border border-slate-200'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          <Bell className="w-3.5 h-3.5 text-teal-600" />
-                          <span>6. Physical Alert</span>
+                          <FileCheck className="w-4 h-4 text-teal-300" />
+                          <span>2. Result by Document (Analyzer)</span>
                         </button>
                       </div>
-                    </div>
 
-                    {/* ======================================================== */}
-                    {/* MODE 1: SINGLE-PAGE A4 CANVA / LETTER STYLE CANVAS       */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'a4_canvas' && (
-                      <div className="rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-                        <A4CanvasResultEditor
-                          booking={activeBooking}
-                          initialTestIndex={selectedTestIndex}
-                          onSaveIndividualTest={(idx, html, summary) => {
-                            setActiveBooking(prev => {
-                              if (!prev) return null;
-                              const updatedTests = [...prev.tests];
-                              if (updatedTests[idx]) {
-                                updatedTests[idx] = {
-                                  ...updatedTests[idx],
-                                  richReportHtml: html,
-                                  resultValue: summary,
-                                  status: 'Completed',
-                                  completedAt: new Date().toISOString()
-                                };
-                              }
-                              return { ...prev, tests: updatedTests };
-                            });
-                          }}
-                          onSaveAllTests={(allTests) => {
-                            setActiveBooking(prev => {
-                              if (!prev) return null;
-                              const updatedTests = [...prev.tests];
-                              allTests.forEach(({ testIndex, richHtml, summary }) => {
-                                if (updatedTests[testIndex]) {
-                                  updatedTests[testIndex] = {
-                                    ...updatedTests[testIndex],
-                                    richReportHtml: richHtml,
+                      {/* ======================================================== */}
+                      {/* TAB 1: RESULT BY CANVAS (A4 SHEET)                       */}
+                      {/* ======================================================== */}
+                      {activeOptionMode === 'a4_canvas' && (
+                        <div className="rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+                          <A4CanvasResultEditor
+                            booking={activeBooking}
+                            initialTestIndex={selectedTestIndex}
+                            onSaveIndividualTest={(idx, html, summary) => {
+                              setActiveBooking(prev => {
+                                if (!prev) return null;
+                                const updatedTests = [...prev.tests];
+                                if (updatedTests[idx]) {
+                                  updatedTests[idx] = {
+                                    ...updatedTests[idx],
+                                    richReportHtml: html,
                                     resultValue: summary,
                                     status: 'Completed',
                                     completedAt: new Date().toISOString()
                                   };
                                 }
+                                return { ...prev, tests: updatedTests };
                               });
-                              return { ...prev, tests: updatedTests, status: 'Completed' };
-                            });
-                          }}
-                          onPrintPreview={() => setShowPdfModal(true)}
-                        />
-                      </div>
-                    )}
 
-                    {/* ======================================================== */}
-                    {/* MODE 2: DUAL-MODE CLINICAL SPLIT-SCREEN WORKSTATION       */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'dual_mode' && (
-                      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                        <SplitScreenResultEntry
-                          bookingId={activeBooking.id}
-                          patientId={activeBooking.patientPid || activeBooking.patientId}
-                          patientName={activeBooking.patientName}
-                          examCode={currentTestInModal.testCode || currentTestInModal.id || 'PV_EXAM'}
-                          testName={currentTestInModal.testName}
-                          category={currentTestInModal.category}
-                          onSaveAndLock={handleSaveFromSplitScreenResult}
-                          onPrintPreview={(result, tpl) => {
-                            setShowPdfModal(true);
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Worksheet View Mode Toggle (Guided Smart vs Manual Structured Sheet) */}
-                    {activeOptionMode === 'form' && (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-100/90 p-2 rounded-2xl border border-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setWorksheetLayoutMode('guided')}
-                            className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                              worksheetLayoutMode === 'guided'
-                                ? 'bg-white text-teal-900 shadow-xs border border-slate-200'
-                                : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Guided Smart Mode</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setWorksheetLayoutMode('manual_sheet')}
-                            className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                              worksheetLayoutMode === 'manual_sheet'
-                                ? 'bg-teal-700 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            <Layers className="w-3.5 h-3.5 text-teal-300" />
-                            <span>Manual Structured Sheet Mode (Tree on Left ➔ Inputs on Right)</span>
-                          </button>
-                        </div>
-                        <span className="text-[11px] font-mono text-slate-500 px-2">
-                          {worksheetLayoutMode === 'manual_sheet' 
-                            ? 'Hierarchical Series / Microbiology & Direct Manual Entry' 
-                            : 'Standard Automated Entry with Chips & Calculators'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* ======================================================== */}
-                    {/* MODE 1A: MANUAL STRUCTURED SHEET MODE (TREE LEFT + INPUTS RIGHT) */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'form' && worksheetLayoutMode === 'manual_sheet' && (
-                      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-                        
-                        {/* LEFT COLUMN (5 Cols): HIERARCHICAL TEST STRUCTURE TREE */}
-                        <div className="xl:col-span-5 bg-slate-900 text-white p-4 sm:p-5 rounded-3xl border border-slate-800 space-y-4 shadow-xl xl:sticky xl:top-2">
-                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                            <div>
-                              <h4 className="text-xs font-black uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
-                                <Layers className="w-4 h-4 text-teal-400" />
-                                Test Series Hierarchy Tree
-                              </h4>
-                              <p className="text-[10px] text-slate-400">Header / Topic ➔ Sub-Header ➔ Sub-Sub Points</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setShowAddSectionModal(true)}
-                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-teal-300 text-[10px] font-bold rounded-xl border border-slate-700 cursor-pointer"
-                                title="Add a Main Topic / Section Header"
-                              >
-                                + Topic
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setShowAddCustomParamModal(true)}
-                                className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-bold rounded-xl cursor-pointer"
-                                title="Add Sub-topic or Sub-sub point"
-                              >
-                                + Sub-Point
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Hierarchical Structure Outline */}
-                          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                            {/* Root Test Name */}
-                            <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 font-bold text-xs text-slate-100 flex items-center justify-between">
-                              <div className="flex items-center gap-2 truncate">
-                                <FlaskConical className="w-4 h-4 text-teal-400 shrink-0" />
-                                <span className="truncate">{currentTestInModal.testName}</span>
-                              </div>
-                              <span className="text-[10px] font-mono bg-teal-900/60 text-teal-300 border border-teal-700/40 px-2 py-0.5 rounded-md">
-                                {currentTestInModal.testCode || 'TEST'}
-                              </span>
-                            </div>
-
-                            {/* Sub-Parameters / Topics Hierarchy */}
-                            {activeTestSubParameters && activeTestSubParameters.length > 0 ? (
-                              <div className="space-y-1.5 pl-3 border-l-2 border-slate-800 ml-3">
-                                {activeTestSubParameters.map((sp, idx) => {
-                                  const isHeading = sp.parameterType === 'heading' || sp.sectionHeader === sp.name;
-                                  const isFilled = !!activeSubParamValues[sp.id];
-                                  const flag = activeParamFlags[sp.id] || 'Normal';
-
-                                  if (isHeading) {
-                                    return (
-                                      <div
-                                        key={sp.id || idx}
-                                        className="mt-3 pt-2 pb-1 text-[11px] font-black uppercase tracking-wider text-teal-300 flex items-center justify-between border-b border-slate-800"
-                                      >
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                                          <span>§ {sp.name}</span>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveSection(sp.id, sp.name)}
-                                          className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
-                                          title={`Delete Section "${sp.name}"`}
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    );
+                              setSavedPrompt({
+                                isOpen: true,
+                                testIndex: idx,
+                                testName: activeBooking.tests[idx]?.testName || `Test ${idx + 1}`
+                              });
+                            }}
+                            onSaveAllTests={(allTests) => {
+                              setActiveBooking(prev => {
+                                if (!prev) return null;
+                                const updatedTests = [...prev.tests];
+                                allTests.forEach(({ testIndex, richHtml, summary }) => {
+                                  if (updatedTests[testIndex]) {
+                                    updatedTests[testIndex] = {
+                                      ...updatedTests[testIndex],
+                                      richReportHtml: richHtml,
+                                      resultValue: summary,
+                                      status: 'Completed',
+                                      completedAt: new Date().toISOString()
+                                    };
                                   }
+                                });
+                                return { ...prev, tests: updatedTests, status: 'Completed' };
+                              });
 
-                                  return (
-                                    <div
-                                      key={sp.id || idx}
-                                      className="p-2 rounded-xl bg-slate-800/40 hover:bg-slate-800 border border-slate-800/80 text-xs flex items-center justify-between transition-colors"
-                                    >
-                                      <div className="flex items-center gap-2 truncate">
-                                        <div className={`w-2 h-2 rounded-full shrink-0 ${isFilled ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                                        <span className="font-semibold text-slate-300 truncate">{sp.name}</span>
-                                        {sp.unit && <span className="text-[10px] font-mono text-slate-500">({sp.unit})</span>}
-                                      </div>
-                                      {isFilled && (
-                                        <span className="text-[10px] font-mono font-bold text-teal-300 bg-teal-950/80 px-1.5 py-0.5 rounded border border-teal-800/50">
-                                          {activeSubParamValues[sp.id]}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-slate-400 italic p-3 text-center">
-                                Single-result test without sub-sections. Click "+ Topic" or "+ Sub-Point" to add hierarchical structure.
-                              </p>
-                            )}
-
-                            {/* Quick Antibiogram Rows in Tree if any */}
-                            {activeAntibiogram.length > 0 && (
-                              <div className="mt-4 pt-2 border-t border-slate-800">
-                                <div className="text-[11px] font-black uppercase text-indigo-400 mb-2 flex items-center gap-1.5">
-                                  <Activity className="w-3.5 h-3.5" />
-                                  <span>Antibiogram Molecule Tree ({activeAntibiogram.length})</span>
-                                </div>
-                                <div className="space-y-1 pl-3 border-l-2 border-indigo-900/60 ml-3">
-                                  {activeAntibiogram.map(ab => (
-                                    <div key={ab.id} className="p-1.5 bg-slate-800/60 rounded-lg text-[11px] flex items-center justify-between">
-                                      <span className="text-slate-300">{ab.antibiotic}</span>
-                                      <span className={`text-[9px] font-black px-1.5 py-0.2 rounded font-mono ${
-                                        ab.sensitivity === 'S' ? 'bg-emerald-900 text-emerald-300' : ab.sensitivity === 'R' ? 'bg-rose-900 text-rose-300' : 'bg-amber-900 text-amber-300'
-                                      }`}>
-                                        {ab.sensitivity === 'S' ? 'Sensible (S)' : ab.sensitivity === 'R' ? 'Résistant (R)' : 'Intermédiaire (I)'}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                              setSavedPrompt({
+                                isOpen: true,
+                                testIndex: selectedTestIndex,
+                                testName: 'Consolidated Batch Results'
+                              });
+                            }}
+                            onPrintPreview={(bookingObj: any) => {
+                              // Use selectedTestIndex directly since tIdx does not exist here
+                              setSelectedTestIndexForPdf(selectedTestIndex);
+                              setShowPdfModal(true);
+                            }}
+                            
+                            
+                          />
                         </div>
+                      )}
 
-                        {/* RIGHT COLUMN (7 Cols): DIRECT ROOMY MANUAL INPUTS CANVAS */}
-                        <div className="xl:col-span-7 space-y-5">
-                          
-                          {/* Main Finding / Summary (Roomy Field) */}
-                          <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-2">
-                            <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
-                              <span>Global Analytical Finding / Impression:</span>
-                              <span className="text-[11px] font-mono font-normal text-slate-500">
-                                Unit: {currentTestInModal.units || 'Qualitative'}
-                              </span>
+                      {/* ======================================================== */}
+                      {/* TAB 2: RESULT BY DOCUMENT (ANALYZER)                     */}
+                      {/* ======================================================== */}
+                      {activeOptionMode === "document" && (
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+                          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-teal-100 text-teal-800">
+                                <Microscope className="w-5 h-5 text-teal-700" />
+                              </div>
+                              <div>
+                                <h4 className="font-extrabold text-sm text-slate-900">Analyzer Diagnostic Output & Document Link</h4>
+                                <p className="text-xs text-slate-500">Record machine analyzer parameters, upload digital printouts, or attach cloud links.</p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 px-3 py-1 rounded-xl border border-teal-200">
+                              LIS Bridge Active
+                            </span>
+                          </div>
+
+                          {/* Analyzer Machine Selection & Presets */}
+                          <div className="space-y-2">
+                            <label className="block text-xs font-bold text-slate-700">
+                              Analyzer Machine Name / Model:
                             </label>
                             <input
                               type="text"
-                              value={activeResultValue}
-                              onChange={e => setActiveResultValue(e.target.value)}
-                              placeholder="Enter comprehensive findings, impression, or primary measurement..."
-                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-300 rounded-2xl text-sm font-mono font-bold text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-inner"
+                              value={analyzerName}
+                              onChange={e => setAnalyzerName(e.target.value)}
+                              placeholder="e.g. Mindray BC-5000, Sysmex XN-550, Roche Cobas c311..."
+                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                             />
-                          </div>
-
-                          {/* Direct Manual Entry Rows for All Sub-Parameters & Sections */}
-                          {activeTestSubParameters && activeTestSubParameters.length > 0 && (
-                            <div className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                  <FileText className="w-4 h-4 text-teal-600" />
-                                  Manual Multi-Parameter Input Rows
-                                </h4>
-                                <span className="text-[10px] font-mono text-slate-500">
-                                  {activeTestSubParameters.length} structured items
-                                </span>
-                              </div>
-
-                              <div className="space-y-3">
-                                {activeTestSubParameters.map((sp, spIdx) => {
-                                  if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
-                                    return (
-                                      <div
-                                        key={sp.id || spIdx}
-                                        className="bg-slate-800 text-white px-4 py-3 rounded-2xl flex items-center justify-between shadow-xs mt-4"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <span className="w-2.5 h-2.5 rounded-full bg-teal-400" />
-                                          <span className="text-xs font-black tracking-wide uppercase">{sp.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveSection(sp.id, sp.name)}
-                                            className="text-xs font-bold text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-700 border border-rose-700/50 px-2.5 py-1 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
-                                            title={`Delete Section "${sp.name}"`}
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                            <span>Delete Section</span>
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-
-                                  const valStr = activeSubParamValues[sp.id] || '';
-                                  const obsStr = activeParamObservations[sp.id] || '';
-                                  const currentFlag = activeParamFlags[sp.id] || 'Normal';
-                                  const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
-                                  const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
-                                  const refDisplay = activeBooking.patientGender === 'Female' 
-                                    ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
-                                    : sp.refRangeMale || `${min || 0} - ${max || 100}`;
-
-                                  return (
-                                    <div
-                                      key={sp.id || spIdx}
-                                      className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-teal-300 transition-all space-y-3 shadow-xs"
-                                    >
-                                      {/* Header of Item */}
-                                      <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs font-black text-slate-900">{sp.name}</span>
-                                          {sp.unit && (
-                                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                                              {sp.unit}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200">
-                                          Ref: <strong className="text-slate-800">{refDisplay}</strong>
-                                        </div>
-                                      </div>
-
-                                      {/* Direct Inputs: Measured Value + Morphological Observation */}
-                                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                                        {/* Measured Value (Roomy Input) */}
-                                        <div className="md:col-span-5 space-y-1">
-                                          <label className="text-[10px] font-bold text-slate-500 uppercase">Measured Value / Result:</label>
-                                          <input
-                                            type="text"
-                                            value={valStr}
-                                            onChange={e => {
-                                              const newVals = { ...activeSubParamValues, [sp.id]: e.target.value };
-                                              const calculated = computeFormulas(newVals, activeTestSubParameters);
-                                              setActiveSubParamValues(calculated);
-                                            }}
-                                            placeholder="Enter numerical or text value..."
-                                            className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                          />
-                                        </div>
-
-                                        {/* Qualitative Observation / Remarks (Roomy Input) */}
-                                        <div className="md:col-span-7 space-y-1">
-                                          <label className="text-[10px] font-bold text-slate-500 uppercase">Observations / Cell Morphology / Details:</label>
-                                          <input
-                                            type="text"
-                                            value={obsStr}
-                                            onChange={e => {
-                                              setActiveParamObservations({ ...activeParamObservations, [sp.id]: e.target.value });
-                                            }}
-                                            placeholder="Specific observations, cellular aspect, flora density..."
-                                            className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-sans text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                          />
-                                        </div>
-                                      </div>
-
-                                      {/* One-Click Sensitivity / Flag Pills */}
-                                      <div className="flex items-center justify-between pt-1 border-t border-slate-100 flex-wrap gap-2">
-                                        <span className="text-[10px] font-bold text-slate-500">Interpretation Flag:</span>
-                                        <div className="flex items-center gap-1.5">
-                                          {(['Normal', 'Low', 'High', 'Borderline'] as const).map(f => (
-                                            <button
-                                              key={f}
-                                              type="button"
-                                              onClick={() => setActiveParamFlags({ ...activeParamFlags, [sp.id]: f })}
-                                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                                currentFlag === f
-                                                  ? f === 'Normal' ? 'bg-emerald-600 text-white' : f === 'High' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'
-                                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                              }`}
-                                            >
-                                              {f}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Antibiogram Sensitivity Matrix (Microbiology Direct Input) */}
-                          <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
-                                <Activity className="w-4 h-4 text-indigo-600" />
-                                Antibiogram & Antibiotic Sensitivity Testing
-                              </h4>
-                              <button
-                                type="button"
-                                onClick={() => setShowAddAntibiogramRow(true)}
-                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer shadow-xs"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Add Antibiotic Molecule</span>
-                              </button>
-                            </div>
-
-                            {activeAntibiogram.length > 0 ? (
-                              <div className="space-y-2">
-                                {activeAntibiogram.map((row, rIdx) => (
-                                  <div key={row.id} className="p-3 bg-white rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                                    <div className="sm:col-span-5 font-bold text-xs text-slate-900 truncate">
-                                      {row.antibiotic}
-                                    </div>
-                                    <div className="sm:col-span-3">
-                                      <input
-                                        type="text"
-                                        value={row.zoneMm || ''}
-                                        onChange={e => {
-                                          const updated = [...activeAntibiogram];
-                                          updated[rIdx].zoneMm = e.target.value;
-                                          setActiveAntibiogram(updated);
-                                        }}
-                                        placeholder="Zone (e.g. 24mm)"
-                                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
-                                      />
-                                    </div>
-                                    <div className="sm:col-span-3 flex items-center gap-1">
-                                      {(['S', 'I', 'R'] as const).map(sens => (
-                                        <button
-                                          key={sens}
-                                          type="button"
-                                          onClick={() => {
-                                            const updated = [...activeAntibiogram];
-                                            updated[rIdx].sensitivity = sens;
-                                            setActiveAntibiogram(updated);
-                                          }}
-                                          className={`flex-1 py-1 rounded-lg text-xs font-black transition-all ${
-                                            row.sensitivity === sens
-                                              ? sens === 'S' ? 'bg-emerald-600 text-white' : sens === 'R' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'
-                                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                          }`}
-                                        >
-                                          {sens}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <div className="sm:col-span-1 flex justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveAntibiogram(activeAntibiogram.filter(a => a.id !== row.id))}
-                                        className="text-slate-400 hover:text-rose-600 p-1"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-slate-400 italic">No antibiotic sensitivity rows added. Click "+ Add Antibiotic Molecule" for microbiology cultures.</p>
-                            )}
-                          </div>
-
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ======================================================== */}
-                    {/* MODE 1B: SPLIT WORKSTATION (GUIDED SMART MODE)            */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'form' && worksheetLayoutMode === 'guided' && (
-                      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-                        
-                        {/* ----------------------------------------------------- */}
-                        {/* LEFT COLUMN: STATIC REFERENCE & NAVIGATION HUB         */}
-                        {/* ----------------------------------------------------- */}
-                        <div className="xl:col-span-4 space-y-4 xl:sticky xl:top-2">
-                          
-                          {/* Test Biological Context Card */}
-                          <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-3 shadow-md">
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                              <span className="text-[11px] font-mono text-teal-400 font-bold uppercase tracking-wider">
-                                Technical Reference
-                              </span>
-                              <span className="text-[10px] bg-teal-500/20 text-teal-300 border border-teal-400/30 px-2 py-0.5 rounded-full font-mono">
-                                {masterDef?.method || 'Enzymatic / Automated'}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1.5 text-xs">
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Specimen Matrix:</span>
-                                <span className="font-bold text-slate-200">{masterDef?.sampleType || currentTestInModal.sampleType || 'Venous Blood'}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Patient Bracket:</span>
-                                <span className="font-bold text-slate-200">{activeBooking.patientGender || 'Adult'} • {activeBooking.patientAge || '30'} yrs</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Standard TAT:</span>
-                                <span className="font-bold text-slate-200">{masterDef?.turnaroundTime || '2 Hours'}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Live Parameter Directory & Fill Progress */}
-                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                                <ListOrdered className="w-3.5 h-3.5 text-teal-600" />
-                                Parameter Navigator
-                              </h4>
-                              {(() => {
-                                const total = activeTestSubParameters.length;
-                                const filled = activeTestSubParameters.filter(p => !!activeSubParamValues[p.id]).length;
-                                return (
-                                  <span className="text-[10px] font-mono font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">
-                                    {filled}/{total} Filled
-                                  </span>
-                                );
-                              })()}
-                            </div>
-
-                            {/* Parameter Directory List */}
-                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                              {activeTestSubParameters.length > 0 ? (
-                                activeTestSubParameters.map(sp => {
-                                  if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
-                                    return (
-                                      <div key={sp.id} className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wider text-teal-800 border-b border-slate-200">
-                                        § {sp.name}
-                                      </div>
-                                    );
-                                  }
-                                  const isFilled = !!activeSubParamValues[sp.id];
-                                  const flag = activeParamFlags[sp.id] || 'Normal';
-
-                                  return (
-                                    <div
-                                      key={sp.id}
-                                      className="flex items-center justify-between p-1.5 rounded-xl hover:bg-slate-100 text-xs transition-colors"
-                                    >
-                                      <div className="flex items-center gap-2 truncate">
-                                        {isFilled ? (
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                        ) : (
-                                          <div className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0" />
-                                        )}
-                                        <span className="font-semibold text-slate-700 truncate">{sp.name}</span>
-                                      </div>
-                                      {isFilled && flag !== 'Normal' && (
-                                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
-                                          flag === 'High' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                                        }`}>
-                                          {flag}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <p className="text-[11px] text-slate-400 italic">Single-finding test format.</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Diagnostic Formulas Guide */}
-                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
-                            <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                              <Calculator className="w-3.5 h-3.5 text-teal-600" />
-                              Auto-Formulas Guide
-                            </h4>
-                            <div className="space-y-1.5 font-mono text-[10px] text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100">
-                              <div>• MCV = (PCV × 10) / RBC</div>
-                              <div>• MCH = (Hb × 10) / RBC</div>
-                              <div>• MCHC = (Hb × 100) / PCV</div>
-                              <div>• A/G Ratio = Albumin / Globulin</div>
-                              <div>• Indirect Bili = Total - Direct</div>
-                              <div>• Friedewald LDL = Chol - HDL - (TG/5)</div>
-                            </div>
-                          </div>
-
-                          {/* Quick Action Buttons Palette */}
-                          <div className="space-y-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={handleQuickFillNormalValues}
-                              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                            >
-                              <Zap className="w-3.5 h-3.5 text-yellow-300" />
-                              <span>⚡ Quick Fill Normal Baseline</span>
-                            </button>
-
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setShowAddCustomParamModal(true)}
-                                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-50 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3 text-teal-600" />
-                                <span>+ Add Parameter</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setShowAddSectionModal(true)}
-                                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-50 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
-                              >
-                                <Layers className="w-3 h-3 text-teal-600" />
-                                <span>+ Add Section</span>
-                              </button>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => setShowAddAntibiogramRow(true)}
-                              className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-indigo-800 border border-indigo-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <Activity className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>+ Antibiogram Antibiotic Row</span>
-                            </button>
-                          </div>
-
-                        </div>
-
-                        {/* ----------------------------------------------------- */}
-                        {/* RIGHT COLUMN: COMPREHENSIVE MULTI-TIER FORM CANVAS     */}
-                        {/* ----------------------------------------------------- */}
-                        <div className="xl:col-span-8 space-y-6">
-                          
-                          {/* Predictive Answers Chips */}
-                          <div className="bg-teal-50/70 p-4 rounded-2xl border border-teal-100 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900">
-                                <Sparkles className="w-4 h-4 text-teal-600" />
-                                <span>Predictive Quick Findings:</span>
-                              </div>
-                              <span className="text-[10px] text-teal-700 font-mono">1-click insert</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {predictiveChoices.map((choice, cIdx) => (
+                            {/* Preset chips */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Quick Select:</span>
+                              {["Mindray BC-5000", "Sysmex XN-550", "Roche Cobas c311", "Abbott Architect ci4100", "Bio-Rad D-10", "Biomerieux VITEK 2", "Siemens Dimension EXL"].map(machine => (
                                 <button
-                                  key={cIdx}
+                                  key={machine}
                                   type="button"
-                                  onClick={() => setActiveResultValue(choice)}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                    activeResultValue === choice
-                                      ? 'bg-teal-600 text-white shadow-xs'
-                                      : 'bg-white text-slate-700 border border-teal-200 hover:bg-teal-100/60'
+                                  onClick={() => setAnalyzerName(machine)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                    analyzerName === machine
+                                      ? "bg-teal-700 text-white shadow-xs"
+                                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                                   }`}
                                 >
-                                  {choice}
+                                  {machine}
                                 </button>
                               ))}
                             </div>
                           </div>
 
-                          {/* Direct Primary Finding Long Input Field */}
-                          <div className="space-y-1.5 bg-slate-50/60 p-4 rounded-2xl border border-slate-200">
-                            <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                              <span>Primary Analytical Finding / Impression:</span>
-                              <span className="text-[11px] font-mono text-slate-500">
-                                Units: {currentTestInModal.units || masterDef?.units || 'Qualitative'}
+                          {/* Cloud / LIS Result URL Link */}
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <LinkIcon className="w-3.5 h-3.5 text-teal-600" />
+                                Analyzer Result Link / LIS Cloud URL:
                               </span>
+                              <span className="text-[10px] text-slate-400 font-normal">Optional network endpoint</span>
                             </label>
                             <input
-                              type="text"
-                              value={activeResultValue}
-                              onChange={e => setActiveResultValue(e.target.value)}
-                              placeholder="Enter comprehensive finding, e.g. Negative for Plasmodium falciparum, 13.8 g/dL, Clear yellow..."
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-inner"
+                              type="url"
+                              value={analyzerLink}
+                              onChange={e => setAnalyzerLink(e.target.value)}
+                              placeholder="https://lis.labnet.internal/reports/export/BC-98421 or HL7 repository URL..."
+                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                             />
                           </div>
 
-                          {/* Multi-Parameter Sub-Parameters Detailed Form */}
-                          {activeTestSubParameters && activeTestSubParameters.length > 0 && (
-                            <div className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                  <Layers className="w-4 h-4 text-teal-600" />
-                                  Structured Parameter Measurements & Qualitative Fields
-                                </h4>
-                                <span className="text-[10px] font-mono text-slate-400">
-                                  {activeTestSubParameters.length} parameters configured
-                                </span>
-                              </div>
-
-                              {/* Responsive Grid / Column Result Editor */}
-                              <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs bg-white">
-                                <table className="w-full text-left text-xs border-collapse">
-                                  <thead className="bg-slate-50 text-slate-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-slate-200">
-                                    <tr>
-                                      <th className="py-3 px-3 w-[26%]">Parameter / Analyte Name</th>
-                                      <th className="py-3 px-3 w-[22%]">Result Value</th>
-                                      <th className="py-3 px-2 w-[12%] text-center">Unit</th>
-                                      <th className="py-3 px-3 w-[16%]">Biological Ref Range</th>
-                                      <th className="py-3 px-3 w-[24%]">Interpretation / Pathologist Remarks</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {activeTestSubParameters.map((sp, spIdx) => {
-                                      // Heading / Sub-Header Row
-                                      if (sp.parameterType === 'heading' || sp.sectionHeader === sp.name) {
-                                        return (
-                                          <tr key={sp.id || spIdx} className="bg-slate-800 text-white font-black">
-                                            <td colSpan={5} className="py-2.5 px-3">
-                                              <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                  <span className="w-2 h-2 rounded-full bg-teal-400" />
-                                                  <span className="text-xs tracking-wide uppercase">{sp.name}</span>
-                                                </div>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleRemoveSection(sp.id, sp.name)}
-                                                  className="text-xs font-bold text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-700 border border-rose-700/50 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
-                                                  title={`Delete Section "${sp.name}"`}
-                                                >
-                                                  <Trash2 className="w-3 h-3" />
-                                                  <span>Delete Section</span>
-                                                </button>
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        );
-                                      }
-
-                                      const valStr = activeSubParamValues[sp.id] || '';
-                                      const obsStr = activeParamObservations[sp.id] || '';
-                                      const currentFlag = activeParamFlags[sp.id] || 'Normal';
-                                      const shouldPrint = activeParamPrintToggles[sp.id] !== false;
-
-                                      const min = activeBooking.patientGender === 'Female' ? sp.femaleMin : sp.maleMin;
-                                      const max = activeBooking.patientGender === 'Female' ? sp.femaleMax : sp.maleMax;
-                                      const refDisplay = activeBooking.patientGender === 'Female' 
-                                        ? sp.refRangeFemale || `${min || 0} - ${max || 100}`
-                                        : sp.refRangeMale || `${min || 0} - ${max || 100}`;
-
-                                      const isHighLow = currentFlag === 'High' || currentFlag === 'Low' || currentFlag === 'Critical';
-                                      const isNormal = currentFlag === 'Normal' && valStr.trim() !== '';
-
-                                      return (
-                                        <tr 
-                                          key={sp.id || spIdx} 
-                                          className={`hover:bg-slate-50/80 transition-colors ${
-                                            isHighLow ? 'bg-rose-50/30' : ''
-                                          }`}
-                                        >
-                                          {/* Column 1: Test Parameter / Analyte Name */}
-                                          <td className="py-3 px-3 align-top">
-                                            <div className="space-y-1">
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="text-xs font-black text-slate-900">{sp.name}</span>
-                                                {sp.method && (
-                                                  <span className="text-[9px] font-mono text-slate-400">
-                                                    ({sp.method})
-                                                  </span>
-                                                )}
-                                              </div>
-                                              <div className="flex items-center gap-2">
-                                                <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 cursor-pointer">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={shouldPrint}
-                                                    onChange={e => {
-                                                      setActiveParamPrintToggles({
-                                                        ...activeParamPrintToggles,
-                                                        [sp.id]: e.target.checked
-                                                      });
-                                                    }}
-                                                    className="rounded text-teal-600 focus:ring-teal-500 w-3 h-3"
-                                                  />
-                                                  <span>Print</span>
-                                                </label>
-                                                {sp.id.startsWith('custom-p-') && (
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveCustomParam(sp.id)}
-                                                    className="text-slate-300 hover:text-rose-600 p-0.5"
-                                                    title="Remove parameter"
-                                                  >
-                                                    <Trash2 className="w-3 h-3" />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </td>
-
-                                          {/* Column 2: Result Value with real-time color coding */}
-                                          <td className="py-3 px-3 align-top">
-                                            <div className="space-y-1.5">
-                                              <input
-                                                type="text"
-                                                value={valStr}
-                                                onChange={e => {
-                                                  const newVals = {
-                                                    ...activeSubParamValues,
-                                                    [sp.id]: e.target.value
-                                                  };
-                                                  const calculated = computeFormulas(newVals, activeTestSubParameters);
-                                                  setActiveSubParamValues(calculated);
-
-                                                  // Auto-flag calculation
-                                                  const numVal = parseFloat(e.target.value);
-                                                  if (!isNaN(numVal) && min !== undefined && max !== undefined) {
-                                                    if (numVal < min) {
-                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Low' }));
-                                                    } else if (numVal > max) {
-                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'High' }));
-                                                    } else {
-                                                      setActiveParamFlags(prev => ({ ...prev, [sp.id]: 'Normal' }));
-                                                    }
-                                                  }
-                                                }}
-                                                placeholder="Value..."
-                                                className={`w-full px-3 py-2 rounded-xl text-xs font-mono font-bold transition-all border ${
-                                                  isHighLow 
-                                                    ? 'border-rose-400 bg-rose-50/90 text-rose-950 ring-1 ring-rose-300' 
-                                                    : isNormal 
-                                                    ? 'border-emerald-300 bg-emerald-50/60 text-emerald-950 ring-1 ring-emerald-300' 
-                                                    : 'border-slate-200 bg-slate-50 text-slate-900 focus:bg-white'
-                                                } focus:outline-none focus:ring-2 focus:ring-teal-500`}
-                                              />
-                                              {/* Out-of-range status indicator & Quick Manual Flag Pills */}
-                                              <div className="flex items-center gap-1">
-                                                {(['Normal', 'Low', 'High'] as const).map(f => (
-                                                  <button
-                                                    key={f}
-                                                    type="button"
-                                                    onClick={() => {
-                                                      setActiveParamFlags({
-                                                        ...activeParamFlags,
-                                                        [sp.id]: f
-                                                      });
-                                                    }}
-                                                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                                                      currentFlag === f
-                                                        ? f === 'High'
-                                                          ? 'bg-rose-600 text-white shadow-2xs'
-                                                          : f === 'Low'
-                                                          ? 'bg-amber-500 text-white shadow-2xs'
-                                                          : 'bg-emerald-600 text-white shadow-2xs'
-                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                                    }`}
-                                                  >
-                                                    {f === 'Normal' ? 'Norm' : f}
-                                                  </button>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          </td>
-
-                                          {/* Column 3: Unit */}
-                                          <td className="py-3 px-2 align-middle text-center">
-                                            {sp.unit ? (
-                                              <span className="inline-block text-[11px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-md">
-                                                {sp.unit}
-                                              </span>
-                                            ) : (
-                                              <span className="text-slate-300 text-xs font-mono">-</span>
-                                            )}
-                                          </td>
-
-                                          {/* Column 4: Biological Reference Range */}
-                                          <td className="py-3 px-3 align-middle">
-                                            <span className="text-xs font-mono text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 inline-block">
-                                              {refDisplay}
-                                            </span>
-                                          </td>
-
-                                          {/* Column 5: Interpretation / Pathologist Remarks */}
-                                          <td className="py-3 px-3 align-top">
-                                            <input
-                                              type="text"
-                                              value={obsStr}
-                                              onChange={e => {
-                                                setActiveParamObservations({
-                                                  ...activeParamObservations,
-                                                  [sp.id]: e.target.value
-                                                });
-                                              }}
-                                              placeholder="Remarks / morphology..."
-                                              className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            />
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Antibiogram Sensitivity Matrix Table */}
-                          {activeAntibiogram.length > 0 && (
-                            <div className="space-y-3 bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
-                                    <Activity className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-950">
-                                      Antibiogram / Antibiotic Susceptibility Matrix
-                                    </h4>
-                                    <p className="text-[10px] text-indigo-600 font-mono">
-                                      Disc Diffusion (Kirby-Bauer) Sensitivity Profile
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAddAntibiogramRow(true)}
-                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-xl flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>Add Antibiotic</span>
-                                </button>
-                              </div>
-
-                              <div className="overflow-x-auto bg-white rounded-2xl border border-indigo-200 shadow-xs">
-                                <table className="w-full text-left text-xs">
-                                  <thead className="bg-indigo-50/80 border-b border-indigo-100 text-indigo-900 text-[10px] font-bold uppercase">
-                                    <tr>
-                                      <th className="py-2.5 px-3">Antibiotic Agent</th>
-                                      <th className="py-2.5 px-3">Disc Potency</th>
-                                      <th className="py-2.5 px-3">Zone (mm)</th>
-                                      <th className="py-2.5 px-3 text-center">Sensitivity</th>
-                                      <th className="py-2.5 px-3 text-right">Action</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-100 font-mono">
-                                    {activeAntibiogram.map(ab => (
-                                      <tr key={ab.id} className="hover:bg-indigo-50/20">
-                                        <td className="py-2 px-3 font-sans font-bold text-slate-800">
-                                          {ab.antibiotic}
-                                        </td>
-                                        <td className="py-2 px-3 text-slate-500">{ab.discPotency || '-'}</td>
-                                        <td className="py-2 px-3">
-                                          <input
-                                            type="text"
-                                            value={ab.zoneMm || ''}
-                                            onChange={e => {
-                                              const updated = activeAntibiogram.map(a => 
-                                                a.id === ab.id ? { ...a, zoneMm: e.target.value } : a
-                                              );
-                                              setActiveAntibiogram(updated);
-                                            }}
-                                            className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center"
-                                          />
-                                        </td>
-                                        <td className="py-2 px-3 text-center">
-                                          <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-                                            {(['S', 'I', 'R'] as const).map(sens => (
-                                              <button
-                                                key={sens}
-                                                type="button"
-                                                onClick={() => {
-                                                  const updated = activeAntibiogram.map(a => 
-                                                    a.id === ab.id ? { ...a, sensitivity: sens } : a
-                                                  );
-                                                  setActiveAntibiogram(updated);
-                                                }}
-                                                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
-                                                  ab.sensitivity === sens
-                                                    ? sens === 'S'
-                                                      ? 'bg-emerald-600 text-white shadow-xs'
-                                                      : sens === 'I'
-                                                      ? 'bg-amber-500 text-white shadow-xs'
-                                                      : 'bg-rose-600 text-white shadow-xs'
-                                                    : 'text-slate-500 hover:text-slate-900'
-                                                }`}
-                                              >
-                                                {sens === 'S' ? 'Sensitive (S)' : sens === 'I' ? 'Intermediate (I)' : 'Resistant (R)'}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </td>
-                                        <td className="py-2 px-3 text-right">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveAntibioticRow(ab.id)}
-                                            className="text-slate-400 hover:text-rose-600 p-1"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Hierarchical Structured Observations (e.g. Bacteriology, Cervico-Vaginal Swabs) */}
-                          {(() => {
-                            const effHier = (currentTestInModal.hierarchicalParams && currentTestInModal.hierarchicalParams.length > 0)
-                              ? currentTestInModal.hierarchicalParams
-                              : (catalog.find(c => c.name?.toLowerCase() === currentTestInModal.testName?.toLowerCase() || c.id === currentTestInModal.testId)?.hierarchicalParams || []);
-                            
-                            if (!effHier || effHier.length === 0) return null;
-
-                            // Group by section
-                            const grouped: Record<string, any[]> = {};
-                            effHier.forEach((p: any) => {
-                              const sec = p.section || 'Observation Template';
-                              if (!grouped[sec]) grouped[sec] = [];
-                              grouped[sec].push(p);
-                            });
-
-                            return (
-                              <div className="space-y-4 bg-slate-50/90 p-4 sm:p-5 rounded-2xl border border-slate-200">
-                                <div className="flex items-center justify-between">
-                                  <h4 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
-                                    <Layers className="w-4 h-4 text-teal-600" />
-                                    Structured Template Observations
-                                  </h4>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono text-slate-500 font-bold">
-                                      {effHier.length} parameters configured
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowAddSectionModal(true)}
-                                      className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                      <span>Add Section</span>
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {Object.entries(grouped).map(([sectionName, params]) => (
-                                  <div key={sectionName} className="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-200">
-                                    <div className="text-[11px] font-black uppercase tracking-wider text-teal-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-teal-600" />
-                                        <span>{sectionName}</span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[9px] font-mono text-slate-400">Multi-tier section</span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteHierarchicalSection(sectionName)}
-                                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
-                                          title={`Delete section "${sectionName}"`}
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                          <span>Delete Section</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2 pt-1">
-                                      {params.map((param: any, pIdx: number) => {
-                                        const key = param.name || `hp-${pIdx}`;
-                                        const currentVal = activeHierarchicalValues[key] !== undefined 
-                                          ? activeHierarchicalValues[key] 
-                                          : (param.defaultValue || '');
-                                        
-                                        return (
-                                          <div key={pIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                                            <div className="sm:col-span-5">
-                                              <span className="text-xs font-bold text-slate-800">{param.name}</span>
-                                              {param.unit && (
-                                                <span className="text-[10px] text-slate-400 font-mono ml-1.5">({param.unit})</span>
-                                              )}
-                                              {param.refRange && (
-                                                <span className="text-[9px] text-slate-400 block font-mono">Ref: {param.refRange}</span>
-                                              )}
-                                            </div>
-                                            <div className="sm:col-span-7">
-                                              <input
-                                                type="text"
-                                                value={currentVal}
-                                                onChange={e => {
-                                                  setActiveHierarchicalValues({
-                                                    ...activeHierarchicalValues,
-                                                    [key]: e.target.value
-                                                  });
-                                                }}
-                                                placeholder={param.defaultValue || 'Enter finding / count...'}
-                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                              />
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })()}
-
-                            {/* Reagents Used Section (Auto-Deduction & Stock Verification) */}
-                            <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                  <Package className="w-4 h-4 text-teal-600" />
-                                  Reagents Used (Auto-Deducted from Inventory)
-                                </h4>
-                                <span className="text-[10px] font-mono text-slate-500">
-                                  {validUnexpiredReagents.length} unexpired in stock
-                                </span>
-                              </div>
-
-                              {/* Out of Stock Error Alert */}
-                              {reagentStockError && (
-                                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-start gap-2">
-                                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                                  <span>{reagentStockError}</span>
-                                </div>
-                              )}
-
-                              {/* Reagent Adder Row */}
-                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-2xl border border-slate-200">
-                                <div className="sm:col-span-6">
-                                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Select Reagent:</label>
-                                  <select
-                                    value={selectedReagentIdToAdd}
-                                    onChange={e => {
-                                      setSelectedReagentIdToAdd(e.target.value);
-                                      setReagentStockError('');
-                                      const found = validUnexpiredReagents.find(r => r.id === e.target.value);
-                                      if (found?.unit) setReagentUnitToAdd(found.unit);
-                                    }}
-                                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium"
-                                  >
-                                    <option value="">-- Choose Reagent Used --</option>
-                                    {validUnexpiredReagents.map(r => {
-                                      const isOutOfStock = (r.quantity || 0) <= 0;
-                                      return (
-                                        <option key={r.id} value={r.id} disabled={isOutOfStock}>
-                                          {r.name} {isOutOfStock ? `⛔ (OUT OF STOCK - 0 ${r.unit || 'Units'})` : `(Stock: ${r.quantity} ${r.unit || 'Units'})`}
-                                        </option>
-                                      );
-                                    })}
-                                  </select>
-                                </div>
-
-                                <div className="sm:col-span-3">
-                                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Quantity Used:</label>
+                          {/* File Document Upload Area */}
+                          <div className="space-y-2">
+                            <label className="block text-xs font-bold text-slate-700">
+                              Upload Analyzer Printout / Diagnostic Document:
+                            </label>
+                            <div className="border-2 border-dashed border-slate-300 hover:border-teal-500 rounded-2xl p-6 text-center bg-slate-50/50 hover:bg-teal-50/30 transition-all space-y-2.5">
+                              <Upload className="w-8 h-8 text-teal-600 mx-auto" />
+                              <div>
+                                <label className="text-xs font-bold text-teal-700 hover:underline cursor-pointer">
+                                  <span>Click to select analyzer file</span>
                                   <input
-                                    type="number"
-                                    min="0.1"
-                                    step="0.1"
-                                    value={reagentQtyToAdd}
-                                    onChange={e => {
-                                      setReagentQtyToAdd(parseFloat(e.target.value) || 1);
-                                      setReagentStockError('');
-                                    }}
-                                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    type="file"
+                                    accept="application/pdf,image/*,.csv,.txt,.xlsx"
+                                    onChange={handleFileUpload}
+                                    className="hidden"
                                   />
-                                </div>
-
-                                <div className="sm:col-span-3 flex items-end">
+                                </label>
+                                <span className="text-xs text-slate-500"> or drag and drop (PDF, CSV, TXT, Images)</span>
+                              </div>
+                              {uploadFileName ? (
+                                <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-teal-800 bg-teal-100/70 border border-teal-300 px-3 py-1.5 rounded-xl">
+                                  <FileCheck className="w-4 h-4 text-teal-700" />
+                                  <span>{uploadFileName}</span>
                                   <button
                                     type="button"
-                                    onClick={handleAddReagentToTest}
-                                    disabled={!selectedReagentIdToAdd}
-                                    className="w-full py-2.5 px-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                                    onClick={() => {
+                                      setUploadFileName("");
+                                      setPdfUploadDataUrl("");
+                                    }}
+                                    className="text-teal-900 hover:text-red-600 font-bold ml-1 cursor-pointer"
                                   >
-                                    <PlusCircle className="w-3.5 h-3.5" />
-                                    <span>Add Reagent</span>
+                                    ✕
                                   </button>
                                 </div>
-                              </div>
-
-                            {/* List of Added Reagents for this Test */}
-                            {activeReagentsUsed.length > 0 ? (
-                              <div className="space-y-1.5 pt-1">
-                                {activeReagentsUsed.map(ru => (
-                                  <div
-                                    key={ru.reagentId}
-                                    className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-mono"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-teal-500" />
-                                      <span className="font-bold text-slate-900 font-sans">{ru.reagentName}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md">
-                                        {ru.quantity} {ru.unit}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveReagentFromTest(ru.reagentId || '')}
-                                        className="text-slate-400 hover:text-rose-600 p-1"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-slate-400 italic">
-                                No explicit reagents added yet. Standard catalog deductions will apply.
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Clinical Remarks & Notes */}
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-700">Clinical Observations & Technologist Impression:</label>
-                            <textarea
-                              rows={2}
-                              value={activeClinicalNotes}
-                              onChange={e => setActiveClinicalNotes(e.target.value)}
-                              placeholder="Clinical observations, morphological impression, cell morphology notes..."
-                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
-                          </div>
-
-                          {/* Action Footer Bar */}
-                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                            <button
-                              type="button"
-                              onClick={() => setShowPdfModal(true)}
-                              className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <Eye className="w-4 h-4 text-teal-600" />
-                              <span>Preview Printable Report</span>
-                            </button>
-
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                              <button
-                                type="button"
-                                onClick={handleSaveCurrentTest}
-                                disabled={isSavingTest}
-                                className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                              >
-                                <Check className="w-4 h-4 text-teal-400" />
-                                <span>{isSavingTest ? 'Saving Test...' : 'Save & Validate This Test'}</span>
-                              </button>
-
-                              {selectedTestIndex < (activeBooking.tests?.length || 0) - 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSelectTestInBooklet(selectedTestIndex + 1)}
-                                  className="px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer border border-teal-200"
-                                >
-                                  <span>Next Test</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
+                              ) : (
+                                <p className="text-[11px] text-slate-400">Supported formats: PDF output, CSV tabular export, or high-res photo scan</p>
                               )}
                             </div>
                           </div>
 
-                        </div>
-
-                      </div>
-                    )}
-
-                    {/* ======================================================== */}
-                    {/* MODE 2: TWO-COLUMN TEMPLATE & FREE-FORM EDITOR          */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'template_editor' && (
-                      <div className="space-y-4 bg-slate-50/70 p-5 rounded-2xl border border-slate-200 animate-in fade-in duration-150">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-                          <div>
-                            <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                              <Columns className="w-4 h-4 text-indigo-600" />
-                              <span>Two-Column Test Template & Rich Result Studio</span>
-                            </h4>
-                            <p className="text-xs text-slate-500">
-                              Side-by-side protocol reference and free-form result editor. Copy & paste test templates or structured findings with ease.
-                            </p>
+                          {/* Analyzer Quantitative Measurements & Clinical Findings */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-xs font-bold text-slate-700">
+                                Analyzer Quantitative Values & Summary Findings:
+                              </label>
+                              <span className="text-[10px] text-slate-400">
+                                Pre-filled by template above or typed manually
+                              </span>
+                            </div>
+                            <textarea
+                              rows={5}
+                              value={analyzerFindings}
+                              onChange={e => setAnalyzerFindings(e.target.value)}
+                              placeholder="Enter or paste measured parameters from analyzer: e.g. Hb: 13.8 g/dL, WBC: 6.4 x 10^3/uL, Platelets: 245 x 10^3/uL... All calibrations in range."
+                              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 leading-relaxed"
+                            />
                           </div>
-                          <div className="flex items-center gap-2">
+
+                          {/* Choose Scope */}
+                          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                            <label className="block text-xs font-bold text-slate-700">Apply Document Result To:</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => setUploadTargetScope("specific")}
+                                className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                                  uploadTargetScope === "specific"
+                                    ? "bg-teal-50 border-teal-500 ring-2 ring-teal-500/20"
+                                    : "bg-white border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                  <TestTube className="w-4 h-4 text-teal-600" />
+                                  <span>Specific Test Only: {currentTestInModal.testName}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Records document specifically for this test card.</p>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setUploadTargetScope("batch")}
+                                className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                                  uploadTargetScope === "batch"
+                                    ? "bg-teal-50 border-teal-500 ring-2 ring-teal-500/20"
+                                    : "bg-white border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                  <FileCheck className="w-4 h-4 text-teal-600" />
+                                  <span>Full Batch (All {activeBooking.tests.length} Tests)</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Applies analyzer printout to entire patient booklet.</p>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Save Button for Document / Analyzer */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                             <button
                               type="button"
                               onClick={() => {
-                                setResultRichText(prev => (prev ? prev + '\n\n' + templateText : templateText));
-                                setActionSuccessMessage('Template content copied into working results editor.');
+                                setSelectedTestIndexForPdf(selectedTestIndex);
+                                setShowPdfModal(true);
                               }}
-                              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                              title="Copy template text into result editor"
+                              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
                             >
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>Copy Template to Result</span>
+                              <Printer className="w-4 h-4 text-slate-600" />
+                              <span>Preview / Print Sheet</span>
                             </button>
-                          </div>
-                        </div>
 
-                        {/* Two Columns Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          {/* Column 1: Test Template & Reference Protocol (Editable by Tech) */}
-                          <div className="space-y-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                <FileCode2 className="w-4 h-4 text-slate-500" />
-                                <span>Left Column: Standard Test Template & Protocol</span>
-                              </label>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                                Editable Protocol
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500">
-                              Standard reference protocol for <span className="font-semibold text-slate-700">{currentTestInModal?.testName || 'Selected Test'}</span>. Technologists can adapt or update this template at any time.
-                            </p>
-                            <textarea
-                              rows={15}
-                              value={templateText}
-                              onChange={e => setTemplateText(e.target.value)}
-                              placeholder="Define or paste standard test procedure, reference standards, methodology, and biological cutoffs..."
-                              className="w-full flex-1 p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed resize-y"
-                            />
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                              <span>Copy & paste freely from analyzer software or SOP manuals.</span>
-                              <span>{templateText.length} characters</span>
-                            </div>
-                          </div>
-
-                          {/* Column 2: Working Result & Technician Observations */}
-                          <div className="space-y-2 bg-white p-4 rounded-2xl border border-indigo-200 shadow-2xs flex flex-col">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                                <FileText className="w-4 h-4 text-indigo-600" />
-                                <span>Right Column: Free-Form Patient Findings & Result</span>
-                              </label>
-                              <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                                Active Patient Record
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500">
-                              Type or paste complex findings, differential cytology counts, morphological remarks, or qualitative impressions.
-                            </p>
-                            <textarea
-                              rows={15}
-                              value={resultRichText}
-                              onChange={e => {
-                                setResultRichText(e.target.value);
-                                setActiveResultValue(e.target.value.split('\n')[0] || e.target.value);
-                              }}
-                              placeholder="Type or paste patient-specific test results, numerical values, differential morphological observations, or microscopic findings..."
-                              className="w-full flex-1 p-3.5 bg-white border border-indigo-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed resize-y"
-                            />
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                              <span>Included in the patient's digital & printable report.</span>
-                              <span>{resultRichText.length} characters</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Bottom Actions Bar for Template Editor */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
-                          <button
-                            type="button"
-                            onClick={() => setShowPdfModal(true)}
-                            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            <Eye className="w-4 h-4 text-teal-600" />
-                            <span>Preview Printable Report</span>
-                          </button>
-
-                          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             <button
                               type="button"
                               onClick={async () => {
-                                if (!activeBooking || !activeBooking.tests) return;
+                                if (!activeBooking) return;
                                 const currentTest = activeBooking.tests[selectedTestIndex];
                                 if (!currentTest) return;
 
-                                setIsSavingTest(true);
-                                setActionSuccessMessage('');
-
+                                setIsUploading(true);
                                 try {
-                                  const techName = user?.name || 'Medical Technologist';
-                                  const primaryLine = resultRichText.split('\n').filter(l => l.trim().length > 0)[0] || 'See detailed report';
+                                  const summary = analyzerFindings.trim()
+                                    ? analyzerFindings.substring(0, 80).trim()
+                                    : `Analyzer: ${analyzerName} - Validated Output Attached`;
 
-                                  const success = await limsService.submitIndividualTestResult({
-                                    labId: targetLabId,
-                                    bookingId: activeBooking.id,
-                                    testId: currentTest.id || currentTest.testId || '',
-                                    resultValue: primaryLine,
-                                    resultFlag: 'Normal',
-                                    subParams: activeSubParamValues,
-                                    notes: resultRichText,
-                                    techName,
-                                    reagentsUsed: activeReagentsUsed
-                                  });
+                                  const techName = user?.name || "Lab Technologist";
 
-                                  if (success) {
-                                    setActionSuccessMessage(`✅ Successfully saved rich template result for "${currentTest.testName}".`);
+                                  const analyzerHtml = `
+                                    <div style="font-family: inherit; font-size: 12px; color: #0f172a; padding: 12px 0;">
+                                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                          <strong style="color: #0f766e; text-transform: uppercase; font-size: 11px;">Automated Diagnostic Analyzer Report</strong>
+                                          <span style="font-size: 11px; color: #64748b;">${new Date().toLocaleDateString("en-GB")} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                        </div>
+                                        <div style="font-size: 12px; font-weight: 600;">Instrument: <span style="color: #0369a1;">${analyzerName || "Laboratory Automated Analyzer"}</span></div>
+                                        ${analyzerLink ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">LIS Cloud Link: <a href="${analyzerLink}" target="_blank" style="color: #0284c7; text-decoration: underline;">${analyzerLink}</a></div>` : ""}
+                                        ${uploadFileName ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">Document Attachment: <strong style="color: #0f172a;">${uploadFileName}</strong></div>` : ""}
+                                      </div>
+                                      <div style="margin-top: 10px; line-height: 1.6; white-space: pre-wrap;">
+                                        <strong>Clinical Findings & Quantitative Measurements:</strong>
+                                        <div style="margin-top: 6px; padding: 10px 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                          ${analyzerFindings || "Parameters within calibrated linear dynamic range of analyzer. Clinical correlation recommended."}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  `;
 
-                                    const updatedTests = [...activeBooking.tests];
-                                    updatedTests[selectedTestIndex] = {
-                                      ...currentTest,
-                                      resultValue: primaryLine,
-                                      status: 'Completed',
-                                      labNotes: resultRichText,
-                                      templateContent: templateText,
-                                      richResultText: resultRichText,
-                                      completedAt: new Date().toISOString(),
-                                      completedBy: techName
-                                    } as any;
-
-                                    const allDone = updatedTests.every(t => t.status === 'Completed');
-                                    setActiveBooking({
-                                      ...activeBooking,
-                                      tests: updatedTests,
-                                      overallStatus: allDone ? 'Completed' : 'In_Lab_Testing'
+                                  if (uploadTargetScope === "batch") {
+                                    for (let i = 0; i < activeBooking.tests.length; i++) {
+                                      const t = activeBooking.tests[i];
+                                      await limsService.submitIndividualTestResult({
+                                        labId: activeBooking.labId,
+                                        bookingId: activeBooking.id,
+                                        testId: t.id || t.testId,
+                                        resultValue: summary,
+                                        resultFlag: "Normal",
+                                        techName,
+                                        notes: analyzerFindings
+                                      });
+                                      t.status = "Completed";
+                                      t.resultValue = summary;
+                                      t.richReportHtml = analyzerHtml;
+                                      if (pdfUploadDataUrl) t.resultFileUrl = pdfUploadDataUrl;
+                                    }
+                                  } else {
+                                    await limsService.submitIndividualTestResult({
+                                      labId: activeBooking.labId,
+                                      bookingId: activeBooking.id,
+                                      testId: currentTest.id || currentTest.testId,
+                                      resultValue: summary,
+                                      resultFlag: "Normal",
+                                      techName,
+                                      notes: analyzerFindings
                                     });
-
-                                    fetchData();
+                                    currentTest.status = "Completed";
+                                    currentTest.resultValue = summary;
+                                    currentTest.richReportHtml = analyzerHtml;
+                                    if (pdfUploadDataUrl) currentTest.resultFileUrl = pdfUploadDataUrl;
                                   }
+
+                                  setActiveBooking({ ...activeBooking });
+
+                                  setSavedPrompt({
+                                    isOpen: true,
+                                    testIndex: selectedTestIndex,
+                                    testName: uploadTargetScope === "batch" ? "All Batch Tests" : currentTest.testName
+                                  });
                                 } catch (err) {
-                                  console.error('Error saving template result:', err);
+                                  console.error("Error saving analyzer document result:", err);
                                 } finally {
-                                  setIsSavingTest(false);
+                                  setIsUploading(false);
                                 }
                               }}
-                              disabled={isSavingTest}
-                              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                              disabled={isUploading}
+                              className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
                             >
-                              <Check className="w-4 h-4 text-indigo-200" />
-                              <span>{isSavingTest ? 'Saving Findings...' : 'Save Template Findings'}</span>
-                            </button>
-
-                            {selectedTestIndex < (activeBooking.tests?.length || 0) - 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleSelectTestInBooklet(selectedTestIndex + 1)}
-                                className="px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer border border-teal-200"
-                              >
-                                <span>Next Test</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ======================================================== */}
-                    {/* MODE 3: UPLOAD RESULT PDF / IMAGE                        */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'upload' && (
-                      <div className="space-y-5 bg-slate-50/60 p-5 rounded-2xl border border-slate-200">
-                        <div className="text-center space-y-1">
-                          <h4 className="text-sm font-bold text-slate-900">Upload Diagnostic PDF / Analyzer Output</h4>
-                          <p className="text-xs text-slate-500">
-                            Upload a standalone result sheet for a single test or a consolidated batch report.
-                          </p>
-                        </div>
-
-                        {/* Target Scope Selection */}
-                        <div className="p-3 bg-white rounded-2xl border border-slate-200 space-y-3">
-                          <label className="block text-xs font-bold text-slate-700">Choose Validation Target:</label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setUploadTargetScope('specific')}
-                              className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer ${
-                                uploadTargetScope === 'specific'
-                                  ? 'bg-teal-50 border-teal-500 ring-2 ring-teal-500/20'
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                              }`}
-                            >
-                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                <TestTube className="w-4 h-4 text-teal-600" />
-                                Specific Test Only
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-1">
-                                Validates only the selected test without completing the rest of the batch.
-                              </p>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setUploadTargetScope('batch')}
-                              className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer ${
-                                uploadTargetScope === 'batch'
-                                  ? 'bg-teal-50 border-teal-500 ring-2 ring-teal-500/20'
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                              }`}
-                            >
-                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                <FileCheck className="w-4 h-4 text-teal-600" />
-                                Full Batch Consolidated PDF
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-1">
-                                Attaches the report to the whole order and marks all tests complete.
-                              </p>
-                            </button>
-                          </div>
-
-                          {uploadTargetScope === 'specific' && (
-                            <div className="pt-2 border-t border-slate-100 space-y-1">
-                              <label className="block text-[11px] font-bold text-slate-600">Select Test to Validate:</label>
-                              <select
-                                value={uploadTargetTestId || activeBooking.tests[selectedTestIndex]?.id || activeBooking.tests[selectedTestIndex]?.testId || ''}
-                                onChange={e => setUploadTargetTestId(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
-                              >
-                                {activeBooking.tests.map((t, idx) => (
-                                  <option key={t.id || idx} value={t.id || t.testId || `t-${idx}`}>
-                                    {t.testName} ({t.status || 'Pending'})
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="border-2 border-dashed border-slate-300 hover:border-teal-500 rounded-2xl p-8 text-center bg-white transition-colors space-y-3">
-                          <Upload className="w-8 h-8 text-teal-600 mx-auto" />
-                          <div>
-                            <label className="text-xs font-bold text-teal-700 hover:underline cursor-pointer">
-                              <span>Click to browse file</span>
-                              <input
-                                type="file"
-                                accept="application/pdf,image/*"
-                                onChange={handleFileUpload}
-                                className="hidden"
-                              />
-                            </label>
-                            <span className="text-xs text-slate-500"> or drag and drop</span>
-                          </div>
-                          {uploadFileName && (
-                            <p className="text-xs font-mono font-bold text-teal-800 bg-teal-50 px-3 py-1 rounded-xl inline-block">
-                              📄 {uploadFileName}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={handleConfirmUpload}
-                            disabled={isUploading || !pdfUploadDataUrl}
-                            className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
-                          >
-                            <Upload className="w-4 h-4" />
-                            <span>{isUploading ? 'Uploading...' : uploadTargetScope === 'specific' ? 'Attach & Validate Test' : 'Attach & Complete Batch'}</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ======================================================== */}
-                    {/* MODE 3: TRIGGER PHYSICAL PICKUP ALERT                   */}
-                    {/* ======================================================== */}
-                    {activeOptionMode === 'physical_pickup' && (
-                      <form onSubmit={handleTriggerPhysicalPickup} className="space-y-5 bg-slate-50/60 p-5 rounded-2xl border border-slate-200">
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-bold text-slate-900">Trigger Physical Hard-Copy Pickup SMS</h4>
-                          <p className="text-xs text-slate-500">
-                            Notifies patient via SMS and patient portal that physical printed copies are ready at front reception.
-                          </p>
-                        </div>
-
-                        {pickupError && (
-                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                            <span>{pickupError}</span>
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                            <Key className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Technologist Authorization Passcode:</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showPickupPasscode ? 'text' : 'password'}
-                              value={pickupPasscode}
-                              onChange={e => setPickupPasscode(e.target.value)}
-                              placeholder="Enter your security access code..."
-                              className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPickupPasscode(!showPickupPasscode)}
-                              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                              title={showPickupPasscode ? 'Hide passcode' : 'Show passcode'}
-                            >
-                              {showPickupPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>{isUploading ? "Saving..." : "Save & Record Analyzer Document"}</span>
                             </button>
                           </div>
                         </div>
-
-                        <div className="flex items-center justify-end gap-3">
-                          <button
-                            type="submit"
-                            className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
-                          >
-                            <Send className="w-4 h-4 text-teal-400" />
-                            <span>Dispatch Pickup SMS</span>
-                          </button>
-                        </div>
-                      </form>
-                    )}
+                      )}
+                    </div>
 
                   </div>
                 ) : (
@@ -3366,6 +2157,7 @@ CLINICAL REAGENTS USED:
           isOpen={showPdfModal}
           onClose={() => setShowPdfModal(false)}
           booking={activeBooking}
+          filterTestIndex={selectedTestIndexForPdf}
           labInfo={{
             name: lab?.name || user?.labName || 'nanoLabs Medical Diagnostics',
             address: lab?.address || 'Clinical Laboratory Center',

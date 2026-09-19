@@ -652,7 +652,14 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
     }
   };
 
-  const labName = booking.labName || 'Central Clinical Pathology & Diagnostic Center';
+  const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
+  const labAddress = booking.labAddress || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
+  const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
+  const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
+  const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';
+  const biologistName = booking.biologistName || 'Biologiste Médical Agréé';
+  const biologistLicense = booking.biologistLicense || 'ONMC / ONPC N° 4829 - Spécialiste Biologie Médicale';
+
   const patientName = booking.patientName || 'Valued Patient';
   const patientAge = booking.patientAge || 'Adult';
   const patientGender = booking.patientGender || 'Adult';
@@ -999,7 +1006,7 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                   {/* Lab Official Letterhead */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs">
+                      <div className="w-12 h-12 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
                         <Building2 className="w-7 h-7" />
                       </div>
                       <div className="space-y-0.5">
@@ -1007,18 +1014,18 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                           {labName}
                         </h2>
                         <p className="text-[11px] font-bold text-teal-700 tracking-wide">
-                          LABORATOIRE D'ANALYSES MÉDICALES & DE BIOLOGIE MOLÉCULAIRE
+                          LABORATOIRE D'ANALYSES DE BIOLOGIE MÉDICALE
                         </p>
                         <p className="text-[10px] text-slate-500">
-                          Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189 • Douala - Yaoundé, Cameroun
+                          {labAddress} • {labAccreditation}
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono">
-                      <div>Tél : +237 670 00 00 00 / 690 00 00 00</div>
-                      <div>Email : contact@nanolabs.health</div>
-                      <div className="font-bold text-teal-900">nanoLabs Secure LIMS Network</div>
+                    <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono shrink-0">
+                      <div>Tél : {labPhone}</div>
+                      <div>Email : {labEmail}</div>
+                      <div className="font-bold text-teal-900">Système LIMS Sécurisé</div>
                     </div>
                   </div>
 
@@ -1118,13 +1125,13 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                         Le Médecin / Biologiste Responsable
                       </span>
                       <p className="text-xs font-black text-slate-900">
-                        Dr. Suzanne Mbongo, MD
+                        {biologistName}
                       </p>
                       <p className="text-[10px] text-slate-500 font-mono">
-                        ONMC N° 4829 / Spécialiste Biologie Clinique
+                        {biologistLicense}
                       </p>
-                      <div className="inline-block px-3 py-1 bg-teal-50 border border-teal-200 rounded-md text-[10px] font-bold text-teal-800">
-                        ✓ Signature Électronique Horodatée
+                      <div className="text-[10px] font-mono text-teal-800 pt-1">
+                        Signé & validé électroniquement
                       </div>
                     </div>
                   </div>

@@ -31,6 +31,7 @@ interface LabReportPdfViewModalProps {
   booking: PatientBooking | any;
   labInfo?: any;
   isStaffOrAdmin?: boolean;
+  filterTestIndex?: number | null;
 }
 
 export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
@@ -38,12 +39,16 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   onClose,
   booking,
   labInfo,
-  isStaffOrAdmin
+  isStaffOrAdmin,
+  filterTestIndex: initialFilterTestIndex
 }) => {
   const { user } = useAuth();
   const canCustomizeTemplates = isStaffOrAdmin !== undefined ? isStaffOrAdmin : (user?.role && user.role !== 'patient');
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
+  const [selectedTestFilter, setSelectedTestFilter] = useState<number | null>(
+    initialFilterTestIndex !== undefined ? initialFilterTestIndex : null
+  );
   const [showUploadPanel, setShowUploadPanel] = useState(false);
 
   const headerFileInputRef = useRef<HTMLInputElement>(null);
@@ -228,6 +233,28 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   <span>Upload Footer</span>
                 </button>
               </>
+            )}
+
+            {/* Print Scope (Batch vs Single Test) */}
+            {booking.tests && booking.tests.length > 1 && (
+              <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <span className="text-[11px] font-bold text-slate-300 pl-2">Print:</span>
+                <select
+                  value={selectedTestFilter === null ? 'batch' : selectedTestFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedTestFilter(val === 'batch' ? null : parseInt(val, 10));
+                  }}
+                  className="bg-slate-900 text-white text-xs font-semibold py-1 px-2.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-400 cursor-pointer"
+                >
+                  <option value="batch">📄 Full Batch Report (All {booking.tests.length} Tests)</option>
+                  {booking.tests.map((t: BookingTestItem, idx: number) => (
+                    <option key={t.id || idx} value={idx}>
+                      🔬 Single Test: {t.testName}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
 
             <button
@@ -420,7 +447,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             </div>
 
             {/* Test Results Section with Multi-tier Hierarchy (Department -> Sub-Header -> Parameters) */}
-            {booking.tests?.map((testItem: BookingTestItem, tIdx: number) => (
+            {((selectedTestFilter !== null && selectedTestFilter !== undefined && booking.tests?.[selectedTestFilter])
+              ? [booking.tests[selectedTestFilter]]
+              : (booking.tests || [])
+            ).map((testItem: BookingTestItem, tIdx: number) => (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
@@ -435,111 +465,119 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 </div>
 
-                {/* Sub-parameters or Direct Value Table */}
-                <div className="relative overflow-hidden bg-white">
-                  <table className="w-full text-left text-xs border-collapse relative z-10">
-                    <thead>
-                      <tr className="border-b-2 border-slate-400 text-slate-800 text-[11px] bg-slate-100">
-                        <th className="py-2 px-3 font-black uppercase">Investigation / Parameter</th>
-                        <th className="py-2 px-3 font-black text-center uppercase">Result</th>
-                        <th className="py-2 px-3 font-black text-center uppercase">Biological Reference Interval</th>
-                        <th className="py-2 px-3 font-black text-right uppercase">Unit</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 text-slate-800">
-                      {testItem.subParameters && testItem.subParameters.length > 0 ? (
-                        testItem.subParameters
-                          .filter(sp => sp.printOnReport !== false)
-                          .map((sp, sIdx) => {
-                            const isHigh = sp.flag === 'High' || sp.isAbnormal;
-                            const isLow = sp.flag === 'Low';
-                            const isBorderline = sp.flag === 'Borderline';
+                {/* If test was completed via A4 Rich Canvas, render richReportHtml cleanly */}
+                {testItem.richReportHtml ? (
+                  <div 
+                    className="py-3 px-2 bg-white text-slate-900 overflow-x-auto print:p-0"
+                    dangerouslySetInnerHTML={{ __html: testItem.richReportHtml }}
+                  />
+                ) : (
+                  /* Sub-parameters or Direct Value Table */
+                  <div className="relative overflow-hidden bg-white">
+                    <table className="w-full text-left text-xs border-collapse relative z-10">
+                      <thead>
+                        <tr className="border-b-2 border-slate-400 text-slate-800 text-[11px] bg-slate-100">
+                          <th className="py-2 px-3 font-black uppercase">Investigation / Parameter</th>
+                          <th className="py-2 px-3 font-black text-center uppercase">Result</th>
+                          <th className="py-2 px-3 font-black text-center uppercase">Biological Reference Interval</th>
+                          <th className="py-2 px-3 font-black text-right uppercase">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-slate-800">
+                        {testItem.subParameters && testItem.subParameters.length > 0 ? (
+                          testItem.subParameters
+                            .filter(sp => sp.printOnReport !== false)
+                            .map((sp, sIdx) => {
+                              const isHigh = sp.flag === 'High' || sp.isAbnormal;
+                              const isLow = sp.flag === 'Low';
+                              const isBorderline = sp.flag === 'Borderline';
 
-                            const refVal = sp.refRangeWords || (
-                              booking.patientGender === 'Female' 
-                                ? (sp.refRangeFemale || sp.refRangeMale || 'Normal')
-                                : booking.patientGender === 'Child' 
-                                  ? (sp.refRangeChild || sp.refRangeMale || 'Normal')
-                                  : (sp.refRangeMale || 'Normal')
-                            );
+                              const refVal = sp.refRangeWords || (
+                                booking.patientGender === 'Female' 
+                                  ? (sp.refRangeFemale || sp.refRangeMale || 'Normal')
+                                  : booking.patientGender === 'Child' 
+                                    ? (sp.refRangeChild || sp.refRangeMale || 'Normal')
+                                    : (sp.refRangeMale || 'Normal')
+                              );
 
-                            const isCalculated = sp.parameterType === 'formula' || sp.computationFormula;
+                              const isCalculated = sp.parameterType === 'formula' || sp.computationFormula;
 
-                            return (
-                              <React.Fragment key={sp.id || sIdx}>
-                                {sp.subHeader && sIdx > 0 && testItem.subParameters && testItem.subParameters[sIdx - 1]?.subHeader !== sp.subHeader && (
-                                  <tr className="bg-slate-100/80 font-black text-[11px] text-slate-900 border-y border-slate-300">
-                                    <td colSpan={4} className="py-1 px-3 uppercase tracking-wider text-teal-900">
-                                      {sp.subHeader}
+                              return (
+                                <React.Fragment key={sp.id || sIdx}>
+                                  {sp.subHeader && sIdx > 0 && testItem.subParameters && testItem.subParameters[sIdx - 1]?.subHeader !== sp.subHeader && (
+                                    <tr className="bg-slate-100/80 font-black text-[11px] text-slate-900 border-y border-slate-300">
+                                      <td colSpan={4} className="py-1 px-3 uppercase tracking-wider text-teal-900">
+                                        {sp.subHeader}
+                                      </td>
+                                    </tr>
+                                  )}
+                                  <tr className="hover:bg-slate-50/70 transition-colors">
+                                    <td className="py-1.5 px-3 font-medium text-slate-900">
+                                      <div className="font-semibold">{sp.name}</div>
+                                      {isCalculated && (
+                                        <span className="text-[9px] text-slate-500 font-normal italic">
+                                          Computed: {sp.computationFormula || 'Formula'}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 px-3 text-center font-bold">
+                                      <div className="inline-flex items-center justify-center gap-1.5">
+                                        <span className={`font-black ${
+                                          isHigh ? 'text-rose-700' : isLow ? 'text-blue-700' : 'text-slate-900'
+                                        }`}>
+                                          {sp.value || 'N/A'}
+                                        </span>
+
+                                        {isHigh && (
+                                          <span className="px-1.5 py-0.2 text-[9px] bg-rose-100 text-rose-800 font-black rounded uppercase border border-rose-300">
+                                            High
+                                          </span>
+                                        )}
+                                        {isLow && (
+                                          <span className="px-1.5 py-0.2 text-[9px] bg-blue-100 text-blue-800 font-black rounded uppercase border border-blue-300">
+                                            Low
+                                          </span>
+                                        )}
+                                        {isBorderline && (
+                                          <span className="px-1.5 py-0.2 text-[9px] bg-amber-100 text-amber-800 font-black rounded uppercase border border-amber-300">
+                                            Borderline
+                                          </span>
+                                        )}
+                                      </div>
+                                      {sp.resultInWords && (
+                                        <div className="text-[9px] text-slate-500 italic">{sp.resultInWords}</div>
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 px-3 text-center text-slate-700 font-mono text-[11px]">
+                                      {refVal}
+                                    </td>
+                                    <td className="py-1.5 px-3 text-right text-slate-600 font-mono text-[11px]">
+                                      {sp.unit}
                                     </td>
                                   </tr>
-                                )}
-                                <tr className="hover:bg-slate-50/70 transition-colors">
-                                  <td className="py-1.5 px-3 font-medium text-slate-900">
-                                    <div className="font-semibold">{sp.name}</div>
-                                    {isCalculated && (
-                                      <span className="text-[9px] text-slate-500 font-normal italic">
-                                        Computed: {sp.computationFormula || 'Formula'}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-1.5 px-3 text-center font-bold">
-                                    <div className="inline-flex items-center justify-center gap-1.5">
-                                      <span className={`font-black ${
-                                        isHigh ? 'text-rose-700' : isLow ? 'text-blue-700' : 'text-slate-900'
-                                      }`}>
-                                        {sp.value || 'N/A'}
-                                      </span>
-
-                                      {isHigh && (
-                                        <span className="px-1.5 py-0.2 text-[9px] bg-rose-100 text-rose-800 font-black rounded uppercase border border-rose-300">
-                                          High
-                                        </span>
-                                      )}
-                                      {isLow && (
-                                        <span className="px-1.5 py-0.2 text-[9px] bg-blue-100 text-blue-800 font-black rounded uppercase border border-blue-300">
-                                          Low
-                                        </span>
-                                      )}
-                                      {isBorderline && (
-                                        <span className="px-1.5 py-0.2 text-[9px] bg-amber-100 text-amber-800 font-black rounded uppercase border border-amber-300">
-                                          Borderline
-                                        </span>
-                                      )}
-                                    </div>
-                                    {sp.resultInWords && (
-                                      <div className="text-[9px] text-slate-500 italic">{sp.resultInWords}</div>
-                                    )}
-                                  </td>
-                                  <td className="py-1.5 px-3 text-center text-slate-700 font-mono text-[11px]">
-                                    {refVal}
-                                  </td>
-                                  <td className="py-1.5 px-3 text-right text-slate-600 font-mono text-[11px]">
-                                    {sp.unit}
-                                  </td>
-                                </tr>
-                              </React.Fragment>
-                            );
-                          })
-                      ) : (
-                        <tr>
-                          <td className="py-2.5 px-3 font-black text-slate-900">
-                            {testItem.testName}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-black text-sm text-blue-900">
-                            {testItem.resultValue || 'Normal / Non-Reactive'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-slate-700 font-mono text-[11px]">
-                            {booking.patientGender === 'Female' ? testItem.refRangeFemale : testItem.refRangeMale || 'Normal'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-slate-600 font-mono text-[11px]">
-                            {testItem.units || 'Index'}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                                </React.Fragment>
+                              );
+                            })
+                        ) : (
+                          <tr>
+                            <td className="py-2.5 px-3 font-black text-slate-900">
+                              {testItem.testName}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-black text-sm text-blue-900">
+                              {testItem.resultValue || 'Normal / Non-Reactive'}
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-slate-700 font-mono text-[11px]">
+                              {booking.patientGender === 'Female' ? testItem.refRangeFemale : testItem.refRangeMale || 'Normal'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate-600 font-mono text-[11px]">
+                              {testItem.units || 'Index'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 {/* Antibiogram / Antibiotic Susceptibility Matrix Table (if available) */}
                 {testItem.antibiogram && testItem.antibiogram.length > 0 && (

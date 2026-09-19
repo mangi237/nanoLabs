@@ -37,7 +37,8 @@ interface PatientHomeScreenProps {
   onOpenBatch?: (batchId: string) => void;
 }
 
-export const HomeScreen: React.FC<PatientHomeScreenProps> = ({
+export const 
+HomeScreen: React.FC<PatientHomeScreenProps> = ({
   onNavigateBook,
   onNavigateScan,
   onNavigateConsult,
