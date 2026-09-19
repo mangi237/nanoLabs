@@ -348,6 +348,18 @@ export interface Lab {
   id: string;
   name: string;
   location: string;
+  lat: number;
+
+  tier: 'budget' | ''| '';
+  tatHours: number;
+  lng:number;
+  averageTurnaroundHours: number;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+ 
+
   city?: string;
   slogan?: string;
   tagline?: string;
@@ -416,6 +428,7 @@ export interface LabTest {
   name?: string;
   testName?: string;
   category?: string;
+ 
   price?: number;
   basePrice?: number;
   systemFee?: number;

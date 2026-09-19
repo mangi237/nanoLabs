@@ -35,7 +35,7 @@ import { SampleMode, FamilyMemberProfile } from '../../types';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { FamilyMemberModal } from '../../components/patient/FamilyMemberModal';
-
+import { Lab } from '../../types';
 interface TestBookingScreenProps {
   initialSelectedTests?: any[];
   onBookingSuccess?: (batchId: string) => void;
@@ -61,7 +61,7 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  
+  const [labs, setLabs] = useState<Lab[]>([]);
   // Sample Mode: Walk-in vs Home Collection
   const [sampleMode, setSampleMode] = useState<SampleMode>('walk_in');
   const [homeAddress, setHomeAddress] = useState('Akwa, Douala (Face Direction Générale MTN)');
@@ -80,7 +80,12 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
   );
   const [coveragePercent, setCoveragePercent] = useState(activeProfile?.insuranceCoveragePercent ?? 80);
   const [showInsuranceSetupModal, setShowInsuranceSetupModal] = useState(false);
-
+  const filteredLabs = labs.filter(lab =>
+    lab.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    lab.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (lab.city && lab.city.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (lab.address && lab.address.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
   // Sync when activeProfile changes
   useEffect(() => {
     if (activeProfile) {
@@ -240,29 +245,33 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
 
     // Sync to LIMS service so Receptionist, Cashier, and Lab Tech see the booking live
     try {
-      limsService.createBooking({
-        labId: selectedLab.id,
-        patientId: patientInfo.id,
-        patientName: patientInfo.name,
-        patientPhone: patientInfo.phone,
-        patientAge: activeProfile?.age || (user as any)?.age || 35,
-        patientGender: activeProfile?.gender === 'female' ? 'Female' : 'Male',
-        homeCollection: sampleMode === 'home_collection',
-        pickupLocation: sampleMode === 'home_collection' ? homeAddress : undefined,
-        tests: selectedTests.map((t, idx) => ({
-          id: `test_${batch.id}_${idx}`,
-          testId: t.code || `T-${idx}`,
-          testCode: t.code,
-          testName: t.name,
-          category: t.category,
-          sampleTypeRequired: t.sampleType || 'Whole Blood (EDTA)',
-          price: t.basePrice || t.price || 5000,
-          status: 'Pending_Validation'
-        }))
-      }).catch(err => console.warn('LIMS sync background warning:', err));
-    } catch (e) {
-      console.warn('LIMS booking error:', e);
-    }
+        limsService.createBooking({
+          labId: selectedLab.id,
+          patientId: patientInfo.id,
+          patientName: patientInfo.name,
+          patientPhone: patientInfo.phone,
+          patientAge: activeProfile?.age || (user as any)?.age || 35,
+          patientGender: activeProfile?.gender === 'female' ? 'Female' : 'Male',
+          homeCollection: sampleMode === 'home_collection',
+          pickupLocation: sampleMode === 'home_collection' ? homeAddress : undefined,
+          creatorName: activeProfile?.fullName|| 'Online Client', // Ensure required creatorName is present
+          
+          // 👇 Change "tests" to "selectedTests"
+          selectedTests: selectedTests.map((t, idx) => ({
+            id: `test_${batch.id}_${idx}`,
+            testId: t.code || `T-${idx}`,
+            testCode: t.code,
+            testName: t.name,
+            category: t.category,
+            sampleTypeRequired: t.sampleType || 'Whole Blood (EDTA)',
+            price: t.basePrice || t.price || 5000,
+            status: 'Pending_Validation'
+          }))
+        }).catch(err => console.warn('LIMS sync background warning:', err));
+      } catch (e) {
+        console.warn('LIMS booking error:', e);
+      }
+      
 
     if (onBookingSuccess) {
       onBookingSuccess(batch.id);
@@ -522,7 +531,7 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
           <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="block text-xs font-bold text-[#0B1F1D] uppercase tracking-wide">
-                2. Select Performing Laboratory ({filteredAndSortedLabs.length} Available)
+                2. Select Performing Laboratory ({labSortFilter.length} Available)
               </label>
               <div className="relative min-w-[200px]">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -564,7 +573,7 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {filteredAndSortedLabs.map((lab) => {
+              {filteredLabs.map((lab) => {
                 const labLat = lab.lat ?? lab.coordinates?.latitude ?? 4.0511;
                 const labLng = lab.lng ?? lab.coordinates?.longitude ?? 9.7042;
                 const dist = calculateDistanceKm(userCoords.lat, userCoords.lng, labLat, labLng);
