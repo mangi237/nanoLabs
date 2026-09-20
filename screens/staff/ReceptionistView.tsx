@@ -46,7 +46,11 @@ import {
   AlertCircle,
   FileCheck,
   Stethoscope,
-  Globe
+  Globe,
+  Home,
+  Navigation,
+  CheckCheck,
+  ExternalLink
 } from 'lucide-react';
 
 const BLOOD_GROUPS = [
@@ -535,11 +539,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       alert('Please select at least one diagnostic test from the catalog.');
       return;
     }
-  
+
     const doctorToUse = attendingDoctor === 'Other' 
       ? (orderCustomDoctorName.trim() || 'External Attending Physician')
       : attendingDoctor;
-  
+
     setIsOrderingTest(true);
     try {
       await limsService.createBooking({
@@ -567,14 +571,14 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         selectedMasterTestIds,
         clinicalNotes: testOrderNotes.trim() || undefined,
         creatorName: user?.name || 'Front Desk Receptionist'
-      } as any);
-  
+      });
+
       if (selectedPatientForTest.isStaffMember) {
         alert(`Staff Free Test Exemption Applied for ${selectedPatientForTest.name}! Billed at 0 FCFA with instant Admin Alert triggered.`);
       } else {
         alert(`Test order generated successfully for ${selectedPatientForTest.name}! Unpaid invoice routed to Cashier.`);
       }
-  
+
       setSelectedPatientForTest(null);
       setSelectedMasterTestIds([]);
       setTestOrderNotes('');
@@ -588,10 +592,29 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }
   };
 
+  const [acceptingBookingId, setAcceptingBookingId] = useState<string | null>(null);
+
   const copyCredentials = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleAcceptBooking = async (booking: PatientBooking) => {
+    try {
+      setAcceptingBookingId(booking.id);
+      await limsService.acceptBookingByReceptionist(
+        targetLabId,
+        booking.id,
+        user?.name || 'Receptionist'
+      );
+      await fetchData();
+    } catch (err) {
+      console.error('Error accepting booking:', err);
+      alert('Failed to accept booking. Please try again.');
+    } finally {
+      setAcceptingBookingId(null);
+    }
   };
 
   const filteredPatients = patients.filter(p => 
@@ -601,7 +624,9 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     p.accessCode?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const pendingBookings = bookings.filter(b => b.paymentStatus === 'unpaid' || b.overallStatus === 'Pending_Payment');
+  // Split bookings into those awaiting Receptionist Review vs those Validated awaiting Cashier Payment
+  const unvalidatedBookings = bookings.filter(b => !b.receptionistValidated);
+  const validatedAwaitingCashier = bookings.filter(b => b.receptionistValidated && b.paymentStatus === 'unpaid');
   const todayStr = new Date().toISOString().split('T')[0];
   const todayCount = patients.filter(p => p.createdAt && p.createdAt.startsWith(todayStr)).length;
 
@@ -619,7 +644,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       <StaffHeroBanner
         workstationNumber="Workstation 01"
         workstationTitle="Patient Admissions & Intake Counter"
-        description="Register walk-in patient accounts, order diagnostic tests for existing patients, issue access passcodes, and manage patient check-in statuses."
+        description="Register walk-in patient accounts, review incoming test requests with home collection coordinates, issue access passcodes, and route validated admissions to the Cashier."
         actions={
           <button
             onClick={() => {
@@ -648,10 +673,10 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Test Requests</p>
-            <h3 className="text-2xl font-black text-amber-600 mt-1">{pendingBookings.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Awaiting Reception Review</p>
+            <h3 className="text-2xl font-black text-rose-600 mt-1">{unvalidatedBookings.length}</h3>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700 font-bold">
             <Clock className="w-6 h-6" />
           </div>
         </div>
@@ -667,30 +692,173 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         </div>
       </div>
 
-      {/* PENDING PATIENT TEST REQUESTS QUEUE */}
-      {pendingBookings.length > 0 && (
+      {/* 1. RECEPTIONIST INCOMING REVIEW & ACCEPTANCE QUEUE */}
+      {unvalidatedBookings.length > 0 && (
+        <div className="bg-rose-500/10 rounded-2xl border-2 border-rose-300 p-5 space-y-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
+              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                Incoming Patient Bookings Requiring Receptionist Review ({unvalidatedBookings.length})
+              </h3>
+            </div>
+            <span className="text-xs font-bold text-rose-700 bg-rose-100/80 px-3 py-1 rounded-full border border-rose-200">
+              Must be accepted here before Cashier can generate invoice
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {unvalidatedBookings.map(b => {
+              const isHome = b.homeCollection || b.pickupLocation;
+              const mapUrl = b.userCoords 
+                ? `https://www.google.com/maps/search/?api=1&query=${b.userCoords.lat},${b.userCoords.lng}`
+                : b.pickupLocation ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.pickupLocation + ', Cameroon')}` : null;
+
+              return (
+                <div key={b.id} className="p-4 bg-white rounded-2xl border border-rose-200 shadow-sm hover:border-rose-300 transition-all space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-black text-sm text-slate-900">{b.patientName}</h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          PID: {b.patientPid || b.patientId}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                          {b.patientGender || 'Adult'} • {b.patientAge || '30'} yrs
+                        </span>
+                        {isHome ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                            <Home className="w-3 h-3" /> Home Sample Collection
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                            <Building2 className="w-3 h-3" /> Walk-in to Laboratory
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                        {b.patientPhone && (
+                          <span className="flex items-center gap-1 font-mono font-medium">
+                            <Phone className="w-3 h-3 text-slate-400" /> {b.patientPhone}
+                          </span>
+                        )}
+                        <span className="font-mono text-teal-700 font-bold">Booking: {b.bookingCode}</span>
+                        {b.doctorName && (
+                          <span className="text-slate-600 flex items-center gap-1">
+                            <Stethoscope className="w-3 h-3 text-teal-600" /> Ref: {b.doctorName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400 font-semibold uppercase">Payable Total</div>
+                      <div className="text-lg font-black text-slate-900 font-mono">
+                        {(b.totalAmount || 0).toLocaleString()} XAF
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location & Home Sample Details */}
+                  {isHome && (
+                    <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-purple-950">Patient Address / GPS Location: </span>
+                          <span className="text-purple-900 font-medium">{b.pickupLocation || 'Douala Central / Akwa'}</span>
+                          {b.landmark && (
+                            <span className="block text-[11px] text-purple-700 mt-0.5">
+                              Landmark: <span className="font-bold">{b.landmark}</span>
+                            </span>
+                          )}
+                          {b.userCoords && (
+                            <span className="block text-[10px] font-mono text-purple-600 mt-0.5">
+                              GPS: {b.userCoords.lat.toFixed(5)}, {b.userCoords.lng.toFixed(5)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {mapUrl && (
+                        <a
+                          href={mapUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shrink-0 self-start sm:self-center shadow-xs"
+                        >
+                          <Navigation className="w-3.5 h-3.5" /> View Map Coordinates <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tests Requested */}
+                  <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-600">Requested Tests:</span>
+                      {b.tests?.map((t, idx) => (
+                        <span key={idx} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                          {t.testName} ({(t.price || 0).toLocaleString()} XAF)
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => handleAcceptBooking(b)}
+                        disabled={acceptingBookingId === b.id}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+                      >
+                        {acceptingBookingId === b.id ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Accepting...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCheck className="w-4 h-4" />
+                            Accept Booking & Forward to Cashier
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2. ACCEPTED ORDERS AWAITING CASHIER INVOICING / PAYMENT */}
+      {validatedAwaitingCashier.length > 0 && (
         <div className="bg-amber-500/10 rounded-2xl border border-amber-300/80 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-amber-700" />
               <h3 className="font-extrabold text-sm text-slate-900">
-                Pending Patient Test Requests ({pendingBookings.length})
+                Accepted Admissions with Cashier ({validatedAwaitingCashier.length})
               </h3>
             </div>
             <span className="text-xs font-semibold text-amber-800">
-              Awaiting Cashier Payment Verification
+              Verified by Reception • Invoicing / Payment in Progress at Cashier
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {pendingBookings.map(b => (
+            {validatedAwaitingCashier.map(b => (
               <div key={b.id} className="p-3.5 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-3 shadow-xs">
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="font-extrabold text-xs text-slate-900">{b.patientName}</div>
-                    {(b.isOnlineBooking || b.registrationType === 'online') && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
-                        <Globe className="w-2.5 h-2.5" /> Online Patient
+                    {b.homeCollection && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-0.5">
+                        <Home className="w-2.5 h-2.5" /> Home
+                      </span>
+                    )}
+                    {b.invoiceGenerated && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Inv #{b.invoiceNumber}
                       </span>
                     )}
                   </div>
@@ -702,7 +870,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 <div className="text-right shrink-0">
                   <span className="font-mono font-bold text-xs text-slate-900 block">{b.totalAmount?.toLocaleString()} XAF</span>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800">
-                    Unpaid • Unlocked at Cashier
+                    {b.invoiceGenerated ? 'Invoice Sent • Unpaid' : 'Awaiting Cashier Invoice'}
                   </span>
                 </div>
               </div>

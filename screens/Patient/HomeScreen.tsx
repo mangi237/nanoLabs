@@ -37,8 +37,7 @@ interface PatientHomeScreenProps {
   onOpenBatch?: (batchId: string) => void;
 }
 
-export const 
-HomeScreen: React.FC<PatientHomeScreenProps> = ({
+export const HomeScreen: React.FC<PatientHomeScreenProps> = ({
   onNavigateBook,
   onNavigateScan,
   onNavigateConsult,
@@ -60,7 +59,7 @@ HomeScreen: React.FC<PatientHomeScreenProps> = ({
 
   useEffect(() => {
     const patientId = user?.id || 'demo_patient';
-    let loaded = getBatchesForPatient(patientId);
+    let loaded = getBatchesForPatient(patientId, user?.phone, user?.name);
 
     // If no batches yet, provide realistic active & past batches
     if (loaded.length === 0) {

@@ -57,7 +57,7 @@ export const TestResultsScreen: React.FC<TestResultsScreenProps> = ({
 
   useEffect(() => {
     const patientId = user?.id || 'demo_patient';
-    let loaded = getBatchesForPatient(patientId);
+    let loaded = getBatchesForPatient(patientId, user?.phone, user?.name);
 
     if (loaded.length === 0) {
       // Demo signed batch for primary user
@@ -454,7 +454,7 @@ export const TestResultsScreen: React.FC<TestResultsScreenProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {selectedBatch.tests.map((test:any, idx: number) => {
+                  {selectedBatch.tests.map((test, idx) => {
                     const isAbnormal = test.flag && test.flag !== 'normal';
                     return (
                       <tr key={test.testId} className="hover:bg-slate-50/60">

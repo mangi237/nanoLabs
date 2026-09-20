@@ -20,7 +20,8 @@ import {
   Menu, 
   X,
   FileSpreadsheet,
-  BarChart3
+  BarChart3,
+  Truck
 } from 'lucide-react';
 import StaffProfileModal from './StaffProfileModal';
 
@@ -46,6 +47,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
     { id: 'admin', label: 'Lab Administrator', icon: Shield, color: 'text-purple-600 bg-purple-50' },
     { id: 'receptionist', label: 'Reception Desk', icon: User, color: 'text-teal-600 bg-teal-50' },
     { id: 'cashier', label: 'Cashier & Billing', icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
+    { id: 'phlebotomist', label: 'Phlebotomy & Dispatch', icon: Truck, color: 'text-indigo-600 bg-indigo-50' },
     { id: 'analyzer', label: 'Sample Analyzer', icon: Microscope, color: 'text-amber-600 bg-amber-50' },
     { id: 'lab_tech', label: 'Lab Technologist', icon: TestTube, color: 'text-cyan-600 bg-cyan-50' },
     { id: 'biologist', label: 'Biologist Validation', icon: ShieldCheck, color: 'text-emerald-600 bg-emerald-50' },

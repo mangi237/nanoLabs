@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid' ;
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 

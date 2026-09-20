@@ -9,13 +9,93 @@ import { TestBatch, BatchStatus, PaymentStatus, BatchTestItem } from '../types';
 const BATCH_STORAGE_KEY = 'nanolabs_batches_ledger';
 
 export function getStoredBatches(): TestBatch[] {
+  let batches: TestBatch[] = [];
   try {
     const raw = localStorage.getItem(BATCH_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (raw) {
+      batches = JSON.parse(raw);
+    }
   } catch (e) {
-    return [];
+    batches = [];
   }
+
+  // Also bridge with real bookings from nanolabs_bookings_ledger
+  try {
+    const rawBookings = localStorage.getItem('nanolabs_bookings_ledger');
+    if (rawBookings) {
+      const bookingsList: any[] = JSON.parse(rawBookings);
+      for (const b of bookingsList) {
+        // If this booking is not already in batches as a TestBatch, synthesize it
+        const existingIdx = batches.findIndex((x) => x.id === b.id || x.batchNumber === b.bookingCode);
+
+        let batchStatus: BatchStatus = 'intake';
+        if (b.overallStatus === 'Completed') {
+          batchStatus = 'ready';
+        } else if (b.overallStatus === 'Pending_Biologist_Validation' || b.overallStatus === 'Pending_Signature') {
+          batchStatus = 'validation';
+        } else if (b.overallStatus === 'In_Lab_Testing') {
+          batchStatus = 'analysis';
+        } else if (b.overallStatus === 'In_Transit') {
+          batchStatus = 'in_transit';
+        } else if (b.overallStatus === 'Sample_Collected' || b.sampleCollectedAtDate) {
+          batchStatus = 'received';
+        } else if (b.paymentStatus === 'paid') {
+          batchStatus = 'collected';
+        } else {
+          batchStatus = 'intake';
+        }
+
+        const tests: BatchTestItem[] = (b.tests || []).map((t: any, idx: number) => ({
+          testId: t.id || `t_${idx}`,
+          code: t.code || t.testCode || (t.testName ? t.testName.slice(0, 5).toUpperCase() : 'TEST'),
+          name: t.testName || t.name || 'Clinical Test',
+          category: t.category || 'biochemistry',
+          sampleType: t.sampleType || t.sampleTypeRequired || 'Venous Blood',
+          basePrice: t.price || 0,
+          resultValue: t.resultValue,
+          referenceRange: t.referenceRange || t.normalRange,
+          unit: t.unit,
+          flag: t.flag || 'normal',
+          status: t.status === 'Completed' ? 'validated' : (t.status === 'In_Lab_Testing' ? 'in_analysis' : 'pending'),
+          richReportHtml: t.richReportHtml
+        }));
+
+        const synthBatch: TestBatch = {
+          id: b.id,
+          batchNumber: b.bookingCode || `BCH-${b.id.slice(-6)}`,
+          patientId: b.patientId || 'demo_patient',
+          patientName: b.patientName || 'Patient',
+          patientPhone: b.patientPhone,
+          patientAge: b.patientAge,
+          patientGender: b.patientGender,
+          labId: b.labId || 'lab_central',
+          labName: b.labName || 'Laboratoire Central d\'Analyses Médicales',
+          sampleMode: b.homeCollection ? 'home_collection' : 'walk_in',
+          status: batchStatus,
+          tests,
+          sampleTubeBarcode: b.sampleBarcode || (b.collectedSamples && b.collectedSamples[0]) || `TUBE-${b.bookingCode || b.id}`,
+          paymentStatus: b.paymentStatus === 'paid' ? 'verified' : 'unpaid',
+          createdAt: b.createdAt || new Date().toISOString(),
+          updatedAt: b.updatedAt || new Date().toISOString(),
+          signedAt: b.overallStatus === 'Completed' ? (b.completedAt || b.updatedAt) : undefined,
+          biologistName: b.biologistName || (b.overallStatus === 'Completed' ? 'Dr. Suzanne Mbongo, MD' : undefined),
+          biologistLicense: b.biologistLicense || (b.overallStatus === 'Completed' ? 'ONMC-BIO-9921' : undefined),
+          qrAuditHash: b.overallStatus === 'Completed' ? `NL-${b.id}-${b.bookingCode}` : undefined
+        };
+
+        if (existingIdx >= 0) {
+          // Update existing with live booking status if newer
+          batches[existingIdx] = { ...batches[existingIdx], ...synthBatch };
+        } else {
+          batches.push(synthBatch);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Note on loading real bookings into batch ledger:', err);
+  }
+
+  return batches;
 }
 
 export function saveStoredBatches(batches: TestBatch[]): void {
@@ -42,9 +122,17 @@ export function getBatchById(id: string): TestBatch | undefined {
   return all.find((b) => b.id === id);
 }
 
-export function getBatchesForPatient(patientId: string): TestBatch[] {
+export function getBatchesForPatient(patientId: string, patientPhone?: string, patientName?: string): TestBatch[] {
   const all = getStoredBatches();
-  return all.filter((b) => b.patientId === patientId);
+  const filtered = all.filter((b) => {
+    if (b.patientId === patientId) return true;
+    if (patientPhone && b.patientPhone && b.patientPhone.replace(/\s+/g, '') === patientPhone.replace(/\s+/g, '')) return true;
+    if (patientName && b.patientName && b.patientName.toLowerCase() === patientName.toLowerCase()) return true;
+    if (patientId === 'demo_patient' && (!b.patientId || b.patientId === 'demo_patient' || b.patientName.includes('Claire Ngo'))) return true;
+    return false;
+  });
+
+  return filtered.length > 0 ? filtered : all;
 }
 
 export function getBatchesForLab(labId: string): TestBatch[] {

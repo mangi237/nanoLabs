@@ -77,12 +77,12 @@ export const PatientA4ReportViewerModal: React.FC<PatientA4ReportViewerModalProp
   const isReportSignedAndReady = Boolean(booking.biologistSigned || booking.overallStatus === 'Completed' || booking.status === 'ready');
 
   const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = booking.labAddress || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
+  const labAddress = booking.address || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
   const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
   const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
-  const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';
+  const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° UNAVAILABLE';
   const biologistName = booking.biologistName || 'Biologiste Médical Agréé';
-  const biologistLicense = booking.biologistLicense || 'ONMC / ONPC N° 4829 - Spécialiste Biologie Médicale';
+  const biologistLicense = booking.biologistLicense || 'ONMC / ONPC UNAVAILABLE';
 
   const patientName = booking.patientName || 'Valued Patient';
   const patientAge = booking.patientAge || 'Adult';

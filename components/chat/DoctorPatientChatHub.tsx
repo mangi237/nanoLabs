@@ -29,6 +29,8 @@ import {
 } from '../../services/doctorChatService';
 import { useAuth } from '../../context/authContext';
 import { PatientBooking } from '../../services/limsService';
+import { getBatchesForPatient } from '../../services/batchService';
+import { TestBatch } from '../../types';
 
 export interface DoctorPatientChatHubProps {
   currentRole?: 'patient' | 'doctor';
@@ -62,6 +64,7 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
   const [showPrescribeMedModal, setShowPrescribeMedModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showShareResultModal, setShowShareResultModal] = useState(false);
+  const [patientBatches, setPatientBatches] = useState<TestBatch[]>([]);
 
   // Forms states
   const [testPrescriptionIndication, setTestPrescriptionIndication] = useState('Diagnostic workup for persistent fatigue and metabolic monitoring');
@@ -86,7 +89,9 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
     if (conns.length > 0) {
       setSelectedConnection(conns[0]);
     }
-  }, []);
+    const batches = getBatchesForPatient(user?.id || 'demo_patient', user?.phone, user?.name);
+    setPatientBatches(batches);
+  }, [user]);
 
   useEffect(() => {
     if (selectedConnection) {
@@ -192,7 +197,7 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
     }
   };
 
-  // Patient sharing dummy sample result
+  // Patient sharing real sample result
   const handleShareResultFromChat = (type: 'fbc' | 'batch') => {
     if (!selectedConnection) return;
     const newMsg = doctorChatService.shareTestResult({
@@ -206,6 +211,30 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
       resultSummary: type === 'fbc' ? 'Hb 13.6 g/dL, WBC 6,800 /mm³, Platelets 265,000 /mm³ (Normal)' : '4 Tests Completed (FBC, Glucose, Lipid, Urinalysis)',
       isBatch: type === 'batch',
       batchTestCount: type === 'batch' ? 4 : 1
+    });
+
+    setMessages(prev => [...prev, newMsg]);
+    setShowShareResultModal(false);
+  };
+
+  const handleShareSpecificBatch = (batch: TestBatch) => {
+    if (!selectedConnection) return;
+    const testNames = (batch.tests || []).map(t => t.name).join(', ');
+    const summary = batch.tests && batch.tests.length > 0 
+      ? batch.tests.map(t => `${t.name}: ${t.resultValue || 'Validated'}`).join(' • ')
+      : 'All laboratory panels verified and approved.';
+
+    const newMsg = doctorChatService.shareTestResult({
+      senderId: selectedConnection.patientId,
+      senderName: selectedConnection.patientName,
+      doctorId: selectedConnection.doctorId,
+      doctorName: selectedConnection.doctorName,
+      testName: batch.tests && batch.tests.length === 1 ? batch.tests[0].name : `Diagnostic Dossier: ${batch.batchNumber}`,
+      bookingCode: batch.batchNumber,
+      bookingId: batch.id,
+      resultSummary: summary,
+      isBatch: (batch.tests || []).length > 1,
+      batchTestCount: (batch.tests || []).length
     });
 
     setMessages(prev => [...prev, newMsg]);
@@ -850,30 +879,50 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
               Select which validated diagnostic report from your health record you want to transmit to your physician:
             </p>
 
-            <div className="space-y-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleShareResultFromChat('fbc')}
-                className="w-full p-3 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-2xl text-left transition-all cursor-pointer flex items-center justify-between"
-              >
-                <div>
-                  <h4 className="font-bold text-slate-900">Single Test: Complete Blood Count (NFS)</h4>
-                  <p className="text-[11px] text-slate-500">Order BK-2026-0813-001 • Validated today</p>
+            <div className="space-y-2 text-xs max-h-72 overflow-y-auto pr-1">
+              {patientBatches.length === 0 ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+                  <p className="text-slate-500 font-medium">No diagnostic batches recorded yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => handleShareResultFromChat('fbc')}
+                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold"
+                  >
+                    Share Sample Diagnostic Summary
+                  </button>
                 </div>
-                <ArrowRight className="w-4 h-4 text-teal-600" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleShareResultFromChat('batch')}
-                className="w-full p-3 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-2xl text-left transition-all cursor-pointer flex items-center justify-between"
-              >
-                <div>
-                  <h4 className="font-bold text-slate-900">Full Batch: Comprehensive Health Checkup (4 Tests)</h4>
-                  <p className="text-[11px] text-slate-500">Includes FBC, Fasting Glucose, Lipid Profile, Urinalysis</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-teal-600" />
-              </button>
+              ) : (
+                patientBatches.map((batch) => {
+                  const testsCount = (batch.tests || []).length;
+                  const isValidated = batch.status === 'ready' || batch.status === 'validation';
+                  return (
+                    <button
+                      key={batch.id}
+                      type="button"
+                      onClick={() => handleShareSpecificBatch(batch)}
+                      className="w-full p-3 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-2xl text-left transition-all cursor-pointer flex items-center justify-between gap-2"
+                    >
+                      <div className="space-y-1 overflow-hidden">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] font-black text-teal-900">{batch.batchNumber}</span>
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold uppercase ${
+                            isValidated ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {isValidated ? 'Validated' : 'In Progress'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-slate-900 truncate">
+                          {batch.tests && batch.tests.length === 1 ? batch.tests[0].name : `${testsCount} Test Diagnostic Panel`}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {(batch.tests || []).map(t => t.name).join(', ')}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-teal-600 shrink-0" />
+                    </button>
+                  );
+                })
+              )}
             </div>
 
             <div className="flex items-center justify-end pt-2 border-t border-slate-100">

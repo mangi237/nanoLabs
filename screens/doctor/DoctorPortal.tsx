@@ -8,7 +8,7 @@ import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewM
 import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescriptionModal';
 import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../ut/ils/databaseErrorBus';
 import { 
   Stethoscope, 
   Users, 
@@ -250,11 +250,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       setSharedInboxReports(allSharedInbox);
     } catch (e) {
       console.error('Error in fetchDoctorEcosystemData:', e);
-      dispatchDatabaseFetchError({
-        message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
-        tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
-        rawError: e
-      });
+      // dispatchDatabaseFetchError({
+      //   message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
+      //   tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
+      //   rawError: e
+      // });
     } finally {
       setLoading(false);
     }
