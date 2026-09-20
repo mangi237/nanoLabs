@@ -95,7 +95,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const filteredManualTests = MASTER_TEST_DICTIONARY.filter(
     (t) =>
       t.name.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
-      t.frenchName.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
+      t.frenchName?.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
       t.code.toLowerCase().includes(manualSearchQuery.toLowerCase())
   );
 
