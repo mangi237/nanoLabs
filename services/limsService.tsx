@@ -115,6 +115,11 @@ export interface PatientBooking {
   patientId: string;
   patientName: string;
   patientAge?: number;
+  labAdress?: string;
+  labPhone?: string;
+  labAccreditation?: string ;
+  labEmail?: string;
+
   age?: number;
   dateOfBirth?: string;
   dob?: string;
@@ -138,6 +143,7 @@ export interface PatientBooking {
   staffDesignation?: string;
   hasInsurance?: boolean;
   insuranceProvider?: string;
+
   insurancePolicyNumber?: string;
   insuranceCoveragePercent?: number; // e.g. 80 for 80% coverage
   coPayPercent?: number; // Patient direct co-payment percentage
@@ -152,10 +158,22 @@ export interface PatientBooking {
     id: string;
     name: string;
     code: string;
+   
     price: number;
     quantity: number;
     category?: string;
   }>;
+  labDetails?: {
+    phone?: string;
+    email?: string;
+    address?: string;
+    accreditation?: string;
+    name?: string;
+    license?: string;
+    location?: string;
+    biologistLicense?: string;
+  }
+  biologistLicense?: string;
   addOnsAmount?: number;
   testsAmount?: number;
   paymentStatus: 'unpaid' | 'paid';
@@ -304,6 +322,7 @@ export const limsService = {
   async createBooking(params: {
     labId: string;
     patientId: string;
+    pickupLocation?: string;
     patientName: string;
     patientAge?: number;
     dateOfBirth?: string;

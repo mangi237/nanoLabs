@@ -548,6 +548,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     try {
       await limsService.createBooking({
         labId: targetLabId,
+        // pickupLocation:
         patientId: selectedPatientForTest.id || selectedPatientForTest.patientId,
         patientName: selectedPatientForTest.name,
         dateOfBirth: selectedPatientForTest.dob || undefined,

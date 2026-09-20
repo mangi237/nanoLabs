@@ -653,7 +653,7 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
   };
 
   const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = booking.labAddress || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
+  const labAddress = booking.labAdress || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
   const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
   const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
   const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';

@@ -77,7 +77,7 @@ export const PatientA4ReportViewerModal: React.FC<PatientA4ReportViewerModalProp
   const isReportSignedAndReady = Boolean(booking.biologistSigned || booking.overallStatus === 'Completed' || booking.status === 'ready');
 
   const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = booking.address || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
+  const labAddress = booking.labAdress || booking.labDetails?.address || booking.labDetails?.location || 'UNAVAILABLE';
   const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
   const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
   const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° UNAVAILABLE';
