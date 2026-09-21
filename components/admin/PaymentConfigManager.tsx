@@ -419,7 +419,7 @@ export const PaymentConfigManager: React.FC = () => {
                 </div>
               </div>
 
-              {activeConfig.apiKeyOrSecret !== undefined && (
+              {/* {activeConfig.apiKeyOrSecret !== undefined && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                     <span>API Key / Secret Token / Swift Code</span>
@@ -433,7 +433,7 @@ export const PaymentConfigManager: React.FC = () => {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
-              )}
+              )} */}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
