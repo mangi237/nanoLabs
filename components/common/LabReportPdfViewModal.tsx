@@ -179,7 +179,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     : '04:35 PM 02 Dec, 2026';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+    <div className="medical-print-scope fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
       <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
         
         {/* Top Control Bar (Non-printable) */}

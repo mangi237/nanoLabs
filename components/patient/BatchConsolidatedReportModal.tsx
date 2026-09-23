@@ -93,7 +93,7 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:static">
+    <div className="medical-print-scope fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:!p-0 print:!bg-white print:!static print:!block print:!overflow-visible">
       <div className="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden print:max-h-none print:shadow-none print:border-none print:rounded-none">
         
         {/* Top Control Bar (Non-Printable) */}

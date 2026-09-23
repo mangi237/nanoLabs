@@ -542,7 +542,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 right: 6mm;
                 bottom: 10mm;
                 left: 6mm;
-                border: 1px solid #cbd5e1;
+                border: 1px solid transparent;
+
                 border-radius: 4px;
                 pointer-events: none;
                 z-index: 2;
