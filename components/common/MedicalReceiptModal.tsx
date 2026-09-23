@@ -1,24 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
-import { 
-  Printer, 
-  X, 
-  CheckCircle2, 
-  CreditCard, 
-  Smartphone, 
-  Building2, 
-  Percent, 
-  ShieldCheck, 
-  Receipt,
-  FileText,
-  Clock,
-  Sparkles,
-  Layers,
+import {
+  Printer,
+  X,
+  Building2,
   Upload,
   Image as ImageIcon
 } from 'lucide-react';
 import { PatientBooking } from '../../services/limsService';
-import { formatDOBDisplay, CAMEROON_INSURANCE_PROVIDERS, PRELEVEMENT_ACT_CODES } from '../../data/cameroonInsurances';
+import { formatDOBDisplay, CAMEROON_INSURANCE_PROVIDERS } from '../../data/cameroonInsurances';
 import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
 import { numberToFrenchWords } from '../../utils/frenchNumberToWords';
 
@@ -73,7 +63,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   labInfo,
   paymentDetails
 }) => {
-  const { user } = useAuth();
+  const { user, lab } = useAuth();
+  const targetLab = lab || labInfo;
+
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
 
@@ -143,19 +135,18 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const tplConfig = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
-  const labName = tplConfig.labName || labInfo?.name || booking.labName || 'NANOLABS CLINICAL DIAGNOSTIC CENTER';
-  const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE';
-  const labAddress = tplConfig.address || labInfo?.address || 'Akwa Boulevard de la Liberté, Douala - Cameroun';
-  const labPhone = tplConfig.phone || labInfo?.phone || '+237 670 000 000';
-  const labEmergency = tplConfig.emergencyPhone || '+237 699 000 000';
-  const labEmail = tplConfig.email || labInfo?.email || 'contact@nanolabs.health';
-  const labWebsite = tplConfig.website || labInfo?.website || 'www.nanolabs.health';
-  const labArrete = tplConfig.arreteNumber || 'Arrêté N° 032/A/MINSANTE/SG/DOSTS';
-  const labAgrement = tplConfig.agrementNumber || 'Agrément N° 019 MINSANTE';
-  const labTaxId = tplConfig.taxNumber || 'Contribuable N° M052100089201L';
-  const directorName = tplConfig.directorName || 'Dr MANGI';
-  const directorDiplomas = tplConfig.directorDiplomas || 'Biologiste Médical Diplômé d\'État • Spécialiste en Diagnostic Clinique';
-  const directorSpecialties = tplConfig.directorSpecialties || 'Biochimie Médicale, Hématologie, Immunologie et Microbiologie Clinique';
+  const labName = tplConfig.labName || targetLab?.name || booking.labName || 'NANOLABS CLINICAL DIAGNOSTIC CENTER';
+  const labSlogan = tplConfig.subTitle || targetLab?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE';
+  const labAddress = tplConfig.address || targetLab?.address || 'Akwa Boulevard de la Liberté, Douala - Cameroun';
+  const labPhone = tplConfig.phone || targetLab?.phone || '+237 670 000 000';
+  const labEmergency = tplConfig.emergencyPhone || targetLab?.emergencyPhone || '+237 699 000 000';
+  const labEmail = tplConfig.email || targetLab?.email || 'contact@nanolabs.health';
+  const labArrete = tplConfig.arreteNumber || targetLab?.arreteNumber || 'Arrêté N° 032/A/MINSANTE/SG/DOSTS';
+  const labAgrement = tplConfig.agrementNumber || targetLab?.agrementNumber || 'Agrément N° 019 MINSANTE';
+  const labTaxId = tplConfig.taxNumber || targetLab?.taxNumber || 'Contribuable N° M052100089201L';
+  const directorName = tplConfig.directorName || targetLab?.directorName || 'Directeur du Laboratoire';
+  const directorDiplomas = tplConfig.directorDiplomas || '';
+  const directorSpecialties = tplConfig.directorSpecialties || '';
   const biologistSignatureTitle = tplConfig.biologistSignatureTitle || 'BIOLOGISTE-CLINICIEN / LA DIRECTION';
 
   const pDetails = paymentDetails || booking.paymentDetails || {};
@@ -164,50 +155,25 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const discountAmount = paymentDetails?.discountAmount ?? booking.discountAmount ?? pDetails.discountAmount ?? 0;
   const discountType = paymentDetails?.discountType || booking.discountType || pDetails.discountType || '';
   const couponCode = paymentDetails?.couponCode || booking.couponCode || pDetails.couponCode || '';
-  const couponSponsorName = paymentDetails?.couponSponsorName || booking.couponSponsorName || pDetails.couponSponsorName || '';
-  const couponNotes = paymentDetails?.couponNotes || booking.couponNotes || pDetails.couponNotes || '';
-  
-  const workerStaffName = paymentDetails?.workerStaffName || booking.workerStaffName || pDetails.workerStaffName || '';
-  const workerStaffId = paymentDetails?.workerStaffId || booking.workerStaffId || pDetails.workerStaffId || '';
-  const workerDepartment = paymentDetails?.workerDepartment || booking.workerDepartment || pDetails.workerDepartment || '';
-  const workerBenefitType = paymentDetails?.workerBenefitType || booking.workerBenefitType || pDetails.workerBenefitType || '';
-  const workerAuthNote = paymentDetails?.workerAuthNote || booking.workerAuthNote || pDetails.workerAuthNote || '';
-
-  const momoProvider = paymentDetails?.momoProvider || booking.momoProvider || pDetails.momoProvider || (paymentMethod.includes('orange') ? 'ORANGE' : 'MTN');
-  const momoSenderPhone = paymentDetails?.momoSenderPhone || booking.momoSenderPhone || pDetails.momoSenderPhone || pDetails.momoNumber || '';
-  const momoSenderName = paymentDetails?.momoSenderName || booking.momoSenderName || pDetails.momoSenderName || '';
-  const momoTxId = paymentDetails?.momoTxId || booking.momoTxId || pDetails.momoTxId || pDetails.transactionRef || '';
-
-  const bankName = paymentDetails?.bankName || booking.bankName || pDetails.bankName || '';
-  const bankAccountName = paymentDetails?.bankAccountName || booking.bankAccountName || pDetails.bankAccountName || '';
-  const bankReference = paymentDetails?.bankReference || booking.bankReference || pDetails.bankReference || pDetails.transactionRef || '';
-  const bankBranch = paymentDetails?.bankBranch || booking.bankBranch || pDetails.bankBranch || '';
-
-  const cardScheme = paymentDetails?.cardScheme || booking.cardScheme || pDetails.cardScheme || pDetails.cardType || 'Visa / Mastercard';
-  const cardLast4 = paymentDetails?.cardLast4 || booking.cardLast4 || pDetails.cardLast4 || '';
-  const cardAuthCode = paymentDetails?.cardAuthCode || booking.cardAuthCode || pDetails.cardAuthCode || '';
-
-  const cashGiven = paymentDetails?.cashGiven ?? pDetails.cashGiven;
-  const cashChange = paymentDetails?.cashChange ?? pDetails.cashChange;
 
   const insuranceProviderName = paymentDetails?.insuranceProvider || booking.insuranceProvider || pDetails.insuranceProvider || pDetails.insuranceDetails?.provider || 'ASCOMA CAMEROUN S.A.';
   const insurancePolicyNumber = paymentDetails?.insurancePolicyNumber || booking.insurancePolicyNumber || pDetails.insurancePolicyNumber || pDetails.insuranceDetails?.policyNumber || 'CSA-8812';
-  
+
   const matchedInsurance = CAMEROON_INSURANCE_PROVIDERS.find(
-    i => i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) || 
+    i => i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) ||
          i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
   ) || CAMEROON_INSURANCE_PROVIDERS[0];
 
-  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent !== undefined 
-    ? paymentDetails.insuranceCoveragePercent 
-    : booking.insuranceCoveragePercent !== undefined 
-      ? booking.insuranceCoveragePercent 
+  const insuranceCoveragePercent = paymentDetails?.insuranceCoveragePercent !== undefined
+    ? paymentDetails.insuranceCoveragePercent
+    : booking.insuranceCoveragePercent !== undefined
+      ? booking.insuranceCoveragePercent
       : pDetails.insuranceCoveragePercent !== undefined
         ? pDetails.insuranceCoveragePercent
-        : booking.coPayPercent !== undefined 
-          ? (100 - booking.coPayPercent) 
-          : pDetails.coPayPercent !== undefined 
-            ? (100 - pDetails.coPayPercent) 
+        : booking.coPayPercent !== undefined
+          ? (100 - booking.coPayPercent)
+          : pDetails.coPayPercent !== undefined
+            ? (100 - pDetails.coPayPercent)
             : (matchedInsurance.defaultCoveragePercent ?? 80);
 
   const coPayPercent = paymentDetails?.coPayPercent !== undefined
@@ -218,36 +184,21 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         ? pDetails.coPayPercent
         : (100 - insuranceCoveragePercent);
 
-  const patientName = booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS';
+  const patientName = booking.patientName || 'NOT AVAILABLE';
   const beneficiaryName = (booking as any).insuredBeneficiaryName || (booking as any).beneficiaryName || patientName;
-  const matricule = (booking as any).matricule || (booking as any).insurancePolicyNumber || booking.insurancePolicyNumber || '004071';
-  const patientDob = booking.dateOfBirth || booking.dob || '1986-02-15';
-  const patientGender = booking.patientGender || 'Male';
-  const patientPhone = booking.patientPhone || '670024784';
-  const society = (booking as any).society || (booking as any).employer || (booking as any).company || 'CIBLE RH EMPLOI SARL';
-  const bpcNumber = (booking as any).bpcNumber || (booking as any).bpc || 'CSA';
-  const dossierNumber = (booking as any).dossierNumber || (booking as any).dosNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '').slice(-2) : '58');
+  const matricule = (booking as any).matricule || (booking as any).insurancePolicyNumber || booking.insurancePolicyNumber || '--';
+  const patientDob = booking.dateOfBirth || booking.dob || '';
+  const patientGender = booking.patientGender || '--';
+  const patientPhone = booking.patientPhone || '--';
+  const society = (booking as any).society || (booking as any).employer || (booking as any).company || '--';
+  const bpcNumber = (booking as any).bpcNumber || (booking as any).bpc || '--';
+  const dossierNumber = (booking as any).dossierNumber || (booking as any).dosNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '').slice(-2) : '--');
   const invoiceNum = (booking.invoiceNumber || (booking.bookingCode ? booking.bookingCode.replace(/\D/g, '') : '000060')).padStart(6, '0');
-  const referringDoctorDisplay = (booking as any).referringDoctor 
+  const referringDoctorDisplay = (booking as any).referringDoctor
     ? `${(booking as any).referringDoctor}${(booking as any).referralHospital ? ` — ${(booking as any).referralHospital}` : ''}`
-    : (booking.doctorName || 'Dr. Emmanuel Nkuo — La Quintinie Hospital');
+    : (booking.doctorName || '--');
 
-  const testsList = booking.tests && booking.tests.length > 0 ? booking.tests : [
-    {
-      id: 't-gly',
-      testName: 'GLYP# DOSAGE DU GLUCOSE PLASMATIQUE',
-      cote: 'B10',
-      price: 520,
-      sampleTypeRequired: 'Plasma fluoré'
-    },
-    {
-      id: 't-iono',
-      testName: 'IONOC# IONOGRAMME PLASMATIQUE COMPLET',
-      cote: 'B95',
-      price: 4940,
-      sampleTypeRequired: 'Sérum / Sang total'
-    }
-  ];
+  const testsList = booking.tests && booking.tests.length > 0 ? booking.tests : [];
 
   const bUnitRate = matchedInsurance.baseRateB || 260;
   const kbUnitRate = matchedInsurance.baseRateKB || 1200;
@@ -266,21 +217,17 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   testsList.forEach((t: any) => {
     let cote = t.cote || 'B10';
-    let lineTotal = t.price || t.totalPrice || 520;
+    let lineTotal = t.price || t.totalPrice || 0;
     let coeffStr = (bUnitRate).toLocaleString();
 
     if (t.testName?.includes('IONO') || t.testName?.includes('IONOC')) {
       cote = 'B95';
-      lineTotal = 4940;
     } else if (t.testName?.includes('GLYC') || t.testName?.includes('GLYP')) {
       cote = 'B10';
-      lineTotal = 520;
     } else if (t.testName?.includes('NFS') || t.testName?.includes('HEMOG')) {
       cote = 'B45';
-      lineTotal = 2340;
     } else if (t.testName?.includes('CHOL') || t.testName?.includes('LIPID')) {
       cote = 'B30';
-      lineTotal = 1560;
     }
 
     const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
@@ -301,82 +248,214 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const explicitAddOns = booking.addOns || pDetails?.addOns || [];
   if (Array.isArray(explicitAddOns) && explicitAddOns.length > 0) {
     explicitAddOns.forEach((ao: any) => {
-      const lineTotal = (ao.price || 1000) * (ao.quantity || 1);
+      const lineTotal = (ao.price || 0) * (ao.quantity || 1);
       const insShare = Math.round(lineTotal * (insuranceCoveragePercent / 100));
       const patShare = lineTotal - insShare;
       lineItems.push({
         designation: `${ao.name} ${ao.code ? `[${ao.code}]` : ''}`.trim(),
         cote: ao.code || 'ACT-PREL',
-        valeurCoeff: (ao.price || 1000).toLocaleString(),
+        valeurCoeff: (ao.price || 0).toLocaleString(),
         qty: ao.quantity || 1,
         totalPrice: lineTotal,
         insuranceAmount: insShare,
         patientAmount: patShare
       });
     });
-  } else {
-    const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
-    const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
-
-    if (hasStool && !testsList.some((t: any) => (t.testName || '').includes('PK#'))) {
-      const pkPrice = Math.round(1.0 * (kbUnitRate / 5));
-      const pkIns = Math.round(pkPrice * (insuranceCoveragePercent / 100));
-      const pkPat = pkPrice - pkIns;
-      lineItems.push({
-        designation: 'PK# ACTE PRELEVEMENT SELLES',
-        cote: 'KB1,0',
-        valeurCoeff: (kbUnitRate).toLocaleString(),
-        qty: 1,
-        totalPrice: pkPrice,
-        insuranceAmount: pkIns,
-        patientAmount: pkPat
-      });
-    }
-
-    if (hasBlood && !testsList.some((t: any) => (t.testName || '').includes('PSE#'))) {
-      const psePrice = Math.round(1.5 * (kbUnitRate / 5));
-      const pseIns = Math.round(psePrice * (insuranceCoveragePercent / 100));
-      const psePat = psePrice - pseIns;
-      lineItems.push({
-        designation: 'PSE# ACTE DE PRELEVEMENT DE SANG ES',
-        cote: 'KB1,5',
-        valeurCoeff: (kbUnitRate).toLocaleString(),
-        qty: 1,
-        totalPrice: psePrice,
-        insuranceAmount: pseIns,
-        patientAmount: psePat
-      });
-    }
   }
 
   const totalExamensLabo = lineItems.reduce((acc, item) => acc + item.totalPrice, 0);
   const totalHT = totalExamensLabo;
   const totalTTC = totalHT;
-  const depassement = 0;
   const totalPatientTicketModerateur = lineItems.reduce((acc, item) => acc + item.patientAmount, 0);
   const totalNetAPayerAssurance = lineItems.reduce((acc, item) => acc + item.insuranceAmount, 0);
 
   const amountInWords = numberToFrenchWords(totalNetAPayerAssurance);
 
-  const isWorkerBenefit = paymentMethod === 'workers_benefit' || discountType === 'workers_benefit' || Boolean(workerStaffName);
-  const isGiftCoupon = paymentMethod === 'gift_coupon' || discountType === 'coupon' || Boolean(couponCode);
-  const isInsurance = paymentMethod === 'insurance' || Boolean(insuranceProviderName);
-  const isMoMo = paymentMethod === 'mobile_money' || paymentMethod.includes('momo') || paymentMethod.includes('orange');
-  const isBank = paymentMethod === 'bank_transfer' || paymentMethod.includes('bank');
-
-  const receiptDateFormatted = booking.paidAt 
+  const receiptDateFormatted = booking.paidAt
     ? new Date(booking.paidAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  // ============================================================
+  // PRINT — opens a clean window with ONLY the receipt sheet
+  // Same pattern as LabReportPdfViewModal and BatchConsolidatedReportModal
+  // ============================================================
   const handlePrint = () => {
-    window.print();
+    const sheet = document.getElementById('medical-receipt-sheet');
+    if (!sheet) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=1200');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    // Inline all CSS rules from the current document so the print window
+    // gets the full compiled Tailwind stylesheet (including @media print rules)
+    const styles = Array.from(document.styleSheets)
+      .map(sheet => {
+        try {
+          return Array.from(sheet.cssRules).map(rule => rule.cssText).join('\n');
+        } catch (e) {
+          return sheet.href ? `<link rel="stylesheet" href="${sheet.href}" />` : '';
+        }
+      })
+      .filter(Boolean)
+      .join('\n');
+
+    const watermarkLogo = targetLab?.logoUrl || (booking as any).labLogoUrl || '';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Medical Receipt - ${booking.bookingCode || ''}</title>
+          <style>${styles}</style>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 8mm 12mm 8mm;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            body { position: relative; }
+
+            /* Watermark — fixed so it repeats on every printed page */
+            .print-watermark {
+              position: fixed;
+              top: 0; right: 0; bottom: 0; left: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 0;
+              pointer-events: none;
+              user-select: none;
+            }
+            .print-watermark img {
+              width: 60%;
+              max-width: 460px;
+              height: auto;
+              object-fit: contain;
+              opacity: 0.10;
+              filter: grayscale(100%);
+              transform: rotate(-12deg);
+            }
+
+            /* Sheet sits above the watermark */
+            #medical-receipt-sheet {
+              position: relative;
+              z-index: 1;
+              background: transparent !important;
+              box-shadow: none !important;
+              border: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              max-width: 100% !important;
+              width: 100% !important;
+              border-radius: 0 !important;
+              overflow: visible !important;
+            }
+
+            /* Pagination — allow long tables to flow across pages */
+            #medical-receipt-sheet table { width: 100%; }
+            #medical-receipt-sheet thead { display: table-header-group; }
+            #medical-receipt-sheet tr { page-break-inside: avoid; break-inside: avoid; }
+
+            .print-header-block { page-break-after: avoid; break-after: avoid; }
+            .print-patient-box  { page-break-inside: avoid; break-inside: avoid; }
+            .print-totals-block { page-break-inside: avoid; break-inside: avoid; }
+            .print-signature-block { page-break-inside: avoid; break-inside: avoid; }
+
+          #medical-receipt-sheet .print-patient-box.grid-cols-2,
+#medical-receipt-sheet .print-patient-box.sm\\:grid-cols-2 {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.75rem !important;
+}
+
+/* Totals recap: force 12-col grid + 6/6 split */
+#medical-receipt-sheet .print-totals-block {
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  gap: 0.75rem !important;
+  width: 100% !important;
+}
+#medical-receipt-sheet .print-totals-block > .sm\\:col-span-6,
+#medical-receipt-sheet .print-totals-block > .print\\:col-span-6,
+#medical-receipt-sheet .print-totals-block > * {
+  grid-column: span 6 / span 6 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Template 1 two-column totals (Part Patient / Part Assureur) */
+#medical-receipt-sheet .print-totals-block.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+#medical-receipt-sheet .print-totals-block.grid-cols-2 > * {
+  grid-column: auto !important;
+  width: 100% !important;
+}
+
+/* Inner flex rows inside the totals cards — spread content */
+#medical-receipt-sheet .print-totals-block .flex.justify-between,
+#medical-receipt-sheet .print-totals-block .flex.items-center.justify-between {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  gap: 0.5rem !important;
+}
+
+/* Ensure the wrapper cards stretch to full column width */
+#medical-receipt-sheet .print-totals-block > div {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Signature / stamp grid (if present) */
+#medical-receipt-sheet .print-signature-block.grid-cols-3 {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 1rem !important;
+}
+            .no-print, .print\\:hidden { display: none !important; }
+          </style>
+        </head>
+        <body>
+          ${watermarkLogo ? `
+            <div class="print-watermark">
+              <img src="${watermarkLogo}" alt="" />
+            </div>
+          ` : ''}
+          ${sheet.outerHTML}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
   };
 
   return (
-    <div className= "medical-print-scope fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:!block print:!max-h-none print:!h-auto print:!static print:!w-full print:!max-w-none print:!p-0 print:!m-0 print:!border-none print:!shadow-none print:!bg-white print:!rounded-none print:!animate-none print:!transform-none">
-        
-        {/* Top Control Bar */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
+
+        {/* Top Control Bar (Non-printable) */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-teal-400 animate-pulse"></div>
@@ -405,23 +484,23 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   ))}
                 </div>
 
-                <input 
-                  type="file" 
-                  ref={headerFileInputRef} 
-                  accept="image/*" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  ref={headerFileInputRef}
+                  accept="image/*"
+                  className="hidden"
                   onChange={(e) => {
                     if (e.target.files?.[0]) handleHeaderUpload(e.target.files[0]);
-                  }} 
+                  }}
                 />
-                <input 
-                  type="file" 
-                  ref={footerFileInputRef} 
-                  accept="image/*" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  ref={footerFileInputRef}
+                  accept="image/*"
+                  className="hidden"
                   onChange={(e) => {
                     if (e.target.files?.[0]) handleFooterUpload(e.target.files[0]);
-                  }} 
+                  }}
                 />
 
                 <button
@@ -462,141 +541,27 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
         </div>
 
-        {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-white my-2 rounded-2xl print:!p-0 print:!m-0 print:!bg-white print:!overflow-visible print:!flex-none print:!block print:!h-auto print:!max-h-none relative">
-          
-          <style>{`
-            /* ============ WATERMARK (SCREEN + PRINT) ============ */
-            .watermark-layer {
-              position: absolute;
-              inset: 0;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              z-index: 0;
-              overflow: hidden;
-              border-radius: inherit;
-            }
-            .watermark-logo {
-              width: 60%;
-              max-width: 420px;
-              object-fit: contain;
-              opacity: 0.06;
-              filter: grayscale(100%);
-              transform: rotate(-15deg);
-              user-select: none;
-              pointer-events: none;
-            }
-            #medical-receipt-sheet > *:not(.watermark-layer) {
-              position: relative;
-              z-index: 1;
-            }
+        {/* On-screen preview scroll container */}
+        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl">
 
-            @media print {
-              @page {
-                size: A4;
-                margin: 12mm 10mm 14mm 10mm;
-              }
-
-              html, body {
-                background: #ffffff !important;
-                color: #000000 !important;
-              }
-
-              /* Watermark fixed → repeats on EVERY printed page */
-              .watermark-layer {
-                position: fixed !important;
-                inset: 0 !important;
-                z-index: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-              }
-              .watermark-logo {
-                width: 65% !important;
-                max-width: 480px !important;
-                opacity: 0.08 !important;
-                filter: grayscale(100%) !important;
-                transform: rotate(-15deg) !important;
-              }
-
-              #medical-receipt-sheet {
-                background: transparent !important;
-                color: #000000 !important;
-                box-shadow: none !important;
-                border: none !important;
-                border-radius: 0 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                max-width: 100% !important;
-                display: block !important;
-                position: relative !important;
-                z-index: 1 !important;
-              }
-
-              /* Printed frame border around every page */
-              #medical-receipt-sheet::before {
-                content: '';
-                position: fixed;
-                top: 8mm;
-                right: 6mm;
-                bottom: 10mm;
-                left: 6mm;
-                border: 1px solid transparent;
-
-                border-radius: 4px;
-                pointer-events: none;
-                z-index: 2;
-              }
-
-              #medical-receipt-sheet table,
-              #medical-receipt-sheet * {
-                max-width: 100% !important;
-              }
-
-              .print-header-block { break-after: avoid; page-break-after: avoid; position: relative; z-index: 3; }
-              .print-patient-box  { break-inside: avoid; page-break-inside: avoid; }
-              .print-billing-table { break-inside: auto; page-break-inside: auto; }
-              .print-billing-table thead { display: table-header-group; }
-              .print-billing-table tr    { break-inside: avoid; page-break-inside: avoid; }
-              .print-totals-block { break-inside: avoid; page-break-inside: avoid; }
-              .print-signature-block,
-              .print-footer-block { break-inside: avoid; page-break-inside: avoid; position: relative; z-index: 3; }
-
-              .no-print { display: none !important; }
-            }
-          `}</style>
- {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
-    <div className="watermark-layer" aria-hidden="true">
-      <img
-        src={labInfo?.logoUrl || (booking as any).labLogoUrl}
-        alt=""
-        className="watermark-logo"
-      />
-    </div>
-  )}
-        
-  <div 
-    id="medical-receipt-sheet"
-    className="bg-transparent rounded-xl shadow-2xl border border-slate-300 overflow-visible max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs relative z-[1]"
-  >
-            
-            {/* ============ WATERMARK LAYER ============ */}
-         
+          <div
+            id="medical-receipt-sheet"
+            className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 text-xs"
+          >
 
             {/* ========================================================================= */}
             {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}
             {/* ========================================================================= */}
             {selectedTemplateIndex % 2 === 1 || selectedTemplateIndex === 1 ? (
               <div className="space-y-4">
-                
-                {/* 1. HEADER — custom image overrides built-in letterhead */}
+
+                {/* 1. HEADER */}
                 <div className="print-header-block">
                   {tplConfig.headerImageUrl ? (
                     <div className="border-b-2 border-slate-900 pb-2">
-                      <img 
-                        src={tplConfig.headerImageUrl} 
-                        alt={labName} 
+                      <img
+                        src={tplConfig.headerImageUrl}
+                        alt={labName}
                         style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
                         className="w-full object-contain mx-auto"
                       />
@@ -604,9 +569,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   ) : (
                     <div className="border-b-2 border-slate-900 pb-3 space-y-2">
                       <div className="flex items-center justify-between gap-3">
-                        {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                        {targetLab?.logoUrl ? (
                           <img
-                            src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                            src={targetLab.logoUrl}
                             alt={labName}
                             referrerPolicy="no-referrer"
                             className="w-16 h-16 rounded-xl object-contain border border-slate-300 bg-white p-1 shadow-xs shrink-0"
@@ -628,17 +593,21 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
                         <div className="w-16 hidden sm:block"></div>
                       </div>
-                      
+
                       <div className="text-center space-y-0.5">
                         <div className="text-xs font-bold text-slate-900 pt-1">
                           {directorName}
                         </div>
-                        <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
-                          {directorDiplomas}
-                        </div>
-                        <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
-                          {directorSpecialties}
-                        </div>
+                        {directorDiplomas && (
+                          <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
+                            {directorDiplomas}
+                          </div>
+                        )}
+                        {directorSpecialties && (
+                          <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
+                            {directorSpecialties}
+                          </div>
+                        )}
 
                         <div className="text-[9px] text-slate-600 font-mono pt-1">
                           {labArrete} • {labAgrement} • {labTaxId}
@@ -662,9 +631,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 3. DUAL IDENTIFICATION & INSURANCE SUMMARY BOXES */}
-                <div className="print-patient-box grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-3 text-[10.5px]">
-                  
-                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 print:bg-white space-y-1">
+                <div className="print-patient-box grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px]">
+
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
                     <div className="font-black uppercase text-slate-950 pb-1 border-b border-slate-200">
                       IDENTIFICATION DU PATIENT
                     </div>
@@ -674,7 +643,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                       Matricule: <strong>{matricule}</strong> • Né(e) le: <strong>{formatDOBDisplay(patientDob)}</strong>
                     </div>
                     <div>
-                      Sexe: <strong>{patientGender === 'Female' ? 'F' : 'M'}</strong> • Tél: <strong className="font-mono">{patientPhone}</strong>
+                      Sexe: <strong>{patientGender === 'Female' ? 'F' : patientGender === 'Male' ? 'M' : '--'}</strong> • Tél: <strong className="font-mono">{patientPhone}</strong>
                     </div>
                     <div>Société: <strong className="font-bold notranslate" translate="no">{society}</strong></div>
                     <div>Prescribing Physician: <strong className="font-bold text-slate-950 notranslate" translate="no">Ref. Doctor: {referringDoctorDisplay}</strong></div>
@@ -684,7 +653,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 print:bg-white space-y-1">
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
                     <div className="font-black uppercase text-indigo-950 pb-1 border-b border-slate-200 flex items-center justify-between">
                       <span>{matchedInsurance.name}</span>
                       <span className="text-[9px] bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-bold">
@@ -695,8 +664,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     <div>B.P.: <strong className="font-mono">{matchedInsurance.bp}</strong></div>
                     <div>Tél: <strong className="font-mono">{matchedInsurance.phone}</strong></div>
                     <div className="pt-1 border-t border-slate-200/80 flex flex-col font-mono text-[9.5px] text-slate-700">
-                      <span>N.I.U.: <strong>{matchedInsurance.taxId || 'M025300001665C'}</strong></span>
-                      <span>R.C.: <strong>{matchedInsurance.rcNumber || 'RC/DLA/1953/B/166'}</strong></span>
+                      <span>N.I.U.: <strong>{matchedInsurance.taxId || '--'}</strong></span>
+                      <span>R.C.: <strong>{matchedInsurance.rcNumber || '--'}</strong></span>
                     </div>
                   </div>
 
@@ -733,17 +702,17 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 5. SUMMARY FINANCIAL RECAPITULATION TABLE */}
-                <div className="print-totals-block grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-3 pt-1">
-                  
-                  <div className="sm:col-span-6 print:col-span-6 space-y-2 text-[10px] text-slate-700">
-                    <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 print:bg-white space-y-1">
+                <div className="print-totals-block grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+
+                  <div className="sm:col-span-6 space-y-2 text-[10px] text-slate-700">
+                    <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 space-y-1">
                       <div className="flex justify-between">
                         <span>TOTAL EXAMENS DE LABORATOIRE:</span>
-                        <strong className="font-mono text-slate-900">{totalExamensLabo.toLocaleString()} FCFA</strong>
+                        <strong className="font-mono text-slate-900">{totalExamensLabo.toLocaleString()} {currency}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span>TOTAL HT:</span>
-                        <strong className="font-mono text-slate-900">{totalHT.toLocaleString()} FCFA</strong>
+                        <strong className="font-mono text-slate-900">{totalHT.toLocaleString()} {currency}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span>TVA (19,25%):</span>
@@ -751,33 +720,29 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                       </div>
                       <div className="flex justify-between border-t border-slate-200 pt-1 font-bold">
                         <span>TOTAL TTC:</span>
-                        <strong className="font-mono text-slate-950">{totalTTC.toLocaleString()} FCFA</strong>
-                      </div>
-                      <div className="flex justify-between text-slate-500">
-                        <span>DÉPASSEMENT:</span>
-                        <strong className="font-mono">0 FCFA</strong>
+                        <strong className="font-mono text-slate-950">{totalTTC.toLocaleString()} {currency}</strong>
                       </div>
                     </div>
                   </div>
 
-                  <div className="sm:col-span-6 print:col-span-6 space-y-2">
-                    <div className="border-2 border-emerald-600 bg-emerald-50/90 print:bg-white rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
+                  <div className="sm:col-span-6 space-y-2">
+                    <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">TICKET MODÉRATEUR (PATIENT)</div>
                         <div className="text-[9px] text-emerald-700 font-semibold">{coPayPercent}% Quote-part à la charge du patient</div>
                       </div>
                       <div className="text-base font-black font-mono text-emerald-900">
-                        {totalPatientTicketModerateur.toLocaleString()} FCFA
+                        {totalPatientTicketModerateur.toLocaleString()} {currency}
                       </div>
                     </div>
 
-                    <div className="border-2 border-indigo-700 bg-indigo-50/90 print:bg-white rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
+                    <div className="border-2 border-indigo-700 bg-indigo-50/90 rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-wider text-indigo-900">NET À PAYER (ASSURANCE)</div>
                         <div className="text-[9px] text-indigo-700 font-semibold">{insuranceCoveragePercent}% Prise en charge officielle</div>
                       </div>
                       <div className="text-base font-black font-mono text-indigo-900">
-                        {totalNetAPayerAssurance.toLocaleString()} FCFA
+                        {totalNetAPayerAssurance.toLocaleString()} {currency}
                       </div>
                     </div>
                   </div>
@@ -785,26 +750,26 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 6. VERBAL CERTIFICATION IN FRENCH */}
-                <div className="p-3 bg-slate-100 print:bg-white rounded-lg border border-slate-300 print:border-black text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
+                <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
                   ARRÊTÉ LA PRÉSENTE FACTURE À LA SOMME DE : <span className="underline">{amountInWords} FRANCS CFA</span>
                 </div>
 
-                {/* 7. DUAL SIGNATURE STAMPS & OFFICIAL LABORATORY SEAL */}
-             {/* Reserved blank space for physical stamp / signature */}
-<div className="print-signature-block pt-6 pb-4" style={{ minHeight: '60mm' }} />
+                {/* 7. Reserved blank space for physical stamp / signature */}
+                <div className="print-signature-block pt-6 pb-4" style={{ minHeight: '60mm' }} />
+
               </div>
             ) : (
               /* ========================================================================= */
               /* TEMPLATE 1: MODERN ACCREDITED EMERALD LETTERHEAD                          */
               /* ========================================================================= */
               <div className="space-y-4">
-                
+
                 <div className="print-header-block">
                   {tplConfig.headerImageUrl ? (
                     <div className="border-b-2 border-teal-800 pb-2">
-                      <img 
-                        src={tplConfig.headerImageUrl} 
-                        alt={labName} 
+                      <img
+                        src={tplConfig.headerImageUrl}
+                        alt={labName}
                         style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
                         className="w-full object-contain mx-auto"
                       />
@@ -812,9 +777,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   ) : (
                     <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3 gap-3">
                       <div className="flex items-center gap-3">
-                        {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                        {targetLab?.logoUrl ? (
                           <img
-                            src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                            src={targetLab.logoUrl}
                             alt={labName}
                             referrerPolicy="no-referrer"
                             className="w-14 h-14 rounded-xl object-contain border border-teal-300 bg-white p-1 shadow-xs shrink-0"
@@ -847,14 +812,14 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   <span className="text-slate-600 font-medium">{receiptDateFormatted}</span>
                 </div>
 
-                <div className="print-patient-box grid grid-cols-2 print:grid-cols-2 gap-3 bg-slate-50 print:bg-white p-3 rounded-xl border border-slate-200 text-[10.5px]">
+                <div className="print-patient-box grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px]">
                   <div>
                     <div>Patient: <strong className="text-slate-950 notranslate" translate="no">{patientName}</strong></div>
-                    <div>PID: <strong className="font-mono text-teal-700">{booking.patientPid || 'P-555'}</strong></div>
+                    <div>PID: <strong className="font-mono text-teal-700">{booking.patientPid || '--'}</strong></div>
                     <div>Contact: <strong className="font-mono">{patientPhone}</strong></div>
                   </div>
                   <div className="text-right">
-                    <div>Prescripteur: <strong className="notranslate" translate="no">Ref. Doctor: {booking.doctorName || referringDoctorDisplay || 'Dr. Emmanuel Nkuo'}</strong></div>
+                    <div>Prescripteur: <strong className="notranslate" translate="no">Ref. Doctor: {booking.doctorName || referringDoctorDisplay || '--'}</strong></div>
                     <div>Organisme: <strong className="notranslate" translate="no">{insuranceProviderName}</strong></div>
                     <div>Couverture: <strong className="text-teal-800">{insuranceCoveragePercent}%</strong></div>
                   </div>
@@ -876,27 +841,28 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                         <tr key={idx}>
                           <td className="p-2 font-bold text-slate-900">{item.designation}</td>
                           <td className="p-2 text-center font-mono">{item.cote}</td>
-                          <td className="p-2 text-right font-mono font-bold">{item.totalPrice.toLocaleString()} FCFA</td>
-                          <td className="p-2 text-right font-mono font-bold text-teal-900">{item.insuranceAmount.toLocaleString()} FCFA</td>
-                          <td className="p-2 text-right font-mono font-bold text-emerald-900">{item.patientAmount.toLocaleString()} FCFA</td>
+                          <td className="p-2 text-right font-mono font-bold">{item.totalPrice.toLocaleString()} {currency}</td>
+                          <td className="p-2 text-right font-mono font-bold text-teal-900">{item.insuranceAmount.toLocaleString()} {currency}</td>
+                          <td className="p-2 text-right font-mono font-bold text-emerald-900">{item.patientAmount.toLocaleString()} {currency}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                <div className="print-totals-block grid grid-cols-2 print:grid-cols-2 gap-3 pt-2">
-                  <div className="p-3 bg-emerald-50 print:bg-white border border-emerald-200 rounded-xl">
+                <div className="print-totals-block grid grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                     <div className="text-[10px] uppercase font-bold text-emerald-800">Part Patient (Ticket Modérateur)</div>
-                    <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} FCFA</div>
+                    <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} {currency}</div>
                   </div>
-                  <div className="p-3 bg-teal-50 print:bg-white border border-teal-200 rounded-xl text-right">
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-right">
                     <div className="text-[10px] uppercase font-bold text-teal-800">Part Assureur (Net à Payer)</div>
-                    <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} FCFA</div>
+                    <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} {currency}</div>
                   </div>
                 </div>
 
-              
+                {/* Reserved blank space for physical stamp / signature */}
+                <div className="print-signature-block pt-6 pb-4" style={{ minHeight: '60mm' }} />
 
               </div>
             )}
@@ -904,7 +870,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Bottom Footer */}
+        {/* Modal Bottom Footer (Non-printable) */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800 print:hidden shrink-0">
           <button
             onClick={onClose}
