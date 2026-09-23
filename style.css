@@ -9,7 +9,9 @@
       size: A4 portrait;
       margin: 6mm 8mm;
     }
-
+    tr, .antibiogram-row {
+      page-break-inside: avoid;
+    }
     html, body {
       background: #ffffff !important;
       background-color: #ffffff !important;

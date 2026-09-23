@@ -369,83 +369,83 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </div>
             )}
 
-            {/* Patient Metadata Grid Box */}
-            <div className="border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
-              
-              {/* Left Demographic Column */}
-              <div className="md:col-span-4 space-y-1.5">
-                <div>
-                  <div className="text-base font-black text-slate-900 notranslate" translate="no">
-                    {booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS'}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-slate-700">
-                  <div>
-                    <span className="text-slate-500">Age: </span>
-                    <strong className="text-slate-900">{booking.patientAge || 39} Years</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Sex: </span>
-                    <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500">PID / Code: </span>
-                  <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode || 'PID-555'}</strong>
-                </div>
-              </div>
+            
+{/* Patient Metadata Grid Box */}
+<div className="border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 print:p-2 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 print:grid-cols-12 gap-3 print:gap-2 text-xs print:text-[10px]">
+  
+  {/* Left Demographic Column */}
+  <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1">
+    <div>
+      <div className="text-base print:text-sm font-black text-slate-900 notranslate" translate="no">
+        {booking.patientName || 'NOT AVAILABLE'}
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-2 text-slate-700">
+      <div>
+        <span className="text-slate-500">Age: </span>
+        <strong className="text-slate-900">{booking.patientAge || 39} Years</strong>
+      </div>
+      <div>
+        <span className="text-slate-500">Sex: </span>
+        <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
+      </div>
+    </div>
+    <div>
+      <span className="text-slate-500">PID / Code: </span>
+      <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode || 'PID-555'}</strong>
+    </div>
+  </div>
 
-              {/* Middle Sample / Ref By Column */}
-              <div className="md:col-span-4 border-y md:border-y-0 md:border-x border-slate-200 py-2 md:py-0 md:px-3 flex flex-col justify-between space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
-                    <QrCode className="w-10 h-10 text-slate-900" />
-                  </div>
-                  <div className="text-[10px] text-slate-600 leading-tight">
-                    <div className="font-bold text-slate-800">Sample Matrix:</div>
-                    <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
-                  </div>
-                </div>
-                <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-                  <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
-                  <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
-                    Ref. Doctor: {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
-                  </div>
-                  <div className="text-slate-600 text-[10px] font-medium notranslate" translate="no">
-                    {booking.referralHospital || booking.doctorFacility || 'La Quintinie Hospital, Douala'}
-                  </div>
-                </div>
-              </div>
+  {/* Middle Sample / Ref By Column */}
+  <div className="md:col-span-4 print:col-span-4 border-y md:border-y-0 md:border-x print:border-y-0 print:border-x border-slate-200 py-2 md:py-0 md:px-3 print:py-0 print:px-3 flex flex-col justify-between space-y-2 print:space-y-1">
+    <div className="flex items-center gap-2">
+      <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
+        <QrCode className="w-10 h-10 print:w-8 print:h-8 text-slate-900" />
+      </div>
+      <div className="text-[10px] text-slate-600 leading-tight">
+        <div className="font-bold text-slate-800">Sample Matrix:</div>
+        <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
+      </div>
+    </div>
+    <div className="bg-slate-50 print:bg-white p-1.5 rounded-lg border border-slate-200 print:border-slate-300">
+      <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
+      <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
+        Ref. Doctor: {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
+      </div>
+      <div className="text-slate-600 text-[10px] font-medium notranslate" translate="no">
+        {booking.referralHospital || booking.doctorFacility || 'La Quintinie Hospital, Douala'}
+      </div>
+    </div>
+  </div>
 
-              {/* Right Barcode & Timestamps Column */}
-              <div className="md:col-span-4 space-y-1.5 text-right flex flex-col justify-between">
-                <div>
-                  <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
-                    ||||| | ||| |||| || | || ||||
-                  </div>
-                  <div className="font-mono text-[9px] text-slate-600">
-                    {booking.bookingCode || '0 35545 62336 78 1'}
-                  </div>
-                </div>
+  {/* Right Barcode & Timestamps Column */}
+  <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1 text-right flex flex-col justify-between">
+    <div>
+      <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
+        ||||| | ||| |||| || | || ||||
+      </div>
+      <div className="font-mono text-[9px] text-slate-600">
+        {booking.bookingCode || '0 35545 62336 78 1'}
+      </div>
+    </div>
 
-                <div className="text-[10px] space-y-0.5 text-slate-600">
-                  <div>
-                    <span>Registered on: </span>
-                    <strong className="text-slate-800">{registeredTimeStr}</strong>
-                  </div>
-                  <div>
-                    <span>Collected on: </span>
-                    <strong className="text-slate-800">{collectedTimeStr}</strong>
-                  </div>
-                  <div>
-                    <span>Reported on: </span>
-                    <strong className="text-slate-800">{reportedTimeStr}</strong>
-                  </div>
-                </div>
-              </div>
+    <div className="text-[10px] space-y-0.5 text-slate-600">
+      <div>
+        <span>Registered on: </span>
+        <strong className="text-slate-800">{registeredTimeStr}</strong>
+      </div>
+      <div>
+        <span>Collected on: </span>
+        <strong className="text-slate-800">{collectedTimeStr}</strong>
+      </div>
+      <div>
+        <span>Reported on: </span>
+        <strong className="text-slate-800">{reportedTimeStr}</strong>
+      </div>
+    </div>
+  </div>
 
-            </div>
-
+</div>
             {/* Test Results Section with Multi-tier Hierarchy (Department -> Sub-Header -> Parameters) */}
             {((selectedTestFilter !== null && selectedTestFilter !== undefined && booking.tests?.[selectedTestFilter])
               ? [booking.tests[selectedTestFilter]]
