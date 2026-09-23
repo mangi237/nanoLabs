@@ -77,7 +77,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
 
-  // Security: Restrict template customization and upload actions strictly to staff/admin
   const canCustomizeTemplates = user?.role && !['patient'].includes(user.role.toLowerCase());
 
   const headerFileInputRef = useRef<HTMLInputElement>(null);
@@ -110,14 +109,13 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     reader.onload = (e) => {
       const result = e.target?.result as string;
       const updated = [...templates];
-      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      const targetIdx = selectedTemplateIndex;
       updated[targetIdx] = {
         ...updated[targetIdx],
         headerImageUrl: result,
         useHeaderImageOnly: true
       };
       setTemplates(updated);
-      setSelectedTemplateIndex(targetIdx);
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
     };
     reader.readAsDataURL(file);
@@ -129,14 +127,13 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     reader.onload = (e) => {
       const result = e.target?.result as string;
       const updated = [...templates];
-      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      const targetIdx = selectedTemplateIndex;
       updated[targetIdx] = {
         ...updated[targetIdx],
         footerImageUrl: result,
         useFooterImageOnly: true
       };
       setTemplates(updated);
-      setSelectedTemplateIndex(targetIdx);
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
     };
     reader.readAsDataURL(file);
@@ -146,7 +143,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const tplConfig = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
-  // Lab metadata from real lab configuration
   const labName = tplConfig.labName || labInfo?.name || booking.labName || 'NANOLABS CLINICAL DIAGNOSTIC CENTER';
   const labSlogan = tplConfig.subTitle || labInfo?.slogan || 'ANALYSES DE BIOLOGIE MEDICALE ET DIAGNOSTIC CLINIQUE';
   const labAddress = tplConfig.address || labInfo?.address || 'Akwa Boulevard de la Liberté, Douala - Cameroun';
@@ -162,7 +158,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const directorSpecialties = tplConfig.directorSpecialties || 'Biochimie Médicale, Hématologie, Immunologie et Microbiologie Clinique';
   const biologistSignatureTitle = tplConfig.biologistSignatureTitle || 'BIOLOGISTE-CLINICIEN / LA DIRECTION';
 
-  // Consolidate payment attributes
   const pDetails = paymentDetails || booking.paymentDetails || {};
   const currency = paymentDetails?.currency || 'FCFA';
   const paymentMethod = (paymentDetails?.paymentMethod || booking.paymentMethod || pDetails.paymentMethod || 'Cash').toLowerCase();
@@ -172,39 +167,32 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const couponSponsorName = paymentDetails?.couponSponsorName || booking.couponSponsorName || pDetails.couponSponsorName || '';
   const couponNotes = paymentDetails?.couponNotes || booking.couponNotes || pDetails.couponNotes || '';
   
-  // Worker Benefit fields
   const workerStaffName = paymentDetails?.workerStaffName || booking.workerStaffName || pDetails.workerStaffName || '';
   const workerStaffId = paymentDetails?.workerStaffId || booking.workerStaffId || pDetails.workerStaffId || '';
   const workerDepartment = paymentDetails?.workerDepartment || booking.workerDepartment || pDetails.workerDepartment || '';
   const workerBenefitType = paymentDetails?.workerBenefitType || booking.workerBenefitType || pDetails.workerBenefitType || '';
   const workerAuthNote = paymentDetails?.workerAuthNote || booking.workerAuthNote || pDetails.workerAuthNote || '';
 
-  // Mobile Money fields
   const momoProvider = paymentDetails?.momoProvider || booking.momoProvider || pDetails.momoProvider || (paymentMethod.includes('orange') ? 'ORANGE' : 'MTN');
   const momoSenderPhone = paymentDetails?.momoSenderPhone || booking.momoSenderPhone || pDetails.momoSenderPhone || pDetails.momoNumber || '';
   const momoSenderName = paymentDetails?.momoSenderName || booking.momoSenderName || pDetails.momoSenderName || '';
   const momoTxId = paymentDetails?.momoTxId || booking.momoTxId || pDetails.momoTxId || pDetails.transactionRef || '';
 
-  // Bank Transfer fields
   const bankName = paymentDetails?.bankName || booking.bankName || pDetails.bankName || '';
   const bankAccountName = paymentDetails?.bankAccountName || booking.bankAccountName || pDetails.bankAccountName || '';
   const bankReference = paymentDetails?.bankReference || booking.bankReference || pDetails.bankReference || pDetails.transactionRef || '';
   const bankBranch = paymentDetails?.bankBranch || booking.bankBranch || pDetails.bankBranch || '';
 
-  // Card fields
   const cardScheme = paymentDetails?.cardScheme || booking.cardScheme || pDetails.cardScheme || pDetails.cardType || 'Visa / Mastercard';
   const cardLast4 = paymentDetails?.cardLast4 || booking.cardLast4 || pDetails.cardLast4 || '';
   const cardAuthCode = paymentDetails?.cardAuthCode || booking.cardAuthCode || pDetails.cardAuthCode || '';
 
-  // Cash fields
   const cashGiven = paymentDetails?.cashGiven ?? pDetails.cashGiven;
   const cashChange = paymentDetails?.cashChange ?? pDetails.cashChange;
 
-  // Insurance details
   const insuranceProviderName = paymentDetails?.insuranceProvider || booking.insuranceProvider || pDetails.insuranceProvider || pDetails.insuranceDetails?.provider || 'ASCOMA CAMEROUN S.A.';
   const insurancePolicyNumber = paymentDetails?.insurancePolicyNumber || booking.insurancePolicyNumber || pDetails.insurancePolicyNumber || pDetails.insuranceDetails?.policyNumber || 'CSA-8812';
   
-  // Find matched insurance provider metadata
   const matchedInsurance = CAMEROON_INSURANCE_PROVIDERS.find(
     i => i.name.toLowerCase().includes(insuranceProviderName.toLowerCase()) || 
          i.shortName.toLowerCase() === insuranceProviderName.toLowerCase()
@@ -230,7 +218,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         ? pDetails.coPayPercent
         : (100 - insuranceCoveragePercent);
 
-  // Patient Demographic Fields
   const patientName = booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS';
   const beneficiaryName = (booking as any).insuredBeneficiaryName || (booking as any).beneficiaryName || patientName;
   const matricule = (booking as any).matricule || (booking as any).insurancePolicyNumber || booking.insurancePolicyNumber || '004071';
@@ -245,7 +232,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     ? `${(booking as any).referringDoctor}${(booking as any).referralHospital ? ` — ${(booking as any).referralHospital}` : ''}`
     : (booking.doctorName || 'Dr. Emmanuel Nkuo — La Quintinie Hospital');
 
-  // Ordered and Paid Tests
   const testsList = booking.tests && booking.tests.length > 0 ? booking.tests : [
     {
       id: 't-gly',
@@ -263,11 +249,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     }
   ];
 
-  // Helper to determine COTE code & base rate for a test
   const bUnitRate = matchedInsurance.baseRateB || 260;
   const kbUnitRate = matchedInsurance.baseRateKB || 1200;
 
-  // Process Line Items with Granular Insurance Breakdown
   interface LineItemBilling {
     designation: string;
     cote: string;
@@ -280,13 +264,11 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   const lineItems: LineItemBilling[] = [];
 
-  // 1. Process diagnostic tests with their Test Name AND Test Code
   testsList.forEach((t: any) => {
     let cote = t.cote || 'B10';
     let lineTotal = t.price || t.totalPrice || 520;
     let coeffStr = (bUnitRate).toLocaleString();
 
-    // If test has explicit COTE e.g. B95, B10, KB1,0
     if (t.testName?.includes('IONO') || t.testName?.includes('IONOC')) {
       cote = 'B95';
       lineTotal = 4940;
@@ -316,7 +298,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     });
   });
 
-  // 2. Explicit Billable Add-ons & Phlebotomy Acts
   const explicitAddOns = booking.addOns || pDetails?.addOns || [];
   if (Array.isArray(explicitAddOns) && explicitAddOns.length > 0) {
     explicitAddOns.forEach((ao: any) => {
@@ -334,7 +315,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
       });
     });
   } else {
-    // Standard automatic prelevement fallback if no explicit add-ons and blood/stool present
     const hasBlood = testsList.some((t: any) => (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sang') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('blood') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('sérum') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('plasma'));
     const hasStool = testsList.some((t: any) => (t.testName || t.name || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('selle') || (t.sampleTypeRequired || t.sampleType || '').toLowerCase().includes('stool'));
 
@@ -369,7 +349,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     }
   }
 
-  // Calculate Cumulative Financial Breakdown
   const totalExamensLabo = lineItems.reduce((acc, item) => acc + item.totalPrice, 0);
   const totalHT = totalExamensLabo;
   const totalTTC = totalHT;
@@ -377,7 +356,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   const totalPatientTicketModerateur = lineItems.reduce((acc, item) => acc + item.patientAmount, 0);
   const totalNetAPayerAssurance = lineItems.reduce((acc, item) => acc + item.insuranceAmount, 0);
 
-  // Convert Insurance / Final Amount to French Words
   const amountInWords = numberToFrenchWords(totalNetAPayerAssurance);
 
   const isWorkerBenefit = paymentMethod === 'workers_benefit' || discountType === 'workers_benefit' || Boolean(workerStaffName);
@@ -395,10 +373,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:p-0 print:m-0 print:bg-white print:static">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:max-w-none print:w-full print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:max-h-none print:rounded-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:static print:block print:overflow-visible print:p-0 print:m-0 print:bg-white">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:block print:max-h-none print:h-auto print:static print:w-full print:max-w-none print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:rounded-none">
         
-        {/* Top Control Bar (Non-printable) */}
+        {/* Top Control Bar */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-teal-400 animate-pulse"></div>
@@ -408,7 +386,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Template Selector & Uploads (Staff/Admin Only) */}
             {canCustomizeTemplates && (
               <>
                 <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
@@ -428,7 +405,6 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   ))}
                 </div>
 
-                {/* Direct Upload Buttons for Header and Footer */}
                 <input 
                   type="file" 
                   ref={headerFileInputRef} 
@@ -487,21 +463,121 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
+        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible print:flex-none print:block">
           
+          <style>{`
+            /* ============ WATERMARK (SCREEN + PRINT) ============ */
+            .watermark-layer {
+              position: absolute;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 0;
+              overflow: hidden;
+              border-radius: inherit;
+            }
+            .watermark-logo {
+              width: 60%;
+              max-width: 420px;
+              object-fit: contain;
+              opacity: 0.06;
+              filter: grayscale(100%);
+              transform: rotate(-15deg);
+              user-select: none;
+              pointer-events: none;
+            }
+            #medical-receipt-sheet > *:not(.watermark-layer) {
+              position: relative;
+              z-index: 1;
+            }
+
+            @media print {
+              @page {
+                size: A4;
+                margin: 12mm 10mm 14mm 10mm;
+              }
+
+              html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+              }
+
+              /* Watermark fixed → repeats on EVERY printed page */
+              .watermark-layer {
+                position: fixed !important;
+                inset: 0 !important;
+                z-index: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              .watermark-logo {
+                width: 65% !important;
+                max-width: 480px !important;
+                opacity: 0.08 !important;
+                filter: grayscale(100%) !important;
+                transform: rotate(-15deg) !important;
+              }
+
+              #medical-receipt-sheet {
+                background: transparent !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                display: block !important;
+                position: relative !important;
+                z-index: 1 !important;
+              }
+
+              /* Printed frame border around every page */
+              #medical-receipt-sheet::before {
+                content: '';
+                position: fixed;
+                top: 8mm;
+                right: 6mm;
+                bottom: 10mm;
+                left: 6mm;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 2;
+              }
+
+              #medical-receipt-sheet table,
+              #medical-receipt-sheet * {
+                max-width: 100% !important;
+              }
+
+              .print-header-block { break-after: avoid; page-break-after: avoid; position: relative; z-index: 3; }
+              .print-patient-box  { break-inside: avoid; page-break-inside: avoid; }
+              .print-billing-table { break-inside: auto; page-break-inside: auto; }
+              .print-billing-table thead { display: table-header-group; }
+              .print-billing-table tr    { break-inside: avoid; page-break-inside: avoid; }
+              .print-totals-block { break-inside: avoid; page-break-inside: avoid; }
+              .print-signature-block,
+              .print-footer-block { break-inside: avoid; page-break-inside: avoid; position: relative; z-index: 3; }
+
+              .no-print { display: none !important; }
+            }
+          `}</style>
+
           <div 
             id="medical-receipt-sheet"
-            className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs"
+           className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden print:overflow-visible max-w-3xl mx-auto ..."
           >
             
-            {/* Custom Uploaded Header Image if provided */}
-            {tplConfig.headerImageUrl && (
-              <div className="border-b-2 border-slate-900 pb-2">
-                <img 
-                  src={tplConfig.headerImageUrl} 
-                  alt={labName} 
-                  style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
-                  className="w-full object-contain mx-auto"
+            {/* ============ WATERMARK LAYER ============ */}
+            {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
+              <div className="watermark-layer" aria-hidden="true">
+                <img
+                  src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                  alt=""
+                  className="watermark-logo"
                 />
               </div>
             )}
@@ -512,55 +588,66 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
             {selectedTemplateIndex % 2 === 1 || selectedTemplateIndex === 1 ? (
               <div className="space-y-4">
                 
-                {/* 1. OFFICIAL LETTERHEAD HEADER (if no custom header image) */}
-                {!tplConfig.headerImageUrl && (
-                  <div className="border-b-2 border-slate-900 pb-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
-                        <img
-                          src={labInfo?.logoUrl || (booking as any).labLogoUrl}
-                          alt={labName}
-                          referrerPolicy="no-referrer"
-                          className="w-16 h-16 rounded-xl object-contain border border-slate-300 bg-white p-1 shadow-xs shrink-0"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
-                          <Building2 className="w-8 h-8 text-white" />
+                {/* 1. HEADER — custom image overrides built-in letterhead */}
+                <div className="print-header-block">
+                  {tplConfig.headerImageUrl ? (
+                    <div className="border-b-2 border-slate-900 pb-2">
+                      <img 
+                        src={tplConfig.headerImageUrl} 
+                        alt={labName} 
+                        style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
+                        className="w-full object-contain mx-auto"
+                      />
+                    </div>
+                  ) : (
+                    <div className="border-b-2 border-slate-900 pb-3 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                          <img
+                            src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                            alt={labName}
+                            referrerPolicy="no-referrer"
+                            className="w-16 h-16 rounded-xl object-contain border border-slate-300 bg-white p-1 shadow-xs shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
+                            <Building2 className="w-8 h-8 text-white" />
+                          </div>
+                        )}
+
+                        <div className="text-center flex-1">
+                          <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
+                            {labName}
+                          </h1>
+                          <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                            {labSlogan}
+                          </h2>
                         </div>
-                      )}
 
-                      <div className="text-center flex-1">
-                        <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">
-                          {labName}
-                        </h1>
-                        <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                          {labSlogan}
-                        </h2>
+                        <div className="w-16 hidden sm:block"></div>
                       </div>
+                      
+                      <div className="text-center space-y-0.5">
+                        <div className="text-xs font-bold text-slate-900 pt-1">
+                          {directorName}
+                        </div>
+                        <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
+                          {directorDiplomas}
+                        </div>
+                        <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
+                          {directorSpecialties}
+                        </div>
 
-                      <div className="w-16 hidden sm:block"></div>
-                    </div>
-                    
-                    <div className="text-center space-y-0.5">
-                      <div className="text-xs font-bold text-slate-900 pt-1">
-                        {directorName}
-                      </div>
-                      <div className="text-[10px] text-slate-700 font-medium leading-tight max-w-2xl mx-auto">
-                        {directorDiplomas}
-                      </div>
-                      <div className="text-[9.5px] text-slate-600 italic leading-tight max-w-2xl mx-auto">
-                        {directorSpecialties}
-                      </div>
-
-                      <div className="text-[9px] text-slate-600 font-mono pt-1">
-                        {labArrete} • {labAgrement} • {labTaxId}
-                      </div>
-                      <div className="text-[9px] text-slate-700 font-semibold">
-                        {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
+                        <div className="text-[9px] text-slate-600 font-mono pt-1">
+                          {labArrete} • {labAgrement} • {labTaxId}
+                        </div>
+                        <div className="text-[9px] text-slate-700 font-semibold">
+                          {labAddress} • Tél: {labPhone} • Urgences: {labEmergency}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* 2. INVOICE TITLE & DATE BAR */}
                 <div className="flex items-center justify-between font-black text-sm border-b border-slate-300 pb-2">
@@ -573,10 +660,9 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 3. DUAL IDENTIFICATION & INSURANCE SUMMARY BOXES */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px]">
+                <div className="print-patient-box grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-3 text-[10.5px]">
                   
-                  {/* Left: Patient Demographic Box */}
-                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 print:bg-white space-y-1">
                     <div className="font-black uppercase text-slate-950 pb-1 border-b border-slate-200">
                       IDENTIFICATION DU PATIENT
                     </div>
@@ -596,8 +682,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Insurance Provider Box */}
-                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 space-y-1">
+                  <div className="border border-slate-400 rounded-lg p-3 bg-slate-50/60 print:bg-white space-y-1">
                     <div className="font-black uppercase text-indigo-950 pb-1 border-b border-slate-200 flex items-center justify-between">
                       <span>{matchedInsurance.name}</span>
                       <span className="text-[9px] bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded font-bold">
@@ -617,7 +702,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
                 {/* 4. GRANULAR COTE ITEMIZED BILLING TABLE */}
                 <div className="border border-slate-400 rounded-lg overflow-hidden text-[10px]">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left print-billing-table">
                     <thead className="bg-slate-100 font-extrabold text-slate-900 border-b border-slate-400 text-[9.5px] uppercase">
                       <tr>
                         <th className="p-2">DESIGNATION</th>
@@ -646,11 +731,10 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 5. SUMMARY FINANCIAL RECAPITULATION TABLE */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                <div className="print-totals-block grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-3 pt-1">
                   
-                  {/* Left Column: Taxes & Exoneration info (7 cols) */}
-                  <div className="sm:col-span-6 space-y-2 text-[10px] text-slate-700">
-                    <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 space-y-1">
+                  <div className="sm:col-span-6 print:col-span-6 space-y-2 text-[10px] text-slate-700">
+                    <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 print:bg-white space-y-1">
                       <div className="flex justify-between">
                         <span>TOTAL EXAMENS DE LABORATOIRE:</span>
                         <strong className="font-mono text-slate-900">{totalExamensLabo.toLocaleString()} FCFA</strong>
@@ -674,9 +758,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Column: Ticket Moderateur & Net A Payer (5 cols) */}
-                  <div className="sm:col-span-6 space-y-2">
-                    <div className="border-2 border-emerald-600 bg-emerald-50/90 rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
+                  <div className="sm:col-span-6 print:col-span-6 space-y-2">
+                    <div className="border-2 border-emerald-600 bg-emerald-50/90 print:bg-white rounded-lg p-2.5 text-emerald-950 flex items-center justify-between">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800">TICKET MODÉRATEUR (PATIENT)</div>
                         <div className="text-[9px] text-emerald-700 font-semibold">{coPayPercent}% Quote-part à la charge du patient</div>
@@ -686,7 +769,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="border-2 border-indigo-700 bg-indigo-50/90 rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
+                    <div className="border-2 border-indigo-700 bg-indigo-50/90 print:bg-white rounded-lg p-2.5 text-indigo-950 flex items-center justify-between">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-wider text-indigo-900">NET À PAYER (ASSURANCE)</div>
                         <div className="text-[9px] text-indigo-700 font-semibold">{insuranceCoveragePercent}% Prise en charge officielle</div>
@@ -700,15 +783,15 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 6. VERBAL CERTIFICATION IN FRENCH */}
-                <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
+                <div className="p-3 bg-slate-100 print:bg-white rounded-lg border border-slate-300 print:border-black text-[10px] font-bold text-slate-900 uppercase leading-relaxed">
                   ARRÊTÉ LA PRÉSENTE FACTURE À LA SOMME DE : <span className="underline">{amountInWords} FRANCS CFA</span>
                 </div>
 
                 {/* 7. DUAL SIGNATURE STAMPS & OFFICIAL LABORATORY SEAL */}
-                <div className="pt-4 grid grid-cols-3 gap-4 text-[10px] items-end border-t border-slate-200">
+                <div className="print-signature-block pt-4 grid grid-cols-3 print:grid-cols-3 gap-4 text-[10px] items-end border-t border-slate-200">
                   <div className="space-y-1">
                     <div className="font-bold text-slate-900 uppercase text-[9.5px]">Signature / Date Assuré(e) :</div>
-                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col justify-between bg-slate-50/40">
+                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col justify-between bg-slate-50/40 print:bg-white">
                       <span className="text-[8.5px] text-slate-400">Emplacement signature patient</span>
                       <span className="italic text-slate-500 text-[9px]">Lu et approuvé ({patientPhone})</span>
                     </div>
@@ -716,7 +799,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
                   <div className="space-y-1 text-center">
                     <div className="font-bold text-slate-900 uppercase text-[9.5px]">Cachet Officiel du Laboratoire :</div>
-                    <div className="h-16 border-2 border-dashed border-teal-300 rounded-lg p-1 flex flex-col items-center justify-center bg-teal-50/20 text-teal-900/60">
+                    <div className="h-16 border-2 border-dashed border-teal-300 rounded-lg p-1 flex flex-col items-center justify-center bg-teal-50/20 print:bg-white text-teal-900/60">
                       <span className="text-[9px] font-black uppercase tracking-wider">Zone Cachet Humide</span>
                       <span className="text-[7.5px] font-mono">(Physical Official Stamp & Seal)</span>
                     </div>
@@ -724,7 +807,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
                   <div className="text-right space-y-1">
                     <div className="font-bold text-slate-900 uppercase text-[9.5px]">{biologistSignatureTitle} :</div>
-                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col items-end justify-between bg-slate-50/40">
+                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col items-end justify-between bg-slate-50/40 print:bg-white">
                       <span className="text-[8.5px] text-slate-400">Signature Biologiste</span>
                       <div className="font-serif font-black text-blue-950 italic text-xs leading-none">
                         <div>{directorName}</div>
@@ -741,36 +824,47 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
               /* ========================================================================= */
               <div className="space-y-4">
                 
-                {/* Header */}
-                <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3 gap-3">
-                  <div className="flex items-center gap-3">
-                    {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
-                      <img
-                        src={labInfo?.logoUrl || (booking as any).labLogoUrl}
-                        alt={labName}
-                        referrerPolicy="no-referrer"
-                        className="w-14 h-14 rounded-xl object-contain border border-teal-300 bg-white p-1 shadow-xs shrink-0"
+                <div className="print-header-block">
+                  {tplConfig.headerImageUrl ? (
+                    <div className="border-b-2 border-teal-800 pb-2">
+                      <img 
+                        src={tplConfig.headerImageUrl} 
+                        alt={labName} 
+                        style={{ maxHeight: `${tplConfig.headerImageHeight || 110}px` }}
+                        className="w-full object-contain mx-auto"
                       />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
-                        <Building2 className="w-7 h-7 text-white" />
-                      </div>
-                    )}
-                    <div>
-                      <h1 className="text-lg font-black uppercase text-slate-950">{labName}</h1>
-                      <p className="text-[11px] font-bold text-teal-800">{labSlogan}</p>
-                      <p className="text-[9px] text-slate-500 font-mono">{labArrete} • {labTaxId}</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between border-b-2 border-teal-800 pb-3 gap-3">
+                      <div className="flex items-center gap-3">
+                        {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                          <img
+                            src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                            alt={labName}
+                            referrerPolicy="no-referrer"
+                            className="w-14 h-14 rounded-xl object-contain border border-teal-300 bg-white p-1 shadow-xs shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black shrink-0">
+                            <Building2 className="w-7 h-7 text-white" />
+                          </div>
+                        )}
+                        <div>
+                          <h1 className="text-lg font-black uppercase text-slate-950">{labName}</h1>
+                          <p className="text-[11px] font-bold text-teal-800">{labSlogan}</p>
+                          <p className="text-[9px] text-slate-500 font-mono">{labArrete} • {labTaxId}</p>
+                        </div>
+                      </div>
 
-                  <div className="text-right text-[10px] text-slate-600 font-medium shrink-0">
-                    <div className="font-bold text-slate-900">{labAddress}</div>
-                    <div>Tél: {labPhone}</div>
-                    <div>Email: {labEmail}</div>
-                  </div>
+                      <div className="text-right text-[10px] text-slate-600 font-medium shrink-0">
+                        <div className="font-bold text-slate-900">{labAddress}</div>
+                        <div>Tél: {labPhone}</div>
+                        <div>Email: {labEmail}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Title */}
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <h2 className="text-base font-black text-slate-900 uppercase">
                     Facture / Diagnostic Service Receipt #{invoiceNum}
@@ -778,8 +872,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   <span className="text-slate-600 font-medium">{receiptDateFormatted}</span>
                 </div>
 
-                {/* Patient Summary */}
-                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px]">
+                <div className="print-patient-box grid grid-cols-2 print:grid-cols-2 gap-3 bg-slate-50 print:bg-white p-3 rounded-xl border border-slate-200 text-[10.5px]">
                   <div>
                     <div>Patient: <strong className="text-slate-950 notranslate" translate="no">{patientName}</strong></div>
                     <div>PID: <strong className="font-mono text-teal-700">{booking.patientPid || 'P-555'}</strong></div>
@@ -792,9 +885,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </div>
                 </div>
 
-                {/* Table */}
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-[10px]">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left print-billing-table">
                     <thead className="bg-slate-100 font-bold border-b border-slate-200">
                       <tr>
                         <th className="p-2">Description</th>
@@ -818,20 +910,18 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </table>
                 </div>
 
-                {/* Totals Box */}
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <div className="print-totals-block grid grid-cols-2 print:grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 bg-emerald-50 print:bg-white border border-emerald-200 rounded-xl">
                     <div className="text-[10px] uppercase font-bold text-emerald-800">Part Patient (Ticket Modérateur)</div>
                     <div className="text-base font-black font-mono text-emerald-900">{totalPatientTicketModerateur.toLocaleString()} FCFA</div>
                   </div>
-                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-right">
+                  <div className="p-3 bg-teal-50 print:bg-white border border-teal-200 rounded-xl text-right">
                     <div className="text-[10px] uppercase font-bold text-teal-800">Part Assureur (Net à Payer)</div>
                     <div className="text-base font-black font-mono text-teal-900">{totalNetAPayerAssurance.toLocaleString()} FCFA</div>
                   </div>
                 </div>
 
-                {/* Footer Signatures */}
-                <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px]">
+                <div className="print-signature-block pt-4 border-t border-slate-200 flex items-center justify-between text-[10px]">
                   <div>
                     <div className="text-slate-500">Signature Bénéficiaire:</div>
                     <div className="h-8 flex items-end italic text-slate-400">Lu et approuvé</div>
@@ -848,7 +938,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Bottom Footer (Non-printable) */}
+        {/* Modal Bottom Footer */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800 print:hidden shrink-0">
           <button
             onClick={onClose}

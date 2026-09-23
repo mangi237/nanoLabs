@@ -81,14 +81,13 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     reader.onload = (e) => {
       const result = e.target?.result as string;
       const updated = [...templates];
-      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      const targetIdx = selectedTemplateIndex;
       updated[targetIdx] = {
         ...updated[targetIdx],
         headerImageUrl: result,
         useHeaderImageOnly: true
       };
       setTemplates(updated);
-      setSelectedTemplateIndex(targetIdx);
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
     };
     reader.readAsDataURL(file);
@@ -100,14 +99,13 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     reader.onload = (e) => {
       const result = e.target?.result as string;
       const updated = [...templates];
-      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+      const targetIdx = selectedTemplateIndex;
       updated[targetIdx] = {
         ...updated[targetIdx],
         footerImageUrl: result,
         useFooterImageOnly: true
       };
       setTemplates(updated);
-      setSelectedTemplateIndex(targetIdx);
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
     };
     reader.readAsDataURL(file);
@@ -137,7 +135,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     window.print();
   };
 
-  // Generate formatted registration, collection, and reporting timestamps
   const registeredTimeStr = booking.createdAt 
     ? new Date(booking.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '02:31 PM 02 Dec, 2026';
@@ -151,10 +148,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     : '04:35 PM 02 Dec, 2026';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:static print:block print:overflow-visible print:p-0 print:m-0 print:bg-white">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:block print:max-h-none print:h-auto print:static print:w-full print:max-w-none print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:rounded-none">
         
-        {/* Top Control Bar (Non-printable) */}
+        {/* Top Control Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shrink-0">
@@ -174,7 +171,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Header/Footer Template Selector & Uploads (Staff/Admin Only) */}
             {canCustomizeTemplates && (
               <>
                 <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
@@ -235,7 +231,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </>
             )}
 
-            {/* Print Scope (Batch vs Single Test) */}
             {booking.tests && booking.tests.length > 1 && (
               <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700">
                 <span className="text-[11px] font-bold text-slate-300 pl-2">Print:</span>
@@ -274,187 +269,270 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
+        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible print:flex-none print:block">
           
           <style>{`
+            /* ============ WATERMARK (SCREEN + PRINT) ============ */
+            .watermark-layer {
+              position: absolute;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 0;
+              overflow: hidden;
+              border-radius: inherit;
+            }
+            .watermark-logo {
+              width: 60%;
+              max-width: 420px;
+              object-fit: contain;
+              opacity: 0.06;
+              filter: grayscale(100%);
+              transform: rotate(-15deg);
+              user-select: none;
+              pointer-events: none;
+            }
+            #medical-report-sheet > *:not(.watermark-layer) {
+              position: relative;
+              z-index: 1;
+            }
+
             @media print {
-              body, html {
+              @page {
+                size: A4;
+                margin: 12mm 10mm 14mm 10mm;
+              }
+
+              html, body {
                 background: #ffffff !important;
                 background-color: #ffffff !important;
                 color: #000000 !important;
               }
+
+              /* Watermark fixed → repeats on EVERY printed page */
+              .watermark-layer {
+                position: fixed !important;
+                inset: 0 !important;
+                z-index: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              .watermark-logo {
+                width: 65% !important;
+                max-width: 480px !important;
+                opacity: 0.08 !important;
+                filter: grayscale(100%) !important;
+                transform: rotate(-15deg) !important;
+              }
+
               #medical-report-sheet {
-                background: #ffffff !important;
-                background-color: #ffffff !important;
+                background: transparent !important;
                 color: #000000 !important;
                 box-shadow: none !important;
                 border: none !important;
+                border-radius: 0 !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 max-width: 100% !important;
+                display: block !important;
+                position: relative !important;
+                z-index: 1 !important;
               }
+
+              /* Printed frame border around every page */
+              #medical-report-sheet::before {
+                content: '';
+                position: fixed;
+                top: 8mm;
+                right: 6mm;
+                bottom: 10mm;
+                left: 6mm;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 2;
+              }
+
+              #medical-report-sheet table,
+              #medical-report-sheet * {
+                max-width: 100% !important;
+              }
+
+              .print-header-block { break-after: avoid; page-break-after: avoid; position: relative; z-index: 3; }
+              .print-patient-box  { break-inside: avoid; page-break-inside: avoid; }
+              .print-test-section { break-inside: auto; page-break-inside: auto; }
+              .print-test-title   { break-after: avoid; page-break-after: avoid; }
+              .print-test-table thead { display: table-header-group; }
+              .print-test-table tr    { break-inside: avoid; page-break-inside: avoid; }
+              .print-signature-block,
+              .print-footer-block { break-inside: avoid; page-break-inside: avoid; position: relative; z-index: 3; }
+
               .print-pure-white {
                 background: #ffffff !important;
-                background-color: #ffffff !important;
                 color: #000000 !important;
                 border-color: #000000 !important;
               }
-              .no-print {
-                display: none !important;
-              }
+              .no-print { display: none !important; }
             }
           `}</style>
 
           <div 
             id="medical-report-sheet"
-            className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 print:bg-white space-y-4"
+            className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 print:bg-white space-y-4 relative"
           >
             
-            {/* Top Header: Custom Uploaded Image OR Accredited Layout */}
-            {currentTpl.headerImageUrl ? (
-              <div className="border-b-2 border-slate-900 pb-2">
-                <img 
-                  src={currentTpl.headerImageUrl} 
-                  alt={labName} 
-                  style={{ maxHeight: `${currentTpl.headerImageHeight || 110}px` }}
-                  className="w-full object-contain mx-auto"
+            {/* ============ WATERMARK LAYER ============ */}
+            {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
+              <div className="watermark-layer" aria-hidden="true">
+                <img
+                  src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+                  alt=""
+                  className="watermark-logo"
                 />
-              </div>
-            ) : (
-              <div className="border-b-2 border-slate-900 pb-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  {/* Left Lab Branding */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-full bg-slate-900 print:bg-white print:border-2 print:border-black text-white print:text-black font-black flex items-center justify-center shadow-md border-2 border-white shrink-0">
-                      <Building2 className="w-8 h-8 text-white print:text-black" />
-                    </div>
-                    <div>
-                      <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
-                        {labName}
-                      </h1>
-                      <div className="text-xs font-bold text-teal-800 print:text-black tracking-wide uppercase">
-                        {labSlogan}
-                      </div>
-                      <div className="text-[10px] text-slate-600 print:text-black leading-tight max-w-sm mt-0.5">
-                        {labAddress} {currentTpl.bpCity ? `• ${currentTpl.bpCity}` : ''}
-                      </div>
-                      <div className="text-[9px] text-slate-500 print:text-black font-mono">
-                        {labArrete} • {labAgrement} • N.I.U: {labTaxId}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Top Contact Bar */}
-                  <div className="flex flex-col items-end text-[11px] text-slate-700 print:text-black space-y-1">
-                    <div className="flex items-center gap-1 font-bold text-slate-900 print:text-black">
-                      <Phone className="w-3.5 h-3.5 text-slate-800 print:text-black" />
-                      <span>{labPhone}</span>
-                    </div>
-                    {labEmail && (
-                      <div className="flex items-center gap-1 font-medium text-slate-600 print:text-black">
-                        <Mail className="w-3.5 h-3.5 text-slate-800 print:text-black" />
-                        <span>{labEmail}</span>
-                      </div>
-                    )}
-                    {labWebsite && (
-                      <div className="bg-slate-100 print:bg-white print:border print:border-black text-slate-800 print:text-black px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
-                        <Globe className="w-3 h-3 text-slate-700 print:text-black" />
-                        <span>{labWebsite.replace(/^https?:\/\//, '')}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="h-0.5 w-full bg-slate-900 mt-3"></div>
               </div>
             )}
 
-            
-{/* Patient Metadata Grid Box */}
-<div className="border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 print:p-2 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 print:grid-cols-12 gap-3 print:gap-2 text-xs print:text-[10px]">
-  
-  {/* Left Demographic Column */}
-  <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1">
-    <div>
-      <div className="text-base print:text-sm font-black text-slate-900 notranslate" translate="no">
-        {booking.patientName || 'NOT AVAILABLE'}
-      </div>
-    </div>
-    <div className="grid grid-cols-2 gap-2 text-slate-700">
-      <div>
-        <span className="text-slate-500">Age: </span>
-        <strong className="text-slate-900">{booking.patientAge || 39} Years</strong>
-      </div>
-      <div>
-        <span className="text-slate-500">Sex: </span>
-        <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
-      </div>
-    </div>
-    <div>
-      <span className="text-slate-500">PID / Code: </span>
-      <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode || 'PID-555'}</strong>
-    </div>
-  </div>
+            {/* Top Header */}
+            <div className="print-header-block">
+              {currentTpl.headerImageUrl ? (
+                <div className="border-b-2 border-slate-900 pb-2">
+                  <img 
+                    src={currentTpl.headerImageUrl} 
+                    alt={labName} 
+                    style={{ maxHeight: `${currentTpl.headerImageHeight || 110}px` }}
+                    className="w-full object-contain mx-auto"
+                  />
+                </div>
+              ) : (
+                <div className="border-b-2 border-slate-900 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-full bg-slate-900 print:bg-white print:border-2 print:border-black text-white print:text-black font-black flex items-center justify-center shadow-md border-2 border-white shrink-0">
+                        <Building2 className="w-8 h-8 text-white print:text-black" />
+                      </div>
+                      <div>
+                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+                          {labName}
+                        </h1>
+                        <div className="text-xs font-bold text-teal-800 print:text-black tracking-wide uppercase">
+                          {labSlogan}
+                        </div>
+                        <div className="text-[10px] text-slate-600 print:text-black leading-tight max-w-sm mt-0.5">
+                          {labAddress} {currentTpl.bpCity ? `• ${currentTpl.bpCity}` : ''}
+                        </div>
+                        <div className="text-[9px] text-slate-500 print:text-black font-mono">
+                          {labArrete} • {labAgrement} • N.I.U: {labTaxId}
+                        </div>
+                      </div>
+                    </div>
 
-  {/* Middle Sample / Ref By Column */}
-  <div className="md:col-span-4 print:col-span-4 border-y md:border-y-0 md:border-x print:border-y-0 print:border-x border-slate-200 py-2 md:py-0 md:px-3 print:py-0 print:px-3 flex flex-col justify-between space-y-2 print:space-y-1">
-    <div className="flex items-center gap-2">
-      <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
-        <QrCode className="w-10 h-10 print:w-8 print:h-8 text-slate-900" />
-      </div>
-      <div className="text-[10px] text-slate-600 leading-tight">
-        <div className="font-bold text-slate-800">Sample Matrix:</div>
-        <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
-      </div>
-    </div>
-    <div className="bg-slate-50 print:bg-white p-1.5 rounded-lg border border-slate-200 print:border-slate-300">
-      <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
-      <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
-        Ref. Doctor: {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
-      </div>
-      <div className="text-slate-600 text-[10px] font-medium notranslate" translate="no">
-        {booking.referralHospital || booking.doctorFacility || 'La Quintinie Hospital, Douala'}
-      </div>
-    </div>
-  </div>
+                    <div className="flex flex-col items-end text-[11px] text-slate-700 print:text-black space-y-1">
+                      <div className="flex items-center gap-1 font-bold text-slate-900 print:text-black">
+                        <Phone className="w-3.5 h-3.5 text-slate-800 print:text-black" />
+                        <span>{labPhone}</span>
+                      </div>
+                      {labEmail && (
+                        <div className="flex items-center gap-1 font-medium text-slate-600 print:text-black">
+                          <Mail className="w-3.5 h-3.5 text-slate-800 print:text-black" />
+                          <span>{labEmail}</span>
+                        </div>
+                      )}
+                      {labWebsite && (
+                        <div className="bg-slate-100 print:bg-white print:border print:border-black text-slate-800 print:text-black px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-slate-700 print:text-black" />
+                          <span>{labWebsite.replace(/^https?:\/\//, '')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-  {/* Right Barcode & Timestamps Column */}
-  <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1 text-right flex flex-col justify-between">
-    <div>
-      <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
-        ||||| | ||| |||| || | || ||||
-      </div>
-      <div className="font-mono text-[9px] text-slate-600">
-        {booking.bookingCode || '0 35545 62336 78 1'}
-      </div>
-    </div>
+                  <div className="h-0.5 w-full bg-slate-900 mt-3"></div>
+                </div>
+              )}
+            </div>
 
-    <div className="text-[10px] space-y-0.5 text-slate-600">
-      <div>
-        <span>Registered on: </span>
-        <strong className="text-slate-800">{registeredTimeStr}</strong>
-      </div>
-      <div>
-        <span>Collected on: </span>
-        <strong className="text-slate-800">{collectedTimeStr}</strong>
-      </div>
-      <div>
-        <span>Reported on: </span>
-        <strong className="text-slate-800">{reportedTimeStr}</strong>
-      </div>
-    </div>
-  </div>
+            {/* Patient Metadata Grid Box */}
+            <div className="print-patient-box border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 print:p-2 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 print:grid-cols-12 gap-3 print:gap-2 text-xs print:text-[10px]">
+              <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1">
+                <div>
+                  <div className="text-base print:text-sm font-black text-slate-900 notranslate" translate="no">
+                    {booking.patientName || 'NOT AVAILABLE'}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-700">
+                  <div>
+                    <span className="text-slate-500">Age: </span>
+                    <strong className="text-slate-900">{booking.patientAge || 39} Years</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Sex: </span>
+                    <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-slate-500">PID / Code: </span>
+                  <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode || 'PID-555'}</strong>
+                </div>
+              </div>
 
-</div>
-            {/* Test Results Section with Multi-tier Hierarchy (Department -> Sub-Header -> Parameters) */}
+              <div className="md:col-span-4 print:col-span-4 border-y md:border-y-0 md:border-x print:border-y-0 print:border-x border-slate-200 py-2 md:py-0 md:px-3 print:py-0 print:px-3 flex flex-col justify-between space-y-2 print:space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
+                    <QrCode className="w-10 h-10 print:w-8 print:h-8 text-slate-900" />
+                  </div>
+                  <div className="text-[10px] text-slate-600 leading-tight">
+                    <div className="font-bold text-slate-800">Sample Matrix:</div>
+                    <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
+                  </div>
+                </div>
+                <div className="bg-slate-50 print:bg-white p-1.5 rounded-lg border border-slate-200 print:border-slate-300">
+                  <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
+                  <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
+                    Ref. Doctor: {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
+                  </div>
+                  <div className="text-slate-600 text-[10px] font-medium notranslate" translate="no">
+                    {booking.referralHospital || booking.doctorFacility || 'La Quintinie Hospital, Douala'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1 text-right flex flex-col justify-between">
+                <div>
+                  <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
+                    ||||| | ||| |||| || | || ||||
+                  </div>
+                  <div className="font-mono text-[9px] text-slate-600">
+                    {booking.bookingCode || '0 35545 62336 78 1'}
+                  </div>
+                </div>
+
+                <div className="text-[10px] space-y-0.5 text-slate-600">
+                  <div>
+                    <span>Registered on: </span>
+                    <strong className="text-slate-800">{registeredTimeStr}</strong>
+                  </div>
+                  <div>
+                    <span>Collected on: </span>
+                    <strong className="text-slate-800">{collectedTimeStr}</strong>
+                  </div>
+                  <div>
+                    <span>Reported on: </span>
+                    <strong className="text-slate-800">{reportedTimeStr}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Results Section */}
             {((selectedTestFilter !== null && selectedTestFilter !== undefined && booking.tests?.[selectedTestFilter])
               ? [booking.tests[selectedTestFilter]]
               : (booking.tests || [])
             ).map((testItem: BookingTestItem, tIdx: number) => (
-              <div key={testItem.id || tIdx} className="space-y-2 pt-1">
+              <div key={testItem.id || tIdx} className="space-y-2 pt-1 print-test-section">
                 
-                {/* Centered Bold Test Title */}
-                <div className="text-center border-b-2 border-slate-800 pb-1 bg-slate-50/50 p-2 rounded-t-lg">
+                <div className="print-test-title text-center border-b-2 border-slate-800 pb-1 bg-slate-50/50 p-2 rounded-t-lg">
                   <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
                     {testItem.testName || 'Complete Blood Count (CBC)'}
                   </h2>
@@ -465,16 +543,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 </div>
 
-                {/* If test was completed via A4 Rich Canvas, render richReportHtml cleanly */}
                 {testItem.richReportHtml ? (
                   <div 
                     className="py-3 px-2 bg-white text-slate-900 overflow-x-auto print:p-0"
                     dangerouslySetInnerHTML={{ __html: testItem.richReportHtml }}
                   />
                 ) : (
-                  /* Sub-parameters or Direct Value Table */
                   <div className="relative overflow-hidden bg-white">
-                    <table className="w-full text-left text-xs border-collapse relative z-10">
+                    <table className="w-full text-left text-xs border-collapse relative z-10 print-test-table">
                       <thead>
                         <tr className="border-b-2 border-slate-400 text-slate-800 text-[11px] bg-slate-100">
                           <th className="py-2 px-3 font-black uppercase">Investigation / Parameter</th>
@@ -579,7 +655,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 )}
 
-                {/* Antibiogram / Antibiotic Susceptibility Matrix Table (if available) */}
                 {testItem.antibiogram && testItem.antibiogram.length > 0 && (
                   <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-300 space-y-2">
                     <div className="flex items-center justify-between pb-1 border-b border-slate-300">
@@ -632,7 +707,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 )}
 
-                {/* Instruments & Interpretation */}
                 <div className="pt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-200">
                   <div>
                     <strong className="text-slate-900">Method / Instruments: </strong>
@@ -647,7 +721,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </div>
             ))}
 
-            {/* End of Report Strip */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
               <span className="font-semibold italic">Merci pour votre confiance</span>
               <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">
@@ -655,10 +728,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </span>
             </div>
 
-            {/* Signatures & Pathologist Sign-Off Block */}
-            <div className="pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs items-end">
-              
-              {/* Medical Lab Technician */}
+            <div className="print-signature-block pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs items-end">
               <div>
                 <div className="h-10 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
                   {booking.tests?.[0]?.completedBy || booking.assignedTechName || 'Technicien de Laboratoire'}
@@ -667,7 +737,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="text-[10px] text-slate-500 font-medium">Exécuté et Validé</div>
               </div>
 
-              {/* Head Pathologist / Lab Director */}
               <div>
                 <div className="h-10 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
                   {labDirectorName}
@@ -676,7 +745,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="text-[10px] text-slate-500 font-medium">{biologistSignatureTitle}</div>
               </div>
 
-              {/* Physical Stamp Zone */}
               <div className="space-y-1">
                 <div className="h-14 border-2 border-dashed border-slate-400 print:border-black rounded-lg p-1 flex flex-col items-center justify-center bg-white print:bg-white text-slate-800 print:text-black">
                   <span className="text-[8.5px] font-black uppercase tracking-wider">Cachet Officiel</span>
@@ -685,7 +753,6 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="font-black text-slate-900 print:text-black text-[10px]">Visa du Laboratoire</div>
               </div>
 
-              {/* Quality & Accreditation Sign-off */}
               <div className="hidden sm:block">
                 <div className="h-10 flex items-center justify-center font-serif text-slate-900 print:text-black italic font-bold text-sm tracking-wide">
                   {labName}
@@ -695,40 +762,40 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   {labArrete}
                 </div>
               </div>
-
             </div>
 
-            {/* Bottom Footer: Custom Uploaded Image OR Accredited Strip */}
-            {currentTpl.footerImageUrl ? (
-              <div className="mt-4 pt-2 border-t border-slate-300 print:border-black">
-                <img 
-                  src={currentTpl.footerImageUrl} 
-                  alt="Footer Stamp" 
-                  style={{ maxHeight: `${currentTpl.footerImageHeight || 60}px` }}
-                  className="w-full object-contain mx-auto"
-                />
-              </div>
-            ) : (
-              <div className="bg-white print:bg-white text-slate-800 print:text-black border border-slate-300 print:border-black rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-2xs print:shadow-none">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-slate-100 print:bg-white text-slate-800 print:text-black rounded-md">
-                    <Truck className="w-3.5 h-3.5" />
+            <div className="print-footer-block">
+              {currentTpl.footerImageUrl ? (
+                <div className="mt-4 pt-2 border-t border-slate-300 print:border-black">
+                  <img 
+                    src={currentTpl.footerImageUrl} 
+                    alt="Footer Stamp" 
+                    style={{ maxHeight: `${currentTpl.footerImageHeight || 60}px` }}
+                    className="w-full object-contain mx-auto"
+                  />
+                </div>
+              ) : (
+                <div className="bg-white print:bg-white text-slate-800 print:text-black border border-slate-300 print:border-black rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-2xs print:shadow-none">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 bg-slate-100 print:bg-white text-slate-800 print:text-black rounded-md">
+                      <Truck className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold uppercase tracking-wider text-[10px] text-slate-700 print:text-black">
+                      {footerNotes}
+                    </span>
                   </div>
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-700 print:text-black">
-                    {footerNotes}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-1.5 border border-slate-300 print:border-black bg-slate-50 print:bg-white text-slate-900 print:text-black px-2.5 py-0.5 rounded-md font-bold text-[10px]">
-                  <MessageCircle className="w-3 h-3 text-slate-700 print:text-black" />
-                  <span>{labPhone}</span>
-                </div>
+                  <div className="flex items-center gap-1.5 border border-slate-300 print:border-black bg-slate-50 print:bg-white text-slate-900 print:text-black px-2.5 py-0.5 rounded-md font-bold text-[10px]">
+                    <MessageCircle className="w-3 h-3 text-slate-700 print:text-black" />
+                    <span>{labPhone}</span>
+                  </div>
 
-                <div className="text-[10px] text-slate-600 print:text-black font-mono">
-                  Édité le: {reportedTimeStr}
+                  <div className="text-[10px] text-slate-600 print:text-black font-mono">
+                    Édité le: {reportedTimeStr}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
           </div>
 

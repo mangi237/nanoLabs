@@ -4,6 +4,36 @@
 
 @import "tailwindcss";
 @layer utilities {
+  .watermark-layer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 0;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+  
+  .watermark-logo {
+    width: 60%;
+    max-width: 420px;
+    object-fit: contain;
+    opacity: 0.06;              /* faded */
+    filter: grayscale(100%);    /* keeps print clean, no muddy colors */
+    transform: rotate(-15deg);  /* typical watermark tilt */
+    user-select: none;
+    pointer-events: none;
+  }
+  
+  /* Ensure sheet content sits above the watermark */
+  #medical-report-sheet > *:not(.watermark-layer),
+  #medical-receipt-sheet > *:not(.watermark-layer) {
+    position: relative;
+    z-index: 1;
+  }
+  
+  
   @media print {
     @page {
       size: A4 portrait;
@@ -27,7 +57,61 @@
     body * {
       visibility: hidden !important;
     }
-
+    .watermark-layer {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+  
+    .watermark-logo {
+      width: 65% !important;
+      max-width: 480px !important;
+      opacity: 0.08 !important;   /* slightly stronger in print to survive the toner */
+      filter: grayscale(100%) !important;
+      transform: rotate(-15deg) !important;
+    }
+  
+    /* Keep content above the fixed watermark */
+    #medical-report-sheet,
+    #medical-receipt-sheet {
+      position: relative !important;
+      z-index: 1 !important;
+      background: transparent !important;  /* so watermark shows through */
+    }
+  
+    /* ============ BORDER / EDGE SPACING ENHANCEMENT ============ */
+    /* @page margin already provides the outer buffer; add a subtle
+       inner border on every printed page so content has a visual frame. */
+    #medical-report-sheet,
+    #medical-receipt-sheet {
+      outline: none !important;
+    }
+  
+    /* Print a thin ruled frame around the content area via a pseudo-element
+       — this is what gives the "bordered receipt / report" look. */
+    #medical-report-sheet::before,
+    #medical-receipt-sheet::before {
+      content: '';
+      position: fixed;
+      top: 8mm;
+      right: 6mm;
+      bottom: 10mm;
+      left: 6mm;
+      border: 1px solid #cbd5e1;    /* slate-300 */
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 2;
+    }
+  
+    /* Header/footer blocks should sit above the frame border */
+    .print-header-block,
+    .print-footer-block {
+      position: relative;
+      z-index: 3;
+    }
     /* Make printable containers and their children visible */
     #medical-receipt-sheet,
     #medical-receipt-sheet *,
