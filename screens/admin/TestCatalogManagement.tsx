@@ -8,6 +8,7 @@ import {
   OfficialCategory, 
   findCategoryForTestName 
 } from '../../data/officialTestCatalog';
+import ClinicalTemplateManagerModal from '../../components/admin/ClinicalTemplateManagerModal';
 import { 
   TestTube, 
   Plus, 
@@ -75,6 +76,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   // New Category Popover / State
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -433,6 +435,15 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowTemplateManager(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-teal-700 to-teal-800 hover:from-teal-800 hover:to-teal-900 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-700/20 transition-all cursor-pointer"
+            title="Browse, customize, or create 33+ accredited clinical test templates"
+          >
+            <Sparkles className="w-4 h-4 text-teal-300" />
+            <span>Clinical Templates & Formulas (33+)</span>
+          </button>
+
           <button
             onClick={() => setShowNewCategoryModal(true)}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold border border-slate-200 transition-all cursor-pointer"
@@ -970,6 +981,14 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Clinical Template Manager Modal */}
+      {showTemplateManager && (
+        <ClinicalTemplateManagerModal
+          isOpen={showTemplateManager}
+          onClose={() => setShowTemplateManager(false)}
+        />
       )}
     </div>
   );

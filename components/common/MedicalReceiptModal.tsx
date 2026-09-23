@@ -373,7 +373,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:static print:block print:overflow-visible print:p-0 print:m-0 print:bg-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
       <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:block print:max-h-none print:h-auto print:static print:w-full print:max-w-none print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:rounded-none">
         
         {/* Top Control Bar */}
@@ -463,7 +463,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible print:flex-none print:block">
+        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:!p-0 print:!m-0 print:!bg-white print:!overflow-visible print:!flex-none print:!block print:!h-auto print:!max-h-none">
           
           <style>{`
             /* ============ WATERMARK (SCREEN + PRINT) ============ */

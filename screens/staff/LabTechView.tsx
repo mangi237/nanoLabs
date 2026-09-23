@@ -10,6 +10,8 @@ import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewM
 import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
 import { SplitScreenResultEntry } from '../../components/results/SplitScreenResultEntry';
 import { A4CanvasResultEditor, A4_CLINICAL_TEMPLATES } from '../../components/results/A4CanvasResultEditor';
+import { clinicalTemplatesService, ClinicalTemplate } from '../../data/clinicalTemplates';
+import ClinicalTemplateManagerModal from '../../components/admin/ClinicalTemplateManagerModal';
 import { PatientExamResult } from '../../types/examTemplate';
 import { 
   TestTube, 
@@ -109,7 +111,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // Selected Patient Booklet Modal State
   const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
   const [selectedTestIndex, setSelectedTestIndex] = useState<number>(0);
-  const [activeOptionMode, setActiveOptionMode] = useState<"a4_canvas" | "document" | "form">("document");
+  const [activeOptionMode, setActiveOptionMode] = useState<'a4_canvas' | 'document'>('a4_canvas');
   const [showA4BatchModal, setShowA4BatchModal] = useState<boolean>(false);
 
   // Analyzer & Document Result States
@@ -172,6 +174,12 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
 
   // Hierarchical Structured Parameters state
   const [activeHierarchicalValues, setActiveHierarchicalValues] = useState<Record<string, string>>({});
+
+  // Clinical Templates State (33+ Accredited Templates)
+  const [showClinicalTemplateModal, setShowClinicalTemplateModal] = useState(false);
+  const [clinicalTemplates, setClinicalTemplates] = useState<ClinicalTemplate[]>(() => clinicalTemplatesService.getAllTemplates());
+  const [templateFilterCategory, setTemplateFilterCategory] = useState<string>('All');
+  const [templateSearchTerm, setTemplateSearchTerm] = useState<string>('');
 
   // Option 2 Upload State
   const [pdfUploadDataUrl, setPdfUploadDataUrl] = useState<string>('');
@@ -404,7 +412,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const handleOpenPatientBooklet = async (booking: PatientBooking) => {
     setActiveBooking(booking);
     setSelectedTestIndex(0);
-    setActiveOptionMode('form');
+    setActiveOptionMode('a4_canvas');
     setActionSuccessMessage('');
     setPdfUploadDataUrl(booking.pdfReportUrl || booking.externalPdfUrl || '');
     setUploadFileName('');
@@ -1700,7 +1708,7 @@ CLINICAL REAGENTS USED:
                               <div className="text-xs font-black text-white flex items-center gap-1.5">
                                 <span>{masterDef?.sampleType || currentTestInModal.sampleType || 'Venous Whole Blood'}</span>
                                 <span className="text-slate-500">•</span>
-                                <span className="text-teal-400 font-mono">{activeBooking.bookingCode || `Tube #ST-${activeBooking.bookingCode || '01'}-${selectedTestIndex + 1}`}</span>
+                                <span className="text-teal-400 font-mono">{(activeBooking as any).specimenTube || `Tube #ST-${activeBooking.bookingCode || '01'}-${selectedTestIndex + 1}`}</span>
                               </div>
                             </div>
                           </div>
@@ -1719,53 +1727,89 @@ CLINICAL REAGENTS USED:
                         </div>
 
                         {/* Quick Clinical Template Selector Bar */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="flex items-center justify-between">
+                        <div className="space-y-2 pt-2 border-t border-slate-800">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
                               <BookOpen className="w-3.5 h-3.5 text-teal-400" />
-                              Select Clinical Template:
+                              <span>Modèles Cliniques Accrédités ({clinicalTemplates.length}) :</span>
                             </span>
-                            <span className="text-[10px] text-slate-400">
-                              Click to pre-fill {activeOptionMode === 'a4_canvas' ? 'Canvas' : 'Analyzer Findings'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                            {A4_CLINICAL_TEMPLATES.map((tpl) => (
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400 hidden sm:inline">
+                                Pré-remplir {activeOptionMode === 'a4_canvas' ? 'le Canvas A4' : 'les Constats Analyseur'}
+                              </span>
                               <button
-                                key={tpl.id}
                                 type="button"
                                 onClick={() => {
-                                  if (activeOptionMode === 'a4_canvas') {
-                                    setActiveBooking(prev => {
-                                      if (!prev) return null;
-                                      const updatedTests = [...prev.tests];
-                                      if (updatedTests[selectedTestIndex]) {
-                                        updatedTests[selectedTestIndex] = {
-                                          ...updatedTests[selectedTestIndex],
-                                          richReportHtml: tpl.html,
-                                        };
-                                      }
-                                      return { ...prev, tests: updatedTests };
-                                    });
-                                    setActionSuccessMessage(`📋 Template "${tpl.name}" applied to Canvas!`);
-                                    setTimeout(() => setActionSuccessMessage(''), 3000);
-                                  } else {
-                                    const tempDiv = document.createElement('div');
-                                    tempDiv.innerHTML = tpl.html;
-                                    const cleanText = tempDiv.innerText || tempDiv.textContent || '';
-                                    setAnalyzerFindings(cleanText.trim());
-                                    setActionSuccessMessage(`📋 Template "${tpl.name}" loaded into Analyzer Findings!`);
-                                    setTimeout(() => setActionSuccessMessage(''), 3000);
-                                  }
+                                  setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
+                                  setShowClinicalTemplateModal(true);
                                 }}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-teal-900/60 text-slate-200 hover:text-teal-200 border border-slate-700 hover:border-teal-500/50 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5"
-                                title={tpl.name}
+                                className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
                               >
-                                <Sparkles className="w-3 h-3 text-amber-400" />
-                                <span>{tpl.name}</span>
+                                <Sparkles className="w-3 h-3 text-amber-300" />
+                                <span>Catalogue & Éditeur ({clinicalTemplates.length})</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Category Filter Pills */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                            {['All', 'Hematology', 'Biochemistry', 'Serology', 'Microbiology', 'Parasitology', 'Endocrinology', 'Hemostasis'].map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setTemplateFilterCategory(cat)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                                  templateFilterCategory === cat
+                                    ? 'bg-teal-500 text-slate-950 font-extrabold'
+                                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                              >
+                                {cat}
                               </button>
                             ))}
+                          </div>
+
+                          {/* Template Cards Horizontal Scroll */}
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                            {clinicalTemplates
+                              .filter(t => templateFilterCategory === 'All' || t.category === templateFilterCategory)
+                              .slice(0, 16)
+                              .map((tpl) => (
+                                <button
+                                  key={tpl.id}
+                                  type="button"
+                                  onClick={() => {
+                                    if (activeOptionMode === 'a4_canvas') {
+                                      setActiveBooking(prev => {
+                                        if (!prev) return null;
+                                        const updatedTests = [...prev.tests];
+                                        if (updatedTests[selectedTestIndex]) {
+                                          updatedTests[selectedTestIndex] = {
+                                            ...updatedTests[selectedTestIndex],
+                                            richReportHtml: tpl.html
+                                          };
+                                        }
+                                        return { ...prev, tests: updatedTests };
+                                      });
+                                      setActionSuccessMessage(`📋 Modèle "${tpl.name}" appliqué au Canvas A4 !`);
+                                      setTimeout(() => setActionSuccessMessage(''), 3000);
+                                    } else {
+                                      const tempDiv = document.createElement('div');
+                                      tempDiv.innerHTML = tpl.html;
+                                      const cleanText = tempDiv.innerText || tempDiv.textContent || '';
+                                      setAnalyzerFindings(cleanText.trim());
+                                      setActionSuccessMessage(`📋 Modèle "${tpl.name}" chargé dans l'analyseur !`);
+                                      setTimeout(() => setActionSuccessMessage(''), 3000);
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-teal-900/60 text-slate-200 hover:text-teal-200 border border-slate-700 hover:border-teal-500/50 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5"
+                                  title={`${tpl.category} • ${tpl.specimen}`}
+                                >
+                                  <Sparkles className="w-3 h-3 text-amber-400" />
+                                  <span>{tpl.name}</span>
+                                </button>
+                              ))}
                           </div>
                         </div>
                       </div>
@@ -1853,13 +1897,10 @@ CLINICAL REAGENTS USED:
                                 testName: 'Consolidated Batch Results'
                               });
                             }}
-                            onPrintPreview={(bookingObj: any) => {
-                              // Use selectedTestIndex directly since tIdx does not exist here
+                            onPrintPreview={(bookingObj) => {
                               setSelectedTestIndexForPdf(selectedTestIndex);
                               setShowPdfModal(true);
                             }}
-                            
-                            
                           />
                         </div>
                       )}
@@ -2095,7 +2136,7 @@ CLINICAL REAGENTS USED:
                                       t.status = "Completed";
                                       t.resultValue = summary;
                                       t.richReportHtml = analyzerHtml;
-                                      if (pdfUploadDataUrl) t.resultFileUrl = pdfUploadDataUrl;
+                                      if (pdfUploadDataUrl) (t as any).resultPdfUrl = pdfUploadDataUrl;
                                     }
                                   } else {
                                     await limsService.submitIndividualTestResult({
@@ -2110,7 +2151,7 @@ CLINICAL REAGENTS USED:
                                     currentTest.status = "Completed";
                                     currentTest.resultValue = summary;
                                     currentTest.richReportHtml = analyzerHtml;
-                                    if (pdfUploadDataUrl) currentTest.resultFileUrl = pdfUploadDataUrl;
+                                    if (pdfUploadDataUrl) (currentTest as any).resultPdfUrl = pdfUploadDataUrl;
                                   }
 
                                   setActiveBooking({ ...activeBooking });
@@ -2611,6 +2652,42 @@ CLINICAL REAGENTS USED:
             onPrintPreview={() => setShowPdfModal(true)}
           />
         </div>
+      )}
+
+      {/* CLINICAL TEMPLATE CATALOG & BUILDER MODAL (33+ Templates) */}
+      {showClinicalTemplateModal && (
+        <ClinicalTemplateManagerModal
+          isOpen={showClinicalTemplateModal}
+          onClose={() => {
+            setShowClinicalTemplateModal(false);
+            setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
+          }}
+          onSelectTemplate={(tpl) => {
+            if (activeOptionMode === 'a4_canvas') {
+              setActiveBooking(prev => {
+                if (!prev) return null;
+                const updatedTests = [...prev.tests];
+                if (updatedTests[selectedTestIndex]) {
+                  updatedTests[selectedTestIndex] = {
+                    ...updatedTests[selectedTestIndex],
+                    richReportHtml: tpl.html
+                  };
+                }
+                return { ...prev, tests: updatedTests };
+              });
+              setActionSuccessMessage(`📋 Modèle "${tpl.name}" appliqué au Canvas A4 !`);
+              setTimeout(() => setActionSuccessMessage(''), 3000);
+            } else {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = tpl.html;
+              const cleanText = tempDiv.innerText || tempDiv.textContent || '';
+              setAnalyzerFindings(cleanText.trim());
+              setActionSuccessMessage(`📋 Modèle "${tpl.name}" chargé dans l'analyseur !`);
+              setTimeout(() => setActionSuccessMessage(''), 3000);
+            }
+            setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
+          }}
+        />
       )}
 
     </div>
