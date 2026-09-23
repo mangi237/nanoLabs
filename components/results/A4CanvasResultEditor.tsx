@@ -37,10 +37,12 @@ import {
   HelpCircle,
   Search,
   X,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem, limsService } from '../../services/limsService';
 import { useAuth } from '../../context/authContext';
+import { useLabBranding, setActiveLabHeader } from '../../utils/labBranding';
 
 export interface A4CanvasResultEditorProps {
   booking: PatientBooking;
@@ -72,6 +74,8 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
   onShareWithDoctor
 }) => {
   const { user, lab } = useAuth();
+  const { logoUrl: brandLogo, headerUrl: brandHeader, setHeader } = useLabBranding(lab);
+  const a4HeaderInputRef = useRef<HTMLInputElement>(null);
   const tests = booking.tests || [];
   const [activeTestIndex, setActiveTestIndex] = useState<number>(initialTestIndex);
 
@@ -221,6 +225,176 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
 </table>
 <p><br></p>`;
     executeCommand('insertHTML', tableHtml);
+  };
+
+  // Dynamically add another row to any pre-populated or customized table
+  const handleAddTableRow = (testIndex: number) => {
+    const editorEl = editorRefs.current[testIndex];
+    if (!editorEl) return;
+
+    // 1. Check if user currently has cursor inside a row or table
+    const sel = window.getSelection();
+    let targetRow: HTMLTableRowElement | null = null;
+    let targetTable: HTMLTableElement | null = null;
+
+    if (sel && sel.rangeCount > 0) {
+      let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+      while (node && node !== editorEl) {
+        if (node.nodeName === 'TR') targetRow = node as HTMLTableRowElement;
+        if (node.nodeName === 'TABLE') {
+          targetTable = node as HTMLTableElement;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+
+    // 2. If cursor is not in a table, target the last table in the active editor
+    if (!targetTable) {
+      const tables = editorEl.querySelectorAll('table');
+      if (tables.length > 0) {
+        targetTable = tables[tables.length - 1];
+      }
+    }
+
+    if (targetTable) {
+      const allRows = targetTable.querySelectorAll('tr');
+      let colCount = 4;
+      const sampleRow = targetRow || (allRows.length > 1 ? allRows[allRows.length - 1] : allRows[0]);
+      if (sampleRow) {
+        colCount = sampleRow.querySelectorAll('th, td').length || 4;
+      }
+
+      const tbody = targetTable.querySelector('tbody') || targetTable;
+      const newRow = document.createElement('tr');
+      newRow.style.borderBottom = '1px solid #e2e8f0';
+
+      if (colCount === 4) {
+        newRow.innerHTML = `
+          <td style="padding: 6px 10px; font-weight: 600; color: #0f172a;">Nouveau Paramètre</td>
+          <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">-</td>
+          <td style="padding: 6px 10px; color: #334155;">-</td>
+          <td style="padding: 6px 10px; color: #64748b;">Valeur de référence</td>
+        `;
+      } else if (colCount === 3) {
+        newRow.innerHTML = `
+          <td style="padding: 6px 10px; font-weight: 600; color: #0f172a;">Nouveau Paramètre</td>
+          <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">-</td>
+          <td style="padding: 6px 10px; color: #64748b;">Valeur de référence</td>
+        `;
+      } else if (colCount === 5) {
+        newRow.innerHTML = `
+          <td style="padding: 6px 10px; font-weight: 600; color: #0f172a;">Nouveau Paramètre</td>
+          <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">-</td>
+          <td style="padding: 6px 10px; color: #334155;">-</td>
+          <td style="padding: 6px 10px; color: #64748b;">Valeur de référence</td>
+          <td style="padding: 6px 10px; text-align: center; font-size: 11px; font-weight: 700; color: #0f766e;">Normal</td>
+        `;
+      } else {
+        let cells = '';
+        for (let i = 0; i < colCount; i++) {
+          cells += `<td style="padding: 6px 10px; color: #0f172a;">-</td>`;
+        }
+        newRow.innerHTML = cells;
+      }
+
+      if (targetRow && targetRow.parentNode) {
+        targetRow.parentNode.insertBefore(newRow, targetRow.nextSibling);
+      } else {
+        tbody.appendChild(newRow);
+      }
+
+      // Sync state and notify
+      const updatedHtml = editorEl.innerHTML;
+      setTestContents(prev => ({
+        ...prev,
+        [testIndex]: {
+          ...prev[testIndex],
+          html: updatedHtml,
+          saved: false
+        }
+      }));
+      if (tests[testIndex]) {
+        tests[testIndex].richReportHtml = updatedHtml;
+      }
+
+      setBannerFeedback(`➕ Ligne ajoutée avec succès au tableau du test ${testIndex + 1} ! Cliquez sur les cellules pour modifier.`);
+      setTimeout(() => setBannerFeedback(null), 3000);
+    } else {
+      insertClinicalTable();
+    }
+  };
+
+  // Remove active or last row from table
+  const handleDeleteTableRow = (testIndex: number) => {
+    const editorEl = editorRefs.current[testIndex];
+    if (!editorEl) return;
+
+    const sel = window.getSelection();
+    let targetRow: HTMLTableRowElement | null = null;
+    let targetTable: HTMLTableElement | null = null;
+
+    if (sel && sel.rangeCount > 0) {
+      let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+      while (node && node !== editorEl) {
+        if (node.nodeName === 'TR') targetRow = node as HTMLTableRowElement;
+        if (node.nodeName === 'TABLE') {
+          targetTable = node as HTMLTableElement;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+
+    if (!targetTable) {
+      const tables = editorEl.querySelectorAll('table');
+      if (tables.length > 0) targetTable = tables[tables.length - 1];
+    }
+
+    if (targetTable) {
+      const rows = targetTable.querySelectorAll('tr');
+      if (rows.length > 1) {
+        const rowToDelete = targetRow || rows[rows.length - 1];
+        if (rowToDelete.querySelector('th') && rows.length > 2) {
+          rows[rows.length - 1].remove();
+        } else {
+          rowToDelete.remove();
+        }
+
+        const updatedHtml = editorEl.innerHTML;
+        setTestContents(prev => ({
+          ...prev,
+          [testIndex]: {
+            ...prev[testIndex],
+            html: updatedHtml,
+            saved: false
+          }
+        }));
+        if (tests[testIndex]) {
+          tests[testIndex].richReportHtml = updatedHtml;
+        }
+        setBannerFeedback(`🗑️ Ligne supprimée du tableau.`);
+        setTimeout(() => setBannerFeedback(null), 3000);
+      }
+    }
+  };
+
+  // Upload custom header image directly from A4 Canvas
+  const handleA4HeaderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setHeader(dataUrl);
+        setBannerFeedback('✅ En-tête officiel du laboratoire enregistré et synchronisé !');
+        setTimeout(() => setBannerFeedback(null), 3500);
+      }
+    };
+    reader.readAsDataURL(file);
+    // reset input
+    e.target.value = '';
   };
 
   // Drop selected template into the middle box of the specified test index (Pre-populates full page)
@@ -378,13 +552,25 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
   };
 
   const bAny = booking as any;
-  const labName = booking.labName || bAny.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = bAny.labAddress || bAny.labDetails?.address || bAny.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
-  const labPhone = bAny.labPhone || bAny.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
-  const labEmail = bAny.labEmail || bAny.labDetails?.email || 'contact@lab-diagnostics.cm';
-  const labAccreditation = bAny.labAccreditation || bAny.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';
-  const biologistName = booking.biologistName || 'Biologiste Médical Agréé';
-  const biologistLicense = bAny.biologistLicense || 'ONMC / ONPC N° 4829 - Spécialiste Biologie Médicale';
+
+  // Real Lab details - strictly NO mock text like "Accredited Medical Biology..."
+  const rawLabName = lab?.name || booking.labName || bAny.labDetails?.name;
+  const isMockName = rawLabName && (
+    rawLabName.toLowerCase().includes('accredited medical') || 
+    rawLabName.toLowerCase().includes('bla bla')
+  );
+  const activeLabName = (!isMockName && rawLabName) ? rawLabName : null;
+  const activeLabAddress = lab?.address || bAny.labAddress || bAny.labDetails?.address || bAny.labDetails?.location || null;
+  const activeLabPhone = lab?.phone || bAny.labPhone || bAny.labDetails?.phone || null;
+  const activeLabEmail = lab?.email || bAny.labEmail || bAny.labDetails?.email || null;
+  const activeLabAccreditation = lab?.accreditation || bAny.labAccreditation || null;
+  const activeLabSlogan = lab?.slogan || lab?.tagline || bAny.labDetails?.slogan || null;
+
+  const hasUploadedHeader = !!brandHeader;
+  const hasRealLabHeader = !!(activeLabName && (activeLabAddress || activeLabPhone));
+
+  const biologistName = booking.biologistName || lab?.directorName || 'Biologiste Médical Responsable';
+  const biologistLicense = bAny.biologistLicense || lab?.licenseNumber || '';
 
   const patientName = booking.patientName || 'Valued Patient';
   const patientAge = booking.patientAge || 'Adult';
@@ -395,6 +581,15 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col antialiased">
+      {/* Hidden File Input for Instant Lab Header Upload */}
+      <input 
+        type="file" 
+        ref={a4HeaderInputRef} 
+        onChange={handleA4HeaderUpload} 
+        accept="image/*" 
+        className="hidden" 
+      />
+
       {/* ========================================================================= */}
       {/* 1. TOP STICKY APPLICATION TOOLBAR: Rich-text controls & Batch actions     */}
       {/* ========================================================================= */}
@@ -521,10 +716,21 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
               type="button"
               onClick={insertClinicalTable}
               className="px-2 py-1 text-teal-300 hover:text-white hover:bg-teal-900/60 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-              title="Insert 4-column clinical parameter table"
+              title="Insérer un tableau clinique standard à 4 colonnes"
             >
               <Table className="w-3.5 h-3.5" />
-              <span>Insert Table</span>
+              <span>Tableau</span>
+            </button>
+
+            {/* Add Table Row Button (even when pre-populated) */}
+            <button
+              type="button"
+              onClick={() => handleAddTableRow(activeTestIndex)}
+              className="px-2.5 py-1 text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+              title="Ajouter une ligne au tableau pré-rempli sur la page active"
+            >
+              <Plus className="w-3.5 h-3.5 text-emerald-400" />
+              <span>+ Ligne</span>
             </button>
 
             {/* Color swatches */}
@@ -720,6 +926,17 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    {/* Direct + Ajouter une Ligne au Tableau button */}
+                    <button
+                      type="button"
+                      onClick={() => handleAddTableRow(testIdx)}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="Ajouter une nouvelle ligne au tableau de résultats de cette page"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Ajouter Ligne au Tableau</span>
+                    </button>
+
                     {/* Add own custom template button */}
                     <button
                       type="button"
@@ -824,42 +1041,99 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
               >
                 
                 {/* ------------------------------------------------------------- */}
-                {/* TOP LOCKED SECTION: Accredited Laboratory Header & Patient Bar */}
+                {/* TOP LOCKED SECTION: Official Laboratory Header & Patient Bar */}
                 {/* ------------------------------------------------------------- */}
                 <div className="space-y-4 border-b-2 border-teal-800 pb-4 select-none">
-                  {/* Lab Official Letterhead */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 shrink-0">
-                      {(lab?.logoUrl || (typeof window !== 'undefined' && localStorage.getItem('nanolabs_active_lab_logo'))) ? (
-                        <img
-                          src={lab?.logoUrl || (typeof window !== 'undefined' ? localStorage.getItem('nanolabs_active_lab_logo') || '' : '')}
-                          alt={labName}
-                          className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-xs shrink-0 select-none"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0 select-none">
-                          <Building2 className="w-7 h-7" />
+                  {/* Lab Official Letterhead: Image OR Real Lab Details OR Required Placeholder Box */}
+                  {hasUploadedHeader ? (
+                    <div className="w-full pb-1 relative group">
+                      <img 
+                        src={brandHeader!} 
+                        alt={activeLabName || 'Official Lab Header'} 
+                        className="w-full max-h-[115px] object-contain mx-auto select-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => a4HeaderInputRef.current?.click()}
+                        className="no-print absolute top-1 right-1 opacity-0 group-hover:opacity-100 px-2 py-1 bg-slate-900/80 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition-opacity flex items-center gap-1 cursor-pointer shadow-md"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>Changer l'en-tête</span>
+                      </button>
+                    </div>
+                  ) : hasRealLabHeader ? (
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 shrink-0">
+                        {brandLogo ? (
+                          <img
+                            src={brandLogo}
+                            alt={activeLabName || 'Lab Logo'}
+                            className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-xs shrink-0 select-none"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0 select-none">
+                            <Building2 className="w-7 h-7" />
+                          </div>
+                        )}
+                        <div className="space-y-0.5">
+                          <h2 className="text-base font-black text-teal-950 tracking-tight uppercase">
+                            {activeLabName}
+                          </h2>
+                          {activeLabSlogan && (
+                            <p className="text-[11px] font-bold text-teal-700 tracking-wide">
+                              {activeLabSlogan}
+                            </p>
+                          )}
+                          {(activeLabAddress || activeLabAccreditation) && (
+                            <p className="text-[10px] text-slate-500">
+                              {[activeLabAddress, activeLabAccreditation].filter(Boolean).join(' • ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {(activeLabPhone || activeLabEmail) && (
+                        <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono shrink-0">
+                          {activeLabPhone && <div>Tél : {activeLabPhone}</div>}
+                          {activeLabEmail && <div>Email : {activeLabEmail}</div>}
+                          <div className="font-bold text-teal-900">Système LIMS Sécurisé</div>
                         </div>
                       )}
-                      <div className="space-y-0.5">
-                        <h2 className="text-base font-black text-teal-950 tracking-tight uppercase">
-                          {labName}
-                        </h2>
-                        <p className="text-[11px] font-bold text-teal-700 tracking-wide">
-                          LABORATOIRE D'ANALYSES DE BIOLOGIE MÉDICALE
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          {labAddress} • {labAccreditation}
-                        </p>
+                    </div>
+                  ) : (
+                    /* The Required Placeholder Box */
+                    <div className="w-full border-2 border-dashed border-teal-400 bg-teal-50/50 rounded-2xl p-6 text-center text-teal-950 flex flex-col items-center justify-center gap-2 select-none group transition-all">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-teal-700" />
+                        <span className="font-black text-sm sm:text-base uppercase tracking-wider text-teal-950">
+                          LAB HEADER WILL GO HERE
+                        </span>
+                      </div>
+                      <p className="text-xs text-teal-800/80 font-medium max-w-md">
+                        No official laboratory letterhead configured. Upload your header image now or select it in &ldquo;Preview PDF / Print Results&rdquo;.
+                      </p>
+                      <div className="flex items-center gap-2 mt-1 no-print">
+                        <button
+                          type="button"
+                          onClick={() => a4HeaderInputRef.current?.click()}
+                          className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Lab Header</span>
+                        </button>
+                        {onPrintPreview && (
+                          <button
+                            type="button"
+                            onClick={() => onPrintPreview(booking)}
+                            className="px-3.5 py-1.5 bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-teal-700" />
+                            <span>Preview PDF / Print</span>
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono shrink-0">
-                      <div>Tél : {labPhone}</div>
-                      <div>Email : {labEmail}</div>
-                      <div className="font-bold text-teal-900">Système LIMS Sécurisé</div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Patient & Examination Locked Demographic Bar */}
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -920,6 +1194,34 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                     className="min-h-[520px] w-full outline-hidden text-slate-800 leading-relaxed font-sans text-[13px] focus:ring-1 focus:ring-teal-500/20 p-2 rounded-xl transition-all"
                     data-placeholder="Tapez directement vos résultats ici, éditez les valeurs, changez les polices, ou insérez un tableau..."
                   />
+
+                  {/* Table Row Controls Bar right below the A4 editor */}
+                  <div className="mt-3 flex items-center justify-between pt-2 border-t border-dashed border-slate-200 text-xs text-slate-500 no-print select-none">
+                    <span className="text-[11px] font-medium text-slate-600 flex items-center gap-1">
+                      <Table className="w-3.5 h-3.5 text-teal-600" />
+                      Lignes du tableau de résultats :
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddTableRow(testIdx)}
+                        className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                        title="Ajouter une ligne au tableau pré-rempli"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>+ Ajouter une ligne</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTableRow(testIdx)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                        title="Supprimer la dernière ligne du tableau"
+                      >
+                        <Trash2 className="w-3 h-3 text-rose-500" />
+                        <span>Supprimer ligne</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* ------------------------------------------------------------- */}

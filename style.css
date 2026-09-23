@@ -3,10 +3,18 @@
 @tailwind utilities;
 
 @import "tailwindcss";
+
+/* ============================================================
+   WATERMARK — on-screen styles (safe, generic classes)
+   These only apply to elements that opt in by using the class.
+   ============================================================ */
 @layer utilities {
   .watermark-layer {
     position: absolute;
-    top: 0; right: 0; bottom: 0; left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -15,6 +23,7 @@
     pointer-events: none;
     user-select: none;
   }
+
   .watermark-logo {
     width: 55%;
     max-width: 380px;
@@ -26,87 +35,127 @@
     pointer-events: none;
     user-select: none;
   }
+}
 
-  /* Ensure sheet content sits above the watermark */
-  #medical-report-sheet > *:not(.watermark-layer),
-  #medical-receipt-sheet > *:not(.watermark-layer) {
-    position: relative;
-    z-index: 1;
+/* ============================================================
+   PRINT STYLES
+   Scoped to elements inside .medical-print-scope so they cannot
+   leak into the rest of the app. Apply .medical-print-scope to
+   the modal wrapper (see JSX).
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 8mm 10mm 8mm;
   }
-  
-  
-  @media print {
-    @page {
-      size: A4 portrait;
-  
-        margin: 8mm 8mm 10mm 8mm;
-    
-    }
-    tr, .antibiogram-row {
-      page-break-inside: avoid;
-    }
-    html, body {
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      color: #000000 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100% !important;
-    }
 
-    /* Isolate print document: Hide all general UI by default */
-    body * {
-      visibility: hidden !important;
-    }
-    .watermark-layer {
-      position: fixed !important;
-      inset: 0 !important;
-      z-index: 0 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-    }
-  
-    .watermark-logo {
-      width: 65% !important;
-      max-width: 480px !important;
-      opacity: 0.08 !important;   /* slightly stronger in print to survive the toner */
-      filter: grayscale(100%) !important;
-      transform: rotate(-15deg) !important;
-    }
-  
-    /* Keep content above the fixed watermark */
-   
-    
-    /* ============ BORDER / EDGE SPACING ENHANCEMENT ============ */
-    /* @page margin already provides the outer buffer; add a subtle
-       inner border on every printed page so content has a visual frame. */
-    #medical-report-sheet,
-    #medical-receipt-sheet {
-      outline: none !important;
-    }
-  
-    /* Print a thin ruled frame around the content area via a pseudo-element
-       — this is what gives the "bordered receipt / report" look. */
-  
-  
-    /* Header/footer blocks should sit above the frame border */
-    .print-header-block,
-    .print-footer-block {
-      position: relative;
-      z-index: 3;
-    }
-    /* Make printable containers and their children visible */
-    #medical-receipt-sheet,
-    #medical-receipt-sheet *,
-    #medical-report-sheet,
-    #medical-report-sheet *,
-    .printable-sheet,
-    .printable-sheet *,
-    .printable-document,
-    .printable-document * {
-      visibility: visible !important;
-    }
-  }}
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* --- Watermark repeats on every printed page --- */
+  .medical-print-scope .watermark-layer {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: none !important;
+  }
+
+  .medical-print-scope .watermark-logo {
+    width: 60% !important;
+    max-width: 460px !important;
+    opacity: 0.13 !important;
+    filter: grayscale(100%) !important;
+    transform: rotate(-12deg) !important;
+  }
+
+  /* --- Printable sheets: transparent so watermark shows through --- */
+  .medical-print-scope #medical-receipt-sheet,
+  .medical-print-scope #medical-report-sheet,
+  .medical-print-scope .printable-sheet {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    position: relative !important;
+    z-index: 1 !important;
+    overflow: visible !important;
+  }
+
+  /* Prevent horizontal edge bleed */
+  .medical-print-scope #medical-receipt-sheet *,
+  .medical-print-scope #medical-report-sheet *,
+  .medical-print-scope .printable-sheet * {
+    max-width: 100% !important;
+  }
+
+  /* --- Pagination control --- */
+  .medical-print-scope .print-header-block {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .medical-print-scope .print-patient-box {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .medical-print-scope .print-test-section,
+  .medical-print-scope .print-billing-table {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .medical-print-scope .print-test-title {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .medical-print-scope .print-test-table thead,
+  .medical-print-scope .print-billing-table thead {
+    display: table-header-group !important;
+  }
+
+  .medical-print-scope .print-test-table tr,
+  .medical-print-scope .print-billing-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .medical-print-scope .print-totals-block,
+  .medical-print-scope .print-signature-block,
+  .medical-print-scope .print-footer-block {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* --- Hide non-printable UI --- */
+  .medical-print-scope .no-print,
+  .medical-print-scope .print\:hidden {
+    display: none !important;
+  }
+}

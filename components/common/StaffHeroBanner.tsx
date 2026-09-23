@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/authContext';
 import { Building2, ShieldCheck, Sparkles, UserCheck } from 'lucide-react';
+import { useLabBranding } from '../../utils/labBranding';
 
 interface StaffHeroBannerProps {
   workstationTitle: string;
@@ -28,6 +29,7 @@ export const StaffHeroBanner: React.FC<StaffHeroBannerProps> = ({
   badgeBg = 'bg-teal-400 text-slate-950'
 }) => {
   const { user, lab } = useAuth();
+  const { logoUrl: brandLogo } = useLabBranding(lab);
 
   const formattedRole = user?.role 
     ? user.role.replace('_', ' ').toUpperCase() 
@@ -44,8 +46,8 @@ export const StaffHeroBanner: React.FC<StaffHeroBannerProps> = ({
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Company Logo / Badge */}
             <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 border border-white/20 text-white font-bold text-xs shadow-xs">
-              {lab?.logoUrl ? (
-                <img src={lab.logoUrl} alt={lab.name} className="w-5 h-5 object-contain rounded-md bg-white p-0.5" />
+              {brandLogo ? (
+                <img src={brandLogo} alt={lab?.name || 'Lab Logo'} className="w-5 h-5 min-w-[20px] min-h-[20px] max-w-[20px] max-h-[20px] object-contain rounded-md bg-white p-0.5 shrink-0 select-none" />
               ) : (
                 <Building2 className="w-4 h-4 text-teal-300" />
               )}

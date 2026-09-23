@@ -17,6 +17,7 @@ import {
   Award
 } from 'lucide-react';
 import { PatientBooking } from '../../services/limsService';
+import { useLabBranding } from '../../utils/labBranding';
 
 interface BatchConsolidatedReportModalProps {
   isOpen: boolean;
@@ -25,7 +26,6 @@ interface BatchConsolidatedReportModalProps {
   labInfo?: any;
   patientInfo?: any;
   onShareToDoctor?: (booking: PatientBooking) => void;
-  
 }
 
 export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModalProps> = ({
@@ -38,13 +38,21 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
 }) => {
   if (!isOpen || !booking) return null;
 
-  const labName = labInfo?.name || booking.labName || 'Central Clinical Diagnostics & Pathology';
-  const labSlogan = labInfo?.slogan || 'Accredited Medical Diagnostics & Molecular Pathology';
-  const labAddress = labInfo?.address || 'Medical District, Douala, Cameroon';
-  const labPhone = labInfo?.phone || '+237 670 000 000';
-  const labEmail = labInfo?.email || 'diagnostics@nanolabs.health';
-  const labLogo = labInfo?.logoUrl || '';
-  const labLicense = labInfo?.licenseNumber || 'NANOLABS/LAB/2026/0491';
+  const targetLab = labInfo || (booking.labId ? { id: booking.labId, name: booking.labName } : undefined);
+  const { logoUrl: brandLogo, headerUrl: brandHeader } = useLabBranding(targetLab);
+
+  const rawLabName = labInfo?.name || booking.labName;
+  const isMockName = rawLabName && (
+    rawLabName.toLowerCase().includes('accredited medical') || 
+    rawLabName.toLowerCase().includes('bla bla')
+  );
+  const activeLabName = (!isMockName && rawLabName) ? rawLabName : null;
+  const labSlogan = labInfo?.slogan || null;
+  const labAddress = labInfo?.address || null;
+  const labPhone = labInfo?.phone || null;
+  const labEmail = labInfo?.email || null;
+  const labLicense = labInfo?.licenseNumber || null;
+  const hasRealLabHeader = !!(activeLabName && (labAddress || labPhone));
 
   const patientName = booking.patientName || patientInfo?.name || 'Valued Patient';
   const patientPid = booking.patientPid || booking.patientId || patientInfo?.patientId || 'PID-2026';
@@ -138,53 +146,92 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
         {/* Scrollable Printable Document Sheet */}
         <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 print:overflow-visible print:p-6 font-sans text-slate-900">
           
-          {/* Header Letterhead */}
+          {/* Header Letterhead or Required Dynamic Placeholder */}
           <div className="border-b-2 border-slate-900 pb-5">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                {labLogo ? (
-                  <img 
-                    src={labLogo} 
-                    alt={labName} 
-                    referrerPolicy="no-referrer"
-                    className="w-16 h-16 rounded-xl object-contain border border-slate-200 p-1"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black shadow-xs">
-                    <Building2 className="w-8 h-8" />
+            {brandHeader ? (
+              <div className="w-full pb-3">
+                <img 
+                  src={brandHeader} 
+                  alt={activeLabName || 'Official Laboratory Header'} 
+                  className="w-full max-h-[110px] object-contain mx-auto"
+                />
+              </div>
+            ) : hasRealLabHeader ? (
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  {brandLogo ? (
+                    <img 
+                      src={brandLogo} 
+                      alt={activeLabName || 'Lab Logo'} 
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 min-w-[64px] min-h-[64px] max-w-[64px] max-h-[64px] rounded-xl object-contain border border-slate-200 p-1 bg-white shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                      <Building2 className="w-8 h-8" />
+                    </div>
+                  )}
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">
+                      {activeLabName}
+                    </h1>
+                    {labSlogan && (
+                      <p className="text-xs font-semibold text-teal-800">
+                        {labSlogan}
+                      </p>
+                    )}
+                    {(labAddress || labPhone || labEmail) && (
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {[labAddress, labPhone ? `Tel: ${labPhone}` : '', labEmail].filter(Boolean).join(' • ')}
+                      </p>
+                    )}
+                    {labLicense && (
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Accreditation / Lic: {labLicense}
+                      </p>
+                    )}
                   </div>
-                )}
-                <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">
-                    {labName}
-                  </h1>
-                  <p className="text-xs font-semibold text-teal-800">
-                    {labSlogan}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {labAddress} • Tel: {labPhone} • {labEmail}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-mono">
-                    Accreditation / Lic: {labLicense}
-                  </p>
                 </div>
-              </div>
 
-              <div className="text-left sm:text-right text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0 print:bg-white print:border-slate-300">
-                <div className="font-bold text-slate-900">
-                  REPORT TYPE: <span className="text-teal-800">CONSOLIDATED BATCH REPORT</span>
-                </div>
-                <div className="font-mono text-slate-700">
-                  Requisition ID: <strong>{booking.bookingCode}</strong>
-                </div>
-                <div className="text-slate-600">
-                  Sample Collection: <strong>{orderDate}</strong>
-                </div>
-                <div className="text-slate-600">
-                  Release / Verification: <strong>{validationDate}</strong>
+                <div className="text-left sm:text-right text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0 print:bg-white print:border-slate-300">
+                  <div className="font-bold text-slate-900">
+                    REPORT TYPE: <span className="text-teal-800">CONSOLIDATED BATCH REPORT</span>
+                  </div>
+                  <div className="font-mono text-slate-700">
+                    Requisition ID: <strong>{booking.bookingCode}</strong>
+                  </div>
+                  <div className="text-slate-600">
+                    Sample Collection: <strong>{orderDate}</strong>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="w-full sm:flex-1 border-2 border-dashed border-teal-500 bg-teal-50/50 rounded-xl p-5 text-center text-teal-950 flex flex-col items-center justify-center gap-1 select-none print:border-black print:bg-white">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-teal-700 print:text-black" />
+                    <span className="font-black text-sm uppercase tracking-wider text-teal-950 print:text-black">
+                      LAB HEADER WILL GO HERE
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-left sm:text-right text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0 print:bg-white print:border-slate-300">
+                  <div className="font-bold text-slate-900">
+                    REPORT TYPE: <span className="text-teal-800">CONSOLIDATED BATCH REPORT</span>
+                  </div>
+                  <div className="font-mono text-slate-700">
+                    Requisition ID: <strong>{booking.bookingCode}</strong>
+                  </div>
+                  <div className="text-slate-600">
+                    Sample Collection: <strong>{orderDate}</strong>
+                  </div>
+                  <div className="text-slate-600">
+                    Release / Verification: <strong>{validationDate}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Patient & Clinical Demographics */}
@@ -324,50 +371,7 @@ export const BatchConsolidatedReportModal: React.FC<BatchConsolidatedReportModal
             })}
           </div>
 
-          {/* Medical Remarks & Biologist Digital Signature */}
-          <div className="pt-4 border-t-2 border-slate-900 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
-            <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 print:bg-white print:border-slate-300">
-              <h4 className="font-black text-slate-900 uppercase text-[11px] flex items-center gap-1.5">
-                <Award className="w-4 h-4 text-teal-700" />
-                Laboratory Quality & Clinical Certification
-              </h4>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                This document constitutes the official consolidated multi-parameter diagnostic examination record generated by accredited automated analyzers with verified internal quality controls. Diagnostic findings should be correlated with clinical symptoms by the attending physician.
-              </p>
-              <div className="text-[10px] font-mono text-slate-500 pt-1">
-                E2EE Hash: SHA256-{(booking.id || '2026').substring(0, 16).toUpperCase()}
-              </div>
-            </div>
-
-            {/* Official Signature Box */}
-            <div className="flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 print:bg-white print:border-slate-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Authorized Sign-off</span>
-                  <div className="font-extrabold text-slate-900 text-sm">Dr. Marie-Claire Bella, MD, PhD</div>
-                  <div className="text-[11px] text-slate-600">Chief Clinical Pathologist & Lab Director</div>
-                </div>
-
-                {/* Digital Stamp Seal */}
-                <div className="w-16 h-16 rounded-full border-2 border-teal-700/80 bg-teal-50 flex flex-col items-center justify-center text-teal-800 text-[9px] font-black text-center p-1 uppercase rotate-[-6deg] shadow-2xs">
-                  <ShieldCheck className="w-4 h-4 text-teal-700" />
-                  <span>Verified</span>
-                  <span className="text-[7px]">nanoLabs</span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                <span>Sign Date: {validationDate}</span>
-                <span className="text-emerald-700 font-bold">DIGITALLY CERTIFIED</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Notice */}
-          <div className="text-center text-[10px] text-slate-400 pt-2 border-t border-slate-100">
-            {labName} • Official Digital Laboratory System • Valid without handwritten signature under Medical Informatics Act
-          </div>
-
+        
         </div>
 
         {/* Modal Bottom Footer (Non-Printable) */}

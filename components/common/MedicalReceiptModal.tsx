@@ -373,7 +373,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
+    <div className= "medical-print-scope fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
       <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:!block print:!max-h-none print:!h-auto print:!static print:!w-full print:!max-w-none print:!p-0 print:!m-0 print:!border-none print:!shadow-none print:!bg-white print:!rounded-none print:!animate-none print:!transform-none">
         
         {/* Top Control Bar */}
@@ -789,35 +789,8 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                 </div>
 
                 {/* 7. DUAL SIGNATURE STAMPS & OFFICIAL LABORATORY SEAL */}
-                <div className="print-signature-block pt-4 grid grid-cols-3 print:grid-cols-3 gap-4 text-[10px] items-end border-t border-slate-200">
-                  <div className="space-y-1">
-                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">Signature / Date Assuré(e) :</div>
-                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col justify-between bg-slate-50/40 print:bg-white">
-                      <span className="text-[8.5px] text-slate-400">Emplacement signature patient</span>
-                      <span className="italic text-slate-500 text-[9px]">Lu et approuvé ({patientPhone})</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 text-center">
-                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">Cachet Officiel du Laboratoire :</div>
-                    <div className="h-16 border-2 border-dashed border-teal-300 rounded-lg p-1 flex flex-col items-center justify-center bg-teal-50/20 print:bg-white text-teal-900/60">
-                      <span className="text-[9px] font-black uppercase tracking-wider">Zone Cachet Humide</span>
-                      <span className="text-[7.5px] font-mono">(Physical Official Stamp & Seal)</span>
-                    </div>
-                  </div>
-
-                  <div className="text-right space-y-1">
-                    <div className="font-bold text-slate-900 uppercase text-[9.5px]">{biologistSignatureTitle} :</div>
-                    <div className="h-16 border border-dashed border-slate-300 rounded-lg p-1.5 flex flex-col items-end justify-between bg-slate-50/40 print:bg-white">
-                      <span className="text-[8.5px] text-slate-400">Signature Biologiste</span>
-                      <div className="font-serif font-black text-blue-950 italic text-xs leading-none">
-                        <div>{directorName}</div>
-                        <div className="text-[8px] font-sans font-normal text-slate-500 not-italic pt-0.5">Biologiste-Clinicien Agréé</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+             {/* Reserved blank space for physical stamp / signature */}
+<div className="print-signature-block pt-6 pb-4" style={{ minHeight: '60mm' }} />
               </div>
             ) : (
               /* ========================================================================= */
@@ -922,16 +895,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
                   </div>
                 </div>
 
-                <div className="print-signature-block pt-4 border-t border-slate-200 flex items-center justify-between text-[10px]">
-                  <div>
-                    <div className="text-slate-500">Signature Bénéficiaire:</div>
-                    <div className="h-8 flex items-end italic text-slate-400">Lu et approuvé</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-slate-500">{biologistSignatureTitle}:</div>
-                    <div className="font-serif font-black text-teal-950 italic text-sm">{directorName}</div>
-                  </div>
-                </div>
+              
 
               </div>
             )}

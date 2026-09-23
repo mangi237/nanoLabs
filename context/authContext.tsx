@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
 import { ensureFirebaseAuth } from '../services/firebase';
+import { getActiveLabLogo, setActiveLabLogo } from '../utils/labBranding';
 
 // Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
 const AsyncStorage = {
@@ -86,6 +87,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const setLabWithPersistence = (newLab: any) => {
+    let labToSave = newLab;
+    if (newLab) {
+      const activeLogo = getActiveLabLogo(newLab) || newLab.logoUrl;
+      if (newLab.logoUrl) {
+        setActiveLabLogo(newLab.logoUrl, newLab.id);
+      } else if (activeLogo) {
+        labToSave = { ...newLab, logoUrl: activeLogo };
+      }
+      setLab(labToSave);
+      AsyncStorage.setItem('lab', JSON.stringify(labToSave));
+      try {
+        localStorage.setItem('lab', JSON.stringify(labToSave));
+      } catch {}
+    } else {
+      setLab(null);
+      localStorage.removeItem('lab');
+    }
+  };
+
   const checkAuthStatus = async () => {
     try {
       await ensureFirebaseAuth();
@@ -102,9 +123,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      if (storedUser && storedLab) {
-        setUser(JSON.parse(storedUser));
-        setLab(JSON.parse(storedLab));
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        let parsedLab = storedLab ? JSON.parse(storedLab) : null;
+        
+        if (!parsedLab && parsedUser?.labId) {
+          parsedLab = { id: parsedUser.labId, name: parsedUser.labName || 'Laboratory Center' };
+        }
+
+        if (parsedLab) {
+          const cachedLogo = getActiveLabLogo(parsedLab);
+          if (cachedLogo) {
+            parsedLab.logoUrl = cachedLogo;
+          }
+          setLab(parsedLab);
+        }
+
+        setUser(parsedUser);
         setIsAuthenticated(true);
       }
     } catch (error) {
@@ -276,7 +311,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshToken,
       clearSession,
       setUser: setUserWithPersistence,
-      setLab,
+      setLab: setLabWithPersistence,
       createStaffWithCode,
       resetStaffAccessCode,
       verifyAccessCode,

@@ -24,6 +24,7 @@ import { PatientBooking, BookingTestItem } from '../../services/limsService';
 import { formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
 import { useAuth } from '../../context/authContext';
+import { useLabBranding, setActiveLabHeader } from '../../utils/labBranding';
 
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
@@ -42,10 +43,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   isStaffOrAdmin,
   filterTestIndex: initialFilterTestIndex
 }) => {
-  const { user } = useAuth();
+  const { user, lab } = useAuth();
+  const targetLab = lab || labInfo;
+  const { logoUrl: brandLogo, headerUrl: brandHeader, setHeader } = useLabBranding(targetLab);
+
   const canCustomizeTemplates = isStaffOrAdmin !== undefined ? isStaffOrAdmin : (user?.role && user.role !== 'patient');
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
+  const [headerChoice, setHeaderChoice] = useState<'auto' | 'image' | 'profile' | 'placeholder'>('auto');
   const [selectedTestFilter, setSelectedTestFilter] = useState<number | null>(
     initialFilterTestIndex !== undefined ? initialFilterTestIndex : null
   );
@@ -80,15 +85,20 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      const updated = [...templates];
-      const targetIdx = selectedTemplateIndex;
-      updated[targetIdx] = {
-        ...updated[targetIdx],
-        headerImageUrl: result,
-        useHeaderImageOnly: true
-      };
-      setTemplates(updated);
-      localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
+      if (result) {
+        setHeader(result);
+        const updated = [...templates];
+        const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
+        updated[targetIdx] = {
+          ...updated[targetIdx],
+          headerImageUrl: result,
+          useHeaderImageOnly: true
+        };
+        setTemplates(updated);
+        setSelectedTemplateIndex(targetIdx);
+        setHeaderChoice('image');
+        localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -99,13 +109,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     reader.onload = (e) => {
       const result = e.target?.result as string;
       const updated = [...templates];
-      const targetIdx = selectedTemplateIndex;
+      const targetIdx = selectedTemplateIndex >= 2 ? selectedTemplateIndex : 2;
       updated[targetIdx] = {
         ...updated[targetIdx],
         footerImageUrl: result,
         useFooterImageOnly: true
       };
       setTemplates(updated);
+      setSelectedTemplateIndex(targetIdx);
       localStorage.setItem('nanoLabs_header_footer_templates', JSON.stringify(updated));
     };
     reader.readAsDataURL(file);
@@ -115,26 +126,46 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 
   const currentTpl = templates[selectedTemplateIndex] || templates[0] || DEFAULT_HEADER_FOOTER_TEMPLATES[0];
 
-  const labName = currentTpl.labName || labInfo?.name || booking.labName || booking.labDetails?.name || 'nanoLabs Clinical Diagnostics Center';
-  const labSlogan = currentTpl.subTitle || labInfo?.slogan || labInfo?.tagline || booking.labDetails?.slogan || 'Accredited Medical Biology & Clinical Laboratory Services';
-  const labAddress = currentTpl.address || labInfo?.address || labInfo?.location || booking.labAddress || 'Boulevard de la Liberté, Akwa Medical Hub';
-  const labPhone = currentTpl.phone || labInfo?.phone || booking.labPhone || '+237 233 42 88 00';
-  const labEmergency = currentTpl.emergencyPhone || '+237 699 92 91 98';
-  const labEmail = currentTpl.email || labInfo?.email || booking.labEmail || 'contact@nanolabs-diagnostics.cm';
-  const labWebsite = currentTpl.website || labInfo?.website || booking.labWebsite || 'www.nanolabs-diagnostics.cm';
-  const labArrete = currentTpl.arreteNumber || 'Arrêté N° 045/A/NANOLABS/SG/DPS/2026';
-  const labAgrement = currentTpl.agrementNumber || 'Agrément N° 088/NANOLABS';
-  const labTaxId = currentTpl.taxNumber || 'M039900008877A';
-  const labDirectorName = currentTpl.directorName || 'Prof. Dr. Roland Enow';
-  const labDirectorDiplomas = currentTpl.directorDiplomas || 'MD, PhD in Clinical Biology & Pathology';
-  const labDirectorSpecialties = currentTpl.directorSpecialties || 'Clinical Chemistry, Molecular Diagnostics & Automated Hematology';
-  const biologistSignatureTitle = currentTpl.biologistSignatureTitle || 'Directeur de Laboratoire & Biologiste Responsable';
-  const footerNotes = currentTpl.footerNotes || 'Accredited Laboratory per ISO 15189 standards.';
+  // Dynamic Lab details - strictly NO mock text like "Accredited Medical Biology..."
+  const rawLabName = targetLab?.name || booking.labName || booking.labDetails?.name;
+  const isMockName = rawLabName && (
+    rawLabName.toLowerCase().includes('accredited medical') || 
+    rawLabName.toLowerCase().includes('bla bla') ||
+    rawLabName.toLowerCase().includes('nanolabs clinical diagnostics center')
+  );
+  const activeLabName = (!isMockName && rawLabName) ? rawLabName : (targetLab?.name || null);
+  const labSlogan = targetLab?.slogan || targetLab?.tagline || booking.labDetails?.slogan || null;
+  const labAddress = targetLab?.address || targetLab?.location || booking.labAddress || null;
+  const labPhone = targetLab?.phone || booking.labPhone || null;
+  const labEmergency = targetLab?.emergencyPhone || targetLab?.phone || null;
+  const labEmail = targetLab?.email || booking.labEmail || null;
+  const labWebsite = targetLab?.website || booking.labWebsite || null;
+  const labArrete = targetLab?.arreteNumber || null;
+  const labAgrement = targetLab?.agrementNumber || null;
+  const labTaxId = targetLab?.taxNumber || null;
+  const labDirectorName = targetLab?.directorName || booking.biologistName || 'Biologiste Médical Responsable';
+  const labDirectorDiplomas = targetLab?.directorDiplomas || null;
+  const labDirectorSpecialties = targetLab?.directorSpecialties || null;
+  const biologistSignatureTitle = targetLab?.biologistSignatureTitle || 'Directeur de Laboratoire & Biologiste Responsable';
+  const footerNotes = currentTpl.footerNotes || 'Compte-rendu conforme aux exigences de validation biologique médicale.';
+
+  // Determine active header image & profile validity
+  const activeHeaderImageUrl = currentTpl.headerImageUrl || brandHeader;
+  const hasRealLabHeader = !!(activeLabName && (labAddress || labPhone));
+
+  const showHeaderImage = (headerChoice === 'image' && !!activeHeaderImageUrl) ||
+    (headerChoice === 'auto' && !!activeHeaderImageUrl);
+
+  const showHeaderProfile = (headerChoice === 'profile' && hasRealLabHeader) ||
+    (headerChoice === 'auto' && !activeHeaderImageUrl && hasRealLabHeader);
+
+  const showPlaceholderBox = !showHeaderImage && !showHeaderProfile;
 
   const handlePrint = () => {
     window.print();
   };
 
+  // Generate formatted registration, collection, and reporting timestamps
   const registeredTimeStr = booking.createdAt 
     ? new Date(booking.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '02:31 PM 02 Dec, 2026';
@@ -148,10 +179,10 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
     : '04:35 PM 02 Dec, 2026';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:!block print:!max-h-none print:!h-auto print:!static print:!w-full print:!max-w-none print:!p-0 print:!m-0 print:!border-none print:!shadow-none print:!bg-white print:!rounded-none print:!animate-none print:!transform-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
         
-        {/* Top Control Bar */}
+        {/* Top Control Bar (Non-printable) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shrink-0">
@@ -171,23 +202,49 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Header Selector & Upload Controls */}
             {canCustomizeTemplates && (
               <>
+                {/* Lab Header Source Selector */}
                 <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
-                  {templates.slice(0, 4).map((tpl, idx) => (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      onClick={() => setSelectedTemplateIndex(idx)}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                        selectedTemplateIndex === idx
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {idx === 0 ? 'Template 1' : idx === 1 ? 'Template 2' : `Custom ${idx - 1}`}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setHeaderChoice('image')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      headerChoice === 'image' || (headerChoice === 'auto' && activeHeaderImageUrl)
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Utiliser l'image d'en-tête officielle"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>En-tête Image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHeaderChoice('profile')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      headerChoice === 'profile'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Utiliser le profil et les coordonnées du laboratoire"
+                  >
+                    <Building2 className="w-3 h-3" />
+                    <span>Profil Lab</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHeaderChoice('placeholder')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      headerChoice === 'placeholder' || (!activeHeaderImageUrl && !hasRealLabHeader && headerChoice === 'auto')
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Afficher l'encadré 'LAB HEADER WILL GO HERE'"
+                  >
+                    <span>Sans En-tête</span>
+                  </button>
                 </div>
 
                 <input 
@@ -212,11 +269,11 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <button
                   type="button"
                   onClick={() => headerFileInputRef.current?.click()}
-                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 cursor-pointer transition-all"
-                  title="Upload custom top letterhead image"
+                  className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl border border-teal-500 shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  title="Téléverser une image d'en-tête de laboratoire (PNG, JPG)"
                 >
-                  <Upload className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Upload Header</span>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Téléverser En-tête</span>
                 </button>
 
                 <button
@@ -231,6 +288,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </>
             )}
 
+            {/* Print Scope (Batch vs Single Test) */}
             {booking.tests && booking.tests.length > 1 && (
               <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700">
                 <span className="text-[11px] font-bold text-slate-300 pl-2">Print:</span>
@@ -269,196 +327,146 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible print:flex-none print:block">
+        <div className="overflow-y-auto flex-1 p-1 sm:p-4 bg-slate-100 my-2 rounded-2xl print:p-0 print:m-0 print:bg-white print:overflow-visible">
           
           <style>{`
-            /* ============ WATERMARK (SCREEN + PRINT) ============ */
-            .watermark-layer {
-              position: absolute;
-              inset: 0;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              z-index: 0;
-              overflow: hidden;
-              border-radius: inherit;
-            }
-            .watermark-logo {
-              width: 60%;
-              max-width: 420px;
-              object-fit: contain;
-              opacity: 0.06;
-              filter: grayscale(100%);
-              transform: rotate(-15deg);
-              user-select: none;
-              pointer-events: none;
-            }
-            #medical-report-sheet > *:not(.watermark-layer) {
-              position: relative;
-              z-index: 1;
-            }
-
             @media print {
-              @page {
-                size: A4;
-                margin: 12mm 10mm 14mm 10mm;
-              }
-
-              html, body {
+              body, html {
                 background: #ffffff !important;
                 background-color: #ffffff !important;
                 color: #000000 !important;
               }
-
-              /* Watermark fixed → repeats on EVERY printed page */
-              .watermark-layer {
-                position: fixed !important;
-                inset: 0 !important;
-                z-index: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-              }
-              .watermark-logo {
-                width: 65% !important;
-                max-width: 480px !important;
-                opacity: 0.08 !important;
-                filter: grayscale(100%) !important;
-                transform: rotate(-15deg) !important;
-              }
-
               #medical-report-sheet {
-                background: transparent !important;
+                background: #ffffff !important;
+                background-color: #ffffff !important;
                 color: #000000 !important;
                 box-shadow: none !important;
                 border: none !important;
-                border-radius: 0 !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 max-width: 100% !important;
-                display: block !important;
-                position: relative !important;
-                z-index: 1 !important;
               }
-
-              /* Printed frame border around every page */
-              #medical-report-sheet::before {
-                content: '';
-                position: fixed;
-                top: 8mm;
-                right: 6mm;
-                bottom: 10mm;
-                left: 6mm;
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-                pointer-events: none;
-                z-index: 2;
-              }
-
-              #medical-report-sheet table,
-              #medical-report-sheet * {
-                max-width: 100% !important;
-              }
-
-              .print-header-block { break-after: avoid; page-break-after: avoid; position: relative; z-index: 3; }
-              .print-patient-box  { break-inside: avoid; page-break-inside: avoid; }
-              .print-test-section { break-inside: auto; page-break-inside: auto; }
-              .print-test-title   { break-after: avoid; page-break-after: avoid; }
-              .print-test-table thead { display: table-header-group; }
-              .print-test-table tr    { break-inside: avoid; page-break-inside: avoid; }
-              .print-signature-block,
-              .print-footer-block { break-inside: avoid; page-break-inside: avoid; position: relative; z-index: 3; }
-
               .print-pure-white {
                 background: #ffffff !important;
+                background-color: #ffffff !important;
                 color: #000000 !important;
                 border-color: #000000 !important;
               }
-              .no-print { display: none !important; }
+              .no-print {
+                display: none !important;
+              }
             }
           `}</style>
 
           <div 
             id="medical-report-sheet"
-            className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 print:bg-white space-y-4 relative"
+            className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 print:bg-white space-y-4"
           >
             
-            {/* ============ WATERMARK LAYER ============ */}
-            {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
-              <div className="watermark-layer" aria-hidden="true">
-                <img
-                  src={labInfo?.logoUrl || (booking as any).labLogoUrl}
-                  alt=""
-                  className="watermark-logo"
+            {/* Top Header: Custom Uploaded Image OR Laboratory Profile OR Required Placeholder Box */}
+            {showHeaderImage ? (
+              <div className="border-b-2 border-slate-900 pb-2">
+                <img 
+                  src={activeHeaderImageUrl!} 
+                  alt={activeLabName || 'Official Laboratory Header'} 
+                  style={{ maxHeight: `${currentTpl.headerImageHeight || 110}px` }}
+                  className="w-full object-contain mx-auto"
                 />
               </div>
-            )}
-
-            {/* Top Header */}
-            <div className="print-header-block">
-              {currentTpl.headerImageUrl ? (
-                <div className="border-b-2 border-slate-900 pb-2">
-                  <img 
-                    src={currentTpl.headerImageUrl} 
-                    alt={labName} 
-                    style={{ maxHeight: `${currentTpl.headerImageHeight || 110}px` }}
-                    className="w-full object-contain mx-auto"
-                  />
-                </div>
-              ) : (
-                <div className="border-b-2 border-slate-900 pb-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-full bg-slate-900 print:bg-white print:border-2 print:border-black text-white print:text-black font-black flex items-center justify-center shadow-md border-2 border-white shrink-0">
+            ) : showHeaderProfile ? (
+              <div className="border-b-2 border-slate-900 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  {/* Left Lab Branding */}
+                  <div className="flex items-center gap-3">
+                    {brandLogo ? (
+                      <img
+                        src={brandLogo}
+                        alt={activeLabName || 'Lab Logo'}
+                        className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-sm shrink-0"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-xl bg-slate-900 print:bg-white print:border-2 print:border-black text-white print:text-black font-black flex items-center justify-center shadow-md shrink-0">
                         <Building2 className="w-8 h-8 text-white print:text-black" />
                       </div>
-                      <div>
-                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
-                          {labName}
-                        </h1>
+                    )}
+                    <div>
+                      <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+                        {activeLabName}
+                      </h1>
+                      {labSlogan && (
                         <div className="text-xs font-bold text-teal-800 print:text-black tracking-wide uppercase">
                           {labSlogan}
                         </div>
+                      )}
+                      {(labAddress || currentTpl.bpCity) && (
                         <div className="text-[10px] text-slate-600 print:text-black leading-tight max-w-sm mt-0.5">
-                          {labAddress} {currentTpl.bpCity ? `• ${currentTpl.bpCity}` : ''}
-                        </div>
-                        <div className="text-[9px] text-slate-500 print:text-black font-mono">
-                          {labArrete} • {labAgrement} • N.I.U: {labTaxId}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end text-[11px] text-slate-700 print:text-black space-y-1">
-                      <div className="flex items-center gap-1 font-bold text-slate-900 print:text-black">
-                        <Phone className="w-3.5 h-3.5 text-slate-800 print:text-black" />
-                        <span>{labPhone}</span>
-                      </div>
-                      {labEmail && (
-                        <div className="flex items-center gap-1 font-medium text-slate-600 print:text-black">
-                          <Mail className="w-3.5 h-3.5 text-slate-800 print:text-black" />
-                          <span>{labEmail}</span>
+                          {[labAddress, currentTpl.bpCity].filter(Boolean).join(' • ')}
                         </div>
                       )}
-                      {labWebsite && (
-                        <div className="bg-slate-100 print:bg-white print:border print:border-black text-slate-800 print:text-black px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
-                          <Globe className="w-3 h-3 text-slate-700 print:text-black" />
-                          <span>{labWebsite.replace(/^https?:\/\//, '')}</span>
+                      {(labArrete || labAgrement || labTaxId) && (
+                        <div className="text-[9px] text-slate-500 print:text-black font-mono">
+                          {[labArrete, labAgrement, labTaxId ? `N.I.U: ${labTaxId}` : ''].filter(Boolean).join(' • ')}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="h-0.5 w-full bg-slate-900 mt-3"></div>
+                  {/* Right Top Contact Bar */}
+                  <div className="flex flex-col items-end text-[11px] text-slate-700 print:text-black space-y-1">
+                    {labPhone && (
+                      <div className="flex items-center gap-1 font-bold text-slate-900 print:text-black">
+                        <Phone className="w-3.5 h-3.5 text-slate-800 print:text-black" />
+                        <span>{labPhone}</span>
+                      </div>
+                    )}
+                    {labEmail && (
+                      <div className="flex items-center gap-1 font-medium text-slate-600 print:text-black">
+                        <Mail className="w-3.5 h-3.5 text-slate-800 print:text-black" />
+                        <span>{labEmail}</span>
+                      </div>
+                    )}
+                    {labWebsite && (
+                      <div className="bg-slate-100 print:bg-white print:border print:border-black text-slate-800 print:text-black px-3 py-1 rounded-md text-[11px] font-bold shadow-xs flex items-center gap-1">
+                        <Globe className="w-3 h-3 text-slate-700 print:text-black" />
+                        <span>{labWebsite.replace(/^https?:\/\//, '')}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="h-0.5 w-full bg-slate-900 mt-3"></div>
+              </div>
+            ) : (
+              /* Required Dynamic Box When Lab Does Not Have a Header */
+              <div className="border-b-2 border-slate-900 pb-3">
+                <div className="w-full border-2 border-dashed border-teal-500 bg-teal-50/50 rounded-xl p-6 sm:p-8 text-center text-teal-950 flex flex-col items-center justify-center gap-2 print:border-slate-800 print:bg-white select-none">
+                  <Building2 className="w-8 h-8 text-teal-700 print:text-black" />
+                  <div className="font-black text-base sm:text-lg uppercase tracking-wider text-teal-950 print:text-black">
+                    LAB HEADER WILL GO HERE
+                  </div>
+                  <p className="text-xs text-teal-800/80 print:text-slate-600 max-w-md">
+                    No official laboratory letterhead configured. Upload your header image now using the button above.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => headerFileInputRef.current?.click()}
+                    className="no-print mt-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Lab Header Image</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Patient Metadata Grid Box */}
-            <div className="print-patient-box border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 print:p-2 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 print:grid-cols-12 gap-3 print:gap-2 text-xs print:text-[10px]">
-              <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1">
+            <div className="border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
+              
+              {/* Left Demographic Column */}
+              <div className="md:col-span-4 space-y-1.5">
                 <div>
-                  <div className="text-base print:text-sm font-black text-slate-900 notranslate" translate="no">
-                    {booking.patientName || 'NOT AVAILABLE'}
+                  <div className="text-base font-black text-slate-900 notranslate" translate="no">
+                    {booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS'}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-700">
@@ -477,17 +485,18 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 </div>
               </div>
 
-              <div className="md:col-span-4 print:col-span-4 border-y md:border-y-0 md:border-x print:border-y-0 print:border-x border-slate-200 py-2 md:py-0 md:px-3 print:py-0 print:px-3 flex flex-col justify-between space-y-2 print:space-y-1">
+              {/* Middle Sample / Ref By Column */}
+              <div className="md:col-span-4 border-y md:border-y-0 md:border-x border-slate-200 py-2 md:py-0 md:px-3 flex flex-col justify-between space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
-                    <QrCode className="w-10 h-10 print:w-8 print:h-8 text-slate-900" />
+                    <QrCode className="w-10 h-10 text-slate-900" />
                   </div>
                   <div className="text-[10px] text-slate-600 leading-tight">
                     <div className="font-bold text-slate-800">Sample Matrix:</div>
                     <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
                   </div>
                 </div>
-                <div className="bg-slate-50 print:bg-white p-1.5 rounded-lg border border-slate-200 print:border-slate-300">
+                <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
                   <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
                   <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
                     Ref. Doctor: {booking.referringDoctor || booking.doctorName || 'Dr. Emmanuel Nkuo'}
@@ -498,7 +507,8 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 </div>
               </div>
 
-              <div className="md:col-span-4 print:col-span-4 space-y-1.5 print:space-y-1 text-right flex flex-col justify-between">
+              {/* Right Barcode & Timestamps Column */}
+              <div className="md:col-span-4 space-y-1.5 text-right flex flex-col justify-between">
                 <div>
                   <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
                     ||||| | ||| |||| || | || ||||
@@ -523,16 +533,18 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 </div>
               </div>
+
             </div>
 
-            {/* Test Results Section */}
+            {/* Test Results Section with Multi-tier Hierarchy (Department -> Sub-Header -> Parameters) */}
             {((selectedTestFilter !== null && selectedTestFilter !== undefined && booking.tests?.[selectedTestFilter])
               ? [booking.tests[selectedTestFilter]]
               : (booking.tests || [])
             ).map((testItem: BookingTestItem, tIdx: number) => (
-              <div key={testItem.id || tIdx} className="space-y-2 pt-1 print-test-section">
+              <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
-                <div className="print-test-title text-center border-b-2 border-slate-800 pb-1 bg-slate-50/50 p-2 rounded-t-lg">
+                {/* Centered Bold Test Title */}
+                <div className="text-center border-b-2 border-slate-800 pb-1 bg-slate-50/50 p-2 rounded-t-lg">
                   <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
                     {testItem.testName || 'Complete Blood Count (CBC)'}
                   </h2>
@@ -543,14 +555,16 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 </div>
 
+                {/* If test was completed via A4 Rich Canvas, render richReportHtml cleanly */}
                 {testItem.richReportHtml ? (
                   <div 
                     className="py-3 px-2 bg-white text-slate-900 overflow-x-auto print:p-0"
                     dangerouslySetInnerHTML={{ __html: testItem.richReportHtml }}
                   />
                 ) : (
+                  /* Sub-parameters or Direct Value Table */
                   <div className="relative overflow-hidden bg-white">
-                    <table className="w-full text-left text-xs border-collapse relative z-10 print-test-table">
+                    <table className="w-full text-left text-xs border-collapse relative z-10">
                       <thead>
                         <tr className="border-b-2 border-slate-400 text-slate-800 text-[11px] bg-slate-100">
                           <th className="py-2 px-3 font-black uppercase">Investigation / Parameter</th>
@@ -655,6 +669,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 )}
 
+                {/* Antibiogram / Antibiotic Susceptibility Matrix Table (if available) */}
                 {testItem.antibiogram && testItem.antibiogram.length > 0 && (
                   <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-300 space-y-2">
                     <div className="flex items-center justify-between pb-1 border-b border-slate-300">
@@ -707,6 +722,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 )}
 
+                {/* Instruments & Interpretation */}
                 <div className="pt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-200">
                   <div>
                     <strong className="text-slate-900">Method / Instruments: </strong>
@@ -721,6 +737,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </div>
             ))}
 
+            {/* End of Report Strip */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
               <span className="font-semibold italic">Merci pour votre confiance</span>
               <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">
@@ -728,75 +745,11 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </span>
             </div>
 
-            <div className="print-signature-block pt-4 border-t-2 border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs items-end">
-              <div>
-                <div className="h-10 flex items-center justify-center font-serif text-slate-800 italic font-bold text-sm tracking-wide">
-                  {booking.tests?.[0]?.completedBy || booking.assignedTechName || 'Technicien de Laboratoire'}
-                </div>
-                <div className="font-black text-slate-900">Technicien Analyste</div>
-                <div className="text-[10px] text-slate-500 font-medium">Exécuté et Validé</div>
-              </div>
-
-              <div>
-                <div className="h-10 flex items-center justify-center font-serif text-blue-900 italic font-bold text-sm tracking-wide">
-                  {labDirectorName}
-                </div>
-                <div className="font-black text-slate-900">{labDirectorName}</div>
-                <div className="text-[10px] text-slate-500 font-medium">{biologistSignatureTitle}</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="h-14 border-2 border-dashed border-slate-400 print:border-black rounded-lg p-1 flex flex-col items-center justify-center bg-white print:bg-white text-slate-800 print:text-black">
-                  <span className="text-[8.5px] font-black uppercase tracking-wider">Cachet Officiel</span>
-                  <span className="text-[7px] font-mono">(Physical Stamp & Seal)</span>
-                </div>
-                <div className="font-black text-slate-900 print:text-black text-[10px]">Visa du Laboratoire</div>
-              </div>
-
-              <div className="hidden sm:block">
-                <div className="h-10 flex items-center justify-center font-serif text-slate-900 print:text-black italic font-bold text-sm tracking-wide">
-                  {labName}
-                </div>
-                <div className="font-black text-slate-900 print:text-black">Contrôle Qualité & Visa</div>
-                <div className="text-[10px] text-slate-600 print:text-black font-medium font-mono">
-                  {labArrete}
-                </div>
-              </div>
-            </div>
-
-            <div className="print-footer-block">
-              {currentTpl.footerImageUrl ? (
-                <div className="mt-4 pt-2 border-t border-slate-300 print:border-black">
-                  <img 
-                    src={currentTpl.footerImageUrl} 
-                    alt="Footer Stamp" 
-                    style={{ maxHeight: `${currentTpl.footerImageHeight || 60}px` }}
-                    className="w-full object-contain mx-auto"
-                  />
-                </div>
-              ) : (
-                <div className="bg-white print:bg-white text-slate-800 print:text-black border border-slate-300 print:border-black rounded-xl overflow-hidden p-2.5 flex items-center justify-between text-[11px] gap-2 shadow-2xs print:shadow-none">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 bg-slate-100 print:bg-white text-slate-800 print:text-black rounded-md">
-                      <Truck className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-bold uppercase tracking-wider text-[10px] text-slate-700 print:text-black">
-                      {footerNotes}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 border border-slate-300 print:border-black bg-slate-50 print:bg-white text-slate-900 print:text-black px-2.5 py-0.5 rounded-md font-bold text-[10px]">
-                    <MessageCircle className="w-3 h-3 text-slate-700 print:text-black" />
-                    <span>{labPhone}</span>
-                  </div>
-
-                  <div className="text-[10px] text-slate-600 print:text-black font-mono">
-                    Édité le: {reportedTimeStr}
-                  </div>
-                </div>
-              )}
-            </div>
-
+            {/* Signatures & Pathologist Sign-Off Block */}
+         
+            <div className="print-signature-block pt-6 pb-4" style={{ minHeight: '60mm' }} />
+            {/* Bottom Footer: Custom Uploaded Image OR Accredited Strip */}
+          
           </div>
 
         </div>

@@ -12,13 +12,16 @@ import {
   Layers, 
   Eye, 
   Save, 
-  AlertCircle
+  AlertCircle,
+  Building2
 } from 'lucide-react';
 import { 
   ClinicalTemplate, 
   ClinicalParameter, 
   clinicalTemplatesService 
 } from '../../data/clinicalTemplates';
+import { useAuth } from '../../context/authContext';
+import { useLabBranding } from '../../utils/labBranding';
 
 interface ClinicalTemplateManagerModalProps {
   isOpen: boolean;
@@ -35,6 +38,18 @@ export const ClinicalTemplateManagerModal: React.FC<ClinicalTemplateManagerModal
   initialTemplateToEdit,
   startInCreateMode = false
 }) => {
+  const { lab } = useAuth();
+  const { logoUrl: brandLogo, headerUrl: brandHeader } = useLabBranding(lab);
+
+  const rawLabName = lab?.name;
+  const isMockName = rawLabName && (
+    rawLabName.toLowerCase().includes('accredited medical') || 
+    rawLabName.toLowerCase().includes('bla bla')
+  );
+  const activeLabName = (!isMockName && rawLabName) ? rawLabName : null;
+  const activeLabAddress = lab?.address || null;
+  const hasRealLabHeader = !!(activeLabName && activeLabAddress);
+
   const [templates, setTemplates] = useState<ClinicalTemplate[]>(() => clinicalTemplatesService.getAllTemplates());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -492,6 +507,49 @@ export const ClinicalTemplateManagerModal: React.FC<ClinicalTemplateManagerModal
             {/* Tab 3: Preview */}
             {activeTab === 'preview' && (
               <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-inner min-h-[300px]">
+                {/* Official Lab Header or Placeholder Box */}
+                {brandHeader ? (
+                  <div className="w-full pb-4 mb-4 border-b border-slate-200">
+                    <img 
+                      src={brandHeader} 
+                      alt={activeLabName || 'Official Laboratory Header'} 
+                      className="w-full max-h-[100px] object-contain mx-auto select-none"
+                    />
+                  </div>
+                ) : hasRealLabHeader ? (
+                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                      {brandLogo ? (
+                        <img 
+                          src={brandLogo} 
+                          alt={activeLabName || 'Lab Logo'} 
+                          className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl object-contain border border-slate-200 p-0.5"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black">
+                          <Building2 className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-black text-slate-900 uppercase text-sm">{activeLabName}</h3>
+                        {activeLabAddress && <p className="text-[11px] text-slate-500">{activeLabAddress}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full border-2 border-dashed border-teal-400 bg-teal-50/50 rounded-2xl p-5 text-center text-teal-950 flex flex-col items-center justify-center gap-1.5 mb-6 select-none">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-teal-700" />
+                      <span className="font-black text-sm uppercase tracking-wider text-teal-950">
+                        LAB HEADER WILL GO HERE
+                      </span>
+                    </div>
+                    <p className="text-xs text-teal-800/80 font-medium">
+                      (Official laboratory letterhead will be applied on print and PDF export)
+                    </p>
+                  </div>
+                )}
+
                 <div 
                   className="prose prose-sm max-w-none text-slate-900"
                   dangerouslySetInnerHTML={{ __html: editingTemplate.html }}
@@ -633,7 +691,7 @@ export const ClinicalTemplateManagerModal: React.FC<ClinicalTemplateManagerModal
 
         {/* Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span>nanoLabs Precision Diagnostic System • Modèles conformes aux normes ISO 15189</span>
+          <span>nanoLabs LIMS • Modèles et Paramètres Cliniques</span>
           <button
             type="button"
             onClick={onClose}

@@ -20,6 +20,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem } from '../../services/limsService';
+import { useLabBranding } from '../../utils/labBranding';
 
 export interface PatientA4ReportViewerModalProps {
   isOpen: boolean;
@@ -76,13 +77,24 @@ export const PatientA4ReportViewerModal: React.FC<PatientA4ReportViewerModalProp
 
   const isReportSignedAndReady = Boolean(booking.biologistSigned || booking.overallStatus === 'Completed' || booking.status === 'ready');
 
-  const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = booking.labAdress || booking.labDetails?.address || booking.labDetails?.location || 'UNAVAILABLE';
-  const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
-  const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
-  const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° UNAVAILABLE';
+  const bAny = booking as any;
+  const targetLab = bAny.labDetails || (booking.labId ? { id: booking.labId, name: booking.labName } : undefined);
+  const { logoUrl: brandLogo, headerUrl: brandHeader } = useLabBranding(targetLab);
+
+  const rawLabName = booking.labName || bAny.labDetails?.name;
+  const isMockName = rawLabName && (
+    rawLabName.toLowerCase().includes('accredited medical') || 
+    rawLabName.toLowerCase().includes('bla bla')
+  );
+  const activeLabName = (!isMockName && rawLabName) ? rawLabName : null;
+  const labAddress = bAny.labAddress || bAny.labDetails?.address || bAny.labDetails?.location || null;
+  const labPhone = bAny.labPhone || bAny.labDetails?.phone || null;
+  const labEmail = bAny.labEmail || bAny.labDetails?.email || null;
+  const labAccreditation = bAny.labAccreditation || bAny.labDetails?.accreditation || null;
+  const hasRealLabHeader = !!(activeLabName && (labAddress || labPhone));
+
   const biologistName = booking.biologistName || 'Biologiste Médical Agréé';
-  const biologistLicense = booking.biologistLicense || 'ONMC / ONPC UNAVAILABLE';
+  const biologistLicense = bAny.biologistLicense || '';
 
   const patientName = booking.patientName || 'Valued Patient';
   const patientAge = booking.patientAge || 'Adult';
@@ -122,7 +134,7 @@ export const PatientA4ReportViewerModal: React.FC<PatientA4ReportViewerModalProp
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Laboratory:</span>
-              <span className="text-teal-300 font-bold">{labName}</span>
+              <span className="text-teal-300 font-bold">{activeLabName || 'Official Laboratory'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Current Status:</span>
@@ -343,31 +355,60 @@ export const PatientA4ReportViewerModal: React.FC<PatientA4ReportViewerModalProp
                     {/* TOP LOCKED SECTION: Accredited Laboratory Header & Patient Bar */}
                     {/* ------------------------------------------------------------- */}
                     <div className="space-y-4 border-b-2 border-teal-800 pb-4">
-                      {/* Lab Official Letterhead */}
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
-                            <Building2 className="w-7 h-7" />
-                          </div>
-                          <div className="space-y-0.5">
-                            <h2 className="text-base font-black text-teal-950 tracking-tight uppercase">
-                              {labName}
-                            </h2>
-                            <p className="text-[11px] font-bold text-teal-700 tracking-wide">
-                              LABORATOIRE D'ANALYSES DE BIOLOGIE MÉDICALE
-                            </p>
-                            <p className="text-[10px] text-slate-500">
-                              {labAddress} • {labAccreditation}
-                            </p>
-                          </div>
+                      {/* Lab Official Letterhead or Required Dynamic Placeholder */}
+                      {brandHeader ? (
+                        <div className="w-full pb-2">
+                          <img 
+                            src={brandHeader} 
+                            alt={activeLabName || 'Official Laboratory Header'} 
+                            className="w-full max-h-[110px] object-contain mx-auto"
+                          />
                         </div>
+                      ) : hasRealLabHeader ? (
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            {brandLogo ? (
+                              <img
+                                src={brandLogo}
+                                alt={activeLabName || 'Lab Logo'}
+                                className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-xs shrink-0"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
+                                <Building2 className="w-7 h-7" />
+                              </div>
+                            )}
+                            <div className="space-y-0.5">
+                              <h2 className="text-base font-black text-teal-950 tracking-tight uppercase">
+                                {activeLabName}
+                              </h2>
+                              <p className="text-[11px] font-bold text-teal-700 tracking-wide">
+                                LABORATOIRE D'ANALYSES DE BIOLOGIE MÉDICALE
+                              </p>
+                              {(labAddress || labAccreditation) && (
+                                <p className="text-[10px] text-slate-500">
+                                  {[labAddress, labAccreditation].filter(Boolean).join(' • ')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
 
-                        <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono shrink-0">
-                          <div>Tél : {labPhone}</div>
-                          <div>Email : {labEmail}</div>
-                          <div className="font-bold text-teal-900">Système LIMS Sécurisé</div>
+                          <div className="text-right text-[10px] text-slate-500 space-y-0.5 font-mono shrink-0">
+                            {labPhone && <div>Tél : {labPhone}</div>}
+                            {labEmail && <div>Email : {labEmail}</div>}
+                            <div className="font-bold text-teal-900">Système LIMS Sécurisé</div>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="w-full border-2 border-dashed border-teal-500 bg-teal-50/50 rounded-xl p-5 text-center text-teal-950 flex flex-col items-center justify-center gap-1 select-none print:border-black print:bg-white">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-teal-700 print:text-black" />
+                            <span className="font-black text-sm uppercase tracking-wider text-teal-950 print:text-black">
+                              LAB HEADER WILL GO HERE
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Patient Demographic & Test Bar */}
                       <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
