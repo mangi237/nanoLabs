@@ -34,7 +34,10 @@ import {
   ExternalLink,
   ChevronRight,
   Share2,
-  HelpCircle
+  HelpCircle,
+  Search,
+  X,
+  AlertCircle
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem, limsService } from '../../services/limsService';
 import { useAuth } from '../../context/authContext';
@@ -49,343 +52,15 @@ export interface A4CanvasResultEditorProps {
   onShareWithDoctor?: (testIndex: number, testName: string, summary: string, richHtml: string) => void;
 }
 
-// Built-in pre-formatted clean templates for quick dropping into the Canva workspace
-export const A4_CLINICAL_TEMPLATES = [
-  {
-    id: 'fbc',
-    name: 'Complete Blood Count (NFS / Hémogramme)',
-    category: 'Hematology',
-    html: `
-<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-family: inherit;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">PARAMÈTRE ANALYSÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a; text-align: center;">RÉSULTAT</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">UNITÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">VALEURS USUELLES</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Hémoglobine (Hb)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">13.6</td>
-      <td style="padding: 6px 10px;">g/dL</td>
-      <td style="padding: 6px 10px; color: #64748b;">12.0 - 16.0</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Hématocrite (Ht)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">41.2</td>
-      <td style="padding: 6px 10px;">%</td>
-      <td style="padding: 6px 10px; color: #64748b;">37.0 - 48.0</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Globules Rouges (Hématies)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">4.65</td>
-      <td style="padding: 6px 10px;">M/µL</td>
-      <td style="padding: 6px 10px; color: #64748b;">4.00 - 5.40</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">VGM (Volume Globulaire Moyen)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">88.6</td>
-      <td style="padding: 6px 10px;">fL</td>
-      <td style="padding: 6px 10px; color: #64748b;">80.0 - 98.0</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">TCMH</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">29.2</td>
-      <td style="padding: 6px 10px;">pg</td>
-      <td style="padding: 6px 10px; color: #64748b;">27.0 - 33.0</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">CCMH</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">33.0</td>
-      <td style="padding: 6px 10px;">g/dL</td>
-      <td style="padding: 6px 10px; color: #64748b;">32.0 - 36.0</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-      <td style="padding: 6px 10px; font-weight: 700; color: #0369a1;">Globules Blancs (Leucocytes)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0369a1;">6,800</td>
-      <td style="padding: 6px 10px;">/mm³</td>
-      <td style="padding: 6px 10px; color: #64748b;">4,000 - 10,000</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; padding-left: 20px;">- Polynucléaires Neutrophiles</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 600;">58 % (3,944 /mm³)</td>
-      <td style="padding: 6px 10px;">%</td>
-      <td style="padding: 6px 10px; color: #64748b;">40 - 75 % (2000 - 7500)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; padding-left: 20px;">- Lymphocytes</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 600;">32 % (2,176 /mm³)</td>
-      <td style="padding: 6px 10px;">%</td>
-      <td style="padding: 6px 10px; color: #64748b;">20 - 45 % (1000 - 4000)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; padding-left: 20px;">- Monocytes</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 600;">6 % (408 /mm³)</td>
-      <td style="padding: 6px 10px;">%</td>
-      <td style="padding: 6px 10px; color: #64748b;">2 - 10 % (200 - 1000)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; padding-left: 20px;">- Polynucléaires Éosinophiles</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 600;">3 % (204 /mm³)</td>
-      <td style="padding: 6px 10px;">%</td>
-      <td style="padding: 6px 10px; color: #64748b;">1 - 5 % (40 - 500)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-      <td style="padding: 6px 10px; font-weight: 700; color: #0f766e;">Plaquettes Sanguines</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">265,000</td>
-      <td style="padding: 6px 10px;">/mm³</td>
-      <td style="padding: 6px 10px; color: #64748b;">150,000 - 450,000</td>
-    </tr>
-  </tbody>
-</table>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> Hémogramme d'aspect normocytaire normochrome équilibré. Absence d'anémie. Formule leucocytaire sans anomalie quantitative ni qualitative. Plaquettes satisfaisantes.
-</div>`
-  },
-  {
-    id: 'widal',
-    name: 'Widal & Félix Serodiagnosis (Fièvre Typhoïde)',
-    category: 'Serology',
-    html: `
-<div style="margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #0f172a;">
-  SÉRODIAGNOSTIC DE WIDAL ET FÉLIX (Technique d'agglutination sur lame et en tube)
-</div>
-<table style="width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; font-family: inherit;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">ANTIGÈNES TESTÉS</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a; text-align: center;">TITRE OBSERVÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">SEUIL DE SIGNIFICATIVITÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">INTERPRÉTATION</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Salmonella typhi O (Somatic)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1/40</td>
-      <td style="padding: 6px 10px; color: #64748b;">≥ 1/160</td>
-      <td style="padding: 6px 10px; font-weight: bold; color: #0f766e;">Négatif / Non significatif</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Salmonella typhi H (Flagellar)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1/80</td>
-      <td style="padding: 6px 10px; color: #64748b;">≥ 1/160</td>
-      <td style="padding: 6px 10px; font-weight: bold; color: #0f766e;">Négatif / Non significatif</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Salmonella paratyphi A (O / H)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">Négatif (&lt; 1/20)</td>
-      <td style="padding: 6px 10px; color: #64748b;">≥ 1/80</td>
-      <td style="padding: 6px 10px; font-weight: bold; color: #0f766e;">Négatif</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Salmonella paratyphi B (O / H)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">Négatif (&lt; 1/20)</td>
-      <td style="padding: 6px 10px; color: #64748b;">≥ 1/80</td>
-      <td style="padding: 6px 10px; font-weight: bold; color: #0f766e;">Négatif</td>
-    </tr>
-  </tbody>
-</table>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> Sérologie Widal et Félix en faveur de l'absence d'infection typhique ou paratyphique évolutive récente. Titres inférieurs aux seuils pathologiques en zone d'endémie.
-</div>`
-  },
-  {
-    id: 'lipid',
-    name: 'Lipid Profile (Bilan Lipidique Complet)',
-    category: 'Biochemistry',
-    html: `
-<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-family: inherit;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">FRACTION LIPIDIQUE</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a; text-align: center;">RÉSULTAT</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">UNITÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">CIBLE THÉRAPEUTIQUE</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Cholestérol Total</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1.84</td>
-      <td style="padding: 6px 10px;">g/L (4.75 mmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 2.00 g/L</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Triglycérides</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1.12</td>
-      <td style="padding: 6px 10px;">g/L (1.27 mmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 1.50 g/L</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">HDL-Cholestérol ("Bon")</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">0.58</td>
-      <td style="padding: 6px 10px;">g/L (1.50 mmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&gt; 0.40 g/L (Homme) / &gt; 0.50 g/L (Femme)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">LDL-Cholestérol (Calcul Friedewald)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1.04</td>
-      <td style="padding: 6px 10px;">g/L (2.69 mmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 1.30 g/L</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-      <td style="padding: 6px 10px; font-weight: 700;">Rapport Cholestérol Total / HDL</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">3.17</td>
-      <td style="padding: 6px 10px;">Indice</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 4.50 (Faible risque)</td>
-    </tr>
-  </tbody>
-</table>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> Bilan lipidique équilibré. Paramètres dans les limites de référence. Risque athérogène bas.
-</div>`
-  },
-  {
-    id: 'malaria',
-    name: 'Malaria Search (Goutte Épaisse & Frottis)',
-    category: 'Parasitology',
-    html: `
-<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-family: inherit;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">EXAMEN MICROSCOPIQUE</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a; text-align: center;">RÉSULTAT</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">VALEUR DE RÉFÉRENCE</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Goutte Épaisse (Coloration Giemsa)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">NÉGATIVE</td>
-      <td style="padding: 6px 10px; color: #64748b;">Absence d'hématozoaires</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Frottis Sanguin Mince</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">Absence de trophozoïtes de Plasmodium</td>
-      <td style="padding: 6px 10px; color: #64748b;">Négatif</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Densité Parasitaire</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">0 parasite / µL de sang</td>
-      <td style="padding: 6px 10px; color: #64748b;">0 parasite / µL</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Test de Diagnostic Rapide (TDR Pf/Pan)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">NÉGATIF</td>
-      <td style="padding: 6px 10px; color: #64748b;">Négatif</td>
-    </tr>
-  </tbody>
-</table>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> Absence d'hématozoaires de paludisme sur l'ensemble des 200 champs microscopiques examinés.
-</div>`
-  },
-  {
-    id: 'urinalysis',
-    name: 'Urinalysis & Chemistry (Examen des Urines / ECBU)',
-    category: 'Microbiology',
-    html: `
-<div style="font-size: 12px; font-weight: bold; color: #0f172a; margin-bottom: 4px;">1. EXAMEN CYTOLOGIQUE DIRECT</div>
-<table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: inherit; margin-bottom: 10px;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px;">ÉLÉMENTS CELLULAIRES</th>
-      <th style="padding: 6px 10px; text-align: center;">NUMÉRATION</th>
-      <th style="padding: 6px 10px;">VALEURS NORMALES</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Leucocytes</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">3,000 / mL (3 / mm³)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 10,000 / mL</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Hématies (Globules rouges)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">1,500 / mL (1 / mm³)</td>
-      <td style="padding: 6px 10px; color: #64748b;">&lt; 10,000 / mL</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Cellules Épithéliales</td>
-      <td style="padding: 6px 10px; text-align: center;">Quelques</td>
-      <td style="padding: 6px 10px; color: #64748b;">Rares ou quelques</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Cylindres / Cristaux</td>
-      <td style="padding: 6px 10px; text-align: center;">Absence</td>
-      <td style="padding: 6px 10px; color: #64748b;">Absence</td>
-    </tr>
-  </tbody>
-</table>
+import { 
+  clinicalTemplatesService, 
+  ClinicalTemplate, 
+  INITIAL_CLINICAL_TEMPLATES 
+} from '../../data/clinicalTemplates';
+import ClinicalTemplateManagerModal from '../admin/ClinicalTemplateManagerModal';
 
-<div style="font-size: 12px; font-weight: bold; color: #0f172a; margin-top: 10px; margin-bottom: 4px;">2. EXAMEN BACTÉRIOLOGIQUE</div>
-<p style="font-size: 12px; margin: 4px 0;"><strong>Examen direct (Coloration de Gram) :</strong> Absence de germes visibles.</p>
-<p style="font-size: 12px; margin: 4px 0;"><strong>Culture (sur milieux usuels CLED, Gélose Chocolat, EMB) :</strong> Culture STÉRILE après 48h d'incubation à 37°C (&lt; 10³ UFC/mL).</p>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> ECBU stérile. Absence de leucocyturie significative ni de bactériurie.
-</div>`
-  },
-  {
-    id: 'renal',
-    name: 'Renal Function Panel (Bilan Rénal / Créatinine / Urée)',
-    category: 'Biochemistry',
-    html: `
-<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-family: inherit;">
-  <thead>
-    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">PARAMÈTRE BIOLOGIQUE</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a; text-align: center;">RÉSULTAT</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">UNITÉ</th>
-      <th style="padding: 6px 10px; font-weight: bold; color: #0f172a;">VALEURS USUELLES</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Créatinine Sérique</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">8.4</td>
-      <td style="padding: 6px 10px;">mg/L (74 µmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">6.0 - 11.0 mg/L</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Débit de Filtration Glomérulaire (DFG - CKD-EPI)</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">98</td>
-      <td style="padding: 6px 10px;">mL/min/1.73m²</td>
-      <td style="padding: 6px 10px; color: #64748b;">&gt; 90 (Fonction normale)</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Urée Sérique</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">0.28</td>
-      <td style="padding: 6px 10px;">g/L (4.6 mmol/L)</td>
-      <td style="padding: 6px 10px; color: #64748b;">0.15 - 0.45 g/L</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 6px 10px; font-weight: 600;">Acide Urique</td>
-      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">46</td>
-      <td style="padding: 6px 10px;">mg/L</td>
-      <td style="padding: 6px 10px; color: #64748b;">25 - 60 mg/L</td>
-    </tr>
-  </tbody>
-</table>
-<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
-  <strong>Conclusion Biologique :</strong> Fonction rénale normale avec DFG préservé. Absence de rétention azotée.
-</div>`
-  },
-  {
-    id: 'blank',
-    name: 'Blank Clean Sheet (Page Vierge)',
-    category: 'General',
-    html: `
-<p style="font-size: 13px; line-height: 1.6; color: #334155;">
-  <strong>RÉSULTAT DE L'EXAMEN :</strong>
-</p>
-<p style="font-size: 13px; line-height: 1.6; color: #334155;">
-  Tapez directement votre compte-rendu médical ici ou insérez un tableau...
-</p>`
-  }
-];
+// Built-in pre-formatted clean templates for quick dropping into the Canva workspace
+export const A4_CLINICAL_TEMPLATES = INITIAL_CLINICAL_TEMPLATES;
 
 export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
   booking,
@@ -396,9 +71,26 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
   onPrintPreview,
   onShareWithDoctor
 }) => {
-  const { user } = useAuth();
+  const { user, lab } = useAuth();
   const tests = booking.tests || [];
   const [activeTestIndex, setActiveTestIndex] = useState<number>(initialTestIndex);
+
+  // Template manager modal & custom template state
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState<ClinicalTemplate | null>(null);
+  const [startCreateMode, setStartCreateMode] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<ClinicalTemplate[]>(() => clinicalTemplatesService.getAllTemplates());
+  const [templateSearchTerm, setTemplateSearchTerm] = useState('');
+  const [selectedTemplateCat, setSelectedTemplateCat] = useState('All');
+
+  // Synchronize available templates whenever updated
+  useEffect(() => {
+    const handleUpdate = () => {
+      setAvailableTemplates(clinicalTemplatesService.getAllTemplates());
+    };
+    window.addEventListener('nanolabs_templates_updated', handleUpdate);
+    return () => window.removeEventListener('nanolabs_templates_updated', handleUpdate);
+  }, []);
 
   // Content for each test index: { html: string, saved: boolean, savedTime?: string }
   const [testContents, setTestContents] = useState<Record<number, { html: string; saved: boolean; savedTime?: string }>>({});
@@ -462,9 +154,15 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
         saved: test.status === 'Completed' || Boolean(test.resultValue),
         savedTime: test.completedAt ? new Date(test.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined
       };
+
+      // Also ensure live DOM reflects the html immediately
+      const el = editorRefs.current[idx];
+      if (el && defaultHtml && el.innerHTML !== defaultHtml) {
+        el.innerHTML = defaultHtml;
+      }
     });
     setTestContents(initialMap);
-  }, [booking.id, tests.length]);
+  }, [booking.id, tests.length, tests.map(t => t.richReportHtml || '').join('|||')]);
 
   // Synchronize DOM elements with state
   useEffect(() => {
@@ -525,7 +223,7 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
     executeCommand('insertHTML', tableHtml);
   };
 
-  // Drop selected template into the middle box of the specified test index
+  // Drop selected template into the middle box of the specified test index (Pre-populates full page)
   const handleDropTemplate = (testIndex: number, templateHtml: string, templateName: string) => {
     const el = editorRefs.current[testIndex];
     if (el) {
@@ -538,8 +236,35 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
         saved: false
       }
     }));
-    setBannerFeedback(`📋 Dropped "${templateName}" into Test ${testIndex + 1}. You can now freely edit text.`);
+    if (tests[testIndex]) {
+      tests[testIndex].richReportHtml = templateHtml;
+    }
+    setBannerFeedback(`✅ Modèle "${templateName}" pré-rempli sur la page A4 ! Vous pouvez directement modifier les données.`);
     setTimeout(() => setBannerFeedback(null), 4000);
+  };
+
+  // Save current canvas page layout and content as a reusable clinical template
+  const handleSaveAsTemplate = (testIndex: number) => {
+    const currentEl = editorRefs.current[testIndex];
+    const html = currentEl ? currentEl.innerHTML : (testContents[testIndex]?.html || '');
+    const currentTest = tests[testIndex];
+    const testName = currentTest?.testName || 'Modèle Personnalisé';
+
+    const customTpl: ClinicalTemplate = {
+      id: `custom_${Date.now()}`,
+      code: `TPL-${Math.floor(100 + Math.random() * 900)}`,
+      name: `${testName} (Modèle Personnalisé)`,
+      category: 'Biochemistry',
+      specimen: currentTest?.sampleTypeRequired || 'Sang total / Sérum',
+      turnaroundTime: '2 hours',
+      defaultConclusion: 'Examen dans les limites physiologiques normales.',
+      parameters: [],
+      html
+    };
+
+    setTemplateToEdit(customTpl);
+    setStartCreateMode(false);
+    setShowTemplateManager(true);
   };
 
   // Save single test
@@ -652,13 +377,14 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
     }
   };
 
-  const labName = booking.labName || booking.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
-  const labAddress = booking.labAdress || booking.labDetails?.address || booking.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
-  const labPhone = booking.labPhone || booking.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
-  const labEmail = booking.labEmail || booking.labDetails?.email || 'contact@lab-diagnostics.cm';
-  const labAccreditation = booking.labAccreditation || booking.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';
+  const bAny = booking as any;
+  const labName = booking.labName || bAny.labDetails?.name || 'Accredited Medical Biology & Diagnostic Center';
+  const labAddress = bAny.labAddress || bAny.labDetails?.address || bAny.labDetails?.location || 'Health Sciences Boulevard, Douala / Yaoundé, Cameroun';
+  const labPhone = bAny.labPhone || bAny.labDetails?.phone || '+237 233 42 88 00 / 699 00 11 22';
+  const labEmail = bAny.labEmail || bAny.labDetails?.email || 'contact@lab-diagnostics.cm';
+  const labAccreditation = bAny.labAccreditation || bAny.labDetails?.accreditation || 'Agrément Ministériel MINSANTE N° 0492/DROS • Norme ISO 15189';
   const biologistName = booking.biologistName || 'Biologiste Médical Agréé';
-  const biologistLicense = booking.biologistLicense || 'ONMC / ONPC N° 4829 - Spécialiste Biologie Médicale';
+  const biologistLicense = bAny.biologistLicense || 'ONMC / ONPC N° 4829 - Spécialiste Biologie Médicale';
 
   const patientName = booking.patientName || 'Valued Patient';
   const patientAge = booking.patientAge || 'Adult';
@@ -969,23 +695,121 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                 </div>
               </div>
 
-              {/* Template selector carousel for this test */}
-              <div className="bg-slate-950/80 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Drop Pre-Formatted Template:</span>
-                </div>
-                <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-                  {A4_CLINICAL_TEMPLATES.map((tpl) => (
+              {/* Enhanced Clinical Template Control Deck with Live Search & Custom Creation */}
+              <div className="bg-slate-950 p-3 sm:p-4 rounded-2xl border border-slate-800 shadow-md space-y-3">
+                {/* Search Bar & Action Buttons */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-teal-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={templateSearchTerm}
+                      onChange={(e) => setTemplateSearchTerm(e.target.value)}
+                      placeholder="Rechercher un modèle clinique (ex: NFS, Widal, Lipide, Urines, HIV, etc.)..."
+                      className="w-full pl-9 pr-8 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                    />
+                    {templateSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setTemplateSearchTerm('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-full cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    {/* Add own custom template button */}
                     <button
-                      key={tpl.id}
                       type="button"
-                      onClick={() => handleDropTemplate(testIdx, tpl.html, tpl.name)}
-                      className="px-2.5 py-1 bg-slate-900 hover:bg-teal-900/60 hover:text-teal-200 text-slate-300 text-[11px] font-bold rounded-lg border border-slate-700/80 transition-all shrink-0 cursor-pointer"
+                      onClick={() => {
+                        setTemplateToEdit(null);
+                        setStartCreateMode(true);
+                        setShowTemplateManager(true);
+                      }}
+                      className="px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="Créer un nouveau modèle de test personnalisé"
                     >
-                      {tpl.name.split('(')[0].trim()}
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Nouveau Modèle</span>
+                    </button>
+
+                    {/* Save Current Canvas Page as Template */}
+                    <button
+                      type="button"
+                      onClick={() => handleSaveAsTemplate(testIdx)}
+                      className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 hover:border-amber-400 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Sauvegarder la disposition et le tableau actuels comme modèle réutilisable"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Enregistrer comme modèle</span>
+                    </button>
+
+                    {/* Open full manager */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTemplateToEdit(null);
+                        setStartCreateMode(false);
+                        setShowTemplateManager(true);
+                      }}
+                      className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Tous les Modèles ({availableTemplates.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                  {['All', 'Hematology', 'Biochemistry', 'Serology', 'Microbiology', 'Parasitology', 'Endocrinology', 'Hemostasis', 'Cardiac'].map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedTemplateCat(cat)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                        selectedTemplateCat === cat
+                          ? 'bg-teal-500 text-slate-950 font-extrabold shadow-xs'
+                          : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+                      }`}
+                    >
+                      {cat}
                     </button>
                   ))}
+                </div>
+
+                {/* Filtered Template Chips - Click to Auto-fill / Pre-populate! */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                  {availableTemplates
+                    .filter(t => {
+                      const matchesCat = selectedTemplateCat === 'All' || t.category === selectedTemplateCat;
+                      const matchesSearch = !templateSearchTerm.trim() || 
+                        t.name.toLowerCase().includes(templateSearchTerm.toLowerCase()) || 
+                        t.code.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+                        t.category.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+                        t.specimen.toLowerCase().includes(templateSearchTerm.toLowerCase());
+                      return matchesCat && matchesSearch;
+                    })
+                    .slice(0, 30)
+                    .map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        onClick={() => handleDropTemplate(testIdx, tpl.html, tpl.name)}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-teal-900/70 hover:text-teal-200 text-slate-200 border border-slate-800 hover:border-teal-500/60 rounded-xl text-[11px] font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 group shadow-xs"
+                        title={`Cliquer pour pré-remplir la page A4 avec "${tpl.name}" (${tpl.category})`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-400 group-hover:scale-125 transition-transform" />
+                        <span>{tpl.name}</span>
+                        {tpl.isCustom && (
+                          <span className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-300 rounded font-bold">
+                            Modifié
+                          </span>
+                        )}
+                      </button>
+                    ))}
                 </div>
               </div>
 
@@ -1005,10 +829,18 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
                 <div className="space-y-4 border-b-2 border-teal-800 pb-4 select-none">
                   {/* Lab Official Letterhead */}
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
-                        <Building2 className="w-7 h-7" />
-                      </div>
+                    <div className="flex items-start gap-3 shrink-0">
+                      {(lab?.logoUrl || (typeof window !== 'undefined' && localStorage.getItem('nanolabs_active_lab_logo'))) ? (
+                        <img
+                          src={lab?.logoUrl || (typeof window !== 'undefined' ? localStorage.getItem('nanolabs_active_lab_logo') || '' : '')}
+                          alt={labName}
+                          className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-xs shrink-0 select-none"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0 select-none">
+                          <Building2 className="w-7 h-7" />
+                        </div>
+                      )}
                       <div className="space-y-0.5">
                         <h2 className="text-base font-black text-teal-950 tracking-tight uppercase">
                           {labName}
@@ -1152,6 +984,24 @@ export const A4CanvasResultEditor: React.FC<A4CanvasResultEditorProps> = ({
           );
         })}
       </main>
+
+      {showTemplateManager && (
+        <ClinicalTemplateManagerModal
+          isOpen={showTemplateManager}
+          initialTemplateToEdit={templateToEdit}
+          startInCreateMode={startCreateMode}
+          onClose={() => {
+            setShowTemplateManager(false);
+            setTemplateToEdit(null);
+            setStartCreateMode(false);
+            setAvailableTemplates(clinicalTemplatesService.getAllTemplates());
+          }}
+          onSelectTemplate={(tpl) => {
+            handleDropTemplate(activeTestIndex, tpl.html, tpl.name);
+            setAvailableTemplates(clinicalTemplatesService.getAllTemplates());
+          }}
+        />
+      )}
     </div>
   );
 };

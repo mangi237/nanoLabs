@@ -180,6 +180,17 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [clinicalTemplates, setClinicalTemplates] = useState<ClinicalTemplate[]>(() => clinicalTemplatesService.getAllTemplates());
   const [templateFilterCategory, setTemplateFilterCategory] = useState<string>('All');
   const [templateSearchTerm, setTemplateSearchTerm] = useState<string>('');
+  const [templateModalInitialTpl, setTemplateModalInitialTpl] = useState<ClinicalTemplate | null>(null);
+  const [templateModalStartCreate, setTemplateModalStartCreate] = useState(false);
+
+  // Synchronize clinical templates whenever modified or created
+  useEffect(() => {
+    const handleSync = () => {
+      setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
+    };
+    window.addEventListener('nanolabs_templates_updated', handleSync);
+    return () => window.removeEventListener('nanolabs_templates_updated', handleSync);
+  }, []);
 
   // Option 2 Upload State
   const [pdfUploadDataUrl, setPdfUploadDataUrl] = useState<string>('');
@@ -1726,28 +1737,64 @@ CLINICAL REAGENTS USED:
                           </div>
                         </div>
 
-                        {/* Quick Clinical Template Selector Bar */}
-                        <div className="space-y-2 pt-2 border-t border-slate-800">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                        {/* Quick Clinical Template Selector Bar with Live Search */}
+                        <div className="space-y-2.5 pt-2.5 border-t border-slate-800">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 shrink-0">
                               <BookOpen className="w-3.5 h-3.5 text-teal-400" />
                               <span>Modèles Cliniques Accrédités ({clinicalTemplates.length}) :</span>
                             </span>
                             
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-400 hidden sm:inline">
-                                Pré-remplir {activeOptionMode === 'a4_canvas' ? 'le Canvas A4' : 'les Constats Analyseur'}
-                              </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Live Search Input */}
+                              <div className="relative flex-1 min-w-[200px]">
+                                <Search className="w-3 h-3 text-teal-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                  type="text"
+                                  value={templateSearchTerm}
+                                  onChange={(e) => setTemplateSearchTerm(e.target.value)}
+                                  placeholder="Rechercher (NFS, Widal, Lipide, Urines...)..."
+                                  className="w-full pl-8 pr-7 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-[11px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                                {templateSearchTerm && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setTemplateSearchTerm('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Create New Template */}
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setTemplateModalInitialTpl(null);
+                                  setTemplateModalStartCreate(true);
+                                  setShowClinicalTemplateModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer shrink-0"
+                                title="Créer un modèle personnalisé pour le laboratoire"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>+ Nouveau</span>
+                              </button>
+
+                              {/* Full Catalog Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTemplateModalInitialTpl(null);
+                                  setTemplateModalStartCreate(false);
                                   setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
                                   setShowClinicalTemplateModal(true);
                                 }}
-                                className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer shrink-0"
                               >
                                 <Sparkles className="w-3 h-3 text-amber-300" />
-                                <span>Catalogue & Éditeur ({clinicalTemplates.length})</span>
+                                <span>Catalogue ({clinicalTemplates.length})</span>
                               </button>
                             </div>
                           </div>
@@ -1773,41 +1820,52 @@ CLINICAL REAGENTS USED:
                           {/* Template Cards Horizontal Scroll */}
                           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
                             {clinicalTemplates
-                              .filter(t => templateFilterCategory === 'All' || t.category === templateFilterCategory)
-                              .slice(0, 16)
+                              .filter(t => {
+                                const matchesCat = templateFilterCategory === 'All' || t.category === templateFilterCategory;
+                                const matchesSearch = !templateSearchTerm.trim() ||
+                                  t.name.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+                                  t.code.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+                                  t.category.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+                                  t.specimen.toLowerCase().includes(templateSearchTerm.toLowerCase());
+                                return matchesCat && matchesSearch;
+                              })
+                              .slice(0, 25)
                               .map((tpl) => (
                                 <button
                                   key={tpl.id}
                                   type="button"
                                   onClick={() => {
-                                    if (activeOptionMode === 'a4_canvas') {
-                                      setActiveBooking(prev => {
-                                        if (!prev) return null;
-                                        const updatedTests = [...prev.tests];
-                                        if (updatedTests[selectedTestIndex]) {
-                                          updatedTests[selectedTestIndex] = {
-                                            ...updatedTests[selectedTestIndex],
-                                            richReportHtml: tpl.html
-                                          };
-                                        }
-                                        return { ...prev, tests: updatedTests };
-                                      });
-                                      setActionSuccessMessage(`📋 Modèle "${tpl.name}" appliqué au Canvas A4 !`);
-                                      setTimeout(() => setActionSuccessMessage(''), 3000);
-                                    } else {
-                                      const tempDiv = document.createElement('div');
-                                      tempDiv.innerHTML = tpl.html;
-                                      const cleanText = tempDiv.innerText || tempDiv.textContent || '';
-                                      setAnalyzerFindings(cleanText.trim());
-                                      setActionSuccessMessage(`📋 Modèle "${tpl.name}" chargé dans l'analyseur !`);
-                                      setTimeout(() => setActionSuccessMessage(''), 3000);
-                                    }
+                                    // Always switch to 'a4_canvas' so it pre-populates the rich page!
+                                    setActiveOptionMode('a4_canvas');
+                                    setActiveBooking(prev => {
+                                      if (!prev) return null;
+                                      const updatedTests = [...prev.tests];
+                                      if (updatedTests[selectedTestIndex]) {
+                                        updatedTests[selectedTestIndex] = {
+                                          ...updatedTests[selectedTestIndex],
+                                          richReportHtml: tpl.html
+                                        };
+                                      }
+                                      return { ...prev, tests: updatedTests };
+                                    });
+                                    // Also set fallback textual findings
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = tpl.html;
+                                    const cleanText = tempDiv.innerText || tempDiv.textContent || '';
+                                    setAnalyzerFindings(cleanText.trim());
+                                    setActionSuccessMessage(`📋 Modèle "${tpl.name}" pré-rempli sur le Canvas A4 !`);
+                                    setTimeout(() => setActionSuccessMessage(''), 3000);
                                   }}
-                                  className="px-3 py-1.5 bg-slate-800 hover:bg-teal-900/60 text-slate-200 hover:text-teal-200 border border-slate-700 hover:border-teal-500/50 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5"
-                                  title={`${tpl.category} • ${tpl.specimen}`}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-teal-900/60 text-slate-200 hover:text-teal-200 border border-slate-700 hover:border-teal-500/50 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5 group"
+                                  title={`${tpl.category} • ${tpl.specimen} - Cliquer pour pré-remplir le Canvas A4`}
                                 >
-                                  <Sparkles className="w-3 h-3 text-amber-400" />
+                                  <Sparkles className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform" />
                                   <span>{tpl.name}</span>
+                                  {tpl.isCustom && (
+                                    <span className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-300 rounded font-bold">
+                                      Perso
+                                    </span>
+                                  )}
                                 </button>
                               ))}
                           </div>
@@ -2658,33 +2716,34 @@ CLINICAL REAGENTS USED:
       {showClinicalTemplateModal && (
         <ClinicalTemplateManagerModal
           isOpen={showClinicalTemplateModal}
+          initialTemplateToEdit={templateModalInitialTpl}
+          startInCreateMode={templateModalStartCreate}
           onClose={() => {
             setShowClinicalTemplateModal(false);
+            setTemplateModalInitialTpl(null);
+            setTemplateModalStartCreate(false);
             setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
           }}
           onSelectTemplate={(tpl) => {
-            if (activeOptionMode === 'a4_canvas') {
-              setActiveBooking(prev => {
-                if (!prev) return null;
-                const updatedTests = [...prev.tests];
-                if (updatedTests[selectedTestIndex]) {
-                  updatedTests[selectedTestIndex] = {
-                    ...updatedTests[selectedTestIndex],
-                    richReportHtml: tpl.html
-                  };
-                }
-                return { ...prev, tests: updatedTests };
-              });
-              setActionSuccessMessage(`📋 Modèle "${tpl.name}" appliqué au Canvas A4 !`);
-              setTimeout(() => setActionSuccessMessage(''), 3000);
-            } else {
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = tpl.html;
-              const cleanText = tempDiv.innerText || tempDiv.textContent || '';
-              setAnalyzerFindings(cleanText.trim());
-              setActionSuccessMessage(`📋 Modèle "${tpl.name}" chargé dans l'analyseur !`);
-              setTimeout(() => setActionSuccessMessage(''), 3000);
-            }
+            // Always set activeOptionMode to a4_canvas so it pre-populates the rich editor page!
+            setActiveOptionMode('a4_canvas');
+            setActiveBooking(prev => {
+              if (!prev) return null;
+              const updatedTests = [...prev.tests];
+              if (updatedTests[selectedTestIndex]) {
+                updatedTests[selectedTestIndex] = {
+                  ...updatedTests[selectedTestIndex],
+                  richReportHtml: tpl.html
+                };
+              }
+              return { ...prev, tests: updatedTests };
+            });
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = tpl.html;
+            const cleanText = tempDiv.innerText || tempDiv.textContent || '';
+            setAnalyzerFindings(cleanText.trim());
+            setActionSuccessMessage(`📋 Modèle "${tpl.name}" pré-rempli sur le Canvas A4 ! Vous pouvez directement modifier les données.`);
+            setTimeout(() => setActionSuccessMessage(''), 3000);
             setClinicalTemplates(clinicalTemplatesService.getAllTemplates());
           }}
         />

@@ -374,7 +374,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:!static print:!block print:!overflow-visible print:!p-0 print:!m-0 print:!bg-white print:!backdrop-blur-none">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:block print:max-h-none print:h-auto print:static print:w-full print:max-w-none print:p-0 print:m-0 print:border-none print:shadow-none print:bg-white print:rounded-none">
+      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col print:!block print:!max-h-none print:!h-auto print:!static print:!w-full print:!max-w-none print:!p-0 print:!m-0 print:!border-none print:!shadow-none print:!bg-white print:!rounded-none print:!animate-none print:!transform-none">
         
         {/* Top Control Bar */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden">
@@ -463,7 +463,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
         </div>
 
         {/* Printable Paper Document Container */}
-        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-slate-200 my-2 rounded-2xl print:!p-0 print:!m-0 print:!bg-white print:!overflow-visible print:!flex-none print:!block print:!h-auto print:!max-h-none">
+        <div className="overflow-y-auto flex-1 p-2 sm:p-5 bg-white my-2 rounded-2xl print:!p-0 print:!m-0 print:!bg-white print:!overflow-visible print:!flex-none print:!block print:!h-auto print:!max-h-none relative">
           
           <style>{`
             /* ============ WATERMARK (SCREEN + PRINT) ============ */
@@ -565,22 +565,23 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
               .no-print { display: none !important; }
             }
           `}</style>
-
-          <div 
-            id="medical-receipt-sheet"
-           className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden print:overflow-visible max-w-3xl mx-auto ..."
-          >
+ {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
+    <div className="watermark-layer" aria-hidden="true">
+      <img
+        src={labInfo?.logoUrl || (booking as any).labLogoUrl}
+        alt=""
+        className="watermark-logo"
+      />
+    </div>
+  )}
+        
+  <div 
+    id="medical-receipt-sheet"
+    className="bg-transparent rounded-xl shadow-2xl border border-slate-300 overflow-visible max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs relative z-[1]"
+  >
             
             {/* ============ WATERMARK LAYER ============ */}
-            {(labInfo?.logoUrl || (booking as any).labLogoUrl) && (
-              <div className="watermark-layer" aria-hidden="true">
-                <img
-                  src={labInfo?.logoUrl || (booking as any).labLogoUrl}
-                  alt=""
-                  className="watermark-logo"
-                />
-              </div>
-            )}
+         
 
             {/* ========================================================================= */}
             {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}

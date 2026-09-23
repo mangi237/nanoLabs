@@ -3,47 +3,45 @@
 @tailwind utilities;
 
 @import "tailwindcss";
+
 @layer utilities {
+  /* ============ WATERMARK (SCREEN) ============ */
   .watermark-layer {
     position: absolute;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 0;
     overflow: hidden;
-    border-radius: inherit;
-  }
-  
-  .watermark-logo {
-    width: 60%;
-    max-width: 420px;
-    object-fit: contain;
-    opacity: 0.06;              /* faded */
-    filter: grayscale(100%);    /* keeps print clean, no muddy colors */
-    transform: rotate(-15deg);  /* typical watermark tilt */
-    user-select: none;
     pointer-events: none;
+    user-select: none;
   }
-  
-  /* Ensure sheet content sits above the watermark */
-  #medical-report-sheet > *:not(.watermark-layer),
-  #medical-receipt-sheet > *:not(.watermark-layer) {
-    position: relative;
-    z-index: 1;
+
+  .watermark-logo {
+    width: 55%;
+    max-width: 380px;
+    height: auto;
+    object-fit: contain;
+    opacity: 0.15;
+    filter: grayscale(100%);
+    transform: rotate(-12deg);
+    pointer-events: none;
+    user-select: none;
   }
-  
-  
+
+  /* ============ PRINT STYLES ============ */
   @media print {
+    /* A4 paper with edge spacing */
     @page {
       size: A4 portrait;
-  
-        margin: 8mm 8mm 10mm 8mm;
-    
+      margin: 8mm 8mm 10mm 8mm;
     }
-    tr, .antibiogram-row {
-      page-break-inside: avoid;
-    }
+
+    /* Base reset */
     html, body {
       background: #ffffff !important;
       background-color: #ffffff !important;
@@ -55,63 +53,119 @@
       width: 100% !important;
     }
 
-    /* Isolate print document: Hide all general UI by default */
-    body * {
-      visibility: hidden !important;
-    }
+    /* ============ WATERMARK (PRINT — repeats every page) ============ */
     .watermark-layer {
       position: fixed !important;
-      inset: 0 !important;
+      top: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: 0 !important;
       z-index: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      pointer-events: none !important;
     }
-  
+
     .watermark-logo {
-      width: 65% !important;
-      max-width: 480px !important;
-      opacity: 0.08 !important;   /* slightly stronger in print to survive the toner */
+      width: 60% !important;
+      max-width: 460px !important;
+      opacity: 0.13 !important;
       filter: grayscale(100%) !important;
-      transform: rotate(-15deg) !important;
+      transform: rotate(-12deg) !important;
     }
-  
-    /* Keep content above the fixed watermark */
+
+    /* ============ PRINTABLE SHEETS ============ */
+    /* The sheet must be transparent so the watermark shows through.
+       It also must be a normal block in print — no flex, no fixed ancestors. */
     #medical-receipt-sheet,
-    #medical-report-sheet {
-      width: 100% !important;
+    #medical-report-sheet,
+    .printable-sheet,
+    .printable-document {
+      background: transparent !important;
+      background-color: transparent !important;
+      color: #000000 !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
       max-width: 100% !important;
+      width: 100% !important;
       box-sizing: border-box !important;
+      display: block !important;
+      position: relative !important;
+      z-index: 1 !important;
       overflow: visible !important;
     }
-  
-    /* ============ BORDER / EDGE SPACING ENHANCEMENT ============ */
-    /* @page margin already provides the outer buffer; add a subtle
-       inner border on every printed page so content has a visual frame. */
-    #medical-report-sheet,
-    #medical-receipt-sheet {
-      outline: none !important;
-    }
-  
-    /* Print a thin ruled frame around the content area via a pseudo-element
-       — this is what gives the "bordered receipt / report" look. */
-  
-  
-    /* Header/footer blocks should sit above the frame border */
-    .print-header-block,
-    .print-footer-block {
-      position: relative;
-      z-index: 3;
-    }
-    /* Make printable containers and their children visible */
-    #medical-receipt-sheet,
+
+    /* Prevent horizontal edge bleed */
+    #medical-receipt-sheet table,
     #medical-receipt-sheet *,
-    #medical-report-sheet,
+    #medical-report-sheet table,
     #medical-report-sheet *,
-    .printable-sheet,
+    .printable-sheet table,
     .printable-sheet *,
-    .printable-document,
+    .printable-document table,
     .printable-document * {
-      visibility: visible !important;
+      max-width: 100% !important;
     }
-  }}
+
+    /* ============ PAGINATION CONTROL ============ */
+    /* Header: render once, don't repeat on page 2 */
+    .print-header-block {
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    /* Patient info box: keep together */
+    .print-patient-box {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    /* Test / billing sections: allow internal splitting across pages */
+    .print-test-section,
+    .print-billing-table {
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }
+
+    /* Test title: keep with the table that follows */
+    .print-test-title {
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+    }
+
+    /* Repeat table headers if a table spans pages */
+    .print-test-table thead,
+    .print-billing-table thead {
+      display: table-header-group !important;
+    }
+
+    /* Keep rows atomic */
+    .print-test-table tr,
+    .print-billing-table tr,
+    tr,
+    .antibiogram-row {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    /* Totals & signatures & footer: keep atomic */
+    .print-totals-block,
+    .print-signature-block,
+    .print-footer-block {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    /* ============ NON-PRINTABLE ============ */
+    .print\:hidden,
+    .no-print {
+      display: none !important;
+    }
+  }
+}

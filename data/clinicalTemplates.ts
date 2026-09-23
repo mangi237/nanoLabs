@@ -21,7 +21,7 @@ export interface ClinicalParameter {
     updatedAt?: string;
   }
   
-  const buildHtmlTable = (title: string, headers: string[], rows: { param: string; result: string; unit: string; normal: string }[], conclusion: string): string => {
+  export const buildHtmlTable = (title: string, headers: string[], rows: { param: string; result: string; unit: string; normal: string }[], conclusion: string): string => {
     const rowHtml = rows.map(r => `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 6px 10px; font-weight: 600;">${r.param}</td>
@@ -956,11 +956,19 @@ export interface ClinicalParameter {
   export const clinicalTemplatesService = {
     getAllTemplates: (): ClinicalTemplate[] => {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length >= 30) {
-            return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Merge: start with all initial templates, allow stored modifications to override, and include any custom added templates
+            const mergedMap = new Map<string, ClinicalTemplate>();
+            INITIAL_CLINICAL_TEMPLATES.forEach(t => mergedMap.set(t.id, t));
+            parsed.forEach((t: ClinicalTemplate) => {
+              if (t && t.id) {
+                mergedMap.set(t.id, t);
+              }
+            });
+            return Array.from(mergedMap.values());
           }
         }
       } catch (e) {
@@ -979,16 +987,19 @@ export interface ClinicalParameter {
       const index = current.findIndex(t => t.id === template.id);
       const updated = [...current];
       const timestamp = new Date().toISOString();
-      const toSave = { ...template, isCustom: true, updatedAt: timestamp };
+      const toSave: ClinicalTemplate = { ...template, isCustom: true, updatedAt: timestamp };
   
       if (index >= 0) {
         updated[index] = toSave;
       } else {
-        updated.push(toSave);
+        updated.unshift(toSave); // Place newly created template right at the top
       }
   
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          window.dispatchEvent(new CustomEvent('nanolabs_templates_updated', { detail: toSave }));
+        }
       } catch (e) {
         console.error('Failed to save clinical templates to localStorage:', e);
       }
@@ -999,14 +1010,20 @@ export interface ClinicalParameter {
       const current = clinicalTemplatesService.getAllTemplates();
       const filtered = current.filter(t => t.id !== id);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+          window.dispatchEvent(new CustomEvent('nanolabs_templates_updated'));
+        }
       } catch (e) {}
       return filtered;
     },
   
     resetToDefaults: (): ClinicalTemplate[] => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_CLINICAL_TEMPLATES));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_CLINICAL_TEMPLATES));
+          window.dispatchEvent(new CustomEvent('nanolabs_templates_updated'));
+        }
       } catch (e) {}
       return INITIAL_CLINICAL_TEMPLATES;
     }

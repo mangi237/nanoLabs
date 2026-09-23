@@ -24,19 +24,75 @@ interface ClinicalTemplateManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectTemplate?: (template: ClinicalTemplate) => void;
+  initialTemplateToEdit?: ClinicalTemplate | null;
+  startInCreateMode?: boolean;
 }
 
 export const ClinicalTemplateManagerModal: React.FC<ClinicalTemplateManagerModalProps> = ({
   isOpen,
   onClose,
-  onSelectTemplate
+  onSelectTemplate,
+  initialTemplateToEdit,
+  startInCreateMode = false
 }) => {
   const [templates, setTemplates] = useState<ClinicalTemplate[]>(() => clinicalTemplatesService.getAllTemplates());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [editingTemplate, setEditingTemplate] = useState<ClinicalTemplate | null>(null);
-  const [activeTab, setActiveTab] = useState<'visual' | 'html' | 'preview'>('visual');
+  const [editingTemplate, setEditingTemplate] = useState<ClinicalTemplate | null>(() => {
+    if (initialTemplateToEdit) {
+      return JSON.parse(JSON.stringify(initialTemplateToEdit));
+    }
+    if (startInCreateMode) {
+      return {
+        id: `custom_${Date.now()}`,
+        code: `CUST-${Math.floor(100 + Math.random() * 900)}`,
+        name: 'Nouveau Modèle Clinique',
+        category: 'Biochemistry',
+        specimen: 'Sérum / Sang total',
+        turnaroundTime: '2 hours',
+        defaultConclusion: 'Examen dans les limites physiologiques normales.',
+        parameters: [
+          { name: 'Paramètre 1', defaultValue: '0.00', unit: 'mg/dL', normalRange: '0.00 - 1.00' }
+        ],
+        html: `
+<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-family: inherit;">
+  <thead>
+    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
+      <th style="padding: 6px 10px;">PARAMÈTRE</th>
+      <th style="padding: 6px 10px; text-align: center;">RÉSULTAT</th>
+      <th style="padding: 6px 10px;">UNITÉ</th>
+      <th style="padding: 6px 10px;">VALEURS DE RÉFÉRENCE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 6px 10px; font-weight: 600;">Paramètre 1</td>
+      <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #0f766e;">0.00</td>
+      <td style="padding: 6px 10px;">mg/dL</td>
+      <td style="padding: 6px 10px; color: #64748b;">0.00 - 1.00</td>
+    </tr>
+  </tbody>
+</table>
+<div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #0f766e; border-radius: 6px; font-size: 11px;">
+  <strong>Conclusion Biologique :</strong> Examen dans les limites physiologiques normales.
+</div>`
+      };
+    }
+    return null;
+  });
+  const [activeTab, setActiveTab] = useState<'visual' | 'html' | 'preview'>(() => {
+    return initialTemplateToEdit?.html && (!initialTemplateToEdit.parameters || initialTemplateToEdit.parameters.length === 0) ? 'html' : 'visual';
+  });
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialTemplateToEdit) {
+      setEditingTemplate(JSON.parse(JSON.stringify(initialTemplateToEdit)));
+      setActiveTab(initialTemplateToEdit.html && (!initialTemplateToEdit.parameters || initialTemplateToEdit.parameters.length === 0) ? 'html' : 'visual');
+    } else if (startInCreateMode && !editingTemplate) {
+      handleCreateNew();
+    }
+  }, [initialTemplateToEdit, startInCreateMode]);
 
   if (!isOpen) return null;
 
@@ -532,6 +588,25 @@ export const ClinicalTemplateManagerModal: React.FC<ClinicalTemplateManagerModal
                         <span>Insérer</span>
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cloned: ClinicalTemplate = {
+                          ...JSON.parse(JSON.stringify(tpl)),
+                          id: `custom_${Date.now()}`,
+                          code: `CUST-${Math.floor(100 + Math.random() * 900)}`,
+                          name: `${tpl.name} (Personnalisé)`,
+                          isCustom: true
+                        };
+                        setEditingTemplate(cloned);
+                        setActiveTab('visual');
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 rounded-xl text-xs font-bold transition-all"
+                      title="Dupliquer et personnaliser ce modèle"
+                    >
+                      Copier
+                    </button>
 
                     <button
                       type="button"
