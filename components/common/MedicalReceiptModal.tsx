@@ -549,9 +549,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
             className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 text-xs"
           >
 
-            {/* ========================================================================= */}
-            {/* TEMPLATE 2: OFFICIAL CAMEROON BIODIAGNOSTICS FACTURE EXTERNE             */}
-            {/* ========================================================================= */}
+         
             {selectedTemplateIndex % 2 === 1 || selectedTemplateIndex === 1 ? (
               <div className="space-y-4">
 
