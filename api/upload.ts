@@ -89,7 +89,7 @@ export const uploadService = {
         }
       }
 
-      // 3. Local browser fallback (Data URL / Object URL)
+     
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
