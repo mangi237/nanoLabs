@@ -1761,6 +1761,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
               <DoctorPatientChatHub
                 currentRole="patient"
+                
                 currentPatientId={user?.id || patientRecordId}
                 currentPatientName={patientFullName}
                 onNavigateToBooking={(tests) => onNavigateTab ? onNavigateTab('book') : null}

@@ -96,6 +96,7 @@ export const PatientApp: React.FC = () => {
                 setCurrentTab('book');
                 setCurrentView('book');
               }}
+            
               onOpenReportModal={() => {
                 setCurrentTab('results');
                 setCurrentView('results');
