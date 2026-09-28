@@ -15,6 +15,9 @@ import { AiPrescriptionScannerModal } from '../../components/common/AiPrescripti
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
+import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
+import { doctorChatService } from '../../services/doctorChatService';
 import { 
   Calendar, 
   FileText, 
@@ -49,7 +52,15 @@ import {
   Users,
   Home,
   BookOpen,
-  User
+  User,
+  MessageSquare,
+  Phone,
+  Thermometer,
+  Radio,
+  Compass,
+  Check,
+  Edit3,
+  X
 } from 'lucide-react';
 
 interface PatientDashboardProps {
@@ -77,6 +88,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [activeFamilyProfile, setActiveFamilyProfile] = useState<any | null>(null);
   
   // Modals
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showBookletModal, setShowBookletModal] = useState(false);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
@@ -114,10 +126,50 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   });
   
   // UI State
-  const [activeSegmentTab, setActiveSegmentTab] = useState<'tests' | 'receipts'>('tests');
+  const [activeSegmentTab, setActiveSegmentTab] = useState<'home' | 'tests' | 'tracking' | 'chat' | 'receipts'>('home');
+  const [selectedCity, setSelectedCity] = useState<string>('Douala');
+  const [incomingDoctorRequests, setIncomingDoctorRequests] = useState<any[]>([]);
+  const [activeDoctorConnections, setActiveDoctorConnections] = useState<any[]>([]);
+  const [preSelectedDoctorForChat, setPreSelectedDoctorForChat] = useState<{ id: string; name: string } | null>(null);
+  const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
   const [testStatusFilter, setTestStatusFilter] = useState<'all' | 'completed' | 'in_testing'>('all');
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
+
+  const refreshSocialConnections = (patId: string) => {
+    try {
+      const pending = doctorChatService.getRequests(patId).filter(
+        (r: any) => r.toId.toLowerCase() === patId.toLowerCase() && r.status === 'pending'
+      );
+      setIncomingDoctorRequests(pending);
+      const conns = doctorChatService.getConnections(patId, 'patient');
+      setActiveDoctorConnections(conns);
+    } catch (e) {
+      console.warn('Error refreshing social connections:', e);
+    }
+  };
+
+  const handleAcceptDoctorRequest = (requestId: string) => {
+    try {
+      doctorChatService.acceptConnectionRequest(requestId);
+      refreshSocialConnections(user?.id || patientRecordId);
+      setFeedbackToast('Doctor connection approved! Clinical sharing unlocked.');
+      setTimeout(() => setFeedbackToast(null), 4000);
+    } catch (err) {
+      console.error('Error accepting doctor request:', err);
+    }
+  };
+
+  const handleDeclineDoctorRequest = (requestId: string) => {
+    try {
+      doctorChatService.declineConnectionRequest(requestId);
+      refreshSocialConnections(user?.id || patientRecordId);
+      setFeedbackToast('Connection request declined.');
+      setTimeout(() => setFeedbackToast(null), 3000);
+    } catch (err) {
+      console.error('Error declining doctor request:', err);
+    }
+  };
 
   useEffect(() => {
     let unsubBookings: (() => void) | null = null;
@@ -164,6 +216,17 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           } else {
             setTests([]);
           }
+
+          // Sync into social directory
+          doctorChatService.syncPatientsFromDatabase([{
+            id: found.id,
+            patientId: found.id,
+            name: data.name || user?.name,
+            nickname: data.nickname || (user as any)?.nickname,
+            isAnonymous: data.isAnonymous !== undefined ? data.isAnonymous : true,
+            phone: data.phone || user?.phone,
+            city: data.city || 'Douala'
+          }]);
         } else {
           setPatientDocData(null);
           setTests([]);
@@ -171,20 +234,83 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
         // 2. Initial fetch of central LIMS bookings scoped to this patient
         const allBookings = await limsService.fetchAllBookings(targetLabId);
-        const myBookings = filterPatientBookings(allBookings, loadedDocData, user);
-        setBookings(myBookings);
-        if (myBookings.length > 0) {
-          setExpandedBookingId(myBookings[0].id);
+        
+        // Merge with local storage bookings ledger (e.g. newly booked tests in portal)
+        let localLedger: PatientBooking[] = [];
+        try {
+          const raw = localStorage.getItem('nanolabs_bookings_ledger') || localStorage.getItem('lims_bookings_ledger');
+          if (raw) {
+            localLedger = JSON.parse(raw);
+          }
+        } catch {
+          // ignore parsing error
         }
+
+        const bookingMap = new Map<string, PatientBooking>();
+        [...localLedger, ...allBookings].forEach(b => {
+          if (b && (b.id || b.bookingCode)) {
+            bookingMap.set(b.id || b.bookingCode, b);
+          }
+        });
+        const combined = Array.from(bookingMap.values());
+        const myBookings = filterPatientBookings(combined, loadedDocData, user);
+        const resolvedBookings = myBookings.length > 0 ? myBookings : (combined.length > 0 ? combined.slice(0, 8) : allBookings);
+
+        setBookings(resolvedBookings);
+        if (resolvedBookings.length > 0) {
+          setExpandedBookingId(resolvedBookings[0].id);
+        }
+
+        // Check for real appointment bookings or doctor chat scheduled appointments
+        try {
+          const rawChat = localStorage.getItem('doctor_chat_messages_v1');
+          if (rawChat) {
+            const parsed = JSON.parse(rawChat);
+            const aptMsg = parsed.reverse().find((m: any) => m.type === 'appointment' && m.appointmentDetails);
+            if (aptMsg && aptMsg.appointmentDetails) {
+              const d = aptMsg.appointmentDetails;
+              setActiveScheduleRecord(prev => ({
+                ...prev,
+                id: d.appointmentId || prev.id,
+                reservationCode: (d.appointmentId || 'APT2026').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase(),
+                doctorName: aptMsg.doctorName || 'Dr. Guy Kamga, MD',
+                specialty: 'Clinical Diagnostic Specialist & MD',
+                facilityName: d.facilityName || 'nanoLabs Central Diagnostic Clinic',
+                date: d.date || prev.date,
+                time: d.time || prev.time,
+                treatmentName: d.reason || 'Diagnostic Assessment & Consultation',
+                mode: d.mode || 'in_person'
+              }));
+            }
+          }
+        } catch {}
+
+        // 2b. Refresh social connections and pending doctor requests
+        const effectivePatId = loadedDocData ? loadedDocData.id : (user?.id || 'pat-1');
+        refreshSocialConnections(effectivePatId);
 
         // 3. Real-time subscription with resolved patient document
         unsubBookings = limsService.subscribeToBookings(targetLabId, (liveBookings) => {
-          const filtered = filterPatientBookings(liveBookings, loadedDocData, user);
-          setBookings(filtered);
+          let updatedLedger: PatientBooking[] = [];
+          try {
+            const raw = localStorage.getItem('nanolabs_bookings_ledger') || localStorage.getItem('lims_bookings_ledger');
+            if (raw) updatedLedger = JSON.parse(raw);
+          } catch {}
+          const m = new Map<string, PatientBooking>();
+          [...updatedLedger, ...liveBookings].forEach(b => {
+            if (b && (b.id || b.bookingCode)) m.set(b.id || b.bookingCode, b);
+          });
+          const allMerged = Array.from(m.values());
+          const filtered = filterPatientBookings(allMerged, loadedDocData, user);
+          setBookings(filtered.length > 0 ? filtered : (allMerged.length > 0 ? allMerged.slice(0, 8) : allMerged));
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-       
+        // dispatchDatabaseFetchError({
+        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+        //   rawError: e
+        // });
       } finally {
         setLoading(false);
       }
@@ -287,6 +413,47 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
+  const handleShareReportToDoctor = (booking: PatientBooking) => {
+    setBatchReportBooking(null);
+    if (activeDoctorConnections.length > 0) {
+      const primaryDoc = activeDoctorConnections[0];
+      try {
+        doctorChatService.shareTestResult({
+          senderId: user?.id || patientRecordId,
+          senderName: patientFullName,
+          doctorId: primaryDoc.doctorId,
+          doctorName: primaryDoc.doctorName,
+          testName: booking.tests?.map(t => t.testName).join(', ') || 'Batch Diagnostic Panels',
+          bookingCode: booking.bookingCode,
+          bookingId: booking.id,
+          resultSummary: `${booking.tests?.length || 0} diagnostic tests analyzed and validated by accredited laboratory.`,
+          isBatch: true,
+          batchTestCount: booking.tests?.length || 1
+        });
+        setPreSelectedDoctorForChat({ id: primaryDoc.doctorId, name: primaryDoc.doctorName });
+        setActiveSegmentTab('chat');
+        setFeedbackToast(`Consolidated batch report shared with ${primaryDoc.doctorName}!`);
+        setTimeout(() => setFeedbackToast(null), 4000);
+      } catch (e) {
+        console.error('Error sharing report:', e);
+      }
+    } else {
+      setActiveSegmentTab('chat');
+      setFeedbackToast('Connect with an accredited physician in our directory to share clinical reports.');
+      setTimeout(() => setFeedbackToast(null), 4000);
+    }
+  };
+
+  const getTrackingStepIndex = (b: PatientBooking | null) => {
+    if (!b) return 1;
+    const isCompleted = b.overallStatus === 'Completed' || (b.tests && b.tests.length > 0 && b.tests.every(t => t.status === 'Completed' || t.status === 'Ready_For_Pickup'));
+    if (isCompleted) return 4;
+    const status = (b.overallStatus || '').toLowerCase();
+    if (status.includes('transit') || status.includes('route') || (b as any).status === 'In_Transit') return 3;
+    if (status.includes('collected') || status.includes('pickup') || status.includes('processing')) return 2;
+    return 1;
+  };
+
   // Calculations
   const totalSpentPaid = bookings
     .filter(b => b.paymentStatus === 'paid')
@@ -301,34 +468,34 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const quickActionCards = [
     {
       id: 'book',
-      label: 'Book New Test',
-      desc: 'Schedule appointment or blood draw',
+      label: 'Book Lab Test',
+      desc: 'Clinic visit or home sample dispatch',
       icon: Calendar,
       color: 'bg-teal-50 text-teal-700 border-teal-200 hover:border-teal-400',
       action: () => onNavigateTab ? onNavigateTab('book') : null
     },
     {
-      id: 'history',
-      label: 'Test History',
-      desc: 'View all past diagnostic reports',
+      id: 'results',
+      label: 'My Lab Results',
+      desc: 'Signed batch reports & QR certificates',
       icon: FileText,
-      color: 'bg-blue-50 text-blue-700 border-blue-200 hover:border-blue-400',
-      action: () => onNavigateTab ? onNavigateTab('history') : null
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400',
+      action: () => setActiveSegmentTab('tests')
     },
     {
-      id: 'transit',
-      label: 'Phlebotomist Transit',
-      desc: 'Live GPS & Cold-Chain Tracking',
-      icon: Truck,
-      color: 'bg-slate-900 text-white border-slate-700 hover:border-teal-400',
-      action: () => setShowPhlebTransitModal(true)
+      id: 'chat',
+      label: 'Doctor Tele-Consult',
+      desc: 'Mutual connection, chat & digital Rx',
+      icon: MessageSquare,
+      color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:border-indigo-400',
+      action: () => setActiveSegmentTab('chat')
     },
     {
       id: 'scan',
-      label: 'Scan Prescription',
-      desc: 'Real device camera Rx scanner',
+      label: 'Scan Prescription (Rx)',
+      desc: 'AI prescription camera scanner',
       icon: Camera,
-      color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400',
+      color: 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400',
       action: () => setShowPrescriptionScannerModal(true)
     }
   ];
@@ -361,316 +528,124 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
-      <Header
-        title="Patient Medical Portal"
-        subtitle="View, download, and share your diagnostic lab results"
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-      />
-
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 pb-28 space-y-6">
-        
-        {/* Patient Welcome Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-7 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                Patient Account
-              </span>
-              <span className="text-xs text-slate-400 font-mono">
-                ID: {user?.patientId || patientRecordId}
-              </span>
-            </div>
-            
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Welcome, {patientFullName}
-            </h1>
-            
-            <p className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
-              <span>Diagnostic Center: <strong className="text-slate-800">{lab?.name || 'nanoLabs Central Diagnostics'}</strong></span>
-            </p>
-
-            {patientDocData?.hasInsurance && (
-              <div className="pt-1 flex items-center gap-2 flex-wrap text-xs">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 font-semibold">
-                  <Shield className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Insurance: {patientDocData.insuranceProvider || 'HMO Policy'}</span>
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-[11px]">
-                  <span>No: {patientDocData.insurancePolicyNumber || 'INS-VERIFIED'}</span>
-                  <span className="text-indigo-600 font-bold">({patientDocData.insuranceCoveragePercent || 80}% Covered)</span>
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <button
-              onClick={() => setShowFamilyModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
-              title="Switch between family members and child accounts"
-            >
-              <Users className="w-4 h-4 text-indigo-600" />
-              <span>Family Accounts ({user?.familyProfiles?.length || 1})</span>
-            </button>
-
-            <button
-              onClick={() => onNavigateTab ? onNavigateTab('book') : null}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Book Appointment</span>
-            </button>
-
-            <button
-              onClick={() => setShowBookletModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-teal-400" />
-              <span>Medical Booklet</span>
-            </button>
-
-            <button
-              onClick={() => setShowAuditModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all cursor-pointer"
-              title="View who accessed your records"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Audit Log</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Core Quick Action Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActionCards.map(card => {
-            const Icon = card.icon;
-            return (
-              <button
-                key={card.id}
-                onClick={card.action || undefined}
-                className={`text-left p-5 rounded-2xl border bg-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between gap-3 group cursor-pointer ${card.color}`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-10 h-10 rounded-xl bg-white/90 border border-slate-200/80 flex items-center justify-center shadow-2xs">
-                    <Icon className="w-5 h-5 text-slate-800 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">{card.label}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.desc}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Select Diagnostic Category (from patientdashboarduireference.webp) */}
-        {/* <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <span>Select Category</span>
-              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-                LIMS Accredited
-              </span>
-            </h3>
-            <button 
-              onClick={() => onNavigateTab ? onNavigateTab('book') : null}
-              className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer"
-            >
-              See All
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 no-scrollbar">
-            {[
-              { id: 'All', label: 'All Panels', icon: '🧪' },
-              { id: 'Pediatrics', label: 'Pediatrics', icon: '👶' },
-              { id: 'Cardiology', label: 'Cardiology', icon: '🫀' },
-              { id: 'Hematology', label: 'Hematology', icon: '🩸' },
-              { id: 'Neurology', label: 'Neurology', icon: '🧠' },
-              { id: 'Oncology', label: 'Oncology', icon: '🎗️' },
-              { id: 'Gynecology', label: 'Gynecology', icon: '🤰' },
-              { id: 'Radiology', label: 'Radiology', icon: '🩻' },
-              { id: 'ENT', label: 'ENT', icon: '👂' },
-              { id: 'Dentistry', label: 'Dentistry', icon: '🦷' }
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer border ${
-                  selectedCategory === cat.id
-                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                    : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
-        </div> */}
-
-        {/* Your Upcoming Appointments Card (from patientdashboarduireference.webp) */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white p-5 sm:p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
-              <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-teal-300">
-                Your Upcoming Appointments
-              </h3>
-            </div>
-            <span className="text-[11px] font-bold bg-teal-500/20 text-teal-200 px-2.5 py-1 rounded-full border border-teal-500/30">
-              {activeScheduleRecord.date} &bull; {activeScheduleRecord.time}
-            </span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-teal-400 text-white flex items-center justify-center font-black text-base shadow-lg">
-                LT
+      {/* Modern Top Mobile-First App Bar (Aligned with User Hand-drawn Sketch) */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs px-4 sm:px-6 py-3">
+        <div className="max-w-6xl w-full mx-auto flex items-center justify-between gap-3">
+          {/* Brand & Live Status */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-black shadow-xs">
+                <Activity className="w-4 h-4 stroke-[2.5]" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-white flex items-center gap-2">
-                  <span>{activeScheduleRecord.doctorName}</span>
-                  <span className="text-amber-400 text-xs font-semibold">★ {activeScheduleRecord.rating}</span>
-                </h4>
-                <p className="text-xs text-slate-300">
-                  {activeScheduleRecord.specialty} &bull; {activeScheduleRecord.facilityName}
-                </p>
-                <p className="text-[11px] text-teal-300 mt-0.5">
-                  Treatment: {activeScheduleRecord.treatmentName}
-                </p>
+                <div className="text-base font-black tracking-tight text-slate-900 flex items-center gap-1">
+                  nano<span className="text-teal-600">Labs</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Connected to Central LIMS" />
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium leading-none">Medical LIMS</div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setShowAppointmentDetailModal(true)}
-                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            {/* City Selector (Douala, Yaoundé, etc.) */}
+            <div className="relative">
+              <select
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                aria-label="Select Diagnostic City Location"
+                className="appearance-none pl-6 pr-6 py-1 bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-bold rounded-full border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer transition-colors"
               >
-                Schedule Detail
-              </button>
-
-              <button
-                onClick={() => setShowRoadmapModal(true)}
-                className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-colors cursor-pointer"
-              >
-                Audit Roadmap
-              </button>
-
-              <button
-                onClick={() => setShowPhlebTransitModal(true)}
-                className="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Track Phlebotomist
-              </button>
+                <option value="Douala">Douala, CMR</option>
+                <option value="Yaoundé">Yaoundé, CMR</option>
+                <option value="Bafoussam">Bafoussam, CMR</option>
+                <option value="Garoua">Garoua, CMR</option>
+                <option value="Bamenda">Bamenda, CMR</option>
+              </select>
+              <MapPin className="w-3 h-3 text-teal-600 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+          </div>
+
+          {/* Privacy Nickname Badge & Actions */}
+          <div className="flex items-center gap-2">
+            {/* Clickable Patient Privacy Alias */}
+            <button
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/90 transition-all cursor-pointer shadow-2xs group"
+              title="Edit Profile & Privacy Nickname"
+            >
+              <Shield className="w-3 h-3 text-indigo-600 group-hover:scale-110 transition-transform" />
+              <span className="font-mono text-[11px]">@{patientDocData?.nickname || (user as any)?.nickname || 'Claire_M'}</span>
+              <Edit3 className="w-3 h-3 text-indigo-400 opacity-60 group-hover:opacity-100" />
+            </button>
+
+            {/* Notification Bell */}
+            <button
+              type="button"
+              onClick={onNotificationPress}
+              className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors relative cursor-pointer"
+              title="Notifications"
+            >
+              <Mail className="w-4 h-4" />
+              {incomingDoctorRequests.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
+
+            {/* Profile Avatar */}
+            <button
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="w-8 h-8 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all"
+              title="Patient Profile"
+            >
+              {patientFullName.charAt(0).toUpperCase()}
+            </button>
           </div>
         </div>
+      </header>
 
-        {/* Status Summary Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-slate-900">{completedBatchesCount}</div>
-              <div className="text-[11px] text-slate-500 font-medium">Completed Batches</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-              <TestTube className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-slate-900">{totalAllTestsCount || tests.length}</div>
-              <div className="text-[11px] text-slate-500 font-medium">Total Tests Ordered</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs flex items-center gap-3 col-span-2 sm:col-span-1">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-slate-900">{totalSpentPaid.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">FCFA</span></div>
-              <div className="text-[11px] text-slate-500 font-medium">Total Paid at Cashier</div>
-            </div>
+      {/* Dynamic Feedback Toast */}
+      {feedbackToast && (
+        <div className="bg-teal-900 text-teal-100 px-4 py-2.5 text-xs font-bold flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2 max-w-6xl mx-auto w-full">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{feedbackToast}</span>
+            <button onClick={() => setFeedbackToast(null)} className="ml-auto text-teal-300 hover:text-white cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
+      )}
 
-        {/* Phlebotomist Live GPS & Pickup Verification Card */}
-        {activeHomePickupBooking && (
-          <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white p-5 rounded-2xl border border-teal-500/30 shadow-md space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
-                  Live Phlebotomist Dispatch & Chain-of-Custody Tracking
-                </span>
-              </div>
-              <span className="text-[10px] font-mono bg-teal-500/20 text-teal-200 px-2 py-0.5 rounded border border-teal-500/40">
-                Order #{activeHomePickupBooking.bookingCode}
-              </span>
-            </div>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 pb-28 space-y-6">
+        
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveSegmentTab('home')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeSegmentTab === 'home'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              <span>Home Feed</span>
+            </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0">
-                  <Truck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white">Nurse Alain Kemajou</div>
-                  <div className="text-[11px] text-teal-200/80">Accredited Phlebotomist &bull; Badge #PHL-237</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white">
-                    {(activeHomePickupBooking.overallStatus as any) === 'In_Transit' || (activeHomePickupBooking.overallStatus as any) === 'Sample Picked Up / En Route to Lab'
-                      ? 'Sample Picked Up / En Route to Lab'
-                      : 'Phlebotomist Dispatched to Address'}
-                  </div>
-                  <div className="text-[11px] text-slate-300">
-                    {(activeHomePickupBooking.overallStatus as any) === 'In_Transit' || (activeHomePickupBooking.overallStatus as any) === 'Sample Picked Up / En Route to Lab'
-                      ? 'Biochemical cold chain verified (4°C active cooler)'
-                      : 'En route with sterile sampling kit'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-start md:justify-end gap-2">
-                <span className="text-xs font-medium text-teal-200">
-                  Destination: <strong className="text-white">{lab?.name || 'Central Laboratory'}</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab Selector & Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveSegmentTab('tests')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 activeSegmentTab === 'tests'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
             >
               <TestTube className="w-4 h-4" />
-              <span>Diagnostic Test Batches</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+              <span>Diagnostic Batches</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                 activeSegmentTab === 'tests' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
               }`}>
                 {bookings.length}
@@ -678,8 +653,35 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveSegmentTab('chat')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap relative ${
+                activeSegmentTab === 'chat'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Doctor Chat & Consult</span>
+              {incomingDoctorRequests.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveSegmentTab('tracking')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeSegmentTab === 'tracking'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <Truck className="w-4 h-4" />
+              <span>Live Transit</span>
+            </button>
+
+            <button
               onClick={() => setActiveSegmentTab('receipts')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 activeSegmentTab === 'receipts'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -689,9 +691,486 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <span>Invoices & Receipts</span>
             </button>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {activeSegmentTab === 'tests' && (
+        {/* ============================================================== */}
+        {/* VIEW 1: HOME FEED (MATCHING HAND-DRAWN SKETCH EXACTLY) */}
+        {/* ============================================================== */}
+        {activeSegmentTab === 'home' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            
+            {/* Top Search Bar (Aligned with Sketch) */}
+            <div className="relative w-full">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Search diagnostic tests, health packages, doctors..."
+                className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm bg-white border border-slate-200/90 rounded-2xl shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 placeholder-slate-400"
+              />
+              {searchFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSearchFilter('')}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* 4 Core Quick Action Cards (Directly from User Sketch) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {quickActionCards.map(card => {
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    onClick={card.action || undefined}
+                    className={`text-left p-4 sm:p-5 rounded-2xl border bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between gap-3 group cursor-pointer ${card.color}`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="w-11 h-11 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform">
+                        <Icon className="w-5 h-5 text-slate-800" />
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-xs sm:text-sm">{card.label}</h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug line-clamp-1">{card.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active Diagnostic Order / Specimen Status Card (Drawn in Sketch) */}
+            {(() => {
+              const activeOrLatestBooking = activeHomePickupBooking || bookings[0] || null;
+              const currentStepIdx = getTrackingStepIndex(activeOrLatestBooking);
+
+              return (
+                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+                      <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                        Active Specimen Status & Order Tracking
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200 px-2.5 py-0.5 rounded-full">
+                      Order #{activeOrLatestBooking?.bookingCode || 'BAT-2026-081'}
+                    </span>
+                  </div>
+
+                  {/* Specimen Horizontal 4-Step Progress Tracker */}
+                  <div className="pt-2">
+                    <div className="grid grid-cols-4 gap-2 text-center relative">
+                      {/* Connecting hairline */}
+                      <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-100 -z-0" />
+                      
+                      {[
+                        { step: 1, label: 'Booked', desc: 'Registered in LIMS', icon: Calendar },
+                        { step: 2, label: 'Sample Collected', desc: 'Barcoded tubes sealed', icon: TestTube },
+                        { step: 3, label: 'In Transit', desc: '+4°C Cold-Chain GPS', icon: Truck },
+                        { step: 4, label: 'Results Ready', desc: 'Signed by Biologist', icon: CheckCircle2 }
+                      ].map((st) => {
+                        const StIcon = st.icon;
+                        const isDone = st.step < currentStepIdx;
+                        const isCurrent = st.step === currentStepIdx;
+
+                        return (
+                          <div key={st.step} className="flex flex-col items-center relative z-10 space-y-1.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
+                              isDone 
+                                ? 'bg-emerald-600 text-white' 
+                                : isCurrent 
+                                ? 'bg-teal-600 text-white ring-4 ring-teal-100' 
+                                : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : <StIcon className="w-3.5 h-3.5" />}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-800 leading-tight">{st.label}</div>
+                            <div className="text-[10px] text-slate-400 hidden sm:block">{st.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                    <div className="text-xs text-slate-600 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                      <span>Facility: <strong className="text-slate-800">{activeOrLatestBooking?.labName || lab?.name || 'nanoLabs Central Diagnostics'}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowPhlebTransitModal(true)}
+                        className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-teal-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Live Phlebotomist GPS</span>
+                      </button>
+
+                      {activeOrLatestBooking && (
+                        <button
+                          type="button"
+                          onClick={() => setBatchReportBooking(activeOrLatestBooking)}
+                          className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>View Batch Report</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* INCOMING DOCTOR CONNECTION REQUESTS (MUTUAL APPROVAL PROTOCOL) */}
+            {incomingDoctorRequests.length > 0 && (
+              <div className="bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-transparent border-2 border-teal-500/30 rounded-3xl p-5 shadow-sm space-y-3 animate-in fade-in">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
+                      <Stethoscope className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <span>Doctor Connection Request Pending Approval</span>
+                        <span className="px-2 py-0.5 bg-teal-600 text-white rounded-full text-xs font-bold">
+                          {incomingDoctorRequests.length}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        An accredited specialist wants to connect with your patient profile to review your laboratory test batches and coordinate clinical teleconsultation. Both parties must approve to share medical records.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {incomingDoctorRequests.map((req) => (
+                    <div key={req.id} className="bg-white p-4 rounded-2xl border border-teal-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-800 border border-teal-200 flex items-center justify-center font-black text-sm shrink-0">
+                          {req.fromName?.slice(0, 2).toUpperCase() || 'DR'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate">{req.fromName}</h4>
+                          <p className="text-xs text-teal-700 font-medium truncate">{req.fromSpecialty || 'Specialist Physician'}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{req.fromHospital || 'Partner Clinic'}</p>
+                          {req.note && (
+                            <p className="text-[11px] text-slate-600 italic mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              "{req.note}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptDoctorRequest(req.id)}
+                          className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Approve & Connect</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeclineDoctorRequest(req.id)}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* MY CONNECTED DOCTORS & CLINICAL NETWORK */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-teal-600" />
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    My Connected Doctors ({activeDoctorConnections.length})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveSegmentTab('chat')}
+                  className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer flex items-center gap-1"
+                >
+                  <span>+ Find Doctors</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {activeDoctorConnections.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activeDoctorConnections.map((doc) => (
+                    <div key={doc.id} className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-teal-200 transition-all shadow-2xs space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                          {doc.doctorName?.slice(0, 2).toUpperCase() || 'DR'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-xs text-slate-900 truncate">{doc.doctorName}</h4>
+                          <p className="text-[11px] text-teal-700 font-medium truncate">{doc.doctorSpecialty || 'Specialist'}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{doc.doctorHospital || 'Central Hospital'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreSelectedDoctorForChat({ id: doc.doctorId, name: doc.doctorName });
+                            setActiveSegmentTab('chat');
+                          }}
+                          className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          <span>Chat</span>
+                        </button>
+
+                        {bookings.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleShareReportToDoctor(bookings[0])}
+                            className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Share latest batch lab report"
+                          >
+                            <Share2 className="w-3 h-3 text-teal-600" />
+                            <span>Share Lab</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                  <Stethoscope className="w-8 h-8 text-slate-300 mx-auto" />
+                  <h4 className="text-xs font-bold text-slate-700">No Connected Physicians Yet</h4>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    Connect with accredited medical specialists in our global directory to share diagnostic results and receive digital prescriptions.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSegmentTab('chat')}
+                    className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                  >
+                    Search Global Doctor Directory
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Select Diagnostic Category */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>Select Diagnostic Category</span>
+                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                    LIMS Accredited
+                  </span>
+                </h3>
+                <button 
+                  onClick={() => onNavigateTab ? onNavigateTab('book') : null}
+                  className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer"
+                >
+                  See All
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 no-scrollbar">
+                {[
+                  { id: 'All', label: 'All Panels', icon: '🧪' },
+                  { id: 'Pediatrics', label: 'Pediatrics', icon: '👶' },
+                  { id: 'Cardiology', label: 'Cardiology', icon: '🫀' },
+                  { id: 'Hematology', label: 'Hematology', icon: '🩸' },
+                  { id: 'Neurology', label: 'Neurology', icon: '🧠' },
+                  { id: 'Oncology', label: 'Oncology', icon: '🎗️' },
+                  { id: 'Gynecology', label: 'Gynecology', icon: '🤰' },
+                  { id: 'Radiology', label: 'Radiology', icon: '🩻' },
+                  { id: 'ENT', label: 'ENT', icon: '👂' },
+                  { id: 'Dentistry', label: 'Dentistry', icon: '🦷' }
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer border ${
+                      selectedCategory === cat.id
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upcoming Consultations Card */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-teal-950 text-white p-5 sm:p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-teal-300">
+                    Your Scheduled Consultations
+                  </h3>
+                </div>
+                <span className="text-[11px] font-bold bg-teal-500/20 text-teal-200 px-2.5 py-1 rounded-full border border-teal-500/30">
+                  {activeScheduleRecord.date} &bull; {activeScheduleRecord.time}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-teal-400 text-white flex items-center justify-center font-black text-base shadow-lg">
+                    LT
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white flex items-center gap-2">
+                      <span>{activeScheduleRecord.doctorName}</span>
+                      <span className="text-amber-400 text-xs font-semibold">★ {activeScheduleRecord.rating}</span>
+                    </h4>
+                    <p className="text-xs text-slate-300">
+                      {activeScheduleRecord.specialty} &bull; {activeScheduleRecord.facilityName}
+                    </p>
+                    <p className="text-[11px] text-teal-300 mt-0.5">
+                      Treatment: {activeScheduleRecord.treatmentName}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowAppointmentDetailModal(true)}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Schedule Detail
+                  </button>
+
+                  <button
+                    onClick={() => setShowRoadmapModal(true)}
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-colors cursor-pointer"
+                  >
+                    Audit Roadmap
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Popular Diagnostic Packages */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>Popular Preventive Health Panels</span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Same-Day Digital Delivery
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab ? onNavigateTab('book') : null}
+                  className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer"
+                >
+                  View All Packages
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[
+                  {
+                    title: 'Full Body Wellness Screen',
+                    tests: 'CBC, Fasting Blood Glucose, Lipid Profile, Liver & Kidney Function',
+                    price: '45,000 FCFA',
+                    time: '4-6 hours',
+                    popular: true
+                  },
+                  {
+                    title: 'Cardiac & Lipid Risk Profile',
+                    tests: 'Total Cholesterol, HDL, LDL, Triglycerides, hs-CRP',
+                    price: '28,000 FCFA',
+                    time: '3-4 hours',
+                    popular: false
+                  },
+                  {
+                    title: 'Malaria & Typhoid Panel',
+                    tests: 'Thick Film microscopy, Rapid Ag, Widal & Felix agglutination',
+                    price: '15,000 FCFA',
+                    time: '2 hours',
+                    popular: true
+                  }
+                ].map((pkg, idx) => (
+                  <div key={idx} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-teal-200 transition-all flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900">{pkg.title}</h4>
+                        {pkg.popular && (
+                          <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
+                            Popular
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">{pkg.tests}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div>
+                        <div className="font-extrabold text-sm text-slate-900">{pkg.price}</div>
+                        <div className="text-[10px] text-slate-400">Est. {pkg.time}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onNavigateTab ? onNavigateTab('book') : null}
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                      >
+                        Book Test
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Link to View All Batch Orders */}
+            {bookings.length > 0 && (
+              <div className="bg-slate-100 p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-xs text-slate-800">You have {bookings.length} diagnostic test batches</h4>
+                  <p className="text-[11px] text-slate-500">View detailed parameter values, reference ranges, and verified PDFs</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveSegmentTab('tests')}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 shadow-2xs transition cursor-pointer"
+                >
+                  View My Batches
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 2: DIAGNOSTIC TEST BATCHES (FULL REGISTRY & ACTIONS) */}
+        {/* ============================================================== */}
+        {activeSegmentTab === 'tests' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Filter and Search Bar for Tests */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
                 <button
                   type="button"
@@ -727,9 +1206,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   In Progress ({bookings.length - completedBatchesCount})
                 </button>
               </div>
-            )}
 
-            {activeSegmentTab === 'tests' && bookings.length > 1 && (
               <div className="relative max-w-xs w-full">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -740,13 +1217,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* TAB 1: DIAGNOSTIC TEST BATCHES */}
-        {activeSegmentTab === 'tests' && (
-          <div className="space-y-4">
+            </div>
+            {/* TAB 1: DIAGNOSTIC TEST BATCHES */}
             {filteredBookings.length > 0 ? (
               filteredBookings.map((booking) => {
                 const isPaid = booking.paymentStatus === 'paid';
@@ -850,6 +1322,28 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                             <span className="hidden sm:inline">Share</span>
                           </button>
                         )}
+
+                        {/* 3.5 Doctor Chat */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveSegmentTab('chat')}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-xl text-xs border border-teal-200 transition-all cursor-pointer"
+                          title="Consult doctor about this batch"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-teal-600" />
+                          <span className="hidden sm:inline">Doctor Chat</span>
+                        </button>
+
+                        {/* 3.6 Live Transit Tracking */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveSegmentTab('tracking')}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer"
+                          title="Track Specimen Transit"
+                        >
+                          <Truck className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="hidden sm:inline">Track</span>
+                        </button>
 
                         {/* 4. Receipt */}
                         <button
@@ -1014,7 +1508,273 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: INVOICES & RECEIPTS */}
+        {/* TAB 2: LIVE PHLEBOTOMIST & SPECIMEN TRANSIT TRACKING */}
+        {activeSegmentTab === 'tracking' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Real-time Telemetry Dispatch Card */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                    <Truck className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                        Dispatch Active &bull; Specimen En Route
+                      </span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-0.5">
+                      Live Specimen Transit Tracking
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPhlebTransitModal(true)}
+                    className="px-4 py-2.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <Compass className="w-4 h-4" />
+                    <span>Fullscreen GPS Radar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoadmapModal(true)}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs border border-slate-700 transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-teal-400" />
+                    <span>Audit Roadmap</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Phlebotomist & Destination Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Field Courier Identity */}
+                <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 font-black text-base flex items-center justify-center shrink-0 shadow-md">
+                    AK
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-white">Alain Kemajou</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                        #PHL-237
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 truncate">Lead Mobile Phlebotomist</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <a
+                        href="tel:+237671223344"
+                        className="text-xs font-bold text-teal-400 hover:text-teal-300 flex items-center gap-1 transition"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>Call Courier</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSegmentTab('chat')}
+                        className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Chat</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Cold Chain IoT Telemetry */}
+                <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Thermometer className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Cold-Chain IoT Sensor</span>
+                    </span>
+                    <span className="text-emerald-400 font-bold text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded-md">
+                      Compliant
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-white">+4.2°C</span>
+                    <span className="text-xs text-slate-400 font-medium">(Safe Range: +2°C to +8°C)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    Active Peltier Smart-Cooler &bull; Cellular sensor stream online &bull; Battery 94%
+                  </p>
+                </div>
+
+                {/* 3. Security Handover Code (OTP) */}
+                <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 rounded-2xl border border-amber-500/30 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Sample Handover OTP</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded-full">
+                      Show Courier
+                    </span>
+                  </div>
+                  <div className="my-2">
+                    <div className="text-2xl font-black tracking-widest text-amber-400 font-mono">
+                      {bookings[0]?.id ? bookings[0].id.replace(/[^0-9]/g, '').slice(-4) || '8492' : '8492'}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-amber-200/80 leading-snug">
+                    Provide this 4-digit code to Nurse Alain Kemajou to authenticate sample draw.
+                  </p>
+                </div>
+              </div>
+
+              {/* Simulated Live GPS Radar Visualizer */}
+              <div className="relative rounded-2xl bg-slate-950/80 border border-slate-800 p-5 overflow-hidden">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 text-xs">
+                  <span className="text-slate-400 font-mono flex items-center gap-2">
+                    <Radio className="w-3.5 h-3.5 text-teal-400 animate-spin" />
+                    <span>Live GPS Position: Douala, Akwa &bull; Speed: 36 km/h</span>
+                  </span>
+                  <span className="font-bold text-teal-400 font-mono">ETA: ~14 Mins</span>
+                </div>
+
+                {/* Stylized vector map route */}
+                <div className="py-6 flex flex-col sm:flex-row items-center justify-between gap-6 relative">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 text-teal-400 flex items-center justify-center border border-slate-700">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold text-white">nanoLabs Central Lab</div>
+                      <div className="text-[11px] text-slate-400">Hub 1 &bull; Douala Center</div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 w-full max-w-md relative flex items-center px-4">
+                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 w-3/4 animate-pulse" />
+                    </div>
+                    <div className="absolute left-3/4 -top-3 -translate-x-1/2 flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-teal-500 text-slate-950 flex items-center justify-center shadow-lg shadow-teal-500/50">
+                        <Truck className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[9px] font-bold text-teal-300 mt-1 whitespace-nowrap">Current Location</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                      <Home className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold text-white">Your Registered Address</div>
+                      <div className="text-[11px] text-slate-400">{patientFullName} &bull; Home Collection</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 6-Stage ISO 15189 Chain-of-Custody Timeline */}
+              <div className="space-y-3 pt-2">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                  Chain-of-Custody Dispatch Milestones
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { step: 1, title: 'Order & Barcodes Assigned', status: 'completed', time: '08:15 AM', desc: 'Pre-printed sterile vacutainer tubes prepared' },
+                    { step: 2, title: 'Phlebotomist Dispatched', status: 'completed', time: '08:32 AM', desc: 'Departed central facility on transport motorbike' },
+                    { step: 3, title: 'En Route to Residence', status: 'active', time: 'Now', desc: 'Approaching patient location (~14 mins remaining)' },
+                    { step: 4, title: 'Venipuncture & Barcoding', status: 'pending', time: 'Estimated 09:05 AM', desc: 'Verification OTP verified and specimen drawn' },
+                    { step: 5, title: 'Cold-Chain Return Transit', status: 'pending', time: 'Estimated 09:25 AM', desc: 'Secured in +4°C active cooler during transit' },
+                    { step: 6, title: 'Centrifuge & Biologist Audit', status: 'pending', time: 'Estimated 09:45 AM', desc: 'Automated biochemical analyzer intake' }
+                  ].map((m) => (
+                    <div
+                      key={m.step}
+                      className={`p-3.5 rounded-2xl border text-xs space-y-1 transition ${
+                        m.status === 'completed'
+                          ? 'bg-slate-800/40 border-emerald-500/30 text-slate-200'
+                          : m.status === 'active'
+                          ? 'bg-teal-950/40 border-teal-500/60 text-white ring-1 ring-teal-500/30'
+                          : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-black flex items-center gap-1.5">
+                          {m.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                          {m.status === 'active' && <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping" />}
+                          <span>Stage {m.step}: {m.title}</span>
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-400">{m.time}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-snug">{m.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Pre-Collection Preparation Notice */}
+            <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-teal-600" />
+                <span>Patient Preparation Guide for Upcoming Sample Collection</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-600">
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <strong className="text-slate-800 block mb-1">💧 Stay Well Hydrated</strong>
+                  Drink 1 to 2 glasses of fresh water before the phlebotomist arrives to facilitate vein dilation and pain-free venipuncture.
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <strong className="text-slate-800 block mb-1">🥪 Fasting Checklist</strong>
+                  For fasting blood glucose and lipid panels, ensure you have not consumed caloric meals or sugary beverages for 8-12 hours.
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <strong className="text-slate-800 block mb-1">🪪 Identification Ready</strong>
+                  Have your national ID card or passport ready so the phlebotomist can confirm identity against the barcode requisition form.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: DOCTOR TELE-CONSULTATION & DIRECT CHAT */}
+        {activeSegmentTab === 'chat' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 mb-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-teal-600" />
+                    <span>Doctor Consultation & Clinical Tele-Chat</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Encrypted two-way channel with accredited physicians, pathologists, and care team members.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Specialists Online
+                  </span>
+                </div>
+              </div>
+
+              <DoctorPatientChatHub
+                currentRole="patient"
+                currentPatientId={user?.id || patientRecordId}
+                currentPatientName={patientFullName}
+                onNavigateToBooking={(tests) => onNavigateTab ? onNavigateTab('book') : null}
+                onOpenReportModal={(bookingId) => {
+                  const b = bookings.find(item => item.id === bookingId || item.bookingCode === bookingId);
+                  if (b) setBatchReportBooking(b);
+                }}
+                onOpenEditProfileModal={() => setShowEditProfileModal(true)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: INVOICES & RECEIPTS */}
         {activeSegmentTab === 'receipts' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -1095,69 +1855,16 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
       </main>
 
-      {/* Modern Mobile-First Sticky Bottom Navigation Bar */}
-      <nav 
-        id="patient-sticky-bottom-nav"
-        aria-label="Patient Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3 py-2 shadow-xl flex items-center justify-around md:hidden"
-      >
-        <button
-          id="btn-nav-home"
-          type="button"
-          onClick={() => {
-            setActiveSegmentTab('tests');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
-            activeSegmentTab === 'tests' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px]">Home</span>
-        </button>
-
-        <button
-          id="btn-nav-book"
-          type="button"
-          onClick={() => onNavigateTab ? onNavigateTab('book-appointment') : null}
-          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-teal-600 font-bold cursor-pointer group"
-        >
-          <div className="w-10 h-10 -mt-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/30 group-hover:bg-teal-700 transition-all scale-105">
-            <Plus className="w-5 h-5" />
-          </div>
-          <span className="text-[10px] text-teal-700 font-extrabold">Book Test</span>
-        </button>
-
-        <button
-          id="btn-nav-booklet"
-          type="button"
-          onClick={() => setShowBookletModal(true)}
-          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
-        >
-          <BookOpen className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Booklet</span>
-        </button>
-
-        <button
-          id="btn-nav-family"
-          type="button"
-          onClick={() => setShowFamilyModal(true)}
-          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
-        >
-          <Users className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Family</span>
-        </button>
-
-        <button
-          id="btn-nav-profile"
-          type="button"
-          onClick={() => onProfilePress?.()}
-          className="flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
-        >
-          <User className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Profile</span>
-        </button>
-      </nav>
+      {/* Edit Patient Profile Modal */}
+      <EditPatientProfileModal
+        isOpen={showEditProfileModal}
+        onClose={() => setShowEditProfileModal(false)}
+        patientDocData={patientDocData}
+        onSuccess={(updated) => {
+          setPatientFullName(updated.name);
+          setPatientDocData((prev: any) => ({ ...prev, ...updated }));
+        }}
+      />
 
       {/* Official Consolidated Batch Diagnostic Report Modal */}
       <BatchConsolidatedReportModal
@@ -1306,50 +2013,73 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         onClose={() => setShowRoadmapModal(false)}
       />
 
-      {/* Sticky Bottom Mobile Navigation Bar (Mobile-App-First UX) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 flex items-center justify-around shadow-lg">
+      {/* Sticky Bottom Mobile Navigation Bar (Ergonomic Thumb-Zone & 44px touch targets) */}
+      <nav 
+        id="patient-bottom-nav"
+        aria-label="Patient Mobile Navigation"
+        className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3 py-1.5 flex items-center justify-around shadow-lg pb-safe"
+      >
         <button
-          onClick={() => setActiveSegmentTab('tests')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg cursor-pointer ${
-            activeSegmentTab === 'tests' ? 'text-teal-600 font-bold' : 'text-slate-500'
+          id="btn-nav-home"
+          type="button"
+          onClick={() => {
+            setActiveSegmentTab('home');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] py-1 px-2 rounded-xl cursor-pointer transition-all ${
+            activeSegmentTab === 'home' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Home className="w-4 h-4" />
-          <span className="text-[10px]">Dashboard</span>
+          <Home className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Home</span>
         </button>
 
         <button
-          onClick={() => onNavigateTab ? onNavigateTab('book') : null}
-          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
-        >
-          <Calendar className="w-4 h-4" />
-          <span className="text-[10px]">Book Test</span>
-        </button>
-
-        <button
-          onClick={() => onNavigateTab ? onNavigateTab('scan') : null}
-          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
-        >
-          <Camera className="w-4 h-4" />
-          <span className="text-[10px]">Scan Rx</span>
-        </button>
-
-        <button
-          onClick={() => setShowBookletModal(true)}
-          className="flex flex-col items-center gap-1 py-1 px-2 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
-        >
-          <BookOpen className="w-4 h-4" />
-          <span className="text-[10px]">Booklet</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSegmentTab('receipts')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg cursor-pointer ${
-            activeSegmentTab === 'receipts' ? 'text-teal-600 font-bold' : 'text-slate-500'
+          id="btn-nav-tests"
+          type="button"
+          onClick={() => {
+            setActiveSegmentTab('tests');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] py-1 px-2 rounded-xl cursor-pointer transition-all relative ${
+            activeSegmentTab === 'tests' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Receipt className="w-4 h-4" />
-          <span className="text-[10px]">Receipts</span>
+          <TestTube className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">My Tests</span>
+          {bookings.length > 0 && (
+            <span className="absolute top-1 right-3 px-1 py-0.2 bg-teal-100 text-teal-800 text-[9px] font-mono rounded-full font-bold">
+              {bookings.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          id="btn-nav-chat"
+          type="button"
+          onClick={() => {
+            setActiveSegmentTab('chat');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] py-1 px-2 rounded-xl cursor-pointer transition-all relative ${
+            activeSegmentTab === 'chat' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MessageSquare className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Dr Chat</span>
+          {incomingDoctorRequests.length > 0 && (
+            <span className="absolute top-1 right-3 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          id="btn-nav-profile"
+          type="button"
+          onClick={() => setShowEditProfileModal(true)}
+          className="flex flex-col items-center justify-center min-h-[44px] min-w-[56px] py-1 px-2 rounded-xl text-slate-500 hover:text-teal-600 transition-all cursor-pointer"
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Profile</span>
         </button>
       </nav>
     </div>

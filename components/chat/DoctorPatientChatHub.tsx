@@ -38,8 +38,11 @@ export interface DoctorPatientChatHubProps {
   currentPatientName?: string;
   currentDoctorId?: string;
   currentDoctorName?: string;
+  initialHubTab?: 'connect' | 'connect ' | 'messages' ;
   onNavigateToBooking?: (preSelectedTests?: any[]) => void;
   onOpenReportModal?: (bookingId: string, testName?: string) => void;
+  onOpenEditProfileModal?: ()=> void;
+  initialPatientId: string;
 }
 
 export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
@@ -49,7 +52,10 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
   currentDoctorId = 'doc_kamga_101',
   currentDoctorName = 'Dr. Joseph Kamga, MD',
   onNavigateToBooking,
-  onOpenReportModal
+  onOpenEditProfileModal,
+  initialHubTab,
+  onOpenReportModal,
+  initialPatientId,
 }) => {
   const { user } = useAuth();
   const effectiveRole = currentRole || (user?.role === 'doctor' ? 'doctor' : 'patient');
@@ -165,20 +171,22 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
     setShowPrescribeMedModal(false);
   };
 
-  // Submit appointment
+  // Submit appointmentw
   const handleScheduleAppointment = () => {
     if (!selectedConnection) return;
     const newMsg = doctorChatService.scheduleAppointment({
       senderId: effectiveRole === 'doctor' ? selectedConnection.doctorId : selectedConnection.patientId,
       senderName: effectiveRole === 'doctor' ? selectedConnection.doctorName : selectedConnection.patientName,
       senderRole: effectiveRole,
-      recipientId: effectiveRole === 'doctor' ? selectedConnection.patientId : selectedConnection.doctorId,
-      recipientName: effectiveRole === 'doctor' ? selectedConnection.patientName : selectedConnection.doctorName,
+      reciepientId: effectiveRole === 'doctor' ? selectedConnection.patientId : selectedConnection.doctorId,
+      receipientName : effectiveRole === 'doctor' ? selectedConnection.patientName : selectedConnection.doctorName,
       date: appointmentDate,
+      
       time: appointmentTime,
       type: appointmentType,
       location: appointmentLocation
     });
+  
 
     setMessages(prev => [...prev, newMsg]);
     setShowAppointmentModal(false);

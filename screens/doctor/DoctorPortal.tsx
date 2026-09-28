@@ -8,7 +8,8 @@ import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewM
 import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescriptionModal';
 import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-// import { dispatchDatabaseFetchError } from '../../ut/ils/databaseErrorBus';
+import { doctorChatService } from '../../services/doctorChatService';
+import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { 
   Stethoscope, 
   Users, 
@@ -43,6 +44,7 @@ import {
   Pill,
   Video,
   User,
+  UserPlus,
   MessageSquare
 } from 'lucide-react';
 
@@ -60,12 +62,13 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const { user, lab, getAllLabs } = useAuth();
   const { t } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs' | 'chat'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs' | 'messages' | 'connect' | 'chat'>('overview');
   const [timeFilter, setTimeFilter] = useState<'day' | 'week' | 'month' | 'all'>('month');
   const [loading, setLoading] = useState(true);
   
   // Doctor profile & affiliated data
   const [doctorProfile, setDoctorProfile] = useState({
+    id: user?.id || (user as any)?.doctorId || 'doc_kamga_101',
     name: user?.name || 'Dr. Attending Physician, MD',
     specialty: (user as any)?.specialty || 'General Medicine & Specialist',
     hospital: (user as any)?.hospital || (user as any)?.hospitalAffiliation || 'Central Referral Hospital',
@@ -77,6 +80,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editForm, setEditForm] = useState({
+    id: user?.id || (user as any)?.doctorId || 'doc_kamga_101',
     name: user?.name || 'Dr. Attending Physician, MD',
     specialty: (user as any)?.specialty || 'General Medicine & Specialist',
     hospital: (user as any)?.hospital || (user as any)?.hospitalAffiliation || 'Central Referral Hospital',
@@ -95,17 +99,61 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const [selectedBookingForReport, setSelectedBookingForReport] = useState<PatientBooking | null>(null);
   const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState<any | null>(null);
   const [selectedPatientForAppointment, setSelectedPatientForAppointment] = useState<any | null>(null);
+  const [chatTargetPatient, setChatTargetPatient] = useState<{ id: string; name: string; phone?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [patientViewMode, setPatientViewMode] = useState<'my_patients' | 'global_search'>('my_patients');
+  const [connectModalTarget, setConnectModalTarget] = useState<any | null>(null);
+  const [connectRequestNote, setConnectRequestNote] = useState('');
   const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
+  const [incomingPatientRequests, setIncomingPatientRequests] = useState<any[]>([]);
+  const [respondingPatientRequestId, setRespondingPatientRequestId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const refreshDoctorSocialData = () => {
+    const targetDocId = doctorProfile.email || user?.id || 'doc_kamga_101';
+    const allReqs = doctorChatService.getRequests(targetDocId);
+    const pendingForMe = allReqs.filter(
+      r => (r.toId.toLowerCase() === targetDocId.toLowerCase() || (user?.doctorId && r.toId.toLowerCase() === user.doctorId.toLowerCase())) && r.status === 'pending'
+    );
+    setIncomingPatientRequests(pendingForMe);
+  };
 
   useEffect(() => {
     fetchDoctorEcosystemData();
+    refreshDoctorSocialData();
   }, [user?.id, user?.email, user?.name]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleApprovePatientRequest = (requestId: string) => {
+    setRespondingPatientRequestId(requestId);
+    try {
+      const conn = doctorChatService.acceptConnectionRequest(requestId);
+      if (conn) {
+        showToast(`Mutual connection established with ${conn.patientName}! You can now review diagnostic records, issue prescriptions, and message.`);
+        refreshDoctorSocialData();
+      }
+    } catch (e) {
+      console.error('Error approving request:', e);
+    } finally {
+      setRespondingPatientRequestId(null);
+    }
+  };
+
+  const handleDeclinePatientRequest = (requestId: string) => {
+    setRespondingPatientRequestId(requestId);
+    try {
+      doctorChatService.declineConnectionRequest(requestId);
+      showToast('Patient connection request declined.');
+      refreshDoctorSocialData();
+    } catch (e) {
+      console.error('Error declining request:', e);
+    } finally {
+      setRespondingPatientRequestId(null);
+    }
   };
 
   const fetchDoctorEcosystemData = async () => {
@@ -192,6 +240,13 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
       for (const currentLab of (allLabs || [{ id: 'lab-1', name: 'nanoLabs Central' }])) {
         try {
+          // Sync real patients registered at this lab
+          const patSnap = await getDocs(collection(db, 'labs', currentLab.id, 'patients'));
+          const pats = patSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          doctorChatService.syncPatientsFromDatabase(pats);
+        } catch (patErr) {}
+
+        try {
           const labBookings = await limsService.fetchAllBookings(currentLab.id);
           const matches = labBookings.filter(b => {
             const refNameNorm = normalizeDocStr(b.referringDoctor || b.doctorName);
@@ -246,15 +301,30 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         console.warn('Error querying global doctor_shared_results:', gErr);
       }
 
+      // Also bridge local ledger bookings so real test orders booked by patients immediately show up in Doctor Portal
+      try {
+        const rawLocal = localStorage.getItem('nanolabs_bookings_ledger') || localStorage.getItem('lims_bookings_ledger');
+        if (rawLocal) {
+          const localList: PatientBooking[] = JSON.parse(rawLocal);
+          for (const lb of localList) {
+            if (!allDoctorBookings.some(b => b.id === lb.id || (lb.bookingCode && b.bookingCode === lb.bookingCode))) {
+              allDoctorBookings.push(lb);
+            }
+          }
+        }
+      } catch (lErr) {
+        console.warn('Error reading local bookings ledger for doctor portal:', lErr);
+      }
+
       setReferredBookings(allDoctorBookings);
       setSharedInboxReports(allSharedInbox);
     } catch (e) {
       console.error('Error in fetchDoctorEcosystemData:', e);
-      // dispatchDatabaseFetchError({
-      //   message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
-      //   tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
-      //   rawError: e
-      // });
+      dispatchDatabaseFetchError({
+        message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
+        tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
+        rawError: e
+      });
     } finally {
       setLoading(false);
     }
@@ -321,6 +391,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
     setIsSavingProfile(true);
     try {
       const updatedProfile = {
+        id: editForm.id || user?.id || (user as any)?.doctorId || 'doc_kamga_101',
         name: editForm.name.trim(),
         specialty: editForm.specialty.trim() || 'General Medicine',
         hospital: editForm.hospital.trim() || 'Referral Hospital',
@@ -605,6 +676,86 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           </div>
         </div>
 
+        {/* INCOMING PATIENT CONNECTION REQUESTS BANNER */}
+        {incomingPatientRequests.length > 0 && (
+          <div className="bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border-2 border-teal-400/50 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4 animate-in fade-in">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-500/20 text-teal-700 flex items-center justify-center font-bold shrink-0">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>Incoming Patient Connection Requests</span>
+                    <span className="px-2 py-0.5 bg-teal-600 text-white rounded-full text-xs font-black">
+                      {incomingPatientRequests.length} Pending Approval
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Patients have requested to link their diagnostic records with your clinical care practice. Both parties must approve before records, prescriptions, and direct consultation can be shared.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {incomingPatientRequests.map((req) => (
+                <div key={req.id} className="bg-white p-4 rounded-2xl border border-teal-200/80 shadow-2xs flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 font-bold text-xs flex items-center justify-center">
+                          {req.fromName?.charAt(0)?.toUpperCase() || 'P'}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900">{req.fromName}</h4>
+                          <span className="text-[10px] font-mono text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                            @{req.fromNickname || req.fromId}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Recent'}
+                      </span>
+                    </div>
+
+                    {req.note && (
+                      <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-2 italic">
+                        "{req.note}"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleApprovePatientRequest(req.id)}
+                      disabled={respondingPatientRequestId === req.id}
+                      className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      {respondingPatientRequestId === req.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Approve & Link Patient</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeclinePatientRequest(req.id)}
+                      disabled={respondingPatientRequestId === req.id}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition cursor-pointer"
+                      title="Decline Request"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* INCOMING LAB PARTNERSHIP INVITATIONS BANNER */}
         {pendingInvitations.length > 0 && (
           <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4 animate-in fade-in">
@@ -720,15 +871,27 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('chat')}
+            onClick={() => setActiveTab('messages')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'chat'
+              activeTab === 'messages' || activeTab === 'chat'
                 ? 'bg-teal-600 text-white shadow-md'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>Patient Tele-Chat & Orders</span>
+            <span>Messages</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('connect')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'connect'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Connect</span>
           </button>
         </div>
 
@@ -841,149 +1004,349 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           </div>
         )}
 
-        {/* TAB 2: PATIENT DIAGNOSTIC REGISTRY */}
+        {/* TAB 2: PATIENT DIAGNOSTIC REGISTRY & GLOBAL PATIENT SEARCH */}
         {activeTab === 'patients' && (
           <div className="space-y-4">
+            {/* View Mode Segmented Controls & Search Bar */}
             <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setPatientViewMode('my_patients')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    patientViewMode === 'my_patients'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  My Referred Orders ({filteredBookings.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPatientViewMode('global_search')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    patientViewMode === 'global_search'
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Global Patient Directory</span>
+                </button>
+              </div>
+
               <div className="relative w-full sm:w-80">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search patient name, PID, or test..."
+                  placeholder={
+                    patientViewMode === 'global_search'
+                      ? "Search patient nickname, PID, city..."
+                      : "Search referred booking, PID, test..."
+                  }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                 />
-              </div>
-
-              <div className="text-xs text-slate-500 font-semibold">
-                Showing <strong>{filteredBookings.length}</strong> patient diagnostic orders
               </div>
             </div>
 
-            {filteredBookings.length === 0 ? (
-              <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
-                <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h4 className="text-sm font-bold text-slate-700">No Patient Prescriptions Recorded</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                  When you prescribe lab tests or patients share their test results with your accredited profile, they will appear here.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3.5 px-4">Booking / Date</th>
-                        <th className="py-3.5 px-4">Patient Name & PID</th>
-                        <th className="py-3.5 px-4">Laboratory</th>
-                        <th className="py-3.5 px-4">Prescribed Tests & Prices</th>
-                        <th className="py-3.5 px-4">Diagnostic Status</th>
-                        <th className="py-3.5 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {filteredBookings
-                        .filter(b => {
-                          if (!searchQuery) return true;
-                          const q = searchQuery.toLowerCase();
-                          return (
-                            b.patientName.toLowerCase().includes(q) ||
-                            ((b as any).patientPid && (b as any).patientPid.toLowerCase().includes(q)) ||
-                            (b.bookingCode && b.bookingCode.toLowerCase().includes(q))
-                          );
-                        })
-                        .map(b => (
-                          <tr key={b.id} className="hover:bg-slate-50 transition">
-                            <td className="py-3.5 px-4 font-mono">
-                              <span className="font-bold text-slate-900 block">{b.bookingCode || b.id.substring(0, 8)}</span>
-                              <span className="text-[10px] text-slate-400">{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent'}</span>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="font-bold text-slate-900">{b.patientName}</div>
-                              <div className="text-[11px] text-slate-500">PID: {b.patientId || (b as any).patientPid || 'PID-GEN'} • {b.patientGender || 'Adult'}</div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="font-semibold text-slate-800">{b.labName || 'nanoLabs Facility'}</div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="space-y-1">
-                                {b.tests && b.tests.length > 0 ? (
-                                  b.tests.map((t: any, idx: number) => (
-                                    <div key={idx} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                      <span className="font-semibold text-slate-800">{t.name || t.testName}</span>
-                                      <span className="font-mono text-slate-500">{Number(t.price || t.cost || 0).toLocaleString()} FCFA</span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700">
-                                    General Diagnostic Panel
-                                  </span>
+            {/* SUB-VIEW A: GLOBAL PATIENT DIRECTORY SEARCH */}
+            {patientViewMode === 'global_search' ? (
+              <div className="space-y-3">
+                <div className="bg-teal-50/70 p-3.5 rounded-2xl border border-teal-200/80 flex items-center justify-between text-xs text-teal-950">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-teal-700 shrink-0" />
+                    <span>
+                      <strong>Mutual Privacy Consent:</strong> In nanoLabs, doctors can search patients by Nickname or PID. Once both accept, you can prescribe laboratory test panels, issue medications (Rx), and inspect certified A4 diagnostic reports.
+                    </span>
+                  </div>
+                </div>
+
+                {(() => {
+                  const targetDocId = doctorProfile.email || user?.id || 'doc_kamga_101';
+                  const directoryList = doctorChatService.searchDirectory(searchQuery, 'patient', targetDocId);
+
+                  if (directoryList.length === 0) {
+                    return (
+                      <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-2">
+                        <Users className="w-10 h-10 text-slate-300 mx-auto" />
+                        <h4 className="text-sm font-bold text-slate-700">No Patients Found</h4>
+                        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                          No registered patient matched "{searchQuery}". Patients can register or set privacy nicknames in the patient portal.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {directoryList.map(pat => {
+                        const displayName = pat.isAnonymous ? `@${pat.nickname} (Anonymous)` : pat.legalName;
+                        return (
+                          <div
+                            key={pat.id}
+                            className="bg-white p-5 rounded-3xl border border-slate-200 shadow-2xs hover:border-teal-400 transition flex flex-col justify-between gap-4"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-base shadow-2xs">
+                                  {pat.avatarUrl ? (
+                                    <img src={pat.avatarUrl} alt={displayName} className="w-full h-full object-cover rounded-2xl" />
+                                  ) : (
+                                    <User className="w-5 h-5" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-xs font-bold text-slate-900 truncate">{displayName}</h4>
+                                  <span className="text-[10px] font-mono text-slate-500 block">PID: {pat.id}</span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>Location: {pat.city || 'Douala, Cameroon'}</span>
+                                </div>
+                                {pat.bio && (
+                                  <p className="text-[11px] text-slate-500 italic mt-0.5 truncate">
+                                    "{pat.bio}"
+                                  </p>
                                 )}
                               </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider inline-flex items-center gap-1 ${
-                                b.status === 'completed' || b.biologistConfirmed
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : b.status === 'processing'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}>
-                                {b.biologistConfirmed && <CheckCircle2 className="w-3 h-3" />}
-                                {b.biologistConfirmed ? 'Confirmed' : (b.status || 'Pending')}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedBookingForReport(b)}
-                                  className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
-                                  title="View Test Report"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Report</span>
-                                </button>
+                            </div>
 
+                            {/* Mutual Connection Status Action */}
+                            <div className="pt-2 border-t border-slate-100">
+                              {pat.isConnected ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Connected</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setChatTargetPatient({ id: pat.id, name: displayName, phone: pat.phone });
+                                      setActiveTab('chat');
+                                    }}
+                                    className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    <span>Chat & Prescribe</span>
+                                  </button>
+                                </div>
+                              ) : pat.hasPendingRequest ? (
+                                <div className="w-full py-2 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold text-center">
+                                  Connection Request Pending
+                                </div>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => setSelectedPatientForAppointment({
-                                    id: b.patientId || (b as any).patientPid || b.id,
-                                    name: b.patientName,
-                                    phone: b.patientPhone,
-                                    bookingId: b.id
+                                  onClick={() => setConnectModalTarget({
+                                    id: pat.id,
+                                    name: displayName,
+                                    nickname: pat.nickname,
+                                    city: pat.city
                                   })}
-                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Schedule Clinic or Video Appointment"
+                                  className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                                 >
-                                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                                  <span>Consult</span>
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                  <span>Connect / Request Link</span>
                                 </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedPatientForPrescription({
-                                    id: b.patientId || (b as any).patientPid || b.id,
-                                    name: b.patientName,
-                                    phone: b.patientPhone,
-                                    bookingId: b.id
-                                  })}
-                                  className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Issue E-Prescription & Dosage Timing"
-                                >
-                                  <Pill className="w-3.5 h-3.5 text-indigo-600" />
-                                  <span>Rx</span>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
+            ) : (
+              /* SUB-VIEW B: MY REFERRED ORDERS */
+              filteredBookings.length === 0 ? (
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-3">
+                  <Users className="w-12 h-12 text-slate-300 mx-auto" />
+                  <h4 className="text-sm font-bold text-slate-700">No Patient Prescriptions Recorded</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    When you prescribe lab tests or patients share their test results with your accredited profile, they will appear here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPatientViewMode('global_search')}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    Search Global Patient Directory
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                        <tr>
+                          <th className="py-3.5 px-4">Booking / Date</th>
+                          <th className="py-3.5 px-4">Patient Name & PID</th>
+                          <th className="py-3.5 px-4">Connection Status</th>
+                          <th className="py-3.5 px-4">Laboratory</th>
+                          <th className="py-3.5 px-4">Diagnostic Status</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {filteredBookings
+                          .filter(b => {
+                            if (!searchQuery) return true;
+                            const q = searchQuery.toLowerCase();
+                            return (
+                              b.patientName.toLowerCase().includes(q) ||
+                              ((b as any).patientPid && (b as any).patientPid.toLowerCase().includes(q)) ||
+                              (b.bookingCode && b.bookingCode.toLowerCase().includes(q))
+                            );
+                          })
+                          .map(b => {
+                            const targetDocId = doctorProfile.id || user?.id || 'doc_kamga_101';
+                            const patId = b.patientId || (b as any).patientPid || b.id;
+                            const isConnected = Boolean(doctorChatService.getConnectionBetween(targetDocId, patId));
+                            const hasPending = Boolean(doctorChatService.hasPendingRequestBetween(targetDocId, patId));
+
+                            return (
+                              <tr key={b.id} className="hover:bg-slate-50 transition">
+                                <td className="py-3.5 px-4 font-mono">
+                                  <span className="font-bold text-slate-900 block">{b.bookingCode || b.id.substring(0, 8)}</span>
+                                  <span className="text-[10px] text-slate-400">{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent'}</span>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-slate-900">{b.patientName}</div>
+                                  <div className="text-[11px] text-slate-500">PID: {patId} • {b.patientGender || 'Adult'}</div>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  {isConnected ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      <span>Mutually Connected</span>
+                                    </span>
+                                  ) : hasPending ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      <span>Request Pending</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConnectModalTarget({
+                                        id: patId,
+                                        name: b.patientName,
+                                        nickname: b.patientName,
+                                        phone: b.patientPhone
+                                      })}
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 transition cursor-pointer"
+                                    >
+                                      <UserPlus className="w-3 h-3 text-teal-600" />
+                                      <span>+ Connect</span>
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <div className="font-semibold text-slate-800">{b.labName || 'nanoLabs Facility'}</div>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider inline-flex items-center gap-1 ${
+                                    b.status === 'completed' || b.biologistConfirmed
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : b.status === 'processing'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {b.biologistConfirmed && <CheckCircle2 className="w-3 h-3" />}
+                                    {b.biologistConfirmed ? 'Confirmed' : (b.status || 'Pending')}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedBookingForReport(b)}
+                                      className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                                      title="View Test Report"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Report</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!isConnected) {
+                                          setConnectModalTarget({ id: patId, name: b.patientName, nickname: b.patientName, phone: b.patientPhone });
+                                        } else {
+                                          setSelectedPatientForAppointment({
+                                            id: patId,
+                                            name: b.patientName,
+                                            phone: b.patientPhone,
+                                            bookingId: b.id
+                                          });
+                                        }
+                                      }}
+                                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                      title={isConnected ? "Schedule Clinic or Video Appointment" : "Connect first to schedule consultation"}
+                                    >
+                                      <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                                      <span>Consult</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!isConnected) {
+                                          setConnectModalTarget({ id: patId, name: b.patientName, nickname: b.patientName, phone: b.patientPhone });
+                                        } else {
+                                          setSelectedPatientForPrescription({
+                                            id: patId,
+                                            name: b.patientName,
+                                            phone: b.patientPhone,
+                                            bookingId: b.id
+                                          });
+                                        }
+                                      }}
+                                      className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                      title={isConnected ? "Issue E-Prescription & Dosage Timing" : "Connect first to issue prescription"}
+                                    >
+                                      <Pill className="w-3.5 h-3.5 text-indigo-600" />
+                                      <span>Rx</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!isConnected) {
+                                          setConnectModalTarget({ id: patId, name: b.patientName, nickname: b.patientName, phone: b.patientPhone });
+                                        } else {
+                                          setChatTargetPatient({
+                                            id: patId,
+                                            name: b.patientName,
+                                            phone: b.patientPhone
+                                          });
+                                          setActiveTab('chat');
+                                        }
+                                      }}
+                                      className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                      title="Direct Tele-Chat with Patient"
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>Chat</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
             )}
           </div>
         )}
@@ -1053,7 +1416,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                       <span className="text-xs text-slate-400 font-mono">{report.labName || 'Central Lab'}</span>
                       <button
                         onClick={() => {
-                          const mockBooking: any = {
+                          const reportBooking: any = {
                             id: report.id,
                             bookingCode: `SHR-${report.id.substring(0, 6)}`,
                             patientName: report.patientName,
@@ -1065,7 +1428,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                             biologistConfirmed: true,
                             tests: report.tests || []
                           };
-                          setSelectedBookingForReport(mockBooking);
+                          setSelectedBookingForReport(reportBooking);
                         }}
                         className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                       >
@@ -1171,13 +1534,16 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           </div>
         )}
 
-        {/* TAB 5: PATIENT TELE-CHAT & PRESCRIPTIONS */}
-        {activeTab === 'chat' && (
+        {/* TAB 5: PATIENT TELE-CHAT & PRESCRIPTIONS / SOCIAL CONNECT */}
+        {(activeTab === 'messages' || activeTab === 'chat' || activeTab === 'connect') && (
           <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm animate-in fade-in duration-200">
             <DoctorPatientChatHub
               currentRole="doctor"
+              initialHubTab={activeTab === 'connect' ? 'connect' : 'messages'}
               currentDoctorId={user?.id || 'doc_kamga_101'}
               currentDoctorName={doctorProfile.name}
+              initialPatientId={chatTargetPatient?.id}
+              initialPatientName={chatTargetPatient?.name}
             />
           </div>
         )}
@@ -1220,18 +1586,33 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         </button>
 
         <button
-          id="btn-doc-nav-chat"
+          id="btn-doc-nav-messages"
           type="button"
           onClick={() => {
-            setActiveTab('chat');
+            setActiveTab('messages');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
-            activeTab === 'chat' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+            activeTab === 'messages' || activeTab === 'chat' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <MessageSquare className="w-5 h-5" />
-          <span className="text-[10px]">Chat</span>
+          <span className="text-[10px]">Messages</span>
+        </button>
+
+        <button
+          id="btn-doc-nav-connect"
+          type="button"
+          onClick={() => {
+            setActiveTab('connect');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
+            activeTab === 'connect' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <UserPlus className="w-5 h-5" />
+          <span className="text-[10px]">Connect</span>
         </button>
 
         <button
@@ -1500,6 +1881,90 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Request Modal */}
+      {connectModalTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-teal-600" />
+                <h3 className="text-sm font-bold text-slate-900">Request Patient Connection</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConnectModalTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl text-xs text-teal-950 space-y-1">
+              <strong>Mutual Consent Required:</strong>
+              <p>
+                In nanoLabs, both physician and patient must accept the connection before clinical prescriptions (Rx), diagnostic reports, or tele-consultations can be shared.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                <User className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 truncate">{connectModalTarget.name}</h4>
+                <span className="text-[10px] text-slate-500 font-mono">PID: {connectModalTarget.id}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">Introductory Clinical Note</label>
+              <textarea
+                value={connectRequestNote}
+                onChange={e => setConnectRequestNote(e.target.value)}
+                rows={3}
+                placeholder={`Hello, Dr. ${doctorProfile.name} would like to connect with you regarding your diagnostic laboratory follow-up.`}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConnectModalTarget(null)}
+                className="px-4 py-2 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const res = doctorChatService.sendConnectionRequest({
+                    fromUser: {
+                      id: user?.id || 'doc_kamga_101',
+                      name: doctorProfile.name,
+                      role: 'doctor',
+                      avatarUrl: doctorProfile.avatarUrl
+                    },
+                    targetUserId: connectModalTarget.id,
+                    note: connectRequestNote.trim() || `Dr. ${doctorProfile.name} requested connection to review your laboratory diagnostic panels.`
+                  });
+                  if (res.success) {
+                    showToast(res.message);
+                    setConnectModalTarget(null);
+                    setConnectRequestNote('');
+                  } else {
+                    showToast(res.message);
+                  }
+                }}
+                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+              >
+                Send Connection Request
+              </button>
+            </div>
           </div>
         </div>
       )}
