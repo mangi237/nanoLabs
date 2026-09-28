@@ -836,19 +836,19 @@ class DoctorChatService {
     time : string;
     type : string;
     // location : string;
-    patientId: string;
-    patientName: string;
-    appointmentDate: string;
-    appointmentTime: string;
-    appointmentType: 'in_person' | 'teleconsultation' | 'lab_review';
+    patientId?: string;
+    patientName?: string;
+    appointmentDate?: string;
+    appointmentTime?: string;
+    appointmentType?: 'in_person' | 'teleconsultation' | 'lab_review';
     location: string;
   }): ChatMessage {
     return this.sendMessage({
       senderId: params.doctorId || '',
       senderName: params.doctorName || '',
       senderRole: 'doctor',
-      recipientId: params.patientId,
-      recipientName: params.patientName,
+      recipientId: params.patientId|| '',
+      recipientName: params.patientName || '',
       type: 'appointment',
       content: `Consultation Appointment Proposed: ${params.appointmentDate} at ${params.appointmentTime}`,
       metadata: {
