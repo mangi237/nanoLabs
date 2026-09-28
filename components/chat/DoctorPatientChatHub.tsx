@@ -183,11 +183,12 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
       reciepientId: effectiveRole === 'doctor' ? selectedConnection.patientId : selectedConnection.doctorId,
       receipientName : effectiveRole === 'doctor' ? selectedConnection.patientName : selectedConnection.doctorName,
       date: appointmentDate,
-      doctorName
+      
       time: appointmentTime,
       type: appointmentType,
       location: appointmentLocation,
       
+    
     });
   
 
