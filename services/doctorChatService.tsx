@@ -825,9 +825,9 @@ class DoctorChatService {
 
   // Doctor Action: Propose Appointment
   public scheduleAppointment(params: {
-    doctorId: string;
-    doctorName: string;
-    senderId : string;
+   doctorId?: string;
+   doctorName?: string;
+    senderId?: string;
     senderName: string;
     senderRole : string;
     reciepientId: string;
@@ -844,8 +844,8 @@ class DoctorChatService {
     location: string;
   }): ChatMessage {
     return this.sendMessage({
-      senderId: params.doctorId,
-      senderName: params.doctorName,
+      senderId: params.doctorId || '',
+      senderName: params.doctorName || '',
       senderRole: 'doctor',
       recipientId: params.patientId,
       recipientName: params.patientName,
