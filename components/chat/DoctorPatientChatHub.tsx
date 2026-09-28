@@ -42,7 +42,8 @@ export interface DoctorPatientChatHubProps {
   onNavigateToBooking?: (preSelectedTests?: any[]) => void;
   onOpenReportModal?: (bookingId: string, testName?: string) => void;
   onOpenEditProfileModal?: ()=> void;
-  initialPatientId: string;
+  initialPatientId?: string;
+  initialPatientName?: string;
 }
 
 export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
@@ -54,6 +55,7 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
   onNavigateToBooking,
   onOpenEditProfileModal,
   initialHubTab,
+  initialPatientName,
   onOpenReportModal,
   initialPatientId,
 }) => {
@@ -181,10 +183,11 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
       reciepientId: effectiveRole === 'doctor' ? selectedConnection.patientId : selectedConnection.doctorId,
       receipientName : effectiveRole === 'doctor' ? selectedConnection.patientName : selectedConnection.doctorName,
       date: appointmentDate,
-      
+      doctorName
       time: appointmentTime,
       type: appointmentType,
-      location: appointmentLocation
+      location: appointmentLocation,
+      
     });
   
 

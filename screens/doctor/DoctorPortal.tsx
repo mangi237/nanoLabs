@@ -9,7 +9,7 @@ import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescript
 import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
 import { doctorChatService } from '../../services/doctorChatService';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { 
   Stethoscope, 
   Users, 
@@ -320,11 +320,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       setSharedInboxReports(allSharedInbox);
     } catch (e) {
       console.error('Error in fetchDoctorEcosystemData:', e);
-      dispatchDatabaseFetchError({
-        message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
-        tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
-        rawError: e
-      });
+      // dispatchDatabaseFetchError({
+      //   message: 'Doctor Portal failed to load referral bookings and diagnostic test reports from database.',
+      //   tableOrCollection: 'labs/{id}/doctor_shared_reports & bookings',
+      //   rawError: e
+      // });
     } finally {
       setLoading(false);
     }
@@ -417,8 +417,9 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       try {
         const docId = user?.id || (user as any)?.doctorId || `doc-${Date.now()}`;
         await setDoc(doc(db, 'doctors', docId), {
+          ...updatedProfile,
           id: docId,
-          ...updatedProfile
+          
         }, { merge: true });
       } catch (dErr) {
         console.warn('Could not update global doctors doc:', dErr);
@@ -428,10 +429,11 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       if (lab?.id && user?.id) {
         try {
           await setDoc(doc(db, 'labs', lab.id, 'referring_doctors', user.id), {
-            id: user.id,
+            
             doctorId: user.id,
             labId: lab.id,
-            ...updatedProfile
+            ...updatedProfile,
+            id: user.id,
           }, { merge: true });
         } catch (refErr) {
           console.warn('Could not update referring_doctors for lab:', refErr);
@@ -1544,6 +1546,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
               currentDoctorName={doctorProfile.name}
               initialPatientId={chatTargetPatient?.id}
               initialPatientName={chatTargetPatient?.name}
+              
             />
           </div>
         )}
