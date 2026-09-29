@@ -56,7 +56,7 @@
       width: 100% !important;
     }
 
-    /* Isolate print document: Hide all general UI by default */
+
     body * {
       visibility: hidden !important;
     }
