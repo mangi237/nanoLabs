@@ -19,7 +19,13 @@ import {
   AlertTriangle,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Zap,
+  ShieldCheck,
+  Check,
+  Sparkles,
+  Search,
+  FileText
 } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc, updateDoc, db } from '../../services/firebase';
 import { useAuth } from '../../context/authContext';
@@ -47,6 +53,22 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
   const [superAdminCode, setSuperAdminCode] = useState('');
   const [showSuperAdminCode, setShowSuperAdminCode] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [totalTestsCount, setTotalTestsCount] = useState<number>(0);
+  const [confirmedTestsList, setConfirmedTestsList] = useState<any[]>([]);
+  const [testSearchQuery, setTestSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tests' | 'staff'>('overview');
+
+  // Manual Subscription Renewal Modal State
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [renewDuration, setRenewDuration] = useState<'30' | '60' | '90' | '180' | '365' | 'unlimited'>('30');
+  const [renewPlan, setRenewPlan] = useState<'flat_subscription' | 'pay_per_test' | 'lifetime_space'>('flat_subscription');
+  const [renewTier, setRenewTier] = useState<'starter' | 'growth' | 'business'>('growth');
+  const [renewReason, setRenewReason] = useState('SuperAdmin Administrative Waiver (No Payment Required)');
+  const [renewCustomNotes, setRenewCustomNotes] = useState('');
+  const [renewCode, setRenewCode] = useState('');
+  const [showRenewCode, setShowRenewCode] = useState(false);
+  const [renewCodeError, setRenewCodeError] = useState('');
+  const [processingRenew, setProcessingRenew] = useState(false);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -56,6 +78,13 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
     email: '',
     address: ''
   });
+
+  const parseTimestamp = (raw: any): number => {
+    if (!raw) return 0;
+    if (typeof raw === 'object' && typeof raw.seconds === 'number') return raw.seconds * 1000;
+    const parsed = new Date(raw).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   const formatCreatedDate = (rawDate: any): string => {
     if (!rawDate) return 'N/A';
@@ -88,6 +117,8 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
           email: data.email || '',
           address: data.address || ''
         });
+        setRenewPlan(data.pricingModel || 'flat_subscription');
+        setRenewTier(data.subscriptionTier || 'growth');
       }
 
       // Fetch lab staff
@@ -95,30 +126,188 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
       const staffDocs = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setStaffList(staffDocs);
 
-      // Fetch lab patients & count confirmed tests
-      const patientSnap = await getDocs(collection(db, 'labs', labId, 'patients'));
-      setPatientCount(patientSnap.size || foundLabDoc?.data()?.patientCount || 0);
-
+      // Fetch lab patients & count confirmed tests with multi-collection reconciliation
       let confirmedCount = 0;
-      patientSnap.docs.forEach(pDoc => {
-        const pData = pDoc.data();
-        const labTests = pData.labTests || [];
-        labTests.forEach((test: any) => {
-          if (
-            test.confirmedByReceptionist === true || 
-            test.sampleCollected === true ||
-            ['confirmed', 'sample-collected', 'collected', 'processing', 'completed', 'paid'].includes(test.status)
-          ) {
-            confirmedCount++;
-          }
+      let totalTests = 0;
+      const testsList: any[] = [];
+      const seenTestKeys = new Set<string>();
+
+      try {
+        const patientSnap = await getDocs(collection(db, 'labs', labId, 'patients'));
+        setPatientCount(patientSnap.size || foundLabDoc?.data()?.patientCount || 0);
+
+        patientSnap.docs.forEach(pDoc => {
+          const pData = pDoc.data();
+          const labTests = pData.labTests || [];
+          totalTests += labTests.length;
+
+          labTests.forEach((test: any, idx: number) => {
+            const testKey = test.id || `${pDoc.id}_${test.name || test.testName || idx}`;
+            seenTestKeys.add(testKey);
+
+            const normStatus = (test.status || '').toLowerCase().replace(/[\s_-]/g, '');
+            const isConfirmed = 
+              test.receptionistValidated === true || 
+              test.confirmedByReceptionist === true || 
+              test.sampleCollected === true ||
+              test.biologistConfirmed === true ||
+              test.paid === true ||
+              test.paymentStatus === 'paid' ||
+              ['confirmed', 'completed', 'paid', 'samplecollected', 'collected', 'processing', 'inlabtesting', 'validated', 'signed'].includes(normStatus);
+
+            if (isConfirmed) {
+              confirmedCount++;
+              testsList.push({
+                id: testKey,
+                testName: test.name || test.testName || 'Diagnostic Investigation',
+                patientName: pData.name || pData.fullName || 'Registered Patient',
+                patientPhone: pData.phone || '',
+                bookingCode: test.bookingCode || pData.bookingCode || 'REG-' + pDoc.id.slice(0, 6).toUpperCase(),
+                status: test.status || 'Confirmed',
+                source: 'Patient Clinical Record',
+                date: test.requestedDate || test.createdAt || pData.createdAt || null,
+                price: test.price || 5500,
+                sampleCollected: !!test.sampleCollected,
+                biologistConfirmed: !!test.biologistConfirmed,
+                receptionistValidated: !!test.receptionistValidated
+              });
+            }
+          });
         });
-      });
+      } catch (patErr) {
+        console.warn('Error reading patients in lab details:', patErr);
+      }
+
+      // Also reconcile bookings
+      try {
+        const bookingsSnap = await getDocs(collection(db, 'labs', labId, 'bookings'));
+        bookingsSnap.docs.forEach(bDoc => {
+          const bData = bDoc.data();
+          const bookingTests = bData.tests || [];
+          const bookingNormStatus = (bData.status || '').toLowerCase().replace(/[\s_-]/g, '');
+          const isBookingConfirmed = 
+            bData.paymentStatus === 'paid' ||
+            bData.sampleCollected === true ||
+            bData.biologistConfirmed === true ||
+            ['confirmed', 'completed', 'processing', 'inlabtesting', 'samplecollected'].includes(bookingNormStatus);
+
+          bookingTests.forEach((test: any, idx: number) => {
+            const testKey = test.id || `${bDoc.id}_${test.name || test.testName || idx}`;
+            if (seenTestKeys.has(testKey)) return;
+            seenTestKeys.add(testKey);
+            totalTests++;
+
+            const normTestStatus = (test.status || '').toLowerCase().replace(/[\s_-]/g, '');
+            const isTestConfirmed = 
+              isBookingConfirmed ||
+              test.receptionistValidated === true ||
+              test.confirmedByReceptionist === true ||
+              test.sampleCollected === true ||
+              test.biologistConfirmed === true ||
+              test.paid === true ||
+              test.paymentStatus === 'paid' ||
+              ['confirmed', 'completed', 'paid', 'samplecollected', 'collected', 'processing', 'inlabtesting', 'validated', 'signed'].includes(normTestStatus);
+
+            if (isTestConfirmed) {
+              confirmedCount++;
+              testsList.push({
+                id: testKey,
+                testName: test.name || test.testName || 'Diagnostic Investigation',
+                patientName: bData.patientName || 'Registered Patient',
+                patientPhone: bData.patientPhone || '',
+                bookingCode: bData.bookingCode || 'BK-' + bDoc.id.slice(0, 6).toUpperCase(),
+                status: test.status || (isBookingConfirmed ? 'Confirmed' : 'Pending'),
+                source: 'LIMS Appointment Booking',
+                date: test.createdAt || bData.createdAt || null,
+                price: test.price || bData.totalAmount || 5500,
+                sampleCollected: !!test.sampleCollected || !!bData.sampleCollected,
+                biologistConfirmed: !!test.biologistConfirmed || !!bData.biologistConfirmed,
+                receptionistValidated: !!test.receptionistValidated
+              });
+            }
+          });
+        });
+      } catch (bookErr) {
+        console.warn('Error reading bookings in lab details:', bookErr);
+      }
+
       setConfirmedTestsCount(confirmedCount);
+      setTotalTestsCount(Math.max(totalTests, confirmedCount));
+      setConfirmedTestsList(testsList);
 
     } catch (err) {
       console.error('Error fetching lab details:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmManualRenewal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lab) return;
+
+    const enteredCode = (renewCode || '').trim().toUpperCase();
+    const activeAdminCode = (user?.accessCode || '').trim().toUpperCase();
+    const validCodes = ['SUPER123', 'SUPERADMIN', 'SUPERADMIN2025'];
+    if (activeAdminCode) validCodes.push(activeAdminCode);
+
+    if (!validCodes.includes(enteredCode)) {
+      setRenewCodeError('Invalid Super Admin authorization code. Manual renewal denied.');
+      return;
+    }
+
+    setProcessingRenew(true);
+    try {
+      const isUnlimited = renewDuration === 'unlimited';
+      const daysToAdd = isUnlimited ? 0 : parseInt(renewDuration, 10);
+      
+      let baseDate = Date.now();
+      if (!isUnlimited && lab.subscriptionExpiresAt) {
+        const existingExpiry = parseTimestamp(lab.subscriptionExpiresAt);
+        if (existingExpiry > Date.now()) {
+          baseDate = existingExpiry;
+        }
+      }
+      
+      const newExpiryDate = isUnlimited ? null : new Date(baseDate + daysToAdd * 24 * 60 * 60 * 1000);
+      const subPrice = renewPlan === 'pay_per_test' ? 500 : renewTier === 'starter' ? 25000 : renewTier === 'growth' ? 45000 : 60000;
+
+      const updatePayload: any = {
+        subscriptionStatus: 'active',
+        isManualRenewal: true,
+        isUnlimitedSubscription: isUnlimited,
+        manualRenewalGrantedBy: user?.name || user?.email || 'SuperAdmin',
+        manualRenewalReason: renewReason,
+        manualRenewalNotes: renewCustomNotes.trim() || undefined,
+        manualRenewalAt: new Date().toISOString(),
+        subscriptionStartDate: new Date().toISOString(),
+        subscriptionExpiresAt: newExpiryDate ? newExpiryDate.toISOString() : null,
+        subscriptionEndDate: newExpiryDate ? newExpiryDate.toISOString() : null,
+        pricingModel: renewPlan,
+        subscriptionPlan: renewPlan,
+        subscriptionTier: renewTier,
+        subscriptionPrice: subPrice,
+        paymentStatus: 'manually_waived',
+        planMutationStatus: 'ACTIVE',
+        requestedPricingModel: null,
+        requestedSubscriptionTier: null,
+        requestedSubscriptionPrice: null,
+        planChangeRequestedAt: null,
+        status: 'active',
+        confirmed: true,
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(doc(db, 'labs', labId), updatePayload);
+      setShowRenewModal(false);
+      setRenewCode('');
+      setRenewCodeError('');
+      await fetchLabDetails();
+    } catch (err) {
+      console.error('Failed to manually renew lab subscription:', err);
+      setRenewCodeError('Failed to save manual subscription renewal.');
+    } finally {
+      setProcessingRenew(false);
     }
   };
 
@@ -229,6 +418,22 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              setShowRenewModal(true);
+              setRenewDuration('30');
+              setRenewPlan(lab.pricingModel || 'flat_subscription');
+              setRenewTier(lab.subscriptionTier || 'growth');
+              setRenewReason('SuperAdmin Administrative Waiver (No Payment Required)');
+              setRenewCustomNotes('');
+              setRenewCode('');
+              setRenewCodeError('');
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer shadow-xs"
+          >
+            <Zap className="w-4 h-4 text-white" />
+            Renew Subscription
+          </button>
+          <button
             onClick={() => setShowEditModal(true)}
             className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:border-slate-300 bg-white text-slate-700 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
           >
@@ -335,6 +540,71 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
         </div>
       </div>
 
+      {/* Subscription & Operational Licensing Status Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+              LIMS Operational License & Subscription
+            </span>
+            {lab.isManualRenewal && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-400" /> Administrative Override
+              </span>
+            )}
+          </div>
+          <div className="text-xl font-black text-white">
+            {lab.pricingModel === 'flat_subscription' 
+              ? `Monthly Flat SaaS (${(lab.subscriptionTier || 'GROWTH').toUpperCase()})` 
+              : lab.pricingModel === 'lifetime_space'
+              ? 'Dedicated Cloud Tenant'
+              : 'Pay-Per-Test (5% Record Fee)'}
+          </div>
+          <p className="text-xs text-slate-400 max-w-xl">
+            {lab.isUnlimitedSubscription ? (
+              <strong className="text-emerald-400">Permanent operational exemption active. This facility has unlimited operational access without billing lockouts.</strong>
+            ) : (() => {
+              let expiryTimestamp: number | null = null;
+              if (lab.subscriptionExpiresAt) {
+                expiryTimestamp = parseTimestamp(lab.subscriptionExpiresAt);
+              } else {
+                const rawDate = lab.subscriptionStartDate || lab.createdAt;
+                const start = parseTimestamp(rawDate) || Date.now();
+                expiryTimestamp = start + 30 * 24 * 60 * 60 * 1000;
+              }
+              const daysLeft = Math.ceil(((expiryTimestamp || 0) - Date.now()) / (1000 * 60 * 60 * 24));
+              if (daysLeft <= 0) {
+                return <strong className="text-rose-400">Subscription expired {Math.abs(daysLeft)} days ago. Facility is due for renewal.</strong>;
+              }
+              return <span>Current period valid for <strong className="text-teal-300">{daysLeft} days remaining</strong> (expires {formatCreatedDate(expiryTimestamp)}).</span>;
+            })()}
+          </p>
+          {lab.isManualRenewal && lab.manualRenewalReason && (
+            <div className="text-[11px] text-slate-400 pt-1">
+              Last renewed by: <strong className="text-slate-200">{lab.manualRenewalGrantedBy || 'SuperAdmin'}</strong> • Reason: <span className="text-amber-200 italic font-medium">{lab.manualRenewalReason}</span>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => {
+            setShowRenewModal(true);
+            setRenewDuration('30');
+            setRenewPlan(lab.pricingModel || 'flat_subscription');
+            setRenewTier(lab.subscriptionTier || 'growth');
+            setRenewReason('SuperAdmin Administrative Waiver (No Payment Required)');
+            setRenewCustomNotes('');
+            setRenewCode('');
+            setRenewCodeError('');
+          }}
+          className="px-5 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-2xl text-xs font-black flex items-center gap-2 shadow-xs transition-all cursor-pointer shrink-0 self-start md:self-center"
+        >
+          <Zap className="w-4 h-4 text-white" />
+          <span>Renew Subscription Manually</span>
+        </button>
+      </div>
+
       {/* Contact & Location Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
@@ -411,6 +681,91 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Authenticated Confirmed Tests Audit Trail Section */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+              Authenticated Confirmed Diagnostic Investigations ({confirmedTestsCount})
+            </h3>
+            <p className="text-xs text-slate-500">
+              Directly queried from patient records and appointment check-ins with validated clinical verification.
+            </p>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search tests, patients, codes..."
+              value={testSearchQuery}
+              onChange={(e) => setTestSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-teal-500"
+            />
+          </div>
+        </div>
+
+        {(() => {
+          const filtered = confirmedTestsList.filter(t => 
+            (t.testName && t.testName.toLowerCase().includes(testSearchQuery.toLowerCase())) ||
+            (t.patientName && t.patientName.toLowerCase().includes(testSearchQuery.toLowerCase())) ||
+            (t.bookingCode && t.bookingCode.toLowerCase().includes(testSearchQuery.toLowerCase()))
+          );
+
+          if (filtered.length === 0) {
+            return (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-slate-300" />
+                <div className="font-semibold text-slate-600 text-sm">No confirmed tests match the search query.</div>
+                <div className="text-xs">Any confirmed tests processed by front desk or cashier will be cataloged here.</div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto border border-slate-100 rounded-2xl">
+              {filtered.map((item, idx) => (
+                <div key={item.id || idx} className="p-3.5 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-slate-900 text-sm">{item.testName}</span>
+                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                        {item.bookingCode}
+                      </span>
+                      <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
+                        {item.source}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-slate-500 flex-wrap">
+                      <span className="font-bold text-slate-700">Patient: {item.patientName}</span>
+                      {item.patientPhone && <span>• Tel: {item.patientPhone}</span>}
+                      {item.date && <span>• Registered: {formatCreatedDate(item.date)}</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <span className="font-mono font-bold text-slate-700 text-xs">
+                      {(item.price || 5500).toLocaleString()} FCFA
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                      ['completed', 'signed', 'validated'].includes((item.status || '').toLowerCase())
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : ['samplecollected', 'collected'].includes((item.status || '').toLowerCase())
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                        : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                    }`}>
+                      <CheckCircle2 className="w-3 h-3" />
+                      {item.status || 'Confirmed'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Edit Modal */}
@@ -577,6 +932,202 @@ export const LabDetailsScreen: React.FC<LabDetailsScreenProps> = ({
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>{deleting ? 'Deleting...' : 'Confirm Delete'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Subscription Renewal & Waiver Modal for This Lab */}
+      {showRenewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl max-w-xl w-full p-6 sm:p-7 space-y-5 shadow-2xl relative my-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                  <Zap className="w-5 h-5 text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Manual Subscription Renewal</h3>
+                  <p className="text-[11px] text-teal-400 font-medium">Administrative License Override • No Payment Required</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setShowRenewModal(false); setRenewCodeError(''); setRenewCode(''); }}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Target Lab Summary Banner */}
+            <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-white text-sm">{lab.name}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                  {lab.location || 'Central Region'}
+                </span>
+              </div>
+              <div className="text-slate-400 text-[11px] flex flex-wrap items-center gap-3">
+                <span>Current Plan: <strong className="text-slate-200 capitalize">{lab.pricingModel || 'flat_subscription'}</strong></span>
+                <span>• Tier: <strong className="text-slate-200 uppercase">{lab.subscriptionTier || 'GROWTH'}</strong></span>
+                <span>• Onboarded: <strong className="text-slate-200">{formatCreatedDate(lab.createdAt)}</strong></span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmManualRenewal} className="space-y-4 text-xs">
+              {/* Duration Options */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-300">
+                  Select Renewal Duration Extension
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {[
+                    { id: '30', label: '+30 Days', sub: '1 Month' },
+                    { id: '60', label: '+60 Days', sub: '2 Months' },
+                    { id: '90', label: '+90 Days', sub: '1 Quarter' },
+                    { id: '180', label: '+180 Days', sub: '6 Months' },
+                    { id: '365', label: '+365 Days', sub: '1 Year' },
+                    { id: 'unlimited', label: 'Permanent', sub: 'No Expiry' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setRenewDuration(opt.id as any)}
+                      className={`p-2 rounded-xl text-center border transition-all cursor-pointer ${
+                        renewDuration === opt.id
+                          ? 'bg-teal-600 text-white border-teal-400 font-bold shadow-xs'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{opt.label}</div>
+                      <div className="text-[9px] opacity-75">{opt.sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pricing Model & Tier */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Operating Commercial Model
+                  </label>
+                  <select
+                    value={renewPlan}
+                    onChange={(e) => setRenewPlan(e.target.value as any)}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-semibold focus:outline-hidden focus:border-teal-500"
+                  >
+                    <option value="flat_subscription">Flat Monthly SaaS Subscription</option>
+                    <option value="pay_per_test">Pay-Per-Test (5% Record Fee)</option>
+                    <option value="lifetime_space">Dedicated Cloud Tenant</option>
+                  </select>
+                </div>
+
+                {renewPlan === 'flat_subscription' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Subscription Tier Level
+                    </label>
+                    <select
+                      value={renewTier}
+                      onChange={(e) => setRenewTier(e.target.value as any)}
+                      className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-semibold focus:outline-hidden focus:border-teal-500"
+                    >
+                      <option value="starter">Starter (Small) - Up to 250 Patients</option>
+                      <option value="growth">Growth (Medium) - Up to 1,000 Patients</option>
+                      <option value="business">Business (Large) - Unlimited Scale</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Administrative Reason / Waiver Justification */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Reason for Manual Waiver / Renewal
+                </label>
+                <select
+                  value={renewReason}
+                  onChange={(e) => setRenewReason(e.target.value)}
+                  className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-semibold focus:outline-hidden focus:border-teal-500"
+                >
+                  <option value="SuperAdmin Administrative Waiver (No Payment Required)">SuperAdmin Administrative Waiver (No Payment Required)</option>
+                  <option value="Cash / Bank Transfer Settled Offline (Payment Verified)">Cash / Bank Transfer Settled Offline (Payment Verified)</option>
+                  <option value="Promotional Onboarding / Clinical Trial Extension">Promotional Onboarding / Clinical Trial Extension</option>
+                  <option value="Emergency Continuity & Technical Support Grace">Emergency Continuity & Technical Support Grace</option>
+                  <option value="Director Discretionary Courtesy License">Director Discretionary Courtesy License</option>
+                </select>
+              </div>
+
+              {/* Optional Administrative Note */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Internal Administrative Audit Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Approved by Director; partner expansion pilot"
+                  value={renewCustomNotes}
+                  onChange={(e) => setRenewCustomNotes(e.target.value)}
+                  className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-hidden focus:border-teal-500"
+                />
+              </div>
+
+              {/* Super Admin Authorization Code */}
+              <div className="pt-2 border-t border-slate-800">
+                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  Super Admin Authorization Code / PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type={showRenewCode ? 'text' : 'password'}
+                    placeholder="Enter SUPER123 or admin code"
+                    value={renewCode}
+                    onChange={(e) => {
+                      setRenewCode(e.target.value);
+                      setRenewCodeError('');
+                    }}
+                    autoFocus
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-xs tracking-wider focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRenewCode(!showRenewCode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    title={showRenewCode ? 'Hide code' : 'Show code'}
+                  >
+                    {showRenewCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {renewCodeError && (
+                  <p className="text-rose-400 text-xs font-medium mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {renewCodeError}
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowRenewModal(false); setRenewCodeError(''); setRenewCode(''); }}
+                  className="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingRenew || !renewCode.trim()}
+                  className="w-1/2 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{processingRenew ? 'Applying Renewal...' : 'Authorize & Grant Renewal'}</span>
                 </button>
               </div>
             </form>
