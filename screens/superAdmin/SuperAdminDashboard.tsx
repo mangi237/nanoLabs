@@ -467,7 +467,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
       fetchNetworkStats();
       if (viewingDoctorCredentials?.id === doctorId) {
-        setViewingDoctorCredentials(prev => prev ? ({ ...prev, verificationStatus: 'verified' }) : null);
+        setViewingDoctorCredentials((prev:any) => prev ? ({ ...prev, verificationStatus: 'verified' }) : null);
       }
     } catch (err) {
       console.error('Error approving doctor:', err);
@@ -488,7 +488,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
       fetchNetworkStats();
       if (viewingDoctorCredentials?.id === doctorId) {
-        setViewingDoctorCredentials(prev => prev ? ({ ...prev, verificationStatus: 'rejected' }) : null);
+        setViewingDoctorCredentials((prev:any ) => prev ? ({ ...prev, verificationStatus: 'rejected' }) : null);
       }
     } catch (err) {
       console.error('Error rejecting doctor:', err);
