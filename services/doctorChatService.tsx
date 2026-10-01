@@ -120,6 +120,21 @@ const STORAGE_PROFILES_KEY = 'nanoLabs_social_user_profiles_v2';
 // Baseline accredited specialists directory available for patient connection discovery
 const ACCREDITED_DOCTOR_PROFILES: UserSocialProfile[] = [
   {
+    id: 'doc_tankua_allen_001',
+    role: 'doctor',
+    legalName: 'Dr. Tankua Allen, MD',
+    nickname: 'Dr. Tankua Allen',
+    isAnonymous: false,
+    specialty: 'Pediatrician & Clinical Diagnostics',
+    hospital: 'Biodiagnostic Labo / Centre Pédiatrique',
+    licenseNumber: 'ONMC #7421-DLA',
+    phone: '+237 672 63 80 94',
+    city: 'Douala',
+    bio: 'Pediatric diagnostic consultant and general practitioner with Biodiagnostic Labo. Available for direct consultations and teleconsultation.',
+    avatarUrl: '/src/assets/images/dr_tankua_allen_portrait_1790889682898.jpg',
+    isOnline: true
+  },
+  {
     id: 'doc_kamga_101',
     role: 'doctor',
     legalName: 'Dr. Joseph Kamga, MD',
@@ -825,30 +840,21 @@ class DoctorChatService {
 
   // Doctor Action: Propose Appointment
   public scheduleAppointment(params: {
-   doctorId?: string;
-   doctorName?: string;
-    senderId?: string;
-    senderName: string;
-    senderRole : string;
-    reciepientId: string;
-    receipientName : string;
-    date : string;
-    time : string;
-    type : string;
-    // location : string;
-    patientId?: string;
-    patientName?: string;
-    appointmentDate?: string;
-    appointmentTime?: string;
-    appointmentType?: 'in_person' | 'teleconsultation' | 'lab_review';
+    doctorId: string;
+    doctorName: string;
+    patientId: string;
+    patientName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    appointmentType: 'in_person' | 'teleconsultation' | 'lab_review';
     location: string;
   }): ChatMessage {
     return this.sendMessage({
-      senderId: params.doctorId || '',
-      senderName: params.doctorName || '',
+      senderId: params.doctorId,
+      senderName: params.doctorName,
       senderRole: 'doctor',
-      recipientId: params.patientId|| '',
-      recipientName: params.patientName || '',
+      recipientId: params.patientId,
+      recipientName: params.patientName,
       type: 'appointment',
       content: `Consultation Appointment Proposed: ${params.appointmentDate} at ${params.appointmentTime}`,
       metadata: {
