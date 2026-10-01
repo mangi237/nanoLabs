@@ -63,6 +63,7 @@ export interface BatchTestItem {
 
 // Canonical TestBatch
 export interface TestBatch {
+  bookingCode : string;
   id: string;
   batchNumber: string;
   patientId: string;

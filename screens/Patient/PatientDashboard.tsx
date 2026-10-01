@@ -10,13 +10,13 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { EditPatientProfileModal } from '../../components/patient/EditPatientProfileModal';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
 import { doctorChatService } from '../../services/doctorChatService';
 import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
 import pinkOctoberScientistImg from '../../assets/images/pink_octobre_scientist_banner_1790889447077.jpg';
