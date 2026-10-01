@@ -18,9 +18,9 @@ import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmap
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
 import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
 import { doctorChatService } from '../../services/doctorChatService';
-import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
-import pinkOctoberScientistImg from '../../assets/images/pink_octobre_scientist_banner_1790889447077.jpg';
-import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
+// import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
+// import pinkOctoberScientistImg from '../../assets/images/pink_octobre_scientist_banner_1790889447077.jpg';
+// import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
 import { 
   Calendar, 
   FileText, 
@@ -310,11 +310,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-        dispatchDatabaseFetchError({
-          message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
-          tableOrCollection: `labs/${targetLabId}/patients & bookings`,
-          rawError: e
-        });
+        // dispatchDatabaseFetchError({
+        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+        //   rawError: e
+        // });
       } finally {
         setLoading(false);
       }
@@ -728,7 +728,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <div className="relative rounded-3xl overflow-hidden shadow-md border border-pink-200 bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600 text-white group cursor-pointer transition-all hover:shadow-lg">
               <div className="relative h-44 sm:h-52 w-full overflow-hidden">
                 <img 
-                  src={pinkOctoberBannerImg} 
+                  // src={pinkOctoberBannerImg} 
                   alt="nanoLabs Octobre Rose - Chaque parcours compte. Chaque laboratoire aussi." 
                   className="w-full h-full object-cover object-center group-hover:scale-102 transition-transform duration-500"
                 />
@@ -1339,7 +1339,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <div className="relative rounded-3xl overflow-hidden shadow-sm border border-pink-200 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-700 text-white">
               <div className="relative h-36 sm:h-44 w-full overflow-hidden flex items-center">
                 <img 
-                  src={pinkOctoberScientistImg} 
+                  // src={pinkOctoberScientistImg} 
                   alt="nanoLabs Pink October Laboratory Initiative" 
                   className="w-full h-full object-cover object-center"
                 />

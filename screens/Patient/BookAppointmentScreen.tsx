@@ -7,7 +7,7 @@ import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { DoctorCardSelect, DoctorOption, ACCREDITED_DOCTORS } from '../../components/common/DoctorCardSelect';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { YeboKycVerificationModal } from '../../components/auth/YeboKycVerificationModal';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { MatchedPrescriptionTest } from '../../core/scanner';
 import { PARTNER_LABS_LOCATIONS, PartnerLabLocation } from '../../core/gps';
 import { 
@@ -48,7 +48,7 @@ import {
   Navigation,
   Compass
 } from 'lucide-react';
-import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
+// import pinkOctoberBannerImg from '../../assets/images/pink';
 
 interface BookAppointmentScreenProps {
   onBack?: () => void;
@@ -507,11 +507,11 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     } catch (err: any) {
       console.error('Booking submission error:', err);
-      dispatchDatabaseFetchError({
-        message: 'Database write failed during diagnostic booking order registration.',
-        tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
-        rawError: err
-      });
+      // dispatchDatabaseFetchError({
+      //   message: 'Database write failed during diagnostic booking order registration.',
+      //   tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
+      //   rawError: err
+      // });
       setErrorMessage(err.message || 'Failed to submit booking. Please try again.');
     } finally {
       setLoading(false);
@@ -736,7 +736,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
             <div className="relative rounded-3xl overflow-hidden shadow-sm border border-pink-200 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white">
               <div className="relative h-32 sm:h-40 w-full overflow-hidden flex items-center">
                 <img 
-                  src={pinkOctoberBannerImg} 
+                  // src={pinkOctoberBannerImg} 
                   alt="nanoLabs Octobre Rose - Dépistage Précoce" 
                   className="w-full h-full object-cover object-center"
                 />
