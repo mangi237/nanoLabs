@@ -202,9 +202,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const selectedLabObj = labs.find(l => l.id === labId);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between selection:bg-teal-500/20 selection:text-teal-900 font-sans">
+    <div className="min-h-screen bg-white sm:bg-slate-50 text-slate-900 flex flex-col justify-between selection:bg-teal-500/20 selection:text-teal-900 font-sans">
       {/* Top Bar */}
-      <header className="w-full px-4 sm:px-8 py-4 flex items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
+      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between border-b border-slate-200/80 bg-white sm:bg-white/80 backdrop-blur-md shrink-0">
         <button
           onClick={onNavigateWebsite}
           className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
@@ -241,13 +241,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-lg">
-          {/* Card */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/40 overflow-hidden">
+      {/* Main Container - Edge-to-edge full width and height on mobile, centered card on tablet/desktop */}
+      <main className="flex-1 flex flex-col sm:items-center sm:justify-center p-0 sm:p-6 lg:p-8">
+        <div className="w-full flex-1 sm:flex-initial sm:max-w-lg flex flex-col">
+          {/* Card - Full width & height on mobile */}
+          <div className="bg-white flex-1 sm:flex-initial rounded-none sm:rounded-3xl border-0 sm:border border-slate-200/90 shadow-none sm:shadow-xl sm:shadow-slate-200/40 overflow-hidden flex flex-col justify-start sm:justify-center">
             {/* Card Header */}
-            <div className="px-6 pt-6 pb-4 border-b border-slate-100 text-center">
+            <div className="px-5 sm:px-6 pt-6 sm:pt-6 pb-4 border-b border-slate-100 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200/80 text-teal-800 text-[11px] font-bold tracking-wide uppercase mb-2.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
                 <span>Encrypted Diagnostic Portal</span>
