@@ -7,7 +7,7 @@ import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { DoctorCardSelect, DoctorOption, ACCREDITED_DOCTORS } from '../../components/common/DoctorCardSelect';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { YeboKycVerificationModal } from '../../components/auth/YeboKycVerificationModal';
-// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { MatchedPrescriptionTest } from '../../core/scanner';
 import { PARTNER_LABS_LOCATIONS, PartnerLabLocation } from '../../core/gps';
 import { 
@@ -44,21 +44,28 @@ import {
   Truck,
   Phone,
   Mail,
-  X
+  X,
+  Navigation,
+  Compass
 } from 'lucide-react';
+import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
 
 interface BookAppointmentScreenProps {
   onBack?: () => void;
   onSuccess?: () => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  initialSelectedTests?: any[];
+  initialStep?: 1 | 2 | 3;
 }
 
 export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   onBack,
   onSuccess,
   onNotificationPress,
-  onProfilePress
+  onProfilePress,
+  initialSelectedTests,
+  initialStep = 1
 }) => {
   const { user, lab, getAllLabs } = useAuth();
   const currentLabId = lab?.id || user?.labId || 'lab-1';
@@ -66,7 +73,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   // --------------------------------------------------------------------------
   // STEPPING STATE: 1 = Tests, 2 = Labs & Pricing, 3 = Doctor & Identity
   // --------------------------------------------------------------------------
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(initialStep || 1);
 
   // System loading & error states
   const [loading, setLoading] = useState(false);
@@ -77,7 +84,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const [catalog] = useState<any[]>(OFFICIAL_MASTER_TEST_CATALOG);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [testSearch, setTestSearch] = useState('');
-  const [selectedTests, setSelectedTests] = useState<any[]>([]);
+  const [selectedTests, setSelectedTests] = useState<any[]>(initialSelectedTests || []);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Step 2: Lab Selection & Batch Strategy
@@ -202,12 +209,59 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   // Schedule & Sample Mode
   const [sampleMode, setSampleMode] = useState<'walk_in' | 'home_collection'>('walk_in');
   const [homeAddress, setHomeAddress] = useState<string>('');
+  const [homePickupDistanceKm, setHomePickupDistanceKm] = useState<number>(4.2);
+  const [isLocatingUser, setIsLocatingUser] = useState<boolean>(false);
   const [appointmentDate, setAppointmentDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
   });
   const [appointmentTime, setAppointmentTime] = useState<string>('08:30 AM');
+
+  // Calculate home phlebotomist pickup fee based on distance from selected lab
+  const calculateHomePickupFee = (): number => {
+    if (sampleMode !== 'home_collection') return 0;
+    const km = Math.max(1, homePickupDistanceKm);
+    const extraKm = Math.max(0, km - 2);
+    return Math.round(1500 + (extraKm * 300));
+  };
+
+  const handleDetectCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setHomeAddress('Akwa, Douala (Central Position)');
+      setHomePickupDistanceKm(3.2);
+      return;
+    }
+    setIsLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocatingUser(false);
+        const { latitude, longitude } = pos.coords;
+        const labObj = availableLabs.find(l => l.id === selectedPrimaryLabId) || availableLabs[0];
+        const labLat = labObj?.lat || 4.0511;
+        const labLng = labObj?.lng || 9.7042;
+        
+        const R = 6371; // km
+        const dLat = (latitude - labLat) * Math.PI / 180;
+        const dLon = (longitude - labLng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(labLat * Math.PI / 180) * Math.cos(latitude * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distKm = Math.round((R * c) * 10) / 10;
+        const finalDist = distKm > 0.5 && distKm < 80 ? distKm : 4.2;
+        
+        setHomePickupDistanceKm(finalDist);
+        setHomeAddress(`My Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+      },
+      () => {
+        setIsLocatingUser(false);
+        setHomeAddress('Akwa, Douala (Center)');
+        setHomePickupDistanceKm(3.5);
+      },
+      { timeout: 7000, enableHighAccuracy: true }
+    );
+  };
 
   // Initialize primary lab
   useEffect(() => {
@@ -275,10 +329,11 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
   // Calculate total price based on batch strategy
   const calculateTotalBookingPrice = (): number => {
+    let testPrice = 0;
     if (batchStrategy === 'single') {
-      return selectedTests.reduce((sum, t) => sum + getLabTestPrice(t, selectedPrimaryLabId), 0);
+      testPrice = selectedTests.reduce((sum, t) => sum + getLabTestPrice(t, selectedPrimaryLabId), 0);
     } else if (batchStrategy === 'split') {
-      return selectedTests.reduce((sum, t) => {
+      testPrice = selectedTests.reduce((sum, t) => {
         const assignedLab = testLabAssignments[t.id] || selectedPrimaryLabId;
         return sum + getLabTestPrice(t, assignedLab);
       }, 0);
@@ -286,8 +341,9 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       // Compare mode: test price at primary lab + price at comparison lab
       const priceLab1 = selectedTests.reduce((sum, t) => sum + getLabTestPrice(t, selectedPrimaryLabId), 0);
       const priceLab2 = selectedTests.reduce((sum, t) => sum + getLabTestPrice(t, comparisonLabId), 0);
-      return priceLab1 + priceLab2;
+      testPrice = priceLab1 + priceLab2;
     }
+    return testPrice + calculateHomePickupFee();
   };
 
   // Handle final submission in Step 3
@@ -451,11 +507,11 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     } catch (err: any) {
       console.error('Booking submission error:', err);
-      // dispatchDatabaseFetchError({
-      //   message: 'Database write failed during diagnostic booking order registration.',
-      //   tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
-      //   rawError: err
-      // });
+      dispatchDatabaseFetchError({
+        message: 'Database write failed during diagnostic booking order registration.',
+        tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
+        rawError: err
+      });
       setErrorMessage(err.message || 'Failed to submit booking. Please try again.');
     } finally {
       setLoading(false);
@@ -676,6 +732,28 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         {/* ========================================================================= */}
         {currentStep === 1 && (
           <div className="space-y-5 animate-fade-in">
+            {/* Pink October Ad Banner for Health Prevention */}
+            <div className="relative rounded-3xl overflow-hidden shadow-sm border border-pink-200 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white">
+              <div className="relative h-32 sm:h-40 w-full overflow-hidden flex items-center">
+                <img 
+                  src={pinkOctoberBannerImg} 
+                  alt="nanoLabs Octobre Rose - Dépistage Précoce" 
+                  className="w-full h-full object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent flex flex-col justify-center p-4 sm:p-5">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-pink-600 text-white text-[10px] font-black uppercase tracking-wider w-fit">
+                    Octobre Rose 🎗️
+                  </span>
+                  <h3 className="text-sm sm:text-base font-black text-white leading-tight mt-1">
+                    Chaque parcours compte. Chaque laboratoire aussi.
+                  </h3>
+                  <p className="text-[11px] text-pink-100 line-clamp-1 mt-0.5">
+                    Sélectionnez vos bilans préventifs et profitez des tarifs solidaires chez nos centres agréés.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Top Info Banner on Pricing Policy */}
             <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl flex items-start gap-3 text-xs text-teal-900">
               <Info className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
@@ -1267,17 +1345,96 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 </div>
 
                 {sampleMode === 'home_collection' && (
-                  <div className="pt-2">
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Home Dispatch Address & Landmark <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={homeAddress}
-                      onChange={(e) => setHomeAddress(e.target.value)}
-                      placeholder="e.g. Akwa, Douala, Rue des Palmiers, face Immeuble Ecobank"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500"
-                    />
+                  <div className="pt-2 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Home Dispatch Address & Landmark <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleDetectCurrentLocation}
+                        disabled={isLocatingUser}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                        title="Acquire current GPS coordinates and calculate distance from laboratory"
+                      >
+                        {isLocatingUser ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" />
+                            <span>Detecting GPS Location...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Compass className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Use My Current Geolocation</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={homeAddress}
+                        onChange={(e) => setHomeAddress(e.target.value)}
+                        placeholder="e.g. Akwa, Douala, Rue des Palmiers, face Immeuble Ecobank"
+                        className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+
+                    {/* Quick Neighborhood Presets with Accurate Distance Estimates */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">
+                        Quick Neighborhood Locations (Click to Estimate Distance):
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { name: 'Akwa, Douala', km: 2.5 },
+                          { name: 'Bonanjo, Douala', km: 3.8 },
+                          { name: 'Bonapriso, Douala', km: 4.2 },
+                          { name: 'Deido, Douala', km: 5.1 },
+                          { name: 'Makepe, Douala', km: 8.4 },
+                          { name: 'Bastos, Yaoundé', km: 3.9 },
+                          { name: 'Mvan, Yaoundé', km: 6.2 }
+                        ].map((nb) => (
+                          <button
+                            key={nb.name}
+                            type="button"
+                            onClick={() => {
+                              setHomeAddress(nb.name);
+                              setHomePickupDistanceKm(nb.km);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer border ${
+                              homeAddress.includes(nb.name.split(',')[0])
+                                ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                            }`}
+                          >
+                            <span>{nb.name}</span>
+                            <span className="opacity-75 font-mono ml-1">({nb.km} km)</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Transparent Distance & Home Pickup Pricing Breakdown */}
+                    <div className="p-3.5 bg-teal-50/80 rounded-xl border border-teal-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="font-extrabold text-teal-950 flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-teal-600" />
+                          <span>Home Phlebotomist Pickup Distance: <strong>{homePickupDistanceKm} km</strong></span>
+                        </div>
+                        <div className="text-[11px] text-teal-800">
+                          Base Tariff: 1,500 XAF (0-2 km) + 300 XAF/km thereafter
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase font-bold text-teal-700">Pickup Fee</div>
+                        <div className="font-mono text-base font-black text-teal-900">
+                          +{calculateHomePickupFee().toLocaleString()} XAF
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
