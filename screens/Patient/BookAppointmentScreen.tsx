@@ -7,7 +7,7 @@ import { cleanFirestoreData } from '../../utils/sanitizeData';
 import { DoctorCardSelect, DoctorOption, ACCREDITED_DOCTORS } from '../../components/common/DoctorCardSelect';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { YeboKycVerificationModal } from '../../components/auth/YeboKycVerificationModal';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { MatchedPrescriptionTest } from '../../core/scanner';
 import { PARTNER_LABS_LOCATIONS, PartnerLabLocation } from '../../core/gps';
 import { 
@@ -48,7 +48,7 @@ import {
   Navigation,
   Compass
 } from 'lucide-react';
-import pinkOctoberBannerImg from '../../assets/images/pinkOctober.jpg';
+import pinkOctoberBannerImg from 'assets/images/pinkOctober2.jpg';
 
 interface BookAppointmentScreenProps {
   onBack?: () => void;
@@ -507,11 +507,11 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     } catch (err: any) {
       console.error('Booking submission error:', err);
-      dispatchDatabaseFetchError({
-        message: 'Database write failed during diagnostic booking order registration.',
-        tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
-        rawError: err
-      });
+      // dispatchDatabaseFetchError({
+      //   message: 'Database write failed during diagnostic booking order registration.',
+      //   tableOrCollection: `labs/${selectedPrimaryLabId}/bookings`,
+      //   rawError: err
+      // });
       setErrorMessage(err.message || 'Failed to submit booking. Please try again.');
     } finally {
       setLoading(false);
