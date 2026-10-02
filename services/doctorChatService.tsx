@@ -311,6 +311,54 @@ class DoctorChatService {
     }
   }
 
+  public syncDoctorsFromDatabase(doctorsList: any[]): void {
+    if (!Array.isArray(doctorsList) || doctorsList.length === 0) return;
+    const profiles = this.getProfiles();
+    let hasChanges = false;
+
+    doctorsList.forEach(docObj => {
+      const docId = docObj.id || docObj.doctorId;
+      if (!docId) return;
+      const cleanName = docObj.name || docObj.legalName || 'Doctor';
+      if (['guest', 'unknown', ''].includes(cleanName.toLowerCase())) return;
+
+      const existingIdx = profiles.findIndex(p => 
+        p.id === docId || 
+        (docObj.licenseNumber && p.licenseNumber === docObj.licenseNumber) ||
+        (docObj.email && (p as any).email === docObj.email)
+      );
+
+      const formattedName = cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`;
+      const doctorProfile: UserSocialProfile = {
+        id: docId,
+        role: 'doctor',
+        legalName: formattedName,
+        nickname: formattedName,
+        isAnonymous: false,
+        specialty: docObj.specialty || 'Clinical Physician & Diagnostics',
+        hospital: docObj.hospitalAffiliation || docObj.hospital || 'nanoLabs Accredited Medical Network',
+        licenseNumber: docObj.licenseNumber || `ONMC-${docId.slice(-5)}`,
+        phone: docObj.phone || '+237 600 00 00 00',
+        city: docObj.city || 'Douala',
+        bio: docObj.bio || 'Accredited specialist practicing in the registered hospital network.',
+        avatarUrl: docObj.avatarUrl || docObj.profilePicture || docObj.photoUrl,
+        isOnline: true
+      };
+
+      if (existingIdx >= 0) {
+        profiles[existingIdx] = { ...profiles[existingIdx], ...doctorProfile };
+        hasChanges = true;
+      } else {
+        profiles.unshift(doctorProfile);
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      this.saveProfiles(profiles);
+    }
+  }
+
   public getConnectionBetween(userId1: string, userId2: string): DoctorPatientConnection | undefined {
     const connections = this.getAllConnectionsRaw();
     const u1 = userId1.toLowerCase();
