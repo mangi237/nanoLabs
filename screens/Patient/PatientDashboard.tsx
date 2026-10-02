@@ -10,18 +10,18 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { EditPatientProfileModal } from '../../components/patient/EditPatientProfileModal';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
 import { doctorChatService } from '../../services/doctorChatService';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import pinkOctoberBannerImg from '../../assets/images/pinkOctober.jpg';
 import pinkOctoberScientistImg from '../../assets/images/pinkOctober2.jpg';
-import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
+// import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
 import { 
   Calendar, 
   FileText, 
@@ -360,11 +360,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-        dispatchDatabaseFetchError({
-          message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
-          tableOrCollection: `labs/${targetLabId}/patients & bookings`,
-          rawError: e
-        });
+        // dispatchDatabaseFetchError({
+        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+        //   rawError: e
+        // });
       } finally {
         setLoading(false);
       }
