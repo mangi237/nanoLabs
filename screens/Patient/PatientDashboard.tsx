@@ -10,17 +10,18 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
-// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfileModal';
 import { doctorChatService } from '../../services/doctorChatService';
-// import pinkOctoberBannerImg from '../../assets/images/pink_octobre_nanolabs_banner_1790889435055.jpg';
-// import pinkOctoberScientistImg from '../../assets/images/pink_octobre_scientist_banner_1790889447077.jpg';
-// import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
+import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
+import pinkOctoberBannerImg from '../../assets/images/pinkOctober.jpg';
+import pinkOctoberScientistImg from '../../assets/images/pinkOctober2.jpg';
+import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
 import { 
   Calendar, 
   FileText, 
@@ -68,7 +69,7 @@ import {
 } from 'lucide-react';
 
 interface PatientDashboardProps {
-  onNavigateTab?: (tab: string) => void;
+  onNavigateTab?: (tab: string, testsPayload?: any[], step?: 1 | 2 | 3) => void;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
   onSelectTest?: (test: any) => void;
@@ -172,6 +173,45 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       setTimeout(() => setFeedbackToast(null), 3000);
     } catch (err) {
       console.error('Error declining doctor request:', err);
+    }
+  };
+
+  const handleBookPreventivePanel = (panel: {
+    id: string;
+    title: string;
+    testKeywords: string[];
+    time?: string;
+    turnaround?: string;
+    testsDescription?: string;
+    popular?: boolean;
+    badge?: string;
+  }) => {
+    const matchedTests: any[] = [];
+    panel.testKeywords.forEach(kw => {
+      const q = kw.toLowerCase();
+      const found = OFFICIAL_MASTER_TEST_CATALOG.find(t =>
+        t.name.toLowerCase().includes(q) ||
+        t.aliases?.some(a => a.toLowerCase().includes(q)) ||
+        (t.id && t.id.toLowerCase() === q)
+      );
+      if (found && !matchedTests.some(m => m.id === found.id)) {
+        matchedTests.push(found);
+      }
+    });
+
+    const testsToBook = matchedTests.length > 0 ? matchedTests : [
+      {
+        id: `pkg-${panel.id}`,
+        name: panel.title,
+        category: 'Biochemistry',
+        price: 15000,
+        turnaroundTime: panel.turnaround || panel.time || 'Same-day',
+        sampleType: 'Venous Blood'
+      }
+    ];
+
+    if (onNavigateTab) {
+      onNavigateTab('book', testsToBook, 2);
     }
   };
 
@@ -289,7 +329,17 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           }
         } catch {}
 
-        // 2b. Refresh social connections and pending doctor requests
+        // 2b. Sync real registered doctors from system
+        try {
+          const accreditedDoctors = await limsService.searchAllAccreditedDoctors('', targetLabId);
+          if (accreditedDoctors && accreditedDoctors.length > 0) {
+            doctorChatService.syncDoctorsFromDatabase(accreditedDoctors);
+          }
+        } catch (docSyncErr) {
+          console.warn('Real doctors sync note:', docSyncErr);
+        }
+
+        // 2c. Refresh social connections and pending doctor requests
         const effectivePatId = loadedDocData ? loadedDocData.id : (user?.id || 'pat-1');
         refreshSocialConnections(effectivePatId);
 
@@ -310,11 +360,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-        // dispatchDatabaseFetchError({
-        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
-        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
-        //   rawError: e
-        // });
+        dispatchDatabaseFetchError({
+          message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+          tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+          rawError: e
+        });
       } finally {
         setLoading(false);
       }
@@ -532,80 +582,29 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
-      {/* Modern Top Mobile-First App Bar (Aligned with User Hand-drawn Sketch) */}
+      {/* Sleek Minimalist Header per User Mockup: nanoLabs Logo & Profile Icon */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs px-4 sm:px-6 py-3">
         <div className="max-w-6xl w-full mx-auto flex items-center justify-between gap-3">
-          {/* Brand & Live Status */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-black shadow-xs">
-                <Activity className="w-4 h-4 stroke-[2.5]" />
-              </div>
-              <div>
-                <div className="text-base font-black tracking-tight text-slate-900 flex items-center gap-1">
-                  nano<span className="text-teal-600">Labs</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Connected to Central LIMS" />
-                </div>
-                <div className="text-[10px] text-slate-400 font-medium leading-none">Medical LIMS</div>
-              </div>
-            </div>
-
-            {/* City Selector (Douala, Yaoundé, etc.) */}
-            <div className="relative">
-              <select
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                aria-label="Select Diagnostic City Location"
-                className="appearance-none pl-6 pr-6 py-1 bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-bold rounded-full border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer transition-colors"
-              >
-                <option value="Douala">Douala, CMR</option>
-                <option value="Yaoundé">Yaoundé, CMR</option>
-                <option value="Bafoussam">Bafoussam, CMR</option>
-                <option value="Garoua">Garoua, CMR</option>
-                <option value="Bamenda">Bamenda, CMR</option>
-              </select>
-              <MapPin className="w-3 h-3 text-teal-600 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Privacy Nickname Badge & Actions */}
+          {/* nanoLabs Logo */}
           <div className="flex items-center gap-2">
-            {/* Clickable Patient Privacy Alias */}
-            <button
-              type="button"
-              onClick={() => setShowEditProfileModal(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/90 transition-all cursor-pointer shadow-2xs group"
-              title="Edit Profile & Privacy Nickname"
-            >
-              <Shield className="w-3 h-3 text-indigo-600 group-hover:scale-110 transition-transform" />
-              <span className="font-mono text-[11px]">@{patientDocData?.nickname || (user as any)?.nickname || 'Claire_M'}</span>
-              <Edit3 className="w-3 h-3 text-indigo-400 opacity-60 group-hover:opacity-100" />
-            </button>
-
-            {/* Notification Bell */}
-            <button
-              type="button"
-              onClick={onNotificationPress}
-              className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors relative cursor-pointer"
-              title="Notifications"
-            >
-              <Mail className="w-4 h-4" />
-              {incomingDoctorRequests.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              )}
-            </button>
-
-            {/* Profile Avatar */}
-            <button
-              type="button"
-              onClick={() => setShowEditProfileModal(true)}
-              className="w-8 h-8 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all"
-              title="Patient Profile"
-            >
-              {patientFullName.charAt(0).toUpperCase()}
-            </button>
+            <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-black shadow-xs">
+              <Activity className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-1.5">
+              <span>nano<span className="text-teal-600">Labs</span></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Connected to Central LIMS" />
+            </div>
           </div>
+
+          {/* Profile Icon */}
+          <button
+            type="button"
+            onClick={() => setShowEditProfileModal(true)}
+            className="w-9 h-9 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all"
+            title="Patient Profile"
+          >
+            {patientFullName.charAt(0).toUpperCase()}
+          </button>
         </div>
       </header>
 
@@ -623,79 +622,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 pb-28 space-y-6">
-        
-        {/* Navigation Tabs Bar */}
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveSegmentTab('home')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                activeSegmentTab === 'home'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span>Home Feed</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSegmentTab('tests')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                activeSegmentTab === 'tests'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <TestTube className="w-4 h-4" />
-              <span>Diagnostic Batches</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                activeSegmentTab === 'tests' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-              }`}>
-                {bookings.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveSegmentTab('chat')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap relative ${
-                activeSegmentTab === 'chat'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Doctor Chat & Consult</span>
-              {incomingDoctorRequests.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveSegmentTab('tracking')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                activeSegmentTab === 'tracking'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Truck className="w-4 h-4" />
-              <span>Live Transit</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSegmentTab('receipts')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                activeSegmentTab === 'receipts'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Receipt className="w-4 h-4" />
-              <span>Invoices & Receipts</span>
-            </button>
-          </div>
-        </div>
 
         {/* ============================================================== */}
         {/* VIEW 1: HOME FEED (MATCHING HAND-DRAWN SKETCH EXACTLY) */}
@@ -728,7 +654,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <div className="relative rounded-3xl overflow-hidden shadow-md border border-pink-200 bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600 text-white group cursor-pointer transition-all hover:shadow-lg">
               <div className="relative h-44 sm:h-52 w-full overflow-hidden">
                 <img 
-                  // src={pinkOctoberBannerImg} 
+                  src={pinkOctoberBannerImg} 
                   alt="nanoLabs Octobre Rose - Chaque parcours compte. Chaque laboratoire aussi." 
                   className="w-full h-full object-cover object-center group-hover:scale-102 transition-transform duration-500"
                 />
@@ -751,130 +677,182 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
             </div>
 
-            {/* Test Card Container - Styled Exactly Like User Screen Shot */}
+            {/* Real-time Booked Test Card Container */}
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Test</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Test</h3>
+                  {bookings.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Live synced with central LIMS" />
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setActiveSegmentTab('tests')}
-                  className="text-xs font-bold text-teal-600 hover:text-teal-700 underline underline-offset-2 cursor-pointer"
+                  className="text-xs font-bold text-teal-600 hover:text-teal-700 underline underline-offset-2 cursor-pointer flex items-center gap-0.5"
                 >
-                  See All
+                  <span>See All ({bookings.length})</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Exact Whaleness Test Card with Hepatitis B&C Screening items */}
-              <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#004D71] text-white flex items-center justify-center font-bold shrink-0 shadow-md">
-                      <TestTube className="w-6 h-6 rotate-45" />
-                    </div>
-                    <div>
-                      <h4 className="text-base font-black text-slate-900 leading-tight">
-                        Whaleness Test
-                      </h4>
-                      <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />
-                        <span>.Biodiagnostic Labo</span>
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-mono font-extrabold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-xl border border-slate-200">
-                    4/4
-                  </span>
-                </div>
+              {bookings.length > 0 ? (
+                (() => {
+                  const latestBooking = bookings[0];
+                  const testsList = latestBooking.tests || [];
+                  const completedTestsCount = testsList.filter(t => t.status === 'Completed' || (t as any).completedAt).length;
+                  const totalTestsCount = testsList.length || 1;
+                  const bookingLabTitle = latestBooking.labName || lab?.name || 'nanoLabs Accredited Lab';
 
-                {/* Subtest Rows */}
-                <div className="space-y-2.5">
-                  {/* Row 1: Orange/Amber Indicator */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between hover:bg-slate-100/70 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-8 rounded-full bg-amber-500 shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-extrabold text-slate-900">
-                          Hepatitis B&C Screening
+                  return (
+                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm space-y-4">
+                      {/* Batch Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-[#004D71] text-white flex items-center justify-center font-bold shrink-0 shadow-md">
+                            <TestTube className="w-6 h-6 rotate-45" />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-black text-slate-900 leading-tight">
+                              {testsList[0]?.testName 
+                                ? (testsList.length > 1 ? `${testsList[0].testName} + ${testsList.length - 1} more` : testsList[0].testName)
+                                : `Diagnostic Batch #${latestBooking.bookingCode}`}
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />
+                              <span className="truncate max-w-[200px] sm:max-w-xs">{bookingLabTitle}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          status: <span className="font-bold text-amber-600">Cashier Approved</span>
+                        <span className="text-[11px] font-mono font-extrabold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-xl border border-slate-200">
+                          {completedTestsCount}/{totalTestsCount}
+                        </span>
+                      </div>
+
+                      {/* Subtest Rows - Real Time Data from Central LIMS */}
+                      <div className="space-y-2.5">
+                        {testsList.slice(0, 3).map((testItem, idx) => {
+                          const isDone = testItem.status === 'Completed' || (testItem as any).completedAt;
+                          const isInLab = testItem.status === 'In_Lab_Testing';
+                          const isPaid = testItem.paid || latestBooking.paymentStatus === 'paid';
+                          const statusLabel = isDone 
+                            ? 'Biologist Signed' 
+                            : isInLab 
+                            ? 'In Lab Testing' 
+                            : testItem.receptionistValidated 
+                            ? 'Cashier Approved' 
+                            : isPaid 
+                            ? 'Sample In Processing' 
+                            : 'Awaiting Validation';
+
+                          return (
+                            <div 
+                              key={testItem.id || idx}
+                              className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between hover:bg-slate-100/70 transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 pr-2">
+                                <div className={`w-1.5 h-8 rounded-full shrink-0 ${
+                                  isDone ? 'bg-emerald-500' : isInLab ? 'bg-teal-500' : 'bg-amber-500'
+                                }`} />
+                                <div className="truncate">
+                                  <div className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                                    {testItem.testName}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <span>status:</span>
+                                    <span className={`font-bold ${
+                                      isDone ? 'text-emerald-600' : isInLab ? 'text-teal-600' : 'text-amber-600'
+                                    }`}>
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isDone || testItem.resultValue) {
+                                    setEnvelopeModalTest(testItem);
+                                  } else {
+                                    setBatchReportBooking(latestBooking);
+                                  }
+                                }}
+                                className="w-8 h-8 rounded-xl bg-[#004D71] hover:bg-[#003852] text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 shadow-xs"
+                                title="View Test Details"
+                              >
+                                <ArrowRight className="w-4 h-4 -rotate-45" />
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {testsList.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => setBatchReportBooking(latestBooking)}
+                            className="w-full py-2 text-center text-xs font-bold text-teal-700 bg-teal-50/60 hover:bg-teal-100/70 rounded-xl transition cursor-pointer"
+                          >
+                            + View {testsList.length - 3} more tests in this batch
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Price and Live Auditing row */}
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowRoadmapModal(true)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-teal-700 transition cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4 text-teal-600" />
+                          <span>View Live Auditing</span>
+                        </button>
+
+                        <div className="text-right">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">PRICE:</span>
+                          <span className="text-sm font-black text-slate-900 font-mono">
+                            {(latestBooking.totalAmount || testsList.reduce((s, t) => s + (t.price || 0), 0)).toLocaleString()} XAF
+                          </span>
                         </div>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveSegmentTab('tests')}
-                      className="w-8 h-8 rounded-xl bg-[#004D71] text-white flex items-center justify-center hover:bg-[#003852] transition-colors cursor-pointer shrink-0"
-                    >
-                      <ArrowRight className="w-4 h-4 -rotate-45" />
-                    </button>
-                  </div>
 
-                  {/* Row 2: Green Indicator */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between hover:bg-slate-100/70 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-8 rounded-full bg-emerald-500 shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-extrabold text-slate-900">
-                          Hepatitis B&C Screening
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          status: <span className="font-bold text-emerald-600">Biologist Signed</span>
-                        </div>
-                      </div>
+                      {/* Primary Dark Teal Action Button */}
+                      <button
+                        type="button"
+                        onClick={() => setBatchReportBooking(latestBooking)}
+                        className="w-full py-3.5 bg-[#1B4B48] hover:bg-[#133735] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>SEE FULL TESTS DETAILS</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (bookings.length > 0) {
-                          setBatchReportBooking(bookings[0]);
-                        } else {
-                          setActiveSegmentTab('tests');
-                        }
-                      }}
-                      className="w-8 h-8 rounded-xl bg-[#004D71] text-white flex items-center justify-center hover:bg-[#003852] transition-colors cursor-pointer shrink-0"
-                    >
-                      <ArrowRight className="w-4 h-4 -rotate-45" />
-                    </button>
+                  );
+                })()
+              ) : (
+                /* Empty state when patient has no tests booked yet */
+                <div className="bg-white rounded-3xl p-6 border border-dashed border-slate-300 shadow-sm text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 mx-auto flex items-center justify-center shadow-xs">
+                    <TestTube className="w-6 h-6 rotate-45" />
                   </div>
-                </div>
-
-                {/* Price and Live Auditing row */}
-                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">No Tests Booked Yet</h4>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                      You do not have any active diagnostic orders. Select a preventive health panel below or book tests directly to begin.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowRoadmapModal(true)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-teal-700 transition cursor-pointer"
+                    onClick={() => onNavigateTab ? onNavigateTab('book') : setActiveSegmentTab('tests')}
+                    className="px-5 py-2.5 bg-[#1B4B48] hover:bg-[#133735] text-white font-extrabold text-xs rounded-xl shadow-xs transition uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer"
                   >
-                    <Eye className="w-4 h-4 text-teal-600" />
-                    <span>View Live Auditing</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Book Your First Test</span>
                   </button>
-
-                  <div className="text-right">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">PRICE:</span>
-                    <span className="text-sm font-black text-slate-900 font-mono">35000XAF</span>
-                  </div>
                 </div>
-
-                {/* Primary Dark Teal Action Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (bookings.length > 0) {
-                      setBatchReportBooking(bookings[0]);
-                    } else {
-                      setActiveSegmentTab('tests');
-                    }
-                  }}
-                  className="w-full py-3.5 bg-[#1B4B48] hover:bg-[#133735] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>SEE FULL TESTS DETAILS</span>
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* 4 Core Quick Action Cards (Directly from User Sketch) */}
+            {/* 4 Core Quick Action Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               {quickActionCards.map(card => {
                 const Icon = card.icon;
@@ -899,13 +877,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               })}
             </div>
 
-            {/* Active Diagnostic Order / Specimen Status Card (Drawn in Sketch) */}
+            {/* Active Specimen Status & Order Tracking (Hidden on Mobile Home, visible on Web View) */}
             {(() => {
               const activeOrLatestBooking = activeHomePickupBooking || bookings[0] || null;
               const currentStepIdx = getTrackingStepIndex(activeOrLatestBooking);
 
               return (
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+                <div className="hidden md:block bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
@@ -921,7 +899,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   {/* Specimen Horizontal 4-Step Progress Tracker */}
                   <div className="pt-2">
                     <div className="grid grid-cols-4 gap-2 text-center relative">
-                      {/* Connecting hairline */}
                       <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-100 -z-0" />
                       
                       {[
@@ -985,260 +962,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               );
             })()}
 
-            {/* INCOMING DOCTOR CONNECTION REQUESTS (MUTUAL APPROVAL PROTOCOL) */}
-            {incomingDoctorRequests.length > 0 && (
-              <div className="bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-transparent border-2 border-teal-500/30 rounded-3xl p-5 shadow-sm space-y-3 animate-in fade-in">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
-                      <Stethoscope className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                        <span>Doctor Connection Request Pending Approval</span>
-                        <span className="px-2 py-0.5 bg-teal-600 text-white rounded-full text-xs font-bold">
-                          {incomingDoctorRequests.length}
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-600 mt-0.5">
-                        An accredited specialist wants to connect with your patient profile to review your laboratory test batches and coordinate clinical teleconsultation. Both parties must approve to share medical records.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                  {incomingDoctorRequests.map((req) => (
-                    <div key={req.id} className="bg-white p-4 rounded-2xl border border-teal-200/90 shadow-2xs space-y-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-800 border border-teal-200 flex items-center justify-center font-black text-sm shrink-0">
-                          {req.fromName?.slice(0, 2).toUpperCase() || 'DR'}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate">{req.fromName}</h4>
-                          <p className="text-xs text-teal-700 font-medium truncate">{req.fromSpecialty || 'Specialist Physician'}</p>
-                          <p className="text-[11px] text-slate-500 truncate">{req.fromHospital || 'Partner Clinic'}</p>
-                          {req.note && (
-                            <p className="text-[11px] text-slate-600 italic mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                              "{req.note}"
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={() => handleAcceptDoctorRequest(req.id)}
-                          className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve & Connect</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeclineDoctorRequest(req.id)}
-                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* MY CONNECTED DOCTORS & CLINICAL NETWORK */}
-            <div id="connected-doctors-section" className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Stethoscope className="w-4 h-4 text-teal-600" />
-                  <h3 className="text-sm font-extrabold text-slate-900">
-                    My Connected Doctors ({activeDoctorConnections.length})
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <a
-                    href="https://waspito.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-                    title="Find and consult verified doctors on Waspito Telehealth"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Find Doctor on Waspito</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSegmentTab('chat')}
-                    className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer flex items-center gap-1"
-                  >
-                    <span>+ Directory</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-
-              {activeDoctorConnections.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {activeDoctorConnections.map((doc) => (
-                    <div key={doc.id} className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-teal-200 transition-all shadow-2xs space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                          {doc.doctorName?.slice(0, 2).toUpperCase() || 'DR'}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-bold text-xs text-slate-900 truncate">{doc.doctorName}</h4>
-                          <p className="text-[11px] text-teal-700 font-medium truncate">{doc.doctorSpecialty || 'Specialist'}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{doc.doctorHospital || 'Central Hospital'}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPreSelectedDoctorForChat({ id: doc.doctorId, name: doc.doctorName });
-                            setActiveSegmentTab('chat');
-                          }}
-                          className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
-                        >
-                          <MessageSquare className="w-3 h-3" />
-                          <span>Chat</span>
-                        </button>
-
-                        {bookings.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => handleShareReportToDoctor(bookings[0])}
-                            className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                            title="Share latest batch lab report"
-                          >
-                            <Share2 className="w-3 h-3 text-teal-600" />
-                            <span>Share Lab</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-6 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 space-y-2">
-                  <Stethoscope className="w-8 h-8 text-slate-300 mx-auto" />
-                  <h4 className="text-xs font-bold text-slate-700">No Connected Physicians Yet</h4>
-                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                    Connect with accredited medical specialists in our global directory to share diagnostic results and receive digital prescriptions.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSegmentTab('chat')}
-                    className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-                  >
-                    Search Global Doctor Directory
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Select Diagnostic Category */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <span>Select Diagnostic Category</span>
-                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-                    LIMS Accredited
-                  </span>
-                </h3>
-                <button 
-                  onClick={() => onNavigateTab ? onNavigateTab('book') : null}
-                  className="text-xs font-bold text-teal-600 hover:text-teal-700 transition cursor-pointer"
-                >
-                  See All
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 no-scrollbar">
-                {[
-                  { id: 'All', label: 'All Panels', icon: '🧪' },
-                  { id: 'Pediatrics', label: 'Pediatrics', icon: '👶' },
-                  { id: 'Cardiology', label: 'Cardiology', icon: '🫀' },
-                  { id: 'Hematology', label: 'Hematology', icon: '🩸' },
-                  { id: 'Neurology', label: 'Neurology', icon: '🧠' },
-                  { id: 'Oncology', label: 'Oncology', icon: '🎗️' },
-                  { id: 'Gynecology', label: 'Gynecology', icon: '🤰' },
-                  { id: 'Radiology', label: 'Radiology', icon: '🩻' },
-                  { id: 'ENT', label: 'ENT', icon: '👂' },
-                  { id: 'Dentistry', label: 'Dentistry', icon: '🦷' }
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer border ${
-                      selectedCategory === cat.id
-                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{cat.icon}</span>
-                    <span>{cat.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Upcoming Consultations Card */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-teal-950 text-white p-5 sm:p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
-                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-teal-300">
-                    Your Scheduled Consultations
-                  </h3>
-                </div>
-                <span className="text-[11px] font-bold bg-teal-500/20 text-teal-200 px-2.5 py-1 rounded-full border border-teal-500/30">
-                  {activeScheduleRecord.date} &bull; {activeScheduleRecord.time}
-                </span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-teal-400 text-white flex items-center justify-center font-black text-base shadow-lg">
-                    LT
-                  </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white flex items-center gap-2">
-                      <span>{activeScheduleRecord.doctorName}</span>
-                      <span className="text-amber-400 text-xs font-semibold">★ {activeScheduleRecord.rating}</span>
-                    </h4>
-                    <p className="text-xs text-slate-300">
-                      {activeScheduleRecord.specialty} &bull; {activeScheduleRecord.facilityName}
-                    </p>
-                    <p className="text-[11px] text-teal-300 mt-0.5">
-                      Treatment: {activeScheduleRecord.treatmentName}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setShowAppointmentDetailModal(true)}
-                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                  >
-                    Schedule Detail
-                  </button>
-
-                  <button
-                    onClick={() => setShowRoadmapModal(true)}
-                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-colors cursor-pointer"
-                  >
-                    Audit Roadmap
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Popular Diagnostic Packages */}
+            {/* Popular Preventive Health Panels (NO PRICES - Instant Auto-Selection & Lab Select) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
@@ -1259,51 +983,85 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   {
+                    id: 'full-body-wellness',
                     title: 'Full Body Wellness Screen',
-                    tests: 'CBC, Fasting Blood Glucose, Lipid Profile, Liver & Kidney Function',
-                    price: '45,000 FCFA',
+                    testsDescription: 'Complete Blood Count (CBC), Fasting Blood Glucose, Lipid Profile, Liver & Kidney Function',
                     time: '4-6 hours',
-                    popular: true
+                    popular: true,
+                    badge: 'Popular',
+                    testKeywords: ['Complete Blood Count', 'Blood Glucose', 'Lipid Profile', 'Creatinine']
                   },
                   {
+                    id: 'cardiac-lipid-risk',
                     title: 'Cardiac & Lipid Risk Profile',
-                    tests: 'Total Cholesterol, HDL, LDL, Triglycerides, hs-CRP',
-                    price: '28,000 FCFA',
+                    testsDescription: 'Total Cholesterol, HDL, LDL, Triglycerides, hs-CRP (C-Reactive Protein)',
                     time: '3-4 hours',
-                    popular: false
+                    popular: false,
+                    testKeywords: ['Lipid Profile', 'C-Reactive Protein', 'Cholesterol']
                   },
                   {
-                    title: 'Malaria & Typhoid Panel',
-                    tests: 'Thick Film microscopy, Rapid Ag, Widal & Felix agglutination',
-                    price: '15,000 FCFA',
+                    id: 'malaria-typhoid',
+                    title: 'Malaria & Typhoid Diagnostic Panel',
+                    testsDescription: 'Thick Film Microscopy, Rapid Antigen, Widal & Felix Agglutination, CBC Differential',
                     time: '2 hours',
-                    popular: true
+                    popular: true,
+                    badge: 'Rapid 2h',
+                    testKeywords: ['Malaria', 'Widal', 'Complete Blood Count']
+                  },
+                  {
+                    id: 'octobre-rose-screen',
+                    title: 'Octobre Rose - Breast & Hormonal Screen',
+                    testsDescription: 'CA 15-3 Breast Tumor Marker, Estradiol, Progesterone, Routine CBC Profile',
+                    time: 'Same-day digital',
+                    popular: true,
+                    badge: 'Octobre Rose 🎗️',
+                    testKeywords: ['CA 15-3', 'Estradiol', 'Progesterone', 'Complete Blood Count']
+                  },
+                  {
+                    id: 'infectious-std-screen',
+                    title: 'Infectious Disease & STI Screening',
+                    testsDescription: 'HIV 1/2 Combo Ag/Ab, Hepatitis B (HBsAg), Hepatitis C (HCV Ab), Syphilis VDRL/TPHA',
+                    time: '2-3 hours',
+                    popular: false,
+                    testKeywords: ['HIV', 'Hepatitis B', 'Hepatitis C', 'Syphilis']
+                  },
+                  {
+                    id: 'metabolic-diabetes',
+                    title: 'Metabolic & Diabetes Checkup',
+                    testsDescription: 'Glycated Hemoglobin (HbA1c), Fasting Blood Glucose, Urine Chemistry Complete Strip, Uric Acid',
+                    time: '3 hours',
+                    popular: false,
+                    testKeywords: ['HbA1c', 'Glucose', 'Urine']
                   }
-                ].map((pkg, idx) => (
-                  <div key={idx} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-teal-200 transition-all flex flex-col justify-between gap-3">
+                ].map((pkg) => (
+                  <div key={pkg.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-teal-200 transition-all flex flex-col justify-between gap-3">
                     <div>
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-xs sm:text-sm text-slate-900">{pkg.title}</h4>
-                        {pkg.popular && (
-                          <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                            Popular
+                        {pkg.badge && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            pkg.badge.includes('Rose') 
+                              ? 'bg-pink-50 text-pink-700 border-pink-200' 
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          }`}>
+                            {pkg.badge}
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-1">{pkg.tests}</p>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{pkg.testsDescription}</p>
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                      <div>
-                        <div className="font-extrabold text-sm text-slate-900">{pkg.price}</div>
-                        <div className="text-[10px] text-slate-400">Est. {pkg.time}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">
+                        ⏱️ Est. {pkg.time}
                       </div>
                       <button
                         type="button"
-                        onClick={() => onNavigateTab ? onNavigateTab('book') : null}
-                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                        onClick={() => handleBookPreventivePanel(pkg)}
+                        className="px-3.5 py-1.5 bg-[#1B4B48] hover:bg-[#133735] text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1.5"
                       >
-                        Book Test
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Book Test</span>
                       </button>
                     </div>
                   </div>
@@ -1339,7 +1097,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <div className="relative rounded-3xl overflow-hidden shadow-sm border border-pink-200 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-700 text-white">
               <div className="relative h-36 sm:h-44 w-full overflow-hidden flex items-center">
                 <img 
-                  // src={pinkOctoberScientistImg} 
+                  src={pinkOctoberScientistImg} 
                   alt="nanoLabs Pink October Laboratory Initiative" 
                   className="w-full h-full object-cover object-center"
                 />
@@ -1375,6 +1133,91 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Active Diagnostic Order / Specimen Status Card (Prominently displayed inside Tests tab) */}
+            {(() => {
+              const activeOrLatestBooking = activeHomePickupBooking || bookings[0] || null;
+              const currentStepIdx = getTrackingStepIndex(activeOrLatestBooking);
+
+              return (
+                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+                      <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                        Active Specimen Status & Order Tracking
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200 px-2.5 py-0.5 rounded-full">
+                      Order #{activeOrLatestBooking?.bookingCode || 'BAT-2026-081'}
+                    </span>
+                  </div>
+
+                  {/* Specimen Horizontal 4-Step Progress Tracker */}
+                  <div className="pt-2">
+                    <div className="grid grid-cols-4 gap-2 text-center relative">
+                      <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-100 -z-0" />
+                      
+                      {[
+                        { step: 1, label: 'Booked', desc: 'Registered in LIMS', icon: Calendar },
+                        { step: 2, label: 'Sample Collected', desc: 'Barcoded tubes sealed', icon: TestTube },
+                        { step: 3, label: 'In Transit', desc: '+4°C Cold-Chain GPS', icon: Truck },
+                        { step: 4, label: 'Results Ready', desc: 'Signed by Biologist', icon: CheckCircle2 }
+                      ].map((st) => {
+                        const StIcon = st.icon;
+                        const isDone = st.step < currentStepIdx;
+                        const isCurrent = st.step === currentStepIdx;
+
+                        return (
+                          <div key={st.step} className="flex flex-col items-center relative z-10 space-y-1.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
+                              isDone 
+                                ? 'bg-emerald-600 text-white' 
+                                : isCurrent 
+                                ? 'bg-teal-600 text-white ring-4 ring-teal-100' 
+                                : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : <StIcon className="w-3.5 h-3.5" />}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-800 leading-tight">{st.label}</div>
+                            <div className="text-[10px] text-slate-400 hidden sm:block">{st.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                    <div className="text-xs text-slate-600 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                      <span>Facility: <strong className="text-slate-800">{activeOrLatestBooking?.labName || lab?.name || 'nanoLabs Central Diagnostics'}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowPhlebTransitModal(true)}
+                        className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-teal-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Live Phlebotomist GPS</span>
+                      </button>
+
+                      {activeOrLatestBooking && (
+                        <button
+                          type="button"
+                          onClick={() => setBatchReportBooking(activeOrLatestBooking)}
+                          className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>View Batch Report</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Filter and Search Bar for Tests */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
@@ -2236,14 +2079,14 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         onClose={() => setShowRoadmapModal(false)}
       />
 
-      {/* Sticky Bottom Mobile Navigation Bar - Chic Floating Island Pill Matching User Mockup */}
-      <div className="sm:hidden fixed bottom-4 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none pb-safe">
+      {/* Fixed Bottom Mobile Navigation Bar - Fixed to bottom of screen with Book Test Action */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl px-2 py-1.5 pb-safe">
         <nav 
           id="patient-bottom-nav"
           aria-label="Patient Mobile Navigation"
-          className="pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200/90 px-5 py-2 flex items-center justify-between gap-6 rounded-full shadow-2xl shadow-slate-900/15"
+          className="flex items-center justify-around w-full"
         >
-          {/* Home Icon with Indicator Dot */}
+          {/* 1. Home Tab */}
           <button
             id="btn-nav-home"
             type="button"
@@ -2251,57 +2094,20 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               setActiveSegmentTab('home');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-1 cursor-pointer transition-all ${
-              activeSegmentTab === 'home' ? 'text-slate-900 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-700'
+            className={`flex flex-col items-center justify-center min-h-[46px] min-w-[54px] py-1 px-1 cursor-pointer transition-all ${
+              activeSegmentTab === 'home' ? 'text-teal-700 font-extrabold' : 'text-slate-400 hover:text-slate-700'
             }`}
           >
-            <Home className="w-5 h-5 stroke-[2.5]" />
+            <Home className="w-5 h-5 stroke-[2.4]" />
+            <span className="text-[10px] font-bold mt-0.5">Home</span>
             {activeSegmentTab === 'home' ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-1" />
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-0.5" />
             ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-1" />
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-0.5" />
             )}
           </button>
 
-          {/* Social / Connect Doctors Icon */}
-          <button
-            id="btn-nav-doctors"
-            type="button"
-            onClick={() => {
-              setActiveSegmentTab('home');
-              const el = document.getElementById('connected-doctors-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-1 text-slate-400 hover:text-slate-700 cursor-pointer transition-all"
-          >
-            <Users className="w-5 h-5 stroke-[2.2]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-1" />
-          </button>
-
-          {/* Messenger / Chat Icon */}
-          <button
-            id="btn-nav-chat"
-            type="button"
-            onClick={() => {
-              setActiveSegmentTab('chat');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-1 cursor-pointer transition-all relative ${
-              activeSegmentTab === 'chat' ? 'text-slate-900 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <Navigation className="w-5 h-5 rotate-45 stroke-[2.2]" />
-            {incomingDoctorRequests.length > 0 && (
-              <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            )}
-            {activeSegmentTab === 'chat' ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-1" />
-            ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-1" />
-            )}
-          </button>
-
-          {/* Results Booklet / My Tests Icon */}
+          {/* 2. My Tests / Results Tab */}
           <button
             id="btn-nav-tests"
             type="button"
@@ -2309,16 +2115,76 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               setActiveSegmentTab('tests');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-1 cursor-pointer transition-all relative ${
-              activeSegmentTab === 'tests' ? 'text-slate-900 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-700'
+            className={`flex flex-col items-center justify-center min-h-[46px] min-w-[54px] py-1 px-1 cursor-pointer transition-all relative ${
+              activeSegmentTab === 'tests' ? 'text-teal-700 font-extrabold' : 'text-slate-400 hover:text-slate-700'
             }`}
           >
-            <BookOpen className="w-5 h-5 stroke-[2.2]" />
-            {activeSegmentTab === 'tests' ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-1" />
-            ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-1" />
+            <TestTube className="w-5 h-5 stroke-[2.4]" />
+            <span className="text-[10px] font-bold mt-0.5">Tests</span>
+            {bookings.length > 0 && (
+              <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
             )}
+            {activeSegmentTab === 'tests' ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-0.5" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-0.5" />
+            )}
+          </button>
+
+          {/* 3. Direct Book Test Center Button */}
+          <button
+            id="btn-nav-book"
+            type="button"
+            onClick={() => {
+              if (onNavigateTab) {
+                onNavigateTab('book');
+              } else {
+                setActiveSegmentTab('tests');
+              }
+            }}
+            className="flex flex-col items-center justify-center -mt-4 group cursor-pointer"
+            title="Book Diagnostic Test"
+          >
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#1B4B48] to-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-900/30 group-hover:scale-105 active:scale-95 transition-all">
+              <Plus className="w-6 h-6 stroke-[3]" />
+            </div>
+            <span className="text-[10px] font-extrabold text-teal-800 mt-0.5">Book</span>
+          </button>
+
+          {/* 4. Chat / Doctors Tab */}
+          <button
+            id="btn-nav-chat"
+            type="button"
+            onClick={() => {
+              setActiveSegmentTab('chat');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex flex-col items-center justify-center min-h-[46px] min-w-[54px] py-1 px-1 cursor-pointer transition-all relative ${
+              activeSegmentTab === 'chat' ? 'text-teal-700 font-extrabold' : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <MessageSquare className="w-5 h-5 stroke-[2.4]" />
+            <span className="text-[10px] font-bold mt-0.5">Doctors</span>
+            {incomingDoctorRequests.length > 0 && (
+              <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+            {activeSegmentTab === 'chat' ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mt-0.5" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-0.5" />
+            )}
+          </button>
+
+          {/* 5. Profile Tab */}
+          <button
+            id="btn-nav-profile"
+            type="button"
+            onClick={() => setShowEditProfileModal(true)}
+            className="flex flex-col items-center justify-center min-h-[46px] min-w-[54px] py-1 px-1 text-slate-400 hover:text-slate-700 cursor-pointer transition-all"
+          >
+            <User className="w-5 h-5 stroke-[2.4]" />
+            <span className="text-[10px] font-bold mt-0.5">Profile</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-transparent mt-0.5" />
           </button>
         </nav>
       </div>
