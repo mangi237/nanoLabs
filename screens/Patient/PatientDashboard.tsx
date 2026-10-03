@@ -469,7 +469,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   const handleShareReportToDoctor = (booking: PatientBooking) => {
     setBatchReportBooking(null);
-    if (activeDoctorConnections.length > 0) {
+    if (activeDoctorConnections.length > 0) { 
       const primaryDoc = activeDoctorConnections[0];
       try {
         doctorChatService.shareTestResult({
