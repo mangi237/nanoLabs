@@ -464,7 +464,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       console.error('Error requesting virtual result:', err);
     } finally {
       setRequestingId(null);
-    }
+    } 
   };
 
   const handleShareReportToDoctor = (booking: PatientBooking) => {
