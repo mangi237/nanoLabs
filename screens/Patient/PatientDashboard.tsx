@@ -466,7 +466,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       setRequestingId(null);
     } 
   };
-//handlind the sharing of reports on the app 
+//handlind the sharing of reports dson the app 
   const handleShareReportToDoctor = (booking: PatientBooking) => {
     setBatchReportBooking(null);
     if (activeDoctorConnections.length > 0) { 
