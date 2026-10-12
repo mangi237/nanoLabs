@@ -21,9 +21,13 @@ import {
   X,
   FileSpreadsheet,
   BarChart3,
-  Truck
+  Truck,
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 import StaffProfileModal from './StaffProfileModal';
+import { HowToUseGuideModal } from '../help/HowToUseGuideModal';
+import { getActiveLabLogo, useLabBranding } from '../../utils/labBranding';
 
 interface StaffSidebarProps {
   currentTab?: string;
@@ -37,7 +41,9 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
   onNotificationPress
 }) => {
   const { user, lab, logout, setUser } = useAuth();
+  const { logoUrl: brandLogo } = useLabBranding(lab);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const currentRole = user?.role || 'staff';
@@ -51,17 +57,19 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
     { id: 'analyzer', label: 'Sample Analyzer', icon: Microscope, color: 'text-amber-600 bg-amber-50' },
     { id: 'lab_tech', label: 'Lab Technologist', icon: TestTube, color: 'text-cyan-600 bg-cyan-50' },
     { id: 'biologist', label: 'Biologist Validation', icon: ShieldCheck, color: 'text-emerald-600 bg-emerald-50' },
-    { id: 'inventory_manager', label: 'Inventory Desk', icon: Package, color: 'text-rose-600 bg-rose-50' }
+    { id: 'inventory_manager', label: 'Inventory Desk', icon: Package, color: 'text-rose-600 bg-rose-50' },
+    { id: 'training_manual', label: 'Staff Training Booklet & SOPs', icon: BookOpen, color: 'text-teal-800 bg-teal-50' }
   ];
 
   // Determine accessible roles:
   // If admin or superadmin: all staff roles are accessible
-  // If user has roles array: filter to assigned roles
+  // If user has roles array: filter to assigned roles (Training Booklet is ALWAYS available to all)
   const isAdmin = currentRole === 'admin' || currentRole === 'superadmin' || (Array.isArray(user?.roles) && user.roles.includes('admin'));
   
   const accessibleRoles = isAdmin
     ? ALL_ROLE_DEFS
     : ALL_ROLE_DEFS.filter(r => {
+        if (r.id === 'training_manual') return true;
         if (r.id === currentRole) return true;
         if (Array.isArray(user?.roles)) {
           return user.roles.includes(r.id) || (r.id === 'lab_tech' && user.roles.includes('labtech'));
@@ -151,15 +159,15 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
         <div className="p-4 border-b border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              {lab?.logoUrl ? (
+              {brandLogo ? (
                 <img
-                  src={lab.logoUrl}
-                  alt={lab.name || 'Lab Logo'}
+                  src={brandLogo}
+                  alt={lab?.name || 'Lab Logo'}
                   referrerPolicy="no-referrer"
-                  className="w-9 h-9 rounded-xl object-cover border border-slate-200 bg-white shadow-2xs"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] shrink-0 rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-2xs select-none"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-700 to-teal-950 text-white flex items-center justify-center font-black shadow-xs">
+                <div className="w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] shrink-0 rounded-xl bg-gradient-to-br from-teal-700 to-teal-950 text-white flex items-center justify-center font-black shadow-xs select-none">
                   <Activity className="w-5 h-5" />
                 </div>
               )}
@@ -267,6 +275,41 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
               Operations
             </span>
 
+            {/* Staff Operating Manual & Training Booklet (Full Document Page) */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSwitchRole('training_manual');
+                onNavigateTab?.('staff-training');
+                setMobileOpen(false);
+              }}
+              className="w-full p-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 border border-teal-700 transition-all flex items-center justify-between cursor-pointer shadow-xs group"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-teal-300" />
+                <span className="truncate">Staff Training Booklet</span>
+              </div>
+              <span className="text-[10px] bg-teal-500 text-teal-950 font-black px-2 py-0.5 rounded-full uppercase">
+                Full Page
+              </span>
+            </button>
+
+            {/* Quick Interactive Guide Modal Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowGuideModal(true);
+                setMobileOpen(false);
+              }}
+              className="w-full p-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-teal-600" />
+                <span>Quick Help Modal</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Popup</span>
+            </button>
+
             {onNotificationPress && (
               <button
                 type="button"
@@ -325,6 +368,13 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
       <StaffProfileModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
+      />
+
+      {/* How to Use Comprehensive Guidebook Modal */}
+      <HowToUseGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        initialCategory="laboratories"
       />
     </>
   );

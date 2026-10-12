@@ -26,9 +26,11 @@ import {
   Stethoscope,
   Layers,
   Percent,
-  CreditCard
+  CreditCard,
+  BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
+import { StaffTrainingBookletPage } from '../staff/StaffTrainingBookletPage';
 
 interface AdminDashboardProps {
   onNavigateTab?: (tab: string) => void;
@@ -46,11 +48,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { lab } = useAuth();
   const [showLabProfileModal, setShowLabProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'templates' | 'insurance' | 'payments' | 'analytics' | 'reports' | 'patients'
+    'overview' | 'training' | 'inventory' | 'catalog' | 'staff' | 'doctors' | 'templates' | 'insurance' | 'payments' | 'analytics' | 'reports' | 'patients'
   >('overview');
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'training', label: 'Staff Training Booklet & SOPs', icon: BookOpen, badge: 'Full Manual' },
     { id: 'templates', label: 'Header & Footer Templates', icon: Layers, badge: 'Dual Styles' },
     { id: 'insurance', label: 'Insurance & COTE Config', icon: Percent, badge: 'Cameroon' },
     { id: 'payments', label: 'Payment Gateway Config', icon: CreditCard, badge: 'MOMO/OM/Cash' },
@@ -137,6 +140,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }
             }}
           />
+        )}
+
+        {activeTab === 'training' && (
+          <StaffTrainingBookletPage onBack={() => setActiveTab('overview')} />
         )}
 
         {activeTab === 'templates' && (

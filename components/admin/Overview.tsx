@@ -25,7 +25,8 @@ import {
   CreditCard,
   Clock,
   Zap,
-  Stethoscope
+  Stethoscope,
+  BookOpen
 } from 'lucide-react';
 import LabProfileModal from './LabProfileModal';
 import SubscriptionRechargeModal from './SubscriptionRechargeModal';
@@ -445,6 +446,31 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
           </button>
         </div>
       )}
+
+      {/* Dedicated Staff Training Academy & Operating Manual Banner */}
+      <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white rounded-3xl p-5 sm:p-6 shadow-md border border-teal-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30 text-[10px] font-extrabold uppercase tracking-wider">
+            <Sparkles className="w-3 h-3 text-teal-300" />
+            <span>Digital Staff Training • Zero Travel Expenses</span>
+          </div>
+          <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+            Laboratory Staff Operating Booklet & Step-by-Step Training Academy
+          </h3>
+          <p className="text-xs text-teal-100/90 leading-relaxed font-normal">
+            Train your receptionists, cashiers, technicians, and biologists to operate every single function with illustrated SOPs, searchable lessons, and physical printouts.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onNavigateTab && onNavigateTab('training')}
+          className="px-5 py-3 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all shrink-0 hover:scale-102"
+        >
+          <BookOpen className="w-4 h-4 text-slate-950" />
+          <span>Open Staff Training Booklet</span>
+        </button>
+      </div>
 
       {/* Patient Workload Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
