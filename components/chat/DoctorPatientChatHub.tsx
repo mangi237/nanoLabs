@@ -47,6 +47,9 @@ import {
 import { useAuth } from '../../context/authContext';
 import { getBatchesForPatient } from '../../services/batchService';
 import { TestBatch } from '../../types';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { limsService } from '../../services/limsService';
 
 export interface DoctorPatientChatHubProps {
   currentRole?: 'patient' | 'doctor';
@@ -211,6 +214,73 @@ export const DoctorPatientChatHub: React.FC<DoctorPatientChatHubProps> = ({
   useEffect(() => {
     refreshData();
   }, [activeUserId, effectiveRole, searchQuery]);
+
+  // Real-time synchronization of accredited doctors from database for B2C patients
+  useEffect(() => {
+    // 1. Initial async fetch from limsService
+    limsService.searchAllAccreditedDoctors().then(docs => {
+      if (docs && docs.length > 0) {
+        doctorChatService.syncDoctorsFromDatabase(docs);
+        refreshData();
+      }
+    }).catch(err => console.warn('Doctor fetch note:', err));
+
+    // 2. Real-time snapshot listener on doctors collection
+    const unsubDoctors = onSnapshot(collection(db, 'doctors'), (snap) => {
+      const realDocs: any[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        realDocs.push({
+          id: d.id,
+          doctorId: d.id,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          specialty: data.specialty || 'General Medicine',
+          licenseNumber: data.licenseNumber || '',
+          hospital: data.hospital || data.hospitalAffiliation || '',
+          hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
+          avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+          isOnline: true
+        });
+      });
+      if (realDocs.length > 0) {
+        doctorChatService.syncDoctorsFromDatabase(realDocs);
+        refreshData();
+      }
+    }, (err) => console.warn('Doctors listener note:', err));
+
+    // 3. Real-time snapshot listener on users where role == doctor
+    const docUsersQuery = query(collection(db, 'users'), where('role', '==', 'doctor'));
+    const unsubUsers = onSnapshot(docUsersQuery, (snap) => {
+      const userDocs: any[] = [];
+      snap.forEach(u => {
+        const data = u.data();
+        userDocs.push({
+          id: u.id,
+          doctorId: u.id,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          specialty: data.specialty || 'General Medicine',
+          licenseNumber: data.licenseNumber || 'ONMC-CMR-ACCREDITED',
+          hospital: data.hospital || data.hospitalAffiliation || '',
+          hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
+          avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+          isOnline: true
+        });
+      });
+      if (userDocs.length > 0) {
+        doctorChatService.syncDoctorsFromDatabase(userDocs);
+        refreshData();
+      }
+    }, (err) => console.warn('Doctor users listener note:', err));
+
+    return () => {
+      unsubDoctors();
+      unsubUsers();
+    };
+  }, []);
 
   // Load chat messages when connection changes
   useEffect(() => {

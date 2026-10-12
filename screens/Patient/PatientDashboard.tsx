@@ -10,13 +10,13 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
-import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { EditPatientProfileModal } from '../../components/patient/EditPatientProfileModal';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
 import { HowToUseGuideModal } from '../../components/help/HowToUseGuideModal';
 import { doctorChatService } from '../../services/doctorChatService';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
@@ -418,11 +418,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-        dispatchDatabaseFetchError({
-          message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
-          tableOrCollection: `labs/${targetLabId}/patients & bookings`,
-          rawError: e
-        });
+        // dispatchDatabaseFetchError({
+        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+        //   rawError: e
+        // });
       } finally {
         setLoading(false);
       }
@@ -1995,7 +1995,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         isOpen={showEditProfileModal}
         onClose={() => setShowEditProfileModal(false)}
         patientDocData={patientDocData}
-        onSuccess={(updated) => {
+        onSuccess={(updated : any ) => {
           setPatientFullName(updated.name);
           setPatientDocData((prev: any) => ({ ...prev, ...updated }));
         }}
