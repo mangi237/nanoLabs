@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Star, MessageCircle, Calendar, ShieldCheck, Stethoscope, Clock, Check } from 'lucide-react';
-import { DoctorDirectoryItem } from './MyDoctorsScreen';
+import { DoctorDirectoryItem } from './MyDoctorScreen';
 
 interface DoctorProfileScreenProps {
   doctor: DoctorDirectoryItem;
@@ -60,7 +60,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
 
           {/* Service Tags */}
           <div className="flex items-center gap-2 flex-wrap">
-            {doctor.services.map(s => (
+            {doctor.services.map((s:any) => (
               <span
                 key={s}
                 className="px-3 py-1 bg-[#E0F2F1] text-[#006978] rounded-xl text-xs font-bold"
