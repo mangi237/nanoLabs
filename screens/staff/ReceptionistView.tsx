@@ -8,7 +8,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DoctorCardSelect, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { 
@@ -251,7 +251,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt:any) => {
+    directLabTests.forEach(dt => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -548,7 +548,6 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     try {
       await limsService.createBooking({
         labId: targetLabId,
-        // pickupLocation:
         patientId: selectedPatientForTest.id || selectedPatientForTest.patientId,
         patientName: selectedPatientForTest.name,
         dateOfBirth: selectedPatientForTest.dob || undefined,
@@ -595,27 +594,91 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
   const [acceptingBookingId, setAcceptingBookingId] = useState<string | null>(null);
 
+  // Booking confirmation with staff PIN modal state
+  const [confirmingBooking, setConfirmingBooking] = useState<PatientBooking | null>(null);
+  const [bookingStaffCode, setBookingStaffCode] = useState('');
+  const [showBookingStaffCode, setShowBookingStaffCode] = useState(false);
+  const [bookingStaffCodeError, setBookingStaffCodeError] = useState('');
+  const [isConfirmingWithCode, setIsConfirmingWithCode] = useState(false);
+  const [confirmedToastMessage, setConfirmedToastMessage] = useState<string | null>(null);
+
   const copyCredentials = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleAcceptBooking = async (booking: PatientBooking) => {
+  const handleOpenConfirmBookingModal = (booking: PatientBooking) => {
+    setConfirmingBooking(booking);
+    setBookingStaffCode('');
+    setBookingStaffCodeError('');
+  };
+
+  const handleConfirmBookingWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmingBooking) return;
+    setBookingStaffCodeError('');
+
+    const cleanCode = bookingStaffCode.trim();
+    if (!cleanCode) {
+      setBookingStaffCodeError('Please enter your authorized Receptionist Access PIN / Passcode.');
+      return;
+    }
+
+    setIsConfirmingWithCode(true);
     try {
-      setAcceptingBookingId(booking.id);
+      const authResult = await authService.verifyStaffActionCode(
+        cleanCode,
+        ['receptionist', 'admin', 'superadmin', 'lab_director'],
+        user?.accessCode || (user as any)?.initialCode,
+        targetLabId
+      );
+
+      if (!authResult.authorized) {
+        setBookingStaffCodeError(authResult.error || 'Access Denied: Invalid Receptionist PIN / Passcode. Only authorized front desk or supervisor credentials can confirm booking requests.');
+        return;
+      }
+
+      const b = confirmingBooking;
+      const staffValidatorName = authResult.staffName || user?.name || 'Front Desk Receptionist';
+
       await limsService.acceptBookingByReceptionist(
         targetLabId,
-        booking.id,
-        user?.name || 'Receptionist'
+        b.id,
+        staffValidatorName
       );
+
+      // Immediately pull it out of unvalidatedBookings in local state:
+      setBookings(prev => prev.map(item => {
+        if (item.id === b.id || item.bookingCode === b.bookingCode) {
+          return {
+            ...item,
+            receptionistValidated: true,
+            receptionistConfirmed: true as any,
+            validatedBy: staffValidatorName,
+            validatedAt: new Date().toISOString()
+          };
+        }
+        return item;
+      }));
+
+      const isMobile = b.homeCollection || b.pickupLocation;
+      setConfirmedToastMessage(`Booking ${b.bookingCode} for ${b.patientName} (${isMobile ? 'Mobile Home Patient' : 'In-Person'}) confirmed by ${staffValidatorName} and routed to Cashier.`);
+      setTimeout(() => setConfirmedToastMessage(null), 6000);
+
+      setConfirmingBooking(null);
+      setBookingStaffCode('');
       await fetchData();
-    } catch (err) {
-      console.error('Error accepting booking:', err);
-      alert('Failed to accept booking. Please try again.');
+    } catch (err: any) {
+      console.error('Error confirming booking with code:', err);
+      setBookingStaffCodeError('Failed to confirm booking. Please try again.');
     } finally {
-      setAcceptingBookingId(null);
+      setIsConfirmingWithCode(false);
     }
+  };
+
+  const handleAcceptBooking = async (booking: PatientBooking) => {
+    handleOpenConfirmBookingModal(booking);
   };
 
   const filteredPatients = patients.filter(p => 
@@ -640,6 +703,27 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         onProfilePress={onProfilePress}
         onRoleSwitcherPress={onRoleSwitcherPress}
       />
+
+      {/* Confirmation Success Alert Toast */}
+      {confirmedToastMessage && (
+        <div className="p-4 bg-emerald-500/15 border-2 border-emerald-500/80 rounded-2xl flex items-center justify-between gap-3 text-emerald-950 animate-in fade-in slide-in-from-top-2 duration-300 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+              <CheckCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm text-emerald-950">Patient Admission Confirmed</h4>
+              <p className="text-xs text-emerald-900 font-medium">{confirmedToastMessage}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setConfirmedToastMessage(null)}
+            className="text-emerald-800 hover:text-emerald-950 p-1.5 rounded-lg hover:bg-emerald-100/60 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Staff Hero Banner */}
       <StaffHeroBanner
@@ -806,21 +890,11 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
                     <div className="flex items-center gap-2 ml-auto">
                       <button
-                        onClick={() => handleAcceptBooking(b)}
-                        disabled={acceptingBookingId === b.id}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+                        onClick={() => handleOpenConfirmBookingModal(b)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
                       >
-                        {acceptingBookingId === b.id ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Accepting...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCheck className="w-4 h-4" />
-                            Accept Booking & Forward to Cashier
-                          </>
-                        )}
+                        <CheckCheck className="w-4 h-4" />
+                        Confirm Booking (Staff PIN)
                       </button>
                     </div>
                   </div>
@@ -1242,7 +1316,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                       value={orderCustomDoctorName}
                       onChange={e => setOrderCustomDoctorName(e.target.value)}
                       required
-                      placeholder="Enter Doctor / Hospital Name"
+                      placeholder="Enter Doctor Name (e.g. Dr. Kamga)"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   )}
@@ -2034,6 +2108,148 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>{isActivating ? 'Activating...' : 'Confirm Activation'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECEPTIONIST PIN CONFIRMATION MODAL FOR INCOMING BOOKINGS */}
+      {confirmingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Confirm Patient Booking Intake</h3>
+                  <p className="text-xs text-slate-400">Receptionist Security Authorization</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setConfirmingBooking(null); setBookingStaffCode(''); setBookingStaffCodeError(''); }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Patient & Booking Details */}
+            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="font-extrabold text-sm text-teal-300">{confirmingBooking.patientName}</div>
+                <span className="font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold border border-slate-700">
+                  Booking #{confirmingBooking.bookingCode}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap text-slate-400 text-[11px]">
+                <span>PID: <strong className="text-slate-200">{confirmingBooking.patientPid || confirmingBooking.patientId}</strong></span>
+                <span>&bull;</span>
+                <span>Phone: <strong className="text-slate-200 font-mono">{confirmingBooking.patientPhone || 'N/A'}</strong></span>
+                <span>&bull;</span>
+                <span>Total: <strong className="text-teal-400 font-mono">{(confirmingBooking.totalAmount || 0).toLocaleString()} XAF</strong></span>
+              </div>
+
+              {/* Mode badge: Mobile vs In-Person */}
+              <div className="pt-1 border-t border-slate-800/80">
+                {confirmingBooking.homeCollection || confirmingBooking.pickupLocation ? (
+                  <div className="p-2.5 bg-purple-950/40 rounded-xl border border-purple-800/50 space-y-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-purple-300 bg-purple-900/60 px-2 py-0.5 rounded">
+                      <Home className="w-3 h-3" /> Mobile Home Patient
+                    </span>
+                    <div className="text-[11px] text-purple-200">
+                      <strong>Pickup Address:</strong> {confirmingBooking.pickupLocation || 'Douala'}
+                      {confirmingBooking.landmark && <span> ({confirmingBooking.landmark})</span>}
+                    </div>
+                    {confirmingBooking.userCoords && (
+                      <div className="text-[10px] font-mono text-purple-400">
+                        GPS: {confirmingBooking.userCoords.lat.toFixed(5)}, {confirmingBooking.userCoords.lng.toFixed(5)}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-blue-950/40 rounded-xl border border-blue-800/50">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-blue-300 bg-blue-900/60 px-2 py-0.5 rounded">
+                      <Building2 className="w-3 h-3" /> In-Person Walk-in Patient
+                    </span>
+                    <div className="text-[11px] text-blue-200 mt-1">
+                      Patient arrives at laboratory intake counter for phlebotomy.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Requested tests summary */}
+              <div className="text-[11px] text-slate-400 pt-1">
+                <span className="font-bold text-slate-300">Tests ({confirmingBooking.tests?.length || 0}): </span>
+                <span>{confirmingBooking.tests?.map(t => t.testName).join(', ') || 'Diagnostic Tests'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmBookingWithCode} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  Enter Receptionist Staff PIN / Passcode to Confirm:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showBookingStaffCode ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Enter your PIN (e.g. 1234 or staff code)..."
+                    value={bookingStaffCode}
+                    onChange={(e) => setBookingStaffCode(e.target.value)}
+                    className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder:text-slate-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowBookingStaffCode(!showBookingStaffCode)}
+                    className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white cursor-pointer"
+                    title={showBookingStaffCode ? 'Hide PIN' : 'Show PIN'}
+                  >
+                    {showBookingStaffCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {bookingStaffCodeError && (
+                  <p className="text-xs font-bold text-red-400 mt-1.5 flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {bookingStaffCodeError}
+                  </p>
+                )}
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Confirming this order immediately pulls the patient from the waiting review queue and routes them to the Cashier desk for invoicing.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setConfirmingBooking(null); setBookingStaffCode(''); setBookingStaffCodeError(''); }}
+                  className="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConfirmingWithCode}
+                  className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isConfirmingWithCode ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Authorizing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCheck className="w-4 h-4" />
+                      <span>Confirm & Forward</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

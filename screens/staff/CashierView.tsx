@@ -44,6 +44,7 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
+import { formatReferringDoctorWithHospital } from '../../utils/formatDoctor';
 
 export interface CashierAddOnItem {
   id: string;
@@ -154,6 +155,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
   // Insurance details
   const [insuranceProvider, setInsuranceProvider] = useState('');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
+  const [isCustomInsurance, setIsCustomInsurance] = useState(false);
   const [coPayPercent, setCoPayPercent] = useState<number>(20); // default 20% patient co-pay
 
   // Security Access Code verification for Cashiers
@@ -223,13 +225,33 @@ export const CashierView: React.FC<CashierViewProps> = ({
       if (!workerStaffName && selectedBooking.patientName) {
         setWorkerStaffName(selectedBooking.patientName);
       }
-      if (!insuranceProvider && (selectedBooking as any).insuranceProvider) {
-        setInsuranceProvider((selectedBooking as any).insuranceProvider);
+      const initProvider = (selectedBooking as any).insuranceProvider || (selectedBooking as any).insuranceCompany || '';
+      const initPolicy = (selectedBooking as any).insurancePolicyNumber || (selectedBooking as any).matricule || (selectedBooking as any).policyNumber || '';
+
+      if (initProvider) {
+        const matched = CAMEROON_INSURANCE_COMPANIES.find(c => 
+          c.name.toLowerCase() === initProvider.toLowerCase() || 
+          c.shortName.toLowerCase() === initProvider.toLowerCase() ||
+          c.id.toLowerCase() === initProvider.toLowerCase()
+        );
+        if (matched) {
+          setInsuranceProvider(matched.name);
+          setIsCustomInsurance(false);
+          if ((selectedBooking as any).coPayPercent === undefined && matched.defaultCoveragePercent) {
+            setCoPayPercent(Math.max(0, 100 - matched.defaultCoveragePercent));
+          }
+        } else {
+          setInsuranceProvider(initProvider);
+          setIsCustomInsurance(true);
+        }
+      } else {
+        // Default to first accredited insurance company
+        setInsuranceProvider(CAMEROON_INSURANCE_COMPANIES[0].name);
+        setIsCustomInsurance(false);
       }
-      if (!insurancePolicyNumber && (selectedBooking as any).insurancePolicyNumber) {
-        setInsurancePolicyNumber((selectedBooking as any).insurancePolicyNumber);
-      }
-      
+
+      setInsurancePolicyNumber(initPolicy);
+
       const hasIns = Boolean((selectedBooking as any).hasInsurance || ((selectedBooking as any).insuranceProvider && (selectedBooking as any).insuranceProvider !== 'Out-of-Pocket / Self'));
       if (hasIns) {
         setPaymentMethod('insurance');
@@ -440,6 +462,18 @@ export const CashierView: React.FC<CashierViewProps> = ({
       }
     }
 
+    // Insurance Validation: Ensure company and matricule are provided
+    if (paymentMethod === 'insurance') {
+      if (!insuranceProvider.trim()) {
+        setAccessCodeError('Please select or enter the Insurance Company (e.g. ASCOMA, AXA, GMC Gras Savoye, Activa, etc.).');
+        return;
+      }
+      if (!insurancePolicyNumber.trim()) {
+        setAccessCodeError('Please enter the Patient Insurance Matricule / N° d\'Adhérent (Policy Number). This is required for official insurance receipts and claims.');
+        return;
+      }
+    }
+
     setIsProcessing(true);
     const targetBookings = selectedGroupBookings && selectedGroupBookings.length > 0 
       ? selectedGroupBookings 
@@ -481,16 +515,20 @@ export const CashierView: React.FC<CashierViewProps> = ({
       cashGiven: paymentMethod === 'cash' ? (parseFloat(cashGiven) || payableAmount) : undefined,
       cashChange: paymentMethod === 'cash' ? changeToReturn : undefined,
       actualPaidAmount: payableAmount,
-      insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
-      insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
+      insuranceProvider: paymentMethod === 'insurance' ? insuranceProvider.trim() : undefined,
+      insurancePolicyNumber: paymentMethod === 'insurance' ? insurancePolicyNumber.trim() : undefined,
+      matricule: paymentMethod === 'insurance' ? insurancePolicyNumber.trim() : undefined,
       insuranceCoveragePercent: paymentMethod === 'insurance' ? (100 - coPayPercent) : undefined,
       coPayPercent: paymentMethod === 'insurance' ? coPayPercent : undefined,
+      insuranceClaimAmount: paymentMethod === 'insurance' ? insurancePortion : 0,
+      patientCoPayAmount: paymentMethod === 'insurance' ? patientPortion : 0,
       addOns: currentAddOns,
       addOnsAmount: addOnsTotalSum,
       testsAmount: testsTotalSum,
       insuranceDetails: paymentMethod === 'insurance' ? {
-        provider: insuranceProvider || (targetBookings[0] as any).insuranceProvider || 'HMO Insurance',
-        policyNumber: insurancePolicyNumber || (targetBookings[0] as any).insurancePolicyNumber || 'N/A',
+        provider: insuranceProvider.trim(),
+        policyNumber: insurancePolicyNumber.trim(),
+        matricule: insurancePolicyNumber.trim(),
         insuranceCoveragePercent: 100 - coPayPercent,
         coPayPercent,
         patientCoPayAmount: patientPortion,
@@ -521,8 +559,11 @@ export const CashierView: React.FC<CashierViewProps> = ({
         couponCode: paymentMethod === 'gift_coupon' || couponApplied ? (couponCode || 'GIFT100') : undefined,
         actualPaidAmount: payableAmount,
         insuranceClaimAmount: paymentMethod === 'insurance' ? insurancePortion : 0,
-        insuranceProvider: paymentMethod === 'insurance' ? (insuranceProvider || 'HMO Insurance') : undefined,
-        insurancePolicyNumber: paymentMethod === 'insurance' ? (insurancePolicyNumber || 'N/A') : undefined,
+        insuranceProvider: paymentMethod === 'insurance' ? insuranceProvider.trim() : undefined,
+        insurancePolicyNumber: paymentMethod === 'insurance' ? insurancePolicyNumber.trim() : undefined,
+        matricule: paymentMethod === 'insurance' ? insurancePolicyNumber.trim() : undefined,
+        insuranceCoveragePercent: paymentMethod === 'insurance' ? (100 - coPayPercent) : undefined,
+        coPayPercent: paymentMethod === 'insurance' ? coPayPercent : undefined,
         overallStatus: 'Pending_Collection' as const,
         addOns: currentAddOns,
         addOnsAmount: addOnsTotalSum,
@@ -1160,113 +1201,102 @@ export const CashierView: React.FC<CashierViewProps> = ({
         </div>
       )}
 
-      {/* COLLECT PAYMENT MODAL */}
+      {/* COLLECT PAYMENT MODAL - LIGHT THEME & HORIZONTAL 2-COLUMN BALANCED LAYOUT */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto">
             
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold">
                   <DollarSign className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-white">Process Patient Order Payment</h3>
-                  <p className="text-xs text-emerald-300">Invoice {selectedBooking.invoiceNumber} • {selectedBooking.bookingCode}</p>
+                  <h3 className="font-extrabold text-base text-slate-900">Process Patient Order Payment</h3>
+                  <p className="text-xs text-slate-500">
+                    Invoice #{selectedBooking.invoiceNumber || 'INV-001'} • Booking: <span className="font-mono font-bold text-teal-700">{selectedBooking.bookingCode}</span> • Cashier: <strong className="text-slate-700">{user?.name || 'Authorized Staff'}</strong>
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedBooking(null)} className="p-2 text-slate-400 hover:text-white cursor-pointer">✕</button>
+              <button 
+                onClick={() => {
+                  setSelectedBooking(null);
+                  setCashierAccessCode('');
+                  setAccessCodeError('');
+                }} 
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Lab Branding & Cashier Accountability Header */}
-              <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {(lab?.logoUrl || (selectedBooking as any).labLogoUrl) ? (
-                    <img
-                      src={lab?.logoUrl || (selectedBooking as any).labLogoUrl}
-                      alt={lab?.name || 'Lab Logo'}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-xl object-contain border border-slate-700 bg-white p-1 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center font-bold shrink-0">
-                      <Building2 className="w-6 h-6 text-white" />
-                    </div>
-                  )}
-                  <div>
-                    <h4 className="font-extrabold text-sm text-white">{lab?.name || 'nanoLabs Medical Diagnostics'}</h4>
-                    <p className="text-[10px] text-teal-400 font-mono">
-                      Authorized Cashier: <strong className="text-white font-bold">{user?.name || 'Authorized Staff'}</strong> [{ (user as any)?.staffId || 'CSH-01' }]
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                    Cashier Settlement
-                  </span>
-                </div>
-              </div>
-
-              {/* Patient & Prescribed Tests with Full Names & Codes */}
-              <div className="p-3.5 bg-slate-800/90 rounded-2xl border border-slate-700 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Patient Information</span>
-                    <div className="text-sm font-black text-white">{selectedBooking.patientName}</div>
-                    <div className="text-[10px] font-mono text-teal-300">
-                      PID: {selectedBooking.patientPid || selectedBooking.patientId || 'PID-001'} • Tél: {selectedBooking.patientPhone || 'N/A'}
-                    </div>
-                  </div>
-                  {(selectedBooking.virtualRequested || selectedBooking.tests?.some(t => t.virtualRequested)) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
-                      <Globe className="w-3 h-3" />
-                      Virtual Delivery
-                    </span>
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
-                  <span className="text-[10px] text-slate-300 font-bold flex items-center gap-1.5">
-                    <FlaskConical className="w-3.5 h-3.5 text-emerald-400" />
-                    Prescribed Diagnostic Tests ({selectedBooking.tests?.length || 0}):
-                  </span>
-                  <div className="space-y-1">
-                    {selectedBooking.tests?.map((t) => (
-                      <div key={t.id} className="flex items-center justify-between p-2 bg-slate-900/90 rounded-xl border border-slate-700/60 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-white">{t.testName}</span>
-                          {(t.testCode || (t as any).code) && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-teal-900/60 text-teal-300 border border-teal-700/50">
-                              {t.testCode || (t as any).code}
-                            </span>
-                          )}
-                        </div>
-                        <span className="font-mono font-bold text-emerald-400">
-                          {(t.price || 5500).toLocaleString()} XAF
-                        </span>
+            {/* 2-Column Responsive Body */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-4 text-xs">
+              
+              {/* LEFT COLUMN: Patient Info, Tests & Additional Billable Items (lg:col-span-6) */}
+              <div className="lg:col-span-6 space-y-4">
+                
+                {/* Patient Summary Card */}
+                <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Patient</span>
+                      <div className="text-sm font-black text-slate-900">{selectedBooking.patientName}</div>
+                      <div className="text-[10px] font-mono text-slate-500">
+                        PID: {selectedBooking.patientPid || selectedBooking.patientId || 'PID-001'} • Tél: {selectedBooking.patientPhone || 'N/A'}
                       </div>
-                    ))}
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Cashier Settlement
+                    </span>
+                  </div>
+
+                  {/* Prescribed Tests */}
+                  <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-600 font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+                        Prescribed Diagnostic Tests ({selectedBooking.tests?.length || 0}):
+                      </span>
+                      <span className="font-mono text-slate-700">
+                        {((selectedBooking.tests || []).reduce((acc: number, t: any) => acc + (t.price || 0), 0)).toLocaleString()} XAF
+                      </span>
+                    </span>
+                    <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                      {selectedBooking.tests?.map((t) => (
+                        <div key={t.id} className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200 text-xs">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <span className="font-bold text-slate-800 truncate">{t.testName}</span>
+                            {(t.testCode || (t as any).code) && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                                {t.testCode || (t as any).code}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-mono font-bold text-slate-900 shrink-0 ml-2">
+                            {(t.price || 5500).toLocaleString()} XAF
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Billable Medical Acts, Phlebotomy & Add-ons Section */}
-              <div className="p-3.5 bg-gradient-to-br from-teal-950/40 via-slate-900 to-slate-950 rounded-2xl border border-teal-500/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-xs text-teal-300 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-teal-400" />
-                    Billable Medical Acts, Phlebotomy & Add-ons
-                  </span>
-                  <span className="text-[10px] font-mono text-teal-400 bg-teal-950/80 px-2 py-0.5 rounded-full border border-teal-600/40">
-                    {currentAddOns.length} Act{currentAddOns.length > 1 ? 's' : ''} Added
-                  </span>
-                </div>
+                {/* Additional Items / Medical Acts (Manual Code, Name, Price Input) */}
+                <div className="p-3.5 bg-teal-50/60 rounded-2xl border border-teal-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-teal-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-teal-600" />
+                      Add Extra Medical Acts & Consumables
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full border border-teal-300">
+                      {currentAddOns.length} Added
+                    </span>
+                  </div>
 
-                {/* Quick Add Presets */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] text-slate-400 font-semibold block">Quick-Add Standard Medical Acts:</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {/* Quick-Add Preset Chips */}
+                  <div className="flex flex-wrap gap-1.5">
                     {CASHIER_ADDON_PRESETS.map((preset) => {
                       const isAlreadyAdded = currentAddOns.some(a => a.id === preset.id || a.code === preset.code);
                       return (
@@ -1280,1017 +1310,485 @@ export const CashierView: React.FC<CashierViewProps> = ({
                               setCurrentAddOns(prev => [...prev, { ...preset }]);
                             }
                           }}
-                          className={`p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                          className={`px-2.5 py-1 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-1.5 text-[10px] font-bold ${
                             isAlreadyAdded 
-                              ? 'bg-teal-900/60 border-teal-400 text-teal-200 shadow-xs' 
-                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                              ? 'bg-teal-600 border-teal-700 text-white shadow-xs' 
+                              : 'bg-white border-teal-200 text-teal-900 hover:bg-teal-100/80'
                           }`}
                         >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className="text-[9px] font-mono font-bold text-teal-400">{preset.code}</span>
-                            <Plus className="w-3 h-3 text-teal-400" />
-                          </div>
-                          <span className="text-[10px] font-bold leading-tight">{preset.name.split('(')[0]}</span>
-                          <span className="text-[9px] font-mono text-emerald-400 mt-0.5">+{preset.price.toLocaleString()} XAF</span>
+                          <span className="font-mono bg-white/20 px-1 py-0.2 rounded text-[9px]">{preset.code}</span>
+                          <span>{preset.name.split('(')[0]}</span>
+                          <span className="font-mono text-emerald-700">+{preset.price.toLocaleString()}</span>
+                          <Plus className="w-3 h-3" />
                         </button>
                       );
                     })}
                   </div>
-                </div>
 
-                {/* Custom Add-on input */}
-                <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
-                  <span className="text-[10px] text-slate-400 font-semibold block">Add Custom Billable Fee / Consumable:</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Act Name (e.g. Domicile)"
-                      value={customAddOnName}
-                      onChange={(e) => setCustomAddOnName(e.target.value)}
-                      className="sm:col-span-2 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Price (XAF)"
-                      value={customAddOnPrice}
-                      onChange={(e) => setCustomAddOnPrice(e.target.value)}
-                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const price = parseFloat(customAddOnPrice);
-                        if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
-                        const code = customAddOnCode.trim() || `ACT-CST-${Date.now().toString().slice(-3)}`;
-                        setCurrentAddOns(prev => [
-                          ...prev,
-                          {
-                            id: `custom-${Date.now()}`,
-                            code,
-                            name: customAddOnName.trim(),
-                            price,
-                            quantity: customAddOnQty || 1
-                          }
-                        ]);
-                        setCustomAddOnName('');
-                        setCustomAddOnCode('');
-                        setCustomAddOnPrice('');
-                        setCustomAddOnQty(1);
-                      }}
-                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Act
-                    </button>
-                  </div>
-                </div>
-
-                {/* Current Active Add-ons List */}
-                {currentAddOns.length > 0 && (
-                  <div className="space-y-1.5 pt-1">
-                    <span className="text-[10px] text-teal-300 font-bold flex items-center justify-between">
-                      <span>Included Billable Items:</span>
-                      <span className="font-mono text-emerald-400">
-                        Subtotal: +{currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()} XAF
-                      </span>
+                  {/* Manual Addition: Code (e.g. KB10), Name, Price */}
+                  <div className="p-2.5 bg-white rounded-xl border border-teal-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-500 font-bold block">
+                      Manual Custom Entry (Enter Code, Name & Price):
                     </span>
-                    <div className="space-y-1">
-                      {currentAddOns.map((ao, idx) => (
-                        <div key={ao.id || idx} className="flex items-center justify-between p-2 bg-teal-950/40 rounded-xl border border-teal-500/30 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-[10px] bg-teal-900/80 text-teal-200 px-1.5 py-0.5 rounded border border-teal-600/40">
-                              {ao.code}
-                            </span>
-                            <span className="font-bold text-white text-[11px]">{ao.name}</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded-lg border border-slate-700">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (ao.quantity > 1) {
-                                    setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity - 1 } : item));
-                                  } else {
-                                    setCurrentAddOns(prev => prev.filter((_, i) => i !== idx));
-                                  }
-                                }}
-                                className="text-slate-400 hover:text-white px-1 font-bold cursor-pointer"
-                              >
-                                -
-                              </button>
-                              <span className="font-mono font-bold text-[10px] text-teal-300 px-1">{ao.quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity + 1 } : item));
-                                }}
-                                className="text-slate-400 hover:text-white px-1 font-bold cursor-pointer"
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            <span className="font-mono font-bold text-emerald-400 text-xs whitespace-nowrap">
-                              {(ao.price * ao.quantity).toLocaleString()} XAF
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={() => setCurrentAddOns(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-rose-400 hover:text-rose-300 p-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-2 flex items-center justify-between">
-                  <span>Select Payment Channel / Method</span>
-                  <span className="text-[10px] text-emerald-400 font-semibold uppercase">Real-time settlement</span>
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: 'cash', label: 'Cash Payment', icon: DollarSign, color: 'text-emerald-400' },
-                    { id: 'mobile_money', label: 'MoMo / Orange Money', icon: Smartphone, color: 'text-amber-400' },
-                    { id: 'bank_transfer', label: 'Bank Transfer / Wire', icon: Landmark, color: 'text-blue-400' },
-                    { id: 'workers_benefit', label: 'Workers Benefit (100%)', icon: HeartHandshake, color: 'text-teal-300' },
-                    { id: 'gift_coupon', label: 'Gift Coupon / Grant', icon: Gift, color: 'text-purple-300' },
-                    { id: 'insurance', label: 'Insurance / HMO Co-Pay', icon: ShieldCheck, color: 'text-indigo-400' },
-                    { id: 'card', label: 'Credit / Debit (POS)', icon: CreditCard, color: 'text-slate-300' }
-                  ].map(m => {
-                    const Icon = m.icon;
-                    const isSel = paymentMethod === m.id;
-                    return (
+                    <div className="grid grid-cols-12 gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Code (e.g. kb10)"
+                        value={customAddOnCode}
+                        onChange={(e) => setCustomAddOnCode(e.target.value)}
+                        className="col-span-3 px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 uppercase"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Act Name (e.g. Domicile)"
+                        value={customAddOnName}
+                        onChange={(e) => setCustomAddOnName(e.target.value)}
+                        className="col-span-4 px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Price (XAF)"
+                        value={customAddOnPrice}
+                        onChange={(e) => setCustomAddOnPrice(e.target.value)}
+                        className="col-span-3 px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-emerald-700 font-mono font-bold placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
                       <button
-                        key={m.id}
                         type="button"
                         onClick={() => {
-                          setPaymentMethod(m.id as any);
-                          if (m.id === 'workers_benefit') {
-                            setDiscountType('workers_benefit');
-                            setDiscountValue(100);
-                          } else if (m.id === 'gift_coupon') {
-                            setDiscountType('coupon');
-                            if (!couponCode) {
-                              setCouponCode('GIFT100');
-                              setCouponType('100% Full Gift Grant');
-                              setCouponApplied(true);
+                          const price = parseFloat(customAddOnPrice);
+                          if (!customAddOnName.trim() || isNaN(price) || price <= 0) return;
+                          const code = customAddOnCode.trim() ? customAddOnCode.trim().toUpperCase() : `ACT-${Date.now().toString().slice(-3)}`;
+                          setCurrentAddOns(prev => [
+                            ...prev,
+                            {
+                              id: `custom-${Date.now()}`,
+                              code,
+                              name: customAddOnName.trim(),
+                              price,
+                              quantity: customAddOnQty || 1
                             }
-                          }
+                          ]);
+                          setCustomAddOnName('');
+                          setCustomAddOnCode('');
+                          setCustomAddOnPrice('');
+                          setCustomAddOnQty(1);
                         }}
-                        className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
-                          isSel 
-                            ? 'bg-emerald-950/90 border-emerald-400 text-white font-bold ring-1 ring-emerald-400 shadow-md' 
-                            : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-700/80'
-                        }`}
+                        className="col-span-2 px-2 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1 transition-colors"
                       >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <Icon className={`w-4 h-4 ${m.color}`} />
-                          {isSel && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                        </div>
-                        <span className="text-[11px] leading-tight font-bold">{m.label}</span>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
                       </button>
-                    );
-                  })}
+                    </div>
+                  </div>
+
+                  {/* Included Add-ons List */}
+                  {currentAddOns.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] text-teal-800 font-bold flex items-center justify-between">
+                        <span>Items to be Invoiced:</span>
+                        <span className="font-mono text-emerald-800 font-extrabold">
+                          +{currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()} XAF
+                        </span>
+                      </span>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {currentAddOns.map((ao, idx) => (
+                          <div key={ao.id || idx} className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-teal-200 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-[9px] bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded border border-teal-300">
+                                {ao.code}
+                              </span>
+                              <span className="font-bold text-slate-800 text-[11px]">{ao.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (ao.quantity > 1) {
+                                      setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity - 1 } : item));
+                                    } else {
+                                      setCurrentAddOns(prev => prev.filter((_, i) => i !== idx));
+                                    }
+                                  }}
+                                  className="text-slate-500 hover:text-slate-800 px-1 font-bold cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-bold text-[10px] text-slate-800 px-1">{ao.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCurrentAddOns(prev => prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity + 1 } : item));
+                                  }}
+                                  className="text-slate-500 hover:text-slate-800 px-1 font-bold cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <span className="font-mono font-bold text-emerald-700 text-xs whitespace-nowrap">
+                                {(ao.price * ao.quantity).toLocaleString()} XAF
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setCurrentAddOns(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* 1. CONDITIONAL SECTION: MOBILE MONEY (MTN MoMo / Orange Money) */}
-              {paymentMethod === 'mobile_money' && (
-                <div className="p-3.5 bg-gradient-to-br from-amber-950/40 via-slate-900 to-orange-950/30 rounded-2xl border border-amber-500/40 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-amber-300 flex items-center gap-1.5">
-                      <Smartphone className="w-4 h-4 text-amber-400" />
-                      Mobile Money Payment Details
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">MTN / Orange Cameroon</span>
-                  </div>
-
-                  {/* Provider selection: MTN or ORANGE */}
-                  <div>
-                    <label className="block text-[10px] text-slate-300 font-bold mb-1.5">MoMo Operator / Provider *</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMomoProvider('MTN')}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                          momoProvider === 'MTN'
-                            ? 'bg-yellow-400/20 border-yellow-400 text-yellow-200 font-bold ring-1 ring-yellow-400'
-                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full bg-yellow-400"></span>
-                          <span className="text-xs">MTN Mobile Money</span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold bg-yellow-400/30 px-1.5 py-0.5 rounded text-yellow-300">*126#</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setMomoProvider('ORANGE')}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                          momoProvider === 'ORANGE'
-                            ? 'bg-orange-500/20 border-orange-400 text-orange-200 font-bold ring-1 ring-orange-400'
-                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full bg-orange-500"></span>
-                          <span className="text-xs">Orange Money</span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold bg-orange-500/30 px-1.5 py-0.5 rounded text-orange-300">#150#</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Sender Phone & Sender Account Name */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Phone Number Used to Send *
-                      </label>
-                      <input
-                        type="tel"
-                        value={momoSenderPhone}
-                        onChange={(e) => setMomoSenderPhone(e.target.value)}
-                        placeholder="e.g. +237 671 23 45 67"
-                        className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Registered MoMo Account Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={momoSenderName}
-                        onChange={(e) => setMomoSenderName(e.target.value)}
-                        placeholder="e.g. Jean-Pierre Kamga"
-                        className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400 font-bold"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Carrier TxID / SMS Reference */}
-                  <div>
-                    <label className="block text-[10px] text-slate-300 font-semibold mb-1 flex items-center justify-between">
-                      <span>Transaction ID / SMS Reference Code</span>
-                      <span className="text-[10px] text-amber-300/80">From SMS confirmation</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={momoTxId}
-                      onChange={(e) => setMomoTxId(e.target.value)}
-                      placeholder="e.g. MP260830.1652.A12345 or 19828472910"
-                      className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-xl text-xs text-amber-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400 font-mono uppercase"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 2. CONDITIONAL SECTION: BANK TRANSFER / DIRECT WIRE / DEPOSIT */}
-              {paymentMethod === 'bank_transfer' && (
-                <div className="p-3.5 bg-gradient-to-br from-blue-950/40 via-slate-900 to-indigo-950/30 rounded-2xl border border-blue-500/40 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-blue-300 flex items-center gap-1.5">
-                      <Landmark className="w-4 h-4 text-blue-400" />
-                      Commercial Bank Wire / Deposit Details
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">BEAC / Cameroon</span>
-                  </div>
-
-                  {/* Bank Name Selector */}
-                  <div>
-                    <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                      Bank Name / Financial Institution *
-                    </label>
-                    <select
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-blue-500/50 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-semibold"
-                    >
-                      {CAMEROON_COMMERCIAL_BANKS.map((b) => (
-                        <option key={b.id} value={b.name}>
-                          {b.name} ({b.code})
-                        </option>
-                      ))}
-                      <option value="Other Commercial Bank (Cameroon)">Other Commercial Bank (Cameroon)</option>
-                    </select>
-                  </div>
-
-                  {/* Account Holder Name & Bank Transfer Reference */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Bank Account Holder / Sender Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={bankAccountName}
-                        onChange={(e) => setBankAccountName(e.target.value)}
-                        placeholder="e.g. Cabinet Medical / Patient Name"
-                        className="w-full px-3 py-2 bg-slate-900 border border-blue-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Transfer Reference / Slip ID *
-                      </label>
-                      <input
-                        type="text"
-                        value={bankReference}
-                        onChange={(e) => setBankReference(e.target.value)}
-                        placeholder="e.g. TXN-UBACMR-992014"
-                        className="w-full px-3 py-2 bg-slate-900 border border-blue-500/50 rounded-xl text-xs text-blue-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Branch / Notes */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Bank Branch / Deposit Notes (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={bankBranch}
-                      onChange={(e) => setBankBranch(e.target.value)}
-                      placeholder="e.g. Douala Bonanjo Branch / Online App Wire"
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 3. CONDITIONAL SECTION: WORKERS BENEFITS & STAFF WELFARE */}
-              {paymentMethod === 'workers_benefit' && (
-                <div className="p-3.5 bg-gradient-to-br from-teal-950/50 via-slate-900 to-emerald-950/40 rounded-2xl border border-teal-500/50 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-teal-300 flex items-center gap-1.5">
-                      <HeartHandshake className="w-4 h-4 text-teal-400" />
-                      Staff Healthcare Welfare & Worker Benefit Concession
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-400/30">
-                      100% Hospital Grant
-                    </span>
-                  </div>
-
-                  {/* Benefit Scheme */}
-                  <div>
-                    <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Worker Benefit Category *</label>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {[
-                        { id: '100% Free Staff Benefit', label: '100% Staff Free' },
-                        { id: '50% Staff Family Subsidy', label: '50% Family Subsidy' },
-                        { id: '100% Medical Director Executive Grant', label: 'Executive Grant' }
-                      ].map((b) => (
+              {/* RIGHT COLUMN: Payment Method, Details, PIN & Confirmation (lg:col-span-6) */}
+              <div className="lg:col-span-6 space-y-4">
+                
+                {/* Payment Channel Grid */}
+                <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2.5">
+                  <label className="block text-slate-800 font-bold text-xs flex items-center justify-between">
+                    <span>Payment Channel / Method</span>
+                    <span className="text-[10px] text-emerald-700 font-semibold uppercase">Instant Settlement</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'cash', label: 'Cash Payment', icon: DollarSign, color: 'text-emerald-600' },
+                      { id: 'mobile_money', label: 'MoMo / Orange', icon: Smartphone, color: 'text-amber-600' },
+                      { id: 'bank_transfer', label: 'Bank Wire / Transfer', icon: Landmark, color: 'text-blue-600' },
+                      { id: 'insurance', label: 'Insurance Co-Pay', icon: ShieldCheck, color: 'text-indigo-600' },
+                      { id: 'workers_benefit', label: 'Staff Welfare (100%)', icon: HeartHandshake, color: 'text-teal-600' },
+                      { id: 'gift_coupon', label: 'Gift Coupon', icon: Gift, color: 'text-purple-600' }
+                    ].map(m => {
+                      const Icon = m.icon;
+                      const isSel = paymentMethod === m.id;
+                      return (
                         <button
-                          key={b.id}
+                          key={m.id}
                           type="button"
-                          onClick={() => setWorkerBenefitType(b.id)}
-                          className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                            workerBenefitType === b.id
-                              ? 'bg-teal-600 text-white border-teal-400 shadow-sm'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
+                          onClick={() => {
+                            setPaymentMethod(m.id as any);
+                            if (m.id === 'workers_benefit') {
+                              setDiscountType('workers_benefit');
+                              setDiscountValue(100);
+                            } else if (m.id === 'gift_coupon') {
+                              setDiscountType('coupon');
+                              if (!couponCode) {
+                                setCouponCode('GIFT100');
+                                setCouponType('100% Full Gift Grant');
+                                setCouponApplied(true);
+                              }
+                            }
+                          }}
+                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                            isSel 
+                              ? 'bg-emerald-600 border-emerald-700 text-white font-bold shadow-xs ring-1 ring-emerald-600' 
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
-                          {b.label}
+                          <Icon className={`w-4 h-4 shrink-0 ${isSel ? 'text-white' : m.color}`} />
+                          <span className="text-[11px] leading-tight font-bold truncate">{m.label}</span>
                         </button>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
 
-                  {/* Staff Selection Dropdown */}
-                  <div>
-                    <label className="block text-[10px] text-teal-300 font-bold mb-1 flex items-center justify-between">
-                      <span>Select Registered Staff Member (Auto-Fill) *</span>
-                      {staffList.length > 0 && (
-                        <span className="text-[9px] text-teal-400 font-normal">
-                          {staffList.length} staff registered
-                        </span>
-                      )}
-                    </label>
-                    <select
-                      value={selectedStaffMemberId}
-                      onChange={(e) => {
-                        const sId = e.target.value;
-                        setSelectedStaffMemberId(sId);
-                        if (sId && sId !== 'custom') {
-                          const found = staffList.find(s => s.id === sId);
-                          if (found) {
-                            setWorkerStaffName(found.name || '');
-                            setWorkerStaffId(found.staffId || found.id || '');
-                            setWorkerDepartment(found.department || found.role || 'Clinical Laboratory / Pathology');
-                          }
-                        }
-                      }}
-                      className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-400 font-bold"
-                    >
-                      <option value="">-- Select from Staff Dropdown --</option>
-                      {staffList.map((stf) => (
-                        <option key={stf.id} value={stf.id}>
-                          {stf.name} — {stf.role || stf.designation || 'Staff'} ({stf.department || 'Lab'}) [{stf.staffId || stf.id}]
-                        </option>
-                      ))}
-                      <option value="custom">+ Manual / Other Staff Entry</option>
-                    </select>
-                  </div>
-
-                  {/* Staff Name & Staff ID */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Staff Beneficiary Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={workerStaffName}
-                        onChange={(e) => setWorkerStaffName(e.target.value)}
-                        placeholder="e.g. Dr. Marie Tchakoute"
-                        className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Staff ID / Matricule Number *
-                      </label>
-                      <input
-                        type="text"
-                        value={workerStaffId}
-                        onChange={(e) => setWorkerStaffId(e.target.value)}
-                        placeholder="e.g. STF-LAB-042"
-                        className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-teal-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400 font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Department & Authorization Note */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Staff Department *
-                      </label>
-                      <select
-                        value={workerDepartment}
-                        onChange={(e) => setWorkerDepartment(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-400"
-                      >
-                        <option value="Clinical Laboratory / Pathology">Clinical Laboratory / Pathology</option>
-                        <option value="Nursing & Ward Services">Nursing & Ward Services</option>
-                        <option value="Pharmacy Department">Pharmacy Department</option>
-                        <option value="Phlebotomy & Sample Collection">Phlebotomy & Sample Collection</option>
-                        <option value="General Hospital Administration">General Hospital Administration</option>
-                        <option value="Biomedical Engineering & IT">Biomedical Engineering & IT</option>
-                        <option value="General Logistics & Facility">General Logistics & Facility</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Authorizing Medical Officer / Director Note
-                      </label>
-                      <input
-                        type="text"
-                        value={workerAuthNote}
-                        onChange={(e) => setWorkerAuthNote(e.target.value)}
-                        placeholder="e.g. Approved by Medical Director"
-                        className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 4. CONDITIONAL SECTION: GIFT COUPONS & PROMOTIONAL VOUCHERS */}
-              {paymentMethod === 'gift_coupon' && (
-                <div className="p-3.5 bg-gradient-to-br from-purple-950/50 via-slate-900 to-indigo-950/40 rounded-2xl border border-purple-500/50 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-purple-300 flex items-center gap-1.5">
-                      <Gift className="w-4 h-4 text-purple-400" />
-                      Gift Coupon & Concession Voucher Details
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-500/20 text-purple-300 border border-purple-400/30">
-                      Promotional Grant
-                    </span>
-                  </div>
-
-                  {/* Preset Gift Coupons */}
-                  <div>
-                    <label className="block text-[10px] text-slate-300 font-bold mb-1.5">Quick Select Gift / Voucher Presets:</label>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-xs">
-                      {[
-                        { code: 'GIFT100', label: '100% Free Gift', desc: '100% Full Gift' },
-                        { code: 'WELLNESS50', label: '50% Wellness', desc: '50% Concession' },
-                        { code: 'FAMILY15', label: '15% Family', desc: '15% Discount' },
-                        { code: 'HEALTH20', label: '20% Health', desc: '20% Concession' },
-                        { code: 'PROMO10', label: '10% Promo', desc: '10% Promo' },
-                        { code: 'STAFF100', label: '100% Staff', desc: '100% Staff Gift' }
-                      ].map((cp) => (
+                  {/* Method Specific Compact Inputs */}
+                  {paymentMethod === 'mobile_money' && (
+                    <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 space-y-2 mt-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-700">Operator:</span>
                         <button
-                          key={cp.code}
                           type="button"
-                          onClick={() => handleApplyCoupon(cp.code)}
-                          className={`py-1.5 px-1 rounded-xl text-[10px] font-bold border text-center transition-all cursor-pointer ${
-                            couponCode === cp.code
-                              ? 'bg-purple-600 text-white border-purple-400 shadow-md font-mono'
-                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 font-mono'
+                          onClick={() => setMomoProvider('MTN')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${
+                            momoProvider === 'MTN' ? 'bg-yellow-400 border-yellow-500 text-slate-900' : 'bg-white border-slate-300 text-slate-600'
                           }`}
                         >
-                          <div>{cp.code}</div>
-                          <div className="text-[8px] opacity-80">{cp.label}</div>
+                          MTN MoMo
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Custom Coupon Input */}
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Tag className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        placeholder="Enter custom gift coupon code (e.g. GIFT100)"
-                        value={couponCode}
-                        onChange={(e) => {
-                          setCouponCode(e.target.value);
-                          setCouponApplied(false);
-                        }}
-                        className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-purple-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-400 uppercase font-mono font-bold"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleApplyCoupon(couponCode)}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl cursor-pointer shadow-sm"
-                    >
-                      {couponApplied ? 'Applied ✓' : 'Apply'}
-                    </button>
-                  </div>
-
-                  {/* Staff Gift Beneficiary Selector */}
-                  {(couponCode.toUpperCase().includes('STAFF') || selectedStaffMemberId) && staffList.length > 0 && (
-                    <div className="p-3 bg-purple-900/40 rounded-xl border border-purple-400/40 space-y-1.5 animate-in fade-in duration-200">
-                      <label className="block text-[10px] text-purple-200 font-bold flex items-center justify-between">
-                        <span>Select Internal Staff Member for Gift / Welfare Waiver:</span>
-                        <span className="text-[9px] text-purple-300 font-mono">Automated Admin Reporting</span>
-                      </label>
-                      <select
-                        value={selectedStaffMemberId}
-                        onChange={(e) => {
-                          const sId = e.target.value;
-                          setSelectedStaffMemberId(sId);
-                          const found = staffList.find(s => s.id === sId);
-                          if (found) {
-                            setWorkerStaffName(found.name || '');
-                            setWorkerStaffId(found.staffId || found.id || 'STF-001');
-                            setWorkerDepartment(found.department || found.role || 'Internal Staff');
-                            setCouponSponsorName('nanoLabs Staff Welfare Fund');
-                            setCouponNotes(`Staff Benefit Gift: ${found.name} (${found.role || 'Personnel'})`);
-                          }
-                        }}
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-purple-400/50 rounded-lg text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-purple-300"
-                      >
-                        <option value="">-- Choose Registered Staff Beneficiary --</option>
-                        {staffList.map((stf) => (
-                          <option key={stf.id} value={stf.id}>
-                            {stf.name} — {stf.role || stf.designation || 'Staff'} [{stf.staffId || stf.id}]
-                          </option>
-                        ))}
-                      </select>
+                        <button
+                          type="button"
+                          onClick={() => setMomoProvider('ORANGE')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${
+                            momoProvider === 'ORANGE' ? 'bg-orange-500 border-orange-600 text-white' : 'bg-white border-slate-300 text-slate-600'
+                          }`}
+                        >
+                          Orange Money
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="tel"
+                          value={momoSenderPhone}
+                          onChange={(e) => setMomoSenderPhone(e.target.value)}
+                          placeholder="Sender Phone (e.g. 671234567)"
+                          className="px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        <input
+                          type="text"
+                          value={momoTxId}
+                          onChange={(e) => setMomoTxId(e.target.value)}
+                          placeholder="TxID / SMS Ref Code"
+                          className="px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase"
+                        />
+                      </div>
                     </div>
                   )}
 
-                  {/* Sponsor / Donor Name & Notes */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Sponsor / Grantor / Gifter Name
-                      </label>
-                      <input
-                        type="text"
-                        value={couponSponsorName}
-                        onChange={(e) => setCouponSponsorName(e.target.value)}
-                        placeholder="e.g. Rotary Club Douala / Dr. Emmanuel"
-                        className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                        Voucher Purpose / Remarks
-                      </label>
-                      <input
-                        type="text"
-                        value={couponNotes}
-                        onChange={(e) => setCouponNotes(e.target.value)}
-                        placeholder="e.g. Community Diagnostic Outreach 2026"
-                        className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+                  {paymentMethod === 'insurance' && (
+                    <div className="p-3 bg-indigo-50/90 rounded-2xl border border-indigo-200 space-y-3 mt-2">
+                      {/* Insurance Company Dropdown */}
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-indigo-950 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Insurance Company (Compagnie d'Assurance) *</span>
+                          </span>
+                          <span className="text-[10px] text-indigo-700 font-semibold uppercase bg-indigo-100/70 px-2 py-0.5 rounded-full">
+                            Accredited Insurers
+                          </span>
+                        </label>
+                        <select
+                          value={isCustomInsurance ? 'OTHER_CUSTOM' : insuranceProvider}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'OTHER_CUSTOM') {
+                              setIsCustomInsurance(true);
+                              setInsuranceProvider('');
+                            } else {
+                              setIsCustomInsurance(false);
+                              setInsuranceProvider(val);
+                              // Auto-update co-pay from company's official default coverage
+                              const matched = CAMEROON_INSURANCE_COMPANIES.find(c => c.name === val || c.id === val || c.shortName === val);
+                              if (matched && matched.defaultCoveragePercent) {
+                                setCoPayPercent(Math.max(0, 100 - matched.defaultCoveragePercent));
+                              }
+                            }
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                        >
+                          <option value="">-- Select Insurance Company from List --</option>
+                          {CAMEROON_INSURANCE_COMPANIES.map(comp => (
+                            <option key={comp.id} value={comp.name}>
+                              {comp.name} {comp.defaultCoveragePercent ? `• ${comp.defaultCoveragePercent}% Prise en Charge` : ''}
+                            </option>
+                          ))}
+                          <option value="OTHER_CUSTOM">➕ Other Insurance Company / Autre (Saisie libre)...</option>
+                        </select>
 
-              {/* 5. CONDITIONAL SECTION: CASH PAYMENT & LIVE CHANGE CALCULATOR */}
-              {paymentMethod === 'cash' && (
-                <div className="p-3.5 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-teal-950/30 rounded-2xl border border-emerald-500/40 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-emerald-300 flex items-center gap-1.5">
-                      <Coins className="w-4 h-4 text-emerald-400" />
-                      Cash Tendered & Change Calculator
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">Over Counter (XAF)</span>
-                  </div>
-
-                  {(() => {
-                    const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
-                    const due = details.finalTotal;
-
-                    return (
-                      <div className="space-y-2.5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                              Cash Handed by Patient (FCFA)
-                            </label>
+                        {isCustomInsurance && (
+                          <div className="pt-1.5">
                             <input
-                              type="number"
-                              value={cashGiven}
-                              onChange={(e) => setCashGiven(e.target.value)}
-                              placeholder={`e.g. ${due}`}
-                              className="w-full px-3 py-2 bg-slate-900 border border-emerald-500/50 rounded-xl text-sm text-emerald-300 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                              type="text"
+                              value={insuranceProvider}
+                              onChange={(e) => setInsuranceProvider(e.target.value)}
+                              placeholder="Type custom insurance company name..."
+                              className="w-full px-2.5 py-1.5 bg-white border border-indigo-400 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              autoFocus
                             />
                           </div>
-                          <div>
-                            <label className="block text-[10px] text-slate-300 font-semibold mb-1">
-                              Change to Return to Patient
-                            </label>
-                            <div className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm font-mono font-black text-amber-400 flex items-center justify-between">
-                              <span>{details.changeToReturn.toLocaleString()} FCFA</span>
-                              {details.changeToReturn > 0 && (
-                                <span className="text-[10px] font-bold bg-amber-400/20 text-amber-300 px-1.5 py-0.5 rounded">Return</span>
-                              )}
+                        )}
+                      </div>
+
+                      {/* Insurance Matricule / Policy ID */}
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-indigo-950 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Insurance Matricule / N° d'Adhérent (Policy Number) *</span>
+                          </span>
+                          <span className="text-[9.5px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                            Printed on Receipt
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={insurancePolicyNumber}
+                          onChange={(e) => setInsurancePolicyNumber(e.target.value)}
+                          placeholder="e.g. ASC-2026-992014, GMC-8821, or MAT-004071"
+                          className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-mono font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 shadow-2xs"
+                          required
+                        />
+                        <p className="text-[10px] text-slate-500">
+                          This insurance matricule appears directly on the official patient receipt for claim verification and third-party reimbursement.
+                        </p>
+                      </div>
+
+                      {/* Co-Pay % and Coverage Split */}
+                      <div className="p-2.5 bg-white rounded-xl border border-indigo-200 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-slate-800 font-bold">Patient Co-Pay % (Ticket Modérateur):</span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={coPayPercent}
+                                onChange={(e) => setCoPayPercent(Number(e.target.value) || 0)}
+                                className="w-14 px-2 py-1 bg-slate-50 border border-indigo-300 rounded-lg text-xs font-bold text-center text-indigo-950"
+                              />
+                              <span className="text-xs font-bold text-slate-600">%</span>
                             </div>
+                          </div>
+
+                          <div className="text-[11px] font-bold text-slate-800">
+                            Prise en charge: <span className="text-emerald-700 font-extrabold">{100 - coPayPercent}%</span> Assureur
                           </div>
                         </div>
 
-                        {/* Quick preset cash tender buttons */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick Tender:</span>
-                          <button
-                            type="button"
-                            onClick={() => setCashGiven(String(due))}
-                            className="px-2 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 rounded-lg text-[10px] font-mono font-bold cursor-pointer"
-                          >
-                            Exact ({due.toLocaleString()})
-                          </button>
-                          {[5000, 10000, 20000, 50000, 100000].filter(amt => amt >= due).slice(0, 4).map((amt) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => setCashGiven(String(amt))}
-                              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-mono cursor-pointer"
-                            >
-                              {amt.toLocaleString()}
-                            </button>
-                          ))}
-                        </div>
+                        {/* Live split amounts */}
+                        {(() => {
+                          const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+                          return (
+                            <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
+                              <span className="text-slate-600">
+                                Part Assureur ({100 - coPayPercent}%): <strong className="text-indigo-900 font-mono">{details.insurancePortion.toLocaleString()} XAF</strong>
+                              </span>
+                              <span className="text-emerald-800 font-bold">
+                                Part Patient ({coPayPercent}%): <strong className="text-emerald-900 font-mono text-xs">{details.patientPortion.toLocaleString()} XAF</strong>
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
+
+                  {paymentMethod === 'cash' && (
+                    <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-600 font-bold">Cash Given:</span>
+                        <input
+                          type="number"
+                          value={cashGiven}
+                          onChange={(e) => setCashGiven(e.target.value)}
+                          placeholder="Amount in FCFA"
+                          className="w-28 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold text-emerald-800"
+                        />
+                      </div>
+                      {(() => {
+                        const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+                        return (
+                          <div className="text-right text-[11px] font-mono">
+                            <span className="text-slate-500 mr-1">Change:</span>
+                            <strong className="text-amber-700 font-bold">{details.changeToReturn.toLocaleString()} XAF</strong>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* 6. CONDITIONAL SECTION: CARD (POS) */}
-              {paymentMethod === 'card' && (
-                <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-200">
-                  <div className="font-extrabold text-xs text-slate-200 flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4 text-emerald-400" />
-                    Electronic POS Terminal Card Settlement
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Card Scheme</label>
-                      <select
-                        value={cardScheme}
-                        onChange={(e) => setCardScheme(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                      >
-                        <option value="Visa">Visa Card</option>
-                        <option value="Mastercard">Mastercard</option>
-                        <option value="GIMAC">GIMAC (CEMAC Card)</option>
-                        <option value="American Express">American Express</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">POS Auth / Approval Code</label>
-                      <input
-                        type="text"
-                        value={cardAuthCode}
-                        onChange={(e) => setCardAuthCode(e.target.value)}
-                        placeholder="e.g. AUTH-88921"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-emerald-300 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Last 4 Digits</label>
-                      <input
-                        type="text"
-                        maxLength={4}
-                        value={cardLast4}
-                        onChange={(e) => setCardLast4(e.target.value)}
-                        placeholder="e.g. 4022"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 7. CONDITIONAL SECTION: INSURANCE CO-PAY DETAILS */}
-              {paymentMethod === 'insurance' && (
-                <div className="p-3.5 bg-indigo-950/70 rounded-2xl border border-indigo-500/40 space-y-3 animate-in fade-in duration-200">
-                  <div className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                    Cameroon Health Insurance & Co-Pay Direct Billing
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Cameroon Insurance Company *</label>
-                      <select
-                        value={insuranceProvider}
-                        onChange={(e) => setInsuranceProvider(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-indigo-800 rounded-lg text-xs text-white"
-                      >
-                        <option value="">Select Insurance Provider...</option>
-                        {CAMEROON_INSURANCE_COMPANIES.map(company => (
-                          <option key={company.id} value={company.name}>{company.name}</option>
-                        ))}
-                        <option value="Other Corporate Insurance (Cameroon)">Other Corporate Insurance (Cameroon)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Policy / Matricule ID *</label>
-                      <input
-                        type="text"
-                        value={insurancePolicyNumber}
-                        onChange={(e) => setInsurancePolicyNumber(e.target.value)}
-                        placeholder="e.g. POL-998234-ACT"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-indigo-800 rounded-lg text-xs text-white font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Co-Pay Coverage Split:</span>
-                      <span className="text-indigo-300 font-bold">{100 - coPayPercent}% Insurer Claim • {coPayPercent}% Patient Co-Pay</span>
-                    </label>
-                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 mb-2">
-                      {[
-                        { coPay: 0, label: '0% Co-Pay (100%)' },
-                        { coPay: 10, label: '10% Co-Pay (90%)' },
-                        { coPay: 15, label: '15% Co-Pay (85%)' },
-                        { coPay: 20, label: '20% Co-Pay (80%)' },
-                        { coPay: 25, label: '25% Co-Pay (75%)' },
-                        { coPay: 30, label: '30% Co-Pay (70%)' },
-                        { coPay: 50, label: '50% Co-Pay (50%)' },
-                        { coPay: 80, label: '80% Co-Pay (20%)' }
-                      ].map((split) => (
-                        <button
-                          key={split.coPay}
-                          type="button"
-                          onClick={() => setCoPayPercent(split.coPay)}
-                          className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer text-center ${
-                            coPayPercent === split.coPay
-                              ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
-                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-                          }`}
-                        >
-                          {split.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-3 p-2 bg-slate-900/80 rounded-xl border border-indigo-900/60 text-xs">
-                      <span className="text-slate-400 text-[11px] whitespace-nowrap">Custom Co-Pay %:</span>
-                      <input 
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={coPayPercent}
-                        onChange={(e) => {
-                          const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                          setCoPayPercent(val);
-                        }}
-                        className="w-20 px-2 py-1 bg-slate-950 border border-indigo-700 rounded-lg text-white font-bold text-center text-xs"
-                      />
-                      <span className="text-[11px] text-indigo-300">
-                        = Patient pays <strong>{coPayPercent}%</strong>, Insurer covers <strong>{100 - coPayPercent}%</strong>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* GENERAL DISCOUNTS & CUSTOM OVERRIDE (for standard methods) */}
-              {!['workers_benefit', 'gift_coupon'].includes(paymentMethod) && (
-                <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-slate-300 flex items-center gap-1.5">
-                      <BadgePercent className="w-4 h-4 text-amber-400" />
-                      Optional Concessions & Custom Override
+                {/* Cashier PIN Verification */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <label className="flex items-center justify-between text-slate-700 font-bold text-xs">
+                    <span className="flex items-center gap-1.5 text-teal-800">
+                      <Lock className="w-3.5 h-3.5" />
+                      Cashier Access PIN / Security Code *
                     </span>
-                    {discountType !== 'none' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiscountType('none');
-                          setDiscountValue(0);
-                          setCouponApplied(false);
-                          setCustomPriceInput('');
-                        }}
-                        className="text-[10px] text-amber-400 hover:underline cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1.5 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => { setDiscountType('percent'); setDiscountValue(10); }}
-                      className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                        discountType === 'percent' && discountValue === 10 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                      }`}
-                    >
-                      10% Off
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setDiscountType('percent'); setDiscountValue(20); }}
-                      className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                        discountType === 'percent' && discountValue === 20 ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                      }`}
-                    >
-                      20% Off
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setDiscountType('fixed'); setDiscountValue(2000); }}
-                      className={`py-1.5 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
-                        discountType === 'fixed' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                      }`}
-                    >
-                      -2,000 XAF
-                    </button>
-                  </div>
-
-                  {/* Custom negotiated price */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-slate-400 shrink-0">Custom Override Total:</label>
+                    <span className="text-[10px] text-slate-400 font-mono">e.g. CSH123</span>
+                  </label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
-                      type="number"
-                      placeholder="Enter manual total in FCFA"
-                      value={customPriceInput}
-                      onChange={(e) => setCustomPriceInput(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      type={showAccessCode ? 'text' : 'password'}
+                      placeholder="Enter authorized cashier PIN..."
+                      value={cashierAccessCode}
+                      onChange={(e) => {
+                        setCashierAccessCode(e.target.value);
+                        if (accessCodeError) setAccessCodeError('');
+                      }}
+                      className="w-full pl-9 pr-9 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowAccessCode(!showAccessCode)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showAccessCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
+                  {accessCodeError && (
+                    <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[10px] text-rose-700 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      <span>{accessCodeError}</span>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* CASHIER ACCESS CODE SECURITY VERIFICATION */}
-              <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
-                <label className="flex items-center justify-between text-slate-300 font-bold text-xs">
-                  <span className="flex items-center gap-1.5 text-emerald-300">
-                    <Lock className="w-3.5 h-3.5" />
-                    Cashier Security PIN / Access Code Required *
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">e.g. CSH123</span>
-                </label>
-                
-                <div className="relative">
-                  <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type={showAccessCode ? 'text' : 'password'}
-                    placeholder="Enter your authorized cashier PIN / access code..."
-                    value={cashierAccessCode}
-                    onChange={(e) => {
-                      setCashierAccessCode(e.target.value);
-                      if (accessCodeError) setAccessCodeError('');
-                    }}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
+                {/* Net Financial Total & Breakdown */}
+                {(() => {
+                  const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
+                  const payable = paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal;
+                  const addOnsSum = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                  const testsSum = Math.max(0, details.baseTotal - addOnsSum);
+
+                  return (
+                    <div className="p-3.5 bg-slate-100/90 rounded-2xl border border-slate-200 space-y-1.5">
+                      <div className="flex justify-between text-slate-600 text-xs">
+                        <span>Tests Subtotal ({selectedBooking.tests?.length || 0}):</span>
+                        <span className="font-mono font-medium">{testsSum.toLocaleString()} XAF</span>
+                      </div>
+                      {addOnsSum > 0 && (
+                        <div className="flex justify-between text-teal-800 text-xs font-semibold">
+                          <span>Added Acts & Consumables ({currentAddOns.length}):</span>
+                          <span className="font-mono">+{addOnsSum.toLocaleString()} XAF</span>
+                        </div>
+                      )}
+                      {details.discountAmount > 0 && (
+                        <div className="flex justify-between text-emerald-700 text-xs font-semibold">
+                          <span>Discount / Welfare Concession:</span>
+                          <span className="font-mono">-{details.discountAmount.toLocaleString()} XAF</span>
+                        </div>
+                      )}
+                      {paymentMethod === 'insurance' && (
+                        <div className="flex justify-between text-indigo-700 text-xs">
+                          <span>Insurer Claim ({100 - coPayPercent}%):</span>
+                          <span className="font-mono">-{details.insurancePortion.toLocaleString()} XAF</span>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t border-slate-300 flex items-center justify-between">
+                        <span className="text-slate-900 font-extrabold text-sm">
+                          Total Payable:
+                        </span>
+                        <span className="text-xl font-black font-mono text-emerald-700">
+                          {payable.toLocaleString()} XAF
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowAccessCode(!showAccessCode)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    onClick={() => {
+                      setSelectedBooking(null);
+                      setCashierAccessCode('');
+                      setAccessCodeError('');
+                    }}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer transition-colors"
                   >
-                    {showAccessCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleCollectPayment}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>{isProcessing ? 'Processing Payment...' : 'Confirm & Stamp Payment'}</span>
                   </button>
                 </div>
 
-                {accessCodeError && (
-                  <div className="p-2.5 bg-rose-950/60 border border-rose-500/50 rounded-xl text-[11px] text-rose-300 flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{accessCodeError}</span>
-                  </div>
-                )}
               </div>
 
-              {/* FINANCIAL BREAKDOWN SUMMARY */}
-              {(() => {
-                const details = calculateSettlementDetails(selectedBooking, selectedGroupBookings);
-                const payable = paymentMethod === 'insurance' ? details.patientPortion : details.finalTotal;
-                const addOnsSum = currentAddOns.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-                const testsSum = Math.max(0, details.baseTotal - addOnsSum);
-
-                return (
-                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
-                    <div className="flex justify-between text-slate-400 text-xs">
-                      <span>Prescribed Diagnostic Tests ({selectedBooking.tests?.length || 0}):</span>
-                      <span className="font-mono">{testsSum.toLocaleString()} XAF</span>
-                    </div>
-
-                    {addOnsSum > 0 && (
-                      <div className="flex justify-between text-teal-300 text-xs font-semibold">
-                        <span>Medical Acts & Phlebotomy Fees ({currentAddOns.length}):</span>
-                        <span className="font-mono font-bold">+{addOnsSum.toLocaleString()} XAF</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between text-slate-400 text-xs pt-1 border-t border-slate-800/80">
-                      <span>Gross Catalog Total:</span>
-                      <span className="font-mono font-bold text-white">{details.baseTotal.toLocaleString()} XAF</span>
-                    </div>
-
-                    {details.discountAmount > 0 && (
-                      <div className="flex justify-between text-emerald-400 text-xs font-semibold">
-                        <span>
-                          {paymentMethod === 'workers_benefit' ? 'Staff Welfare Benefit (100% Grant):' :
-                           paymentMethod === 'gift_coupon' ? `Gift Coupon Concession (${couponCode || 'GIFT100'}):` :
-                           'Discount / Concession Applied:'}
-                        </span>
-                        <span className="font-mono font-bold">-{details.discountAmount.toLocaleString()} XAF</span>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'insurance' && (
-                      <div className="flex justify-between text-indigo-300 text-xs">
-                        <span>HMO Insurance Claim Portion ({100 - coPayPercent}%):</span>
-                        <span className="font-mono font-bold">-{details.insurancePortion.toLocaleString()} XAF</span>
-                      </div>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-white font-extrabold text-sm">
-                        {paymentMethod === 'workers_benefit' || (paymentMethod === 'gift_coupon' && details.finalTotal === 0) 
-                          ? 'Net Patient Payable (Fully Subsidized):' 
-                          : 'Actual Paid by Patient:'}
-                      </span>
-                      <span className={`text-xl font-black font-mono ${payable === 0 ? 'text-teal-400' : 'text-emerald-400'}`}>
-                        {payable.toLocaleString()} XAF
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-200 flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                Validating authorizes transaction, stamps detailed receipt with all payment data, and advances patient to Phlebotomy.
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedBooking(null);
-                    setCashierAccessCode('');
-                    setAccessCodeError('');
-                  }}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={handleCollectPayment}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>{isProcessing ? 'Verifying & Processing...' : 'Verify PIN & Confirm Payment'}</span>
-                </button>
-              </div>
             </div>
 
           </div>
@@ -2308,8 +1806,9 @@ export const CashierView: React.FC<CashierViewProps> = ({
             paymentMethod: showReceipt.paymentMethod || paymentMethod,
             insuranceProvider: showReceipt.insuranceProvider || insuranceProvider,
             insurancePolicyNumber: showReceipt.insurancePolicyNumber || insurancePolicyNumber,
-            insuranceCoveragePercent: showReceipt.coPayPercent ? 100 - showReceipt.coPayPercent : undefined,
-            coPayPercent: showReceipt.coPayPercent || coPayPercent,
+            matricule: (showReceipt as any).matricule || showReceipt.insurancePolicyNumber || insurancePolicyNumber,
+            insuranceCoveragePercent: showReceipt.coPayPercent !== undefined ? 100 - showReceipt.coPayPercent : (100 - coPayPercent),
+            coPayPercent: showReceipt.coPayPercent !== undefined ? showReceipt.coPayPercent : coPayPercent,
             discountAmount: showReceipt.discountAmount,
             discountType: (showReceipt as any).discountType || discountType,
             couponCode: showReceipt.couponCode || couponCode,

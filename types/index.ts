@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid' ;
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -63,9 +63,9 @@ export interface BatchTestItem {
 
 // Canonical TestBatch
 export interface TestBatch {
-  bookingCode : string;
   id: string;
   batchNumber: string;
+  bookingCode?: string;
   patientId: string;
   patientName: string;
   familyProfileId?: string;
@@ -349,18 +349,6 @@ export interface Lab {
   id: string;
   name: string;
   location: string;
-  lat: number;
-
-  tier: 'budget' | ''| '';
-  tatHours: number;
-  lng:number;
-  averageTurnaroundHours: number;
-  coordinates?: {
-    latitude: number;
-    longitude: number;
-  };
- 
-
   city?: string;
   slogan?: string;
   tagline?: string;
@@ -429,7 +417,6 @@ export interface LabTest {
   name?: string;
   testName?: string;
   category?: string;
- 
   price?: number;
   basePrice?: number;
   systemFee?: number;
@@ -592,6 +579,14 @@ export interface PatientBooking {
   referringDoctor?: string;
   referralHospital?: string;
   referralNotes?: string;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  matricule?: string;
+  insuranceCoveragePercent?: number;
+  coPayPercent?: number;
+  insuranceClaimAmount?: number;
+  patientCoPayAmount?: number;
+  paymentDetails?: any;
   createdAt?: string;
   updatedAt?: string;
 }

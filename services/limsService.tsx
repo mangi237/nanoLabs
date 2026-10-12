@@ -1,4 +1,4 @@
-import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, setDoc } from './firebase';
+import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, setDoc } from './firebase';
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
@@ -115,11 +115,6 @@ export interface PatientBooking {
   patientId: string;
   patientName: string;
   patientAge?: number;
-  labAdress?: string;
-  labPhone?: string;
-  labAccreditation?: string ;
-  labEmail?: string;
-
   age?: number;
   dateOfBirth?: string;
   dob?: string;
@@ -143,8 +138,8 @@ export interface PatientBooking {
   staffDesignation?: string;
   hasInsurance?: boolean;
   insuranceProvider?: string;
-
   insurancePolicyNumber?: string;
+  matricule?: string;
   insuranceCoveragePercent?: number; // e.g. 80 for 80% coverage
   coPayPercent?: number; // Patient direct co-payment percentage
   insuranceCoveredAmount?: number; // Amount covered by insurance
@@ -158,22 +153,10 @@ export interface PatientBooking {
     id: string;
     name: string;
     code: string;
-   
     price: number;
     quantity: number;
     category?: string;
   }>;
-  labDetails?: {
-    phone?: string;
-    email?: string;
-    address?: string;
-    accreditation?: string;
-    name?: string;
-    license?: string;
-    location?: string;
-    biologistLicense?: string;
-  }
-  biologistLicense?: string;
   addOnsAmount?: number;
   testsAmount?: number;
   paymentStatus: 'unpaid' | 'paid';
@@ -185,6 +168,7 @@ export interface PatientBooking {
   
   // Receptionist Validation & Walk-In Flags
   receptionistValidated?: boolean;
+  receptionistConfirmed?: boolean;
   validatedBy?: string;
   validatedAt?: string;
   registrationType?: 'online' | 'walk_in';
@@ -229,9 +213,17 @@ export interface PatientBooking {
   
   // Home Collection & Invoicing Pipeline
   homeCollection?: boolean;
+  homePickupRequested?: boolean;
+  homeDeliveryRequested?: boolean;
   pickupLocation?: string;
   landmark?: string;
   userCoords?: { lat: number; lng: number };
+  pickupDistanceMeters?: number;
+  ratePer100m?: number;
+  homePickupFee?: number;
+  homeDeliveryFee?: number;
+  prelevementFee?: number;
+  invoiceStatus?: 'pending_cashier' | 'invoice_issued' | 'payment_submitted' | 'payment_confirmed';
   batchId?: string;
   invoiceGenerated?: boolean;
   invoiceGeneratedAt?: string;
@@ -253,8 +245,14 @@ export interface PatientBooking {
   phlebotomistName?: string;
   phlebotomistPhone?: string;
   phlebotomistPasscode?: string;
+  phlebotomistTermsAccepted?: boolean;
+  phlebotomistGpsActive?: boolean;
   phlebotomistEta?: string;
   phlebotomistCoords?: { lat: number; lng: number };
+  transitStatus?: 'pending_dispatch' | 'dispatched' | 'en_route_to_patient' | 'arrived_at_patient' | 'sample_collected_returning_to_lab' | 'arrived_at_lab';
+  locationSharingActive?: boolean;
+  handoverOtp?: string;
+  handoverConfirmedAt?: string;
   sampleHandoverVerified?: boolean;
   sampleHandoverCode?: string;
   sampleDepositedInLab?: boolean;
@@ -322,7 +320,6 @@ export const limsService = {
   async createBooking(params: {
     labId: string;
     patientId: string;
-    pickupLocation?: string;
     patientName: string;
     patientAge?: number;
     dateOfBirth?: string;
@@ -334,7 +331,6 @@ export const limsService = {
     referringDoctorId?: string;
     referringDoctor?: string;
     referralHospital?: string;
-    homeCollection? : boolean;
     referralNotes?: string;
     isStaffExemption?: boolean;
     staffMemberName?: string;
@@ -516,7 +512,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp: any) => ({
+          subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -876,6 +872,7 @@ export const limsService = {
           couponCode: paymentDetails?.couponCode ?? data.couponCode,
           insuranceProvider: paymentDetails?.insuranceProvider ?? data.insuranceProvider,
           insurancePolicyNumber: paymentDetails?.insurancePolicyNumber ?? data.insurancePolicyNumber,
+          matricule: paymentDetails?.insurancePolicyNumber ?? (paymentDetails as any)?.matricule ?? data.matricule,
           coPayPercent: paymentDetails?.coPayPercent ?? data.coPayPercent,
           insuranceCoveredAmount: paymentDetails?.insuranceDetails?.insuranceClaimAmount,
           patientCoPayAmount: paymentDetails?.insuranceDetails?.patientCoPayAmount,
@@ -1941,13 +1938,17 @@ export const limsService = {
           ...t,
           status: 'Completed' as TestStatus,
           biologistSigned: true,
-          biologistSignedAt: timestamp
+          biologistConfirmed: true,
+          biologistSignedAt: timestamp,
+          biologistConfirmedAt: timestamp
         }));
 
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
           biologistSigned: true,
+          biologistConfirmed: true,
           biologistName,
           biologistSignedAt: timestamp,
+          biologistConfirmedAt: timestamp,
           biologistRemarks: biologistRemarks || 'Clinical findings reviewed and authorized for official release.',
           biologistPasscodeVerified: true,
           overallStatus: 'Completed',
@@ -2000,6 +2001,65 @@ export const limsService = {
       return { success: false, error: 'Booking not found.' };
     } catch (err: any) {
       return { success: false, error: err.message || 'Biologist signoff failed.' };
+    }
+  },
+
+  /**
+   * Submit Analytical Results from Lab Tech to Biologist for Confirmation
+   * Records technician digital code and consumes logged reagents
+   */
+  async submitResultsToBiologist(params: {
+    labId: string;
+    bookingId: string;
+    techName: string;
+    techCode: string;
+    reagentsUsed?: Array<{ reagentId?: string; reagentName: string; quantity: number; unit: string }>;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { labId, bookingId, techName, techCode, reagentsUsed } = params;
+    const timestamp = new Date().toISOString();
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+
+      if (bookingDoc) {
+        const data = bookingDoc.data() as PatientBooking;
+        const currentTests = Array.isArray(data.tests) ? data.tests : [];
+
+        // Mark tests as completed by tech
+        const updatedTests = currentTests.map(t => ({
+          ...t,
+          status: 'Completed' as TestStatus,
+          labTechSigned: true,
+          completedBy: techName,
+          completedAt: timestamp
+        }));
+
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
+          labTechSigned: true,
+          labTechSignedAt: timestamp,
+          labTechName: techName,
+          labTechCode: techCode,
+          reagentsUsed: reagentsUsed || [],
+          overallStatus: 'In_Lab_Testing',
+          tests: updatedTests,
+          updatedAt: timestamp
+        }));
+
+        // Deduct reagents with quantity > 0
+        if (Array.isArray(reagentsUsed) && reagentsUsed.length > 0) {
+          const toDeduct = reagentsUsed.filter(r => r.quantity > 0);
+          if (toDeduct.length > 0) {
+            await this.deductCustomReagents(labId, toDeduct);
+          }
+        }
+
+        return { success: true };
+      }
+      return { success: false, error: 'Booking not found.' };
+    } catch (err: any) {
+      console.error('Error submitting results to biologist:', err);
+      return { success: false, error: err.message || 'Failed to submit to biologist' };
     }
   },
 
@@ -2664,6 +2724,7 @@ export const limsService = {
     const timestamp = new Date().toISOString();
     const patch: Partial<PatientBooking> = {
       receptionistValidated: true,
+      receptionistConfirmed: true as any,
       validatedBy: validatorName,
       validatedAt: timestamp,
       overallStatus: 'Pending_Payment',
@@ -2672,6 +2733,7 @@ export const limsService = {
     };
 
     try {
+      // 1. Direct doc lookup by document ID
       const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
       const bSnap = await getDoc(bookingRef);
       if (bSnap.exists()) {
@@ -2688,6 +2750,50 @@ export const limsService = {
           tests: updatedTests
         }));
         this.syncLocalBookingUpdate(bookingId, { ...patch, tests: updatedTests });
+        return true;
+      }
+
+      // 2. Query by 'id' field if doc ID differs
+      const qById = query(collection(db, 'labs', labId, 'bookings'), where('id', '==', bookingId));
+      const snapById = await getDocs(qById);
+      if (!snapById.empty) {
+        for (const docMatch of snapById.docs) {
+          const data = docMatch.data() as PatientBooking;
+          const updatedTests = (data.tests || []).map(t => ({
+            ...t,
+            receptionistValidated: true,
+            validatedBy: validatorName,
+            validatedAt: timestamp,
+            status: (t.status === 'Completed' ? t.status : 'Pending_Payment') as TestStatus
+          }));
+          await updateDoc(docMatch.ref, cleanFirestoreData({
+            ...patch,
+            tests: updatedTests
+          }));
+        }
+        this.syncLocalBookingUpdate(bookingId, patch);
+        return true;
+      }
+
+      // 3. Query by 'bookingCode'
+      const qByCode = query(collection(db, 'labs', labId, 'bookings'), where('bookingCode', '==', bookingId));
+      const snapByCode = await getDocs(qByCode);
+      if (!snapByCode.empty) {
+        for (const docMatch of snapByCode.docs) {
+          const data = docMatch.data() as PatientBooking;
+          const updatedTests = (data.tests || []).map(t => ({
+            ...t,
+            receptionistValidated: true,
+            validatedBy: validatorName,
+            validatedAt: timestamp,
+            status: (t.status === 'Completed' ? t.status : 'Pending_Payment') as TestStatus
+          }));
+          await updateDoc(docMatch.ref, cleanFirestoreData({
+            ...patch,
+            tests: updatedTests
+          }));
+        }
+        this.syncLocalBookingUpdate(bookingId, patch);
         return true;
       }
     } catch (e) {
@@ -2897,7 +3003,6 @@ export const limsService = {
     return this.ACCREDITED_PARTNER_DOCTORS.map(d => ({
       id: d.id,
       doctorId: d.id,
-      labId: 'unknown for Now', // 👈 Add this line (or use a specific string/variable if it's not on 'd')
       name: d.name,
       specialty: d.specialty,
       licenseNumber: d.licenseNumber,
@@ -3275,7 +3380,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData, id: d.id,};
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -3547,7 +3652,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -3620,7 +3725,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
