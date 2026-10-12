@@ -296,7 +296,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {popularTests.map((t) => (
+          {popularTests.map((t:any) => (
             <div
               key={t.id}
               onClick={() => onSelectTest(t)}
