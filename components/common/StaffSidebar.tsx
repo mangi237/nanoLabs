@@ -26,7 +26,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import StaffProfileModal from './StaffProfileModal';
-import { HowToUseGuideModal } from '../help/HowToUseGuideModal';
+import { HowToUseGuideModal } from '../../components/help/HowToUseGuideModal';
 import { getActiveLabLogo, useLabBranding } from '../../utils/labBranding';
 
 interface StaffSidebarProps {
