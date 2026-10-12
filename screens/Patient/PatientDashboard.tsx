@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
 import { useLanguage } from '../../context/languageContext';
-import { db, getDocs, collection } from '../../services/firebase';
+import { db, getDocs, collection, onSnapshot, query, where } from '../../services/firebase';
 import { limsService, PatientBooking } from '../../services/limsService';
 import PatientActivityAuditModal from '../../components/medical/PatientActivityAuditModal';
 import MedicalBookletModal from '../../components/medical/MedicalBookletModal';
@@ -10,18 +10,19 @@ import BatchConsolidatedReportModal from '../../components/patient/BatchConsolid
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { SealedEnvelopeResultModal } from '../../components/common/SealedEnvelopeResultModal';
 import { FamilyProfileSwitcherModal } from '../../components/common/FamilyProfileSwitcherModal';
-// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
 import { AiPrescriptionScannerModal } from '../../components/common/AiPrescriptionScannerModal';
 import { LivePhlebotomistTrackingModal } from '../../components/patient/LivePhlebotomistTrackingModal';
 import { DoctorAppointmentDetailModal, DoctorAppointmentRecord } from '../../components/doctor/DoctorAppointmentDetailModal';
 import { LiveAuditRoadmapModal } from '../../components/patient/LiveAuditRoadmapModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
-import { EditPatientProfileModal } from '../../components/patient/EditPatientProfile';
+import { EditPatientProfileModal } from '../../components/patient/EditPatientProfileModal';
+import { HowToUseGuideModal } from '../../components/help/HowToUseGuideModal';
 import { doctorChatService } from '../../services/doctorChatService';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import pinkOctoberBannerImg from '../../assets/images/pinkOctober.jpg';
 import pinkOctoberScientistImg from '../../assets/images/pinkOctober2.jpg';
-// import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
+import drTankuaPortraitImg from '../../assets/images/dr_tankua_allen_portrait_1790889682898.jpg';
 import { 
   Calendar, 
   FileText, 
@@ -140,6 +141,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [testStatusFilter, setTestStatusFilter] = useState<'all' | 'completed' | 'in_testing'>('all');
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   const refreshSocialConnections = (patId: string) => {
     try {
@@ -329,12 +331,68 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           }
         } catch {}
 
-        // 2b. Sync real registered doctors from system
+        // 2b. Sync real registered doctors from system & real-time snapshot listeners
+        let unsubDoctors: (() => void) | undefined;
+        let unsubDocUsers: (() => void) | undefined;
+
         try {
           const accreditedDoctors = await limsService.searchAllAccreditedDoctors('', targetLabId);
           if (accreditedDoctors && accreditedDoctors.length > 0) {
             doctorChatService.syncDoctorsFromDatabase(accreditedDoctors);
           }
+
+          // Real-time listener on 'doctors' collection
+          unsubDoctors = onSnapshot(collection(db, 'doctors'), (snap) => {
+            const liveDocs: any[] = [];
+            snap.forEach(d => {
+              const data = d.data();
+              liveDocs.push({
+                id: d.id,
+                doctorId: d.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || '',
+                specialty: data.specialty || 'General Medicine',
+                licenseNumber: data.licenseNumber || '',
+                hospital: data.hospital || data.hospitalAffiliation || '',
+                hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
+                avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+                isOnline: true
+              });
+            });
+            if (liveDocs.length > 0) {
+              doctorChatService.syncDoctorsFromDatabase(liveDocs);
+              const pId = loadedDocData ? loadedDocData.id : (user?.id || 'pat-1');
+              refreshSocialConnections(pId);
+            }
+          }, (err) => console.warn('Real-time doctors listener note:', err));
+
+          // Real-time listener on users where role == 'doctor'
+          const docUsersQuery = query(collection(db, 'users'), where('role', '==', 'doctor'));
+          unsubDocUsers = onSnapshot(docUsersQuery, (snap) => {
+            const userDocs: any[] = [];
+            snap.forEach(u => {
+              const data = u.data();
+              userDocs.push({
+                id: u.id,
+                doctorId: u.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || '',
+                specialty: data.specialty || 'General Practitioner',
+                licenseNumber: data.licenseNumber || '',
+                hospital: data.hospital || data.hospitalAffiliation || '',
+                hospitalAffiliation: data.hospitalAffiliation || data.hospital || '',
+                avatarUrl: data.avatarUrl || data.profilePicture || data.photoUrl || '',
+                isOnline: true
+              });
+            });
+            if (userDocs.length > 0) {
+              doctorChatService.syncDoctorsFromDatabase(userDocs);
+              const pId = loadedDocData ? loadedDocData.id : (user?.id || 'pat-1');
+              refreshSocialConnections(pId);
+            }
+          }, (err) => console.warn('Real-time doctor users listener note:', err));
         } catch (docSyncErr) {
           console.warn('Real doctors sync note:', docSyncErr);
         }
@@ -360,11 +418,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         });
       } catch (e) {
         console.error('Error fetching patient data:', e);
-        // dispatchDatabaseFetchError({
-        //   message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
-        //   tableOrCollection: `labs/${targetLabId}/patients & bookings`,
-        //   rawError: e
-        // });
+        dispatchDatabaseFetchError({
+          message: 'Patient Dashboard failed to load live diagnostic bookings from laboratory database.',
+          tableOrCollection: `labs/${targetLabId}/patients & bookings`,
+          rawError: e
+        });
       } finally {
         setLoading(false);
       }
@@ -373,9 +431,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     initDashboardData();
 
     return () => {
-      if (unsubBookings) {
-        unsubBookings();
-      }
+      if (unsubBookings) unsubBookings();
     };
   }, [user?.id, user?.email, user?.accessCode, (user as any)?.patientId, lab?.id]);
 
@@ -464,12 +520,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       console.error('Error requesting virtual result:', err);
     } finally {
       setRequestingId(null);
-    } 
+    }
   };
-//handlind the sharing of reports dson the app 
+
   const handleShareReportToDoctor = (booking: PatientBooking) => {
     setBatchReportBooking(null);
-    if (activeDoctorConnections.length > 0) { 
+    if (activeDoctorConnections.length > 0) {
       const primaryDoc = activeDoctorConnections[0];
       try {
         doctorChatService.shareTestResult({
@@ -596,15 +652,28 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </div>
           </div>
 
-          {/* Profile Icon */}
-          <button
-            type="button"
-            onClick={() => setShowEditProfileModal(true)}
-            className="w-9 h-9 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all"
-            title="Patient Profile"
-          >
-            {patientFullName.charAt(0).toUpperCase()}
-          </button>
+          {/* Actions: How to Use Guide & Profile Icon */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowGuideModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="How to Use nanoLabs - Step-by-Step Guide"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-teal-700" />
+              <span className="hidden xs:inline">How to Use</span>
+            </button>
+
+            {/* Profile Icon */}
+            <button
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="w-9 h-9 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all"
+              title="Patient Profile"
+            >
+              {patientFullName.charAt(0).toUpperCase()}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -2077,6 +2146,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       <LiveAuditRoadmapModal
         isOpen={showRoadmapModal}
         onClose={() => setShowRoadmapModal(false)}
+      />
+
+      {/* How to Use Comprehensive Patient Handbook Modal */}
+      <HowToUseGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        initialCategory="patients"
       />
 
       {/* Fixed Bottom Mobile Navigation Bar - Fixed to bottom of screen with Book Test Action */}
