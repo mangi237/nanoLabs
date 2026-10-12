@@ -30,7 +30,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
-import { StaffTrainingBookletPage } from '../staff/StaffTrainingBookletPage';
+import { StaffTrainingBookletPage } from '../../screens/staff/StaffTrainingBookletPage';
 
 interface AdminDashboardProps {
   onNavigateTab?: (tab: string) => void;
