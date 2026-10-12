@@ -14,7 +14,7 @@ import {
   X
 } from 'lucide-react';
 import { useFamilyProfile } from '../../context/familyProfileContext';
-import { REAL_DOCTORS_DIRECTORY } from './MyDoctorsScreen';
+import { REAL_DOCTORS_DIRECTORY } from './MyDoctorScreen';
 
 export interface PatientAppointment {
   id: string;
