@@ -12,7 +12,7 @@ import {
   Stethoscope,
   Sparkles
 } from 'lucide-react';
-import { DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorsScreen';
+import { DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorScreen';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 
 export interface ChatMessage {
