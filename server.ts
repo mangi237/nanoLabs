@@ -2464,6 +2464,292 @@ Return ONLY valid JSON (no markdown formatting, no code blocks) matching this sc
 });
 
 // -------------------------------------------------------------
+// Interactive Guide AI Smart Search Endpoint (Semantic Guidebook)
+// -------------------------------------------------------------
+app.post('/api/guide-ai-search', async (req: Request, res: Response) => {
+  try {
+    const { query, roleFilter } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return res.status(400).json({ success: false, error: 'Search query is required' });
+    }
+
+    const trimmedQuery = query.trim();
+
+    // Deterministic semantic fallback mapping for instant reliability
+    const getDeterministicFallback = (q: string) => {
+      const lower = q.toLowerCase();
+
+      if (lower.includes('kb10') || lower.includes('act') || lower.includes('consumable') || lower.includes('domicile') || lower.includes('cashier') || lower.includes('pay') || lower.includes('bill') || lower.includes('change') || lower.includes('money') || lower.includes('momo') || lower.includes('orange') || lower.includes('csh123')) {
+        return {
+          directAnswer: "To add medical acts like KB10 (domicile collection) or settle bills: Open the Cashier desk, click 'Collect Payment' on the patient. In the 2-column modal, type the Act Code (e.g. kb10), Name, and Price in XAF, then click 'Add'. Settle payment with Cash or MoMo, enter PIN CSH123, and confirm.",
+          recommendedRole: "Cashier & Billing Desk (Step 2)",
+          targetTab: "Cashier",
+          actionButton: {
+            label: "[+ Add Extra Medical Act] & [Confirm Payment ✓]",
+            color: "blue",
+            icon: "DollarSign",
+            description: "Located inside the 2-column Confirm Payment modal at the Cashier desk."
+          },
+          steps: [
+            "Open the Cashier tab and click 'Collect Payment' on the patient card.",
+            "Under 'Add Extra Medical Acts', enter Code 'kb10', Name 'Prélèvement domicile', and Price in XAF, then click 'Add'.",
+            "Select payment channel (Cash, MoMo, Orange, or Staff Free), enter PIN CSH123, and click 'Confirm & Stamp Payment'."
+          ],
+          relevantArticleId: "lab-cashier"
+        };
+      }
+
+      if (lower.includes('print') || lower.includes('lock') || lower.includes('cannot print') || lower.includes('stuck') || lower.includes('why') || lower.includes('biologist confirm')) {
+        return {
+          directAnswer: "Lab Technicians cannot print clinical reports before biological validation! For patient safety and laboratory compliance, all test findings must be validated and electronically signed by the Clinical Biologist first. Once signed, printing is immediately unlocked for all workstations.",
+          recommendedRole: "Lab Technologist & Clinical Biologist",
+          targetTab: "Lab Tech / Biologist Validation",
+          actionButton: {
+            label: "[Submit to Biologist] & [Authorize, Sign & Confirm ✓]",
+            color: "amber",
+            icon: "ShieldCheck",
+            description: "Lab Tech submits with tech PIN; Biologist enters passcode BIO123 to unlock printing."
+          },
+          steps: [
+            "Lab Tech enters analytical results and clicks 'Submit to Biologist' (with reagent consumption logged).",
+            "Biologist opens the 'Biologist Validation' tab and reviews values and flags.",
+            "Biologist enters PIN BIO123 and clicks 'Authorize, Sign & Confirm for Printing' to release the report."
+          ],
+          relevantArticleId: "lab-technologist"
+        };
+      }
+
+      if (lower.includes('reagent') || lower.includes('stock') || lower.includes('inventory') || lower.includes('consumable') || lower.includes('empty') || lower.includes('deduct')) {
+        return {
+          directAnswer: "Reagents can be logged during test completion by Lab Technologists or restocked by the Lab Administrator. Technicians search unexpired reagent cards and click '+' or '-' to deduct used quantities before submitting to the Biologist.",
+          recommendedRole: "Lab Technologist & Lab Admin",
+          targetTab: "Lab Tech / Reagents",
+          actionButton: {
+            label: "[Search Reagents & Select Qty (+/-)]",
+            color: "cyan",
+            icon: "TestTube",
+            description: "Appears in the Biologist submission modal when completing test analysis."
+          },
+          steps: [
+            "Click to complete or submit analysis in the Lab Tech console.",
+            "Search the visual reagent card grid for the chemical or kit used.",
+            "Click '+' to adjust quantities consumed, then submit to the Biologist."
+          ],
+          relevantArticleId: "lab-technologist"
+        };
+      }
+
+      if (lower.includes('walk-in') || lower.includes('register') || lower.includes('patient') || lower.includes('reception') || lower.includes('doctor name') || lower.includes('self-referred')) {
+        return {
+          directAnswer: "To register a patient at the front desk: Click the green '+ Register Walk-In Patient' button. Enter patient demographics. If the patient has no doctor, select 'Self-Referred / Walk-in' (never put the laboratory name as a doctor). Check prescribed tests and submit to Cashier.",
+          recommendedRole: "Reception Desk (Step 1)",
+          targetTab: "Reception",
+          actionButton: {
+            label: "[+ Register Walk-In Patient]",
+            color: "emerald",
+            icon: "User",
+            description: "Top left quick action button on the Reception Desk dashboard."
+          },
+          steps: [
+            "Click '+ Register Walk-In Patient' on the Reception Desk console.",
+            "Input Full Name, Age, Gender, Phone, and select referring doctor or 'Self-Referred'.",
+            "Search and check ordered tests, then click 'Submit Test Order' to dispatch to Cashier."
+          ],
+          relevantArticleId: "lab-reception"
+        };
+      }
+
+      if (lower.includes('blood') || lower.includes('tube') || lower.includes('needle') || lower.includes('phlebotom') || lower.includes('barcode') || lower.includes('sample') || lower.includes('vein')) {
+        return {
+          directAnswer: "Phlebotomists collect specimens from paid patients. Purple tubes are for Hemato/NFS, Red/Gold for Biochemistry, Grey for Blood Sugar, and Light Blue for Coagulation. Click 'Print Tube Barcodes', affix labels, and click 'Dispatch Sample to Laboratory'.",
+          recommendedRole: "Phlebotomy Desk (Step 3)",
+          targetTab: "Phlebotomy",
+          actionButton: {
+            label: "[Print Tube Barcodes 🏷️] & [Dispatch Sample 🚚]",
+            color: "indigo",
+            icon: "Truck",
+            description: "Action buttons on the patient specimen card in Phlebotomy queue."
+          },
+          steps: [
+            "Select the paid patient card to verify required tube colors and draw volumes.",
+            "Draw biological specimens safely and click 'Print Tube Barcodes'.",
+            "Stick barcodes on tubes and click 'Dispatch Sample to Laboratory' for bench testing."
+          ],
+          relevantArticleId: "lab-phlebotomy"
+        };
+      }
+
+      if (lower.includes('doctor') || lower.includes('prescription') || lower.includes('rx') || lower.includes('chat') || lower.includes('consult')) {
+        return {
+          directAnswer: "Partner doctors can review referred patients, inspect completed A4 test reports and antibiograms, and chat securely with patients. In the chat, tap the Prescription icon to issue digitally stamped e-prescriptions (Rx).",
+          recommendedRole: "Doctor Portal",
+          targetTab: "Doctor Portal / Chat Hub",
+          actionButton: {
+            label: "[Issue Digital Prescription (Rx) 💊]",
+            color: "purple",
+            icon: "Stethoscope",
+            description: "Prescription button inside the secure Doctor-Patient Chat Hub."
+          },
+          steps: [
+            "Log in to the Doctor Portal and view connected patients.",
+            "Inspect verified laboratory test reports with reference ranges.",
+            "Open chat to consult patients and click the Rx icon to issue signed digital prescriptions."
+          ],
+          relevantArticleId: "doc-orders-results"
+        };
+      }
+
+      return {
+        directAnswer: `Here is the recommended guidance for "${q}": Explore the relevant department tab or check the step-by-step role guide. All functions are detailed with button previews, PIN codes, and practical tips.`,
+        recommendedRole: "nanoLabs Platform Guide",
+        targetTab: "Guidebook",
+        actionButton: {
+          label: "[Explore Role Guidebook]",
+          color: "teal",
+          icon: "BookOpen",
+          description: "Click any article in the left directory to see detailed step-by-step instructions."
+        },
+        steps: [
+          "Select your role category (Patients, Laboratories, or Doctors) from the top tabs.",
+          "Click the matching guide article to view colored button previews and instructions.",
+          "Follow the numbered steps with exact screen locations and safety rules."
+        ],
+        relevantArticleId: "lab-reception"
+      };
+    };
+
+    // Try Gemini AI for rich semantic reasoning
+    try {
+      const ai = getGeminiClient();
+      const prompt = `You are the patient and laboratory staff training assistant for nanoLabs, an electronic Laboratory Information Management System (LIMS) used in Cameroon.
+Users may be elderly or non-technical lab staff (Receptionist, Cashier, Phlebotomist, Lab Technologist, Clinical Biologist, Lab Administrator, Doctor, or Patient).
+They are asking: "${trimmedQuery}".
+Role filter: "${roleFilter || 'all'}".
+
+System Knowledge & Workflows:
+1. Reception Desk (Step 1): Button: [+ Register Walk-In Patient]. Intake demographics (Name, Age, Gender, Phone). Select referring doctor or keep "Self-Referred / Walk-in" (NEVER select lab name). Order tests from catalog and submit to Cashier.
+2. Cashier Desk (Step 2): Button: [Collect Payment] (2-column light modal). Button: [+ Add Extra Medical Act] (enter Code e.g. "kb10", Name e.g. "Prélèvement domicile", Price in XAF, or click preset chip). Channels: Cash (auto change calculator), MTN MoMo, Orange Money, Insurance, Staff Free. Enter PIN CSH123 and click [Confirm & Stamp Payment]. Prints official receipt.
+3. Phlebotomy Desk (Step 3): Tube color codes: Purple EDTA (NFS), Red/Gold (Biochem), Grey Fluoride (Sugar), Blue Citrate (Coagulation). Buttons: [Print Tube Barcodes], [Dispatch Sample to Laboratory].
+4. Lab Technologist (Step 4): Enter biochemical values with auto abnormal flags. Locked Print: Lab Tech CANNOT print reports before Biologist validation ("Wait for Biologist to Confirm") for patient safety. Button: [Submit to Biologist] - prompts tech PIN & Reagent card search (+/- qty or "Continue Anyway").
+5. Clinical Biologist (Step 5): Review analytical findings and tech signature. Add clinical comments. Button: [Authorize, Sign & Confirm for Printing] with Passcode BIO123. Unlocks official A4 printing for all staff and releases to patient portal.
+6. Lab Administrator: Staff management (invite, roles, PINs), Master test catalog & pricing (XAF), Reagents stock management & delivery logs, Daily financial revenue reconciliation.
+7. Doctor Portal: Review referred patients & A4 reports. Chat with patients. Button: [Issue Digital Prescription (Rx)] with digital stamp.
+8. Patient Portal: Search tests, book appointment (Clinic or Home collection), track live status, view & download official QR-coded A4 reports, consult accredited doctors.
+
+Return strict JSON only (no markdown quotes, no extra text):
+{
+  "directAnswer": "Clear, friendly, simple explanation (2-3 sentences) suitable for older lab workers.",
+  "recommendedRole": "Exact Role Name",
+  "targetTab": "Exact Screen or Tab Name",
+  "actionButton": {
+    "label": "Exact button text to click",
+    "color": "green | blue | purple | amber | red | emerald | teal",
+    "icon": "DollarSign | TestTube | ShieldCheck | Printer | User | Package | Stethoscope | BookOpen",
+    "description": "Where to find this button"
+  },
+  "steps": [
+    "Step 1: clear step",
+    "Step 2: clear step",
+    "Step 3: clear step"
+  ],
+  "relevantArticleId": "lab-reception | lab-cashier | lab-phlebotomy | lab-technologist | lab-biologist | admin-staff | admin-catalog | admin-reagents | admin-finance | doc-orders-results | doc-chat-rx | pat-book-test | pat-view-results | pat-doctor-chat"
+}`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const text = aiResponse.text || '';
+      let parsed;
+      try {
+        parsed = JSON.parse(text.trim().replace(/^```json\s*|\s*```$/g, ''));
+      } catch (pErr) {
+        parsed = getDeterministicFallback(trimmedQuery);
+      }
+
+      return res.json({
+        success: true,
+        source: 'gemini-ai',
+        query: trimmedQuery,
+        result: parsed
+      });
+    } catch (aiErr: any) {
+      console.warn('Gemini guide search fallback used:', aiErr.message);
+      const fallback = getDeterministicFallback(trimmedQuery);
+      return res.json({
+        success: true,
+        source: 'semantic-engine',
+        query: trimmedQuery,
+        result: fallback
+      });
+    }
+  } catch (error: any) {
+    console.error('Guide AI search error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// -------------------------------------------------------------
+// POST /api/ai/nanolabs-consult
+// NanoLabs AI Diagnostic Companion powered by Gemini
+// -------------------------------------------------------------
+app.post('/api/ai/nanolabs-consult', async (req, res) => {
+  try {
+    const { message, testContext, patientName, mode } = req.body;
+    if (!message && !testContext) {
+      return res.status(400).json({ success: false, error: 'Query message or test context is required' });
+    }
+
+    try {
+      const ai = getGeminiClient();
+      const prompt = `You are NanoLabs AI, an empathetic, highly knowledgeable medical diagnostic assistant for nanoLabs, a clinical laboratory diagnostic network in Cameroon.
+Patient Name: ${patientName || 'Patient'}.
+Mode: ${mode || 'general_consultation'}.
+
+User Query / Request:
+"${message || 'Please interpret my laboratory diagnostic results below.'}"
+
+${testContext ? `Attached Diagnostic Result / Biological Context:\n${typeof testContext === 'string' ? testContext : JSON.stringify(testContext, null, 2)}` : ''}
+
+Your responsibilities:
+1. Explain diagnostic investigations, pre-test preparation guidelines (fasting, timing, medications), and biomarker roles in clear, reassuring, plain language.
+2. If laboratory results are provided, break down each parameter (normal vs out-of-range), explain biological significance in non-alarmist terms, and suggest questions the patient can ask their doctor.
+3. Always include a professional medical disclaimer: this AI analysis empowers health literacy and is not a substitute for formal clinical consultation with an ONMC-certified physician.
+
+Provide a comprehensive, beautifully structured response with markdown formatting (bullet points, clear sections).`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt
+      });
+
+      const responseText = aiResponse.text || 'I have analyzed your request. Please consult your physician for personalized clinical care.';
+      return res.json({
+        success: true,
+        answer: responseText,
+        model: 'gemini-3.8-flash',
+        timestamp: new Date().toISOString()
+      });
+    } catch (aiErr: any) {
+      console.warn('Gemini consult error, providing clinical guideline response:', aiErr.message);
+      return res.json({
+        success: true,
+        answer: `### NanoLabs Clinical Overview\n\nThank you for reaching out regarding your diagnostic inquiry. \n\n**Key Preparation & Biological Guidelines:**\n- **Pre-Test Fasting:** For metabolic panels (Blood Glucose, Lipid Profile), observe a strict 10-12 hour fast with plain water permitted.\n- **Sample Validity:** Biomarkers are calibrated against standard adult reference intervals. Values outside typical ranges should be correlated clinically.\n- **Next Step:** We encourage sharing this report directly with your connected ONMC physician using the secure doctor share feature in your NanoLabs portal.\n\n*Disclaimer: NanoLabs AI is designed for patient health literacy and does not replace medical doctor diagnosis.*`,
+        model: 'fallback-clinical-engine',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error: any) {
+    console.error('NanoLabs consult error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// -------------------------------------------------------------
 // Vite Middleware / Static Serving Setup
 // -------------------------------------------------------------
 async function startServer() {
