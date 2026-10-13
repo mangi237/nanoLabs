@@ -1806,7 +1806,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
             paymentMethod: showReceipt.paymentMethod || paymentMethod,
             insuranceProvider: showReceipt.insuranceProvider || insuranceProvider,
             insurancePolicyNumber: showReceipt.insurancePolicyNumber || insurancePolicyNumber,
-            // matricule: (showReceipt as any).matricule || showReceipt.insurancePolicyNumber || insurancePolicyNumber,
+            matricule: (showReceipt as any).matricule || showReceipt.insurancePolicyNumber || insurancePolicyNumber,
             insuranceCoveragePercent: showReceipt.coPayPercent !== undefined ? 100 - showReceipt.coPayPercent : (100 - coPayPercent),
             coPayPercent: showReceipt.coPayPercent !== undefined ? showReceipt.coPayPercent : coPayPercent,
             discountAmount: showReceipt.discountAmount,

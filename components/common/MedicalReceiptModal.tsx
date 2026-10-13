@@ -20,6 +20,7 @@ interface MedicalReceiptModalProps {
   paymentDetails?: {
     paymentMethod?: string;
     discountAmount?: number;
+    matricule?: string ;
     discountType?: string;
     discountValue?: number;
     couponCode?: string;
