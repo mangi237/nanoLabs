@@ -22,6 +22,8 @@ import { CEMAC_INSURERS } from '../auth/InsuranceSetupScreen';
 interface ProfileScreenProps {
   onLogout?: () => void;
   onBack?: () => void;
+  onNavigateInsurance?: ()=> void;
+  onNavigateHealthRecords?: () => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
