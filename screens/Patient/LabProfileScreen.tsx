@@ -37,16 +37,29 @@ export const LabProfileScreen: React.FC<LabProfileScreenProps> = ({
           alt={lab.name}
           className="w-full h-48 object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-4">
-          <div className="text-white">
-            <h2 className="text-xl font-black">{lab.name}</h2>
-            <div className="flex items-center gap-2 text-xs font-semibold text-white/90 mt-1">
-              <span className="flex items-center text-amber-300">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent flex items-end p-4 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-white p-1 border border-white/80 shadow-md shrink-0 flex items-center justify-center overflow-hidden">
+            <img
+              src={lab.logoUrl || lab.imageUrl}
+              alt={`${lab.name} logo`}
+              className="w-full h-full object-contain rounded-xl"
+              onError={(e) => {
+                if (lab.imageUrl && (e.currentTarget.src !== lab.imageUrl)) {
+                  e.currentTarget.src = lab.imageUrl;
+                  e.currentTarget.className = "w-full h-full object-cover rounded-xl";
+                }
+              }}
+            />
+          </div>
+          <div className="text-white min-w-0">
+            <h2 className="text-xl font-black truncate">{lab.name}</h2>
+            <div className="flex items-center gap-2 text-xs font-semibold text-white/90 mt-0.5">
+              <span className="flex items-center text-amber-300 font-bold">
                 <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300 mr-1" />
                 {lab.rating} ({lab.reviewsCount})
               </span>
               <span>&bull;</span>
-              <span>{lab.turnaroundTime} Turnaround</span>
+              <span>{lab.turnaroundTime}</span>
             </div>
           </div>
         </div>
