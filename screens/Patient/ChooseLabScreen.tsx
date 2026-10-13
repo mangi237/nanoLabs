@@ -98,29 +98,26 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
       try {
         const snap = await getDocs(collection(db, 'labs'));
         if (!snap.empty) {
-            const liveList: PartnerLabItem[] = snap.docs.map((docSnap, idx) => {
-                const data = docSnap.data();
-                return {
-                  id: docSnap.id,
-                  name: data.name || `Laboratory ${idx + 1}`,
-                  rating: data.rating || 4.7,
-                  reviewsCount: data.reviewsCount || 85,
-                  turnaroundTime: data.turnaroundTime || '3-4 hrs',
-                  features: ['Home pickup', 'Delivery', 'Accredited'],
-                  distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
-                  city: data.city || 'Douala',
-                  address: data.address || 'Akwa, Douala',
-                  imageUrl: data.imageUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].imageUrl,
-                  accredited: true,
-                  baseDeliveryFeePerKm: 800,
-                  testPricingMultiplier: data.pricingMultiplier || 1.0,
-                  
-                  // 💡 Added missing fields required by PartnerLabItem
-                  logoUrl: data.logoUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].logoUrl || '', 
-                  ratePer100m: data.ratePer100mts || 0 
-                };
-              });
-              
+          const liveList: PartnerLabItem[] = snap.docs.map((docSnap, idx) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              name: data.name || `Laboratory ${idx + 1}`,
+              rating: data.rating || 4.7,
+              reviewsCount: data.reviewsCount || 85,
+              turnaroundTime: data.turnaroundTime || '3-4 hrs',
+              features: ['Home pickup', 'Delivery', 'Accredited'],
+              distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
+              city: data.city || 'Douala',
+              address: data.address || 'Akwa, Douala',
+              imageUrl: data.imageUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].imageUrl,
+              logoUrl: data.logoUrl || data.logo || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].logoUrl || data.imageUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].imageUrl,
+              accredited: true,
+              ratePer100m: Number(data.ratePer100m) || 60,
+              baseDeliveryFeePerKm: 800,
+              testPricingMultiplier: data.pricingMultiplier || 1.0
+            };
+          });
           setLabs(liveList);
         }
       } catch (e) {
@@ -235,11 +232,30 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
                 className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all group"
               >
                 <div className="flex items-start gap-3.5">
-                  <img
-                    src={lab.imageUrl}
-                    alt={lab.name}
-                    className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shrink-0"
-                  />
+                  <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-1 shadow-2xs shrink-0 group-hover:border-[#006978] transition-colors">
+                    {lab.logoUrl ? (
+                      <img
+                        src={lab.logoUrl}
+                        alt={`${lab.name} logo`}
+                        className="w-full h-full object-contain rounded-xl"
+                        onError={(e) => {
+                          // Fallback to imageUrl if logo fails to load
+                          if (lab.imageUrl && (e.currentTarget.src !== lab.imageUrl)) {
+                            e.currentTarget.src = lab.imageUrl;
+                            e.currentTarget.className = "w-full h-full object-cover rounded-xl";
+                          }
+                        }}
+                      />
+                    ) : lab.imageUrl ? (
+                      <img
+                        src={lab.imageUrl}
+                        alt={lab.name}
+                        className="w-full h-full object-cover rounded-xl"
+                      />
+                    ) : (
+                      <Building2 className="w-8 h-8 text-[#006978]" />
+                    )}
+                  </div>
                   <div className="space-y-1">
                     <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
                       {lab.name}
