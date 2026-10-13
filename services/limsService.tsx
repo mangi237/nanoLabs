@@ -318,6 +318,7 @@ export const limsService = {
    * Receptionist creates a new Patient Booklet Booking
    */
   async createBooking(params: {
+    homeCollection?: boolean; 
     labId: string;
     patientId: string;
     patientName: string;
@@ -372,6 +373,7 @@ export const limsService = {
     insuranceClaimAmount?: number;
     patientCoPayAmount?: number;
     prescriptionType?: string;
+    pickupLocation?: string;
     prescriptionImageUrl?: string;
     yeboKycVerified?: boolean;
     yeboReferenceId?: string;
@@ -379,6 +381,7 @@ export const limsService = {
     const {
       labId = 'lab-1',
       patientId,
+  
       patientName,
       patientAge = 30,
       dateOfBirth,
@@ -421,6 +424,7 @@ export const limsService = {
       userCoords,
       batchId
     }: {
+      // homeCollection: string;
       labId: string;
       patientId: string;
       patientName: string;

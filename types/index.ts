@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -346,6 +346,15 @@ export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_
 export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  lat?: number;
+  lng?: number;
+  tier?: string | number;
+  averageTurnaroundHours?: number;
+  tatHours?: number;
   id: string;
   name: string;
   location: string;

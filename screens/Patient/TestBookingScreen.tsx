@@ -574,8 +574,8 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {filteredLabs.map((lab) => {
-                const labLat = lab.lat ?? lab.coordinates?.latitude ?? 4.0511;
-                const labLng = lab.lng ?? lab.coordinates?.longitude ?? 9.7042;
+                const labLat = lab.lat ;
+                const labLng = lab.lng ;
                 const dist = calculateDistanceKm(userCoords.lat, userCoords.lng, labLat, labLng);
                 const isSelected = lab.id === selectedLabId;
                 return (
