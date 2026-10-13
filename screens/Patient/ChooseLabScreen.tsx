@@ -98,24 +98,29 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
       try {
         const snap = await getDocs(collection(db, 'labs'));
         if (!snap.empty) {
-          const liveList: PartnerLabItem[] = snap.docs.map((docSnap, idx) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              name: data.name || `Laboratory ${idx + 1}`,
-              rating: data.rating || 4.7,
-              reviewsCount: data.reviewsCount || 85,
-              turnaroundTime: data.turnaroundTime || '3-4 hrs',
-              features: ['Home pickup', 'Delivery', 'Accredited'],
-              distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
-              city: data.city || 'Douala',
-              address: data.address || 'Akwa, Douala',
-              imageUrl: data.imageUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].imageUrl,
-              accredited: true,
-              baseDeliveryFeePerKm: 800,
-              testPricingMultiplier: data.pricingMultiplier || 1.0
-            };
-          });
+            const liveList: PartnerLabItem[] = snap.docs.map((docSnap, idx) => {
+                const data = docSnap.data();
+                return {
+                  id: docSnap.id,
+                  name: data.name || `Laboratory ${idx + 1}`,
+                  rating: data.rating || 4.7,
+                  reviewsCount: data.reviewsCount || 85,
+                  turnaroundTime: data.turnaroundTime || '3-4 hrs',
+                  features: ['Home pickup', 'Delivery', 'Accredited'],
+                  distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
+                  city: data.city || 'Douala',
+                  address: data.address || 'Akwa, Douala',
+                  imageUrl: data.imageUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].imageUrl,
+                  accredited: true,
+                  baseDeliveryFeePerKm: 800,
+                  testPricingMultiplier: data.pricingMultiplier || 1.0,
+                  
+                  // 💡 Added missing fields required by PartnerLabItem
+                  logoUrl: data.logoUrl || DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length].logoUrl || '', 
+                  ratePer100m: data.ratePer100mts || 0 
+                };
+              });
+              
           setLabs(liveList);
         }
       } catch (e) {
