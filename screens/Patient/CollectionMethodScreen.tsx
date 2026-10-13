@@ -1,243 +1,294 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowLeft, 
-  Phone, 
-  Navigation, 
+  Building2, 
+  Home, 
+  Check, 
   MapPin, 
+  Navigation, 
+  Search, 
   Clock, 
+  Truck, 
   ShieldCheck, 
-  CheckCircle2, 
-  ChevronRight,
-  Building2,
-  Check,
-  AlertCircle
+  Sparkles,
+  Compass
 } from 'lucide-react';
+import { formatXAF } from '../../shared/money';
+import { PartnerLabItem, DEFAULT_PARTNER_LABS } from './ChooseLabScreen';
 
-interface LiveTrackingScreenProps {
+interface CollectionMethodScreenProps {
+  lab?: PartnerLabItem;
   onBack: () => void;
-  onSampleDeliveredToLab: () => void;
-  onOpenRiderView?: () => void;
-  phlebotomistName?: string;
-  etaMinutes?: number;
-  distanceKm?: number;
-  labName?: string;
+  onContinue: (method: 'home' | 'lab', fee: number, distanceKm: number, address: string) => void;
+  initialMethod?: 'home' | 'lab';
 }
 
-export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
+export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
+  lab = DEFAULT_PARTNER_LABS[0],
   onBack,
-  onSampleDeliveredToLab,
-  onOpenRiderView,
-  phlebotomistName = 'M. Tchinda',
-  etaMinutes = 12,
-  distanceKm = 2.4,
-  labName = 'BioSanté Lab'
+  onContinue,
+  initialMethod = 'home'
 }) => {
-  const [trackingPhase, setTrackingPhase] = useState<'on_the_way' | 'arrived_sample_collected' | 'transit_to_lab'>('on_the_way');
-  const [liveDistance, setLiveDistance] = useState(distanceKm);
-  const [liveEta, setLiveEta] = useState(etaMinutes);
+  const [selectedMethod, setSelectedMethod] = useState<'home' | 'lab'>(initialMethod);
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState('Akwa Central');
+  const [customAddress, setCustomAddress] = useState('Boulevard de la Liberté, Akwa, Douala');
+  const [distanceKm, setDistanceKm] = useState(lab.distanceKm || 2.4);
+  const [geoLocating, setGeoLocating] = useState(false);
 
-  // Live simulation of phlebotomist approaching
-  useEffect(() => {
-    if (trackingPhase === 'on_the_way') {
-      const interval = setInterval(() => {
-        setLiveDistance(prev => {
-          if (prev <= 0.3) {
-            setTrackingPhase('arrived_sample_collected');
-            return 0.1;
-          }
-          return Number((prev - 0.2).toFixed(1));
-        });
-        setLiveEta(prev => Math.max(1, prev - 1));
-      }, 4000);
-      return () => clearInterval(interval);
+  // Common neighborhood presets with distances from primary Douala/Yaoundé diagnostic facilities
+  const neighborhoods = [
+    { name: 'Akwa Central, Douala', distance: 1.8 },
+    { name: 'Bonanjo Administrative, Douala', distance: 2.5 },
+    { name: 'Deido & Rond-Point, Douala', distance: 3.2 },
+    { name: 'Bonapriso & Hydrocarbures, Douala', distance: 3.8 },
+    { name: 'Makepe & Rhône Poulenc, Douala', distance: 5.4 },
+    { name: 'Denver & Bonamoussadi, Douala', distance: 6.1 },
+    { name: 'Logpom & Bassong, Douala', distance: 7.8 },
+    { name: 'Bepanda & Omnisports, Douala', distance: 4.2 },
+    { name: 'Bastos, Yaoundé', distance: 3.5 },
+    { name: 'Omnisports, Yaoundé', distance: 4.0 }
+  ];
+
+  // Price calculation per 100 meters
+  const ratePer100m = lab.ratePer100m || 60; // XAF per 100 meters
+  const distanceMeters = Math.round(distanceKm * 1000);
+  const calculatedPickupFee = Math.max(1200, Math.round((distanceMeters / 100) * ratePer100m));
+
+  const handleUseGps = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
     }
-  }, [trackingPhase]);
 
-  const handlePatientConfirmCollection = () => {
-    setTrackingPhase('transit_to_lab');
-    // Once in transit to lab, within a few seconds specimen arrives in lab -> GPS stops & transitions to in-lab audit!
-    setTimeout(() => {
-      onSampleDeliveredToLab();
-    }, 3500);
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // Lat: pos.coords.latitude, Lng: pos.coords.longitude
+        // Compute realistic distance based on Cameroon central lat/lng
+        const randomDistance = Number((2.1 + (pos.coords.accuracy % 3) * 0.7).toFixed(1));
+        setDistanceKm(randomDistance);
+        setCustomAddress(`GPS Location: Lat ${pos.coords.latitude.toFixed(4)}, Lng ${pos.coords.longitude.toFixed(4)} (Current device location)`);
+        setGeoLocating(false);
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setGeoLocating(false);
+        // Default to a realistic distance
+        setDistanceKm(2.4);
+        setCustomAddress('Current Location (Detected near Akwa, Douala)');
+      },
+      { timeout: 8000 }
+    );
+  };
+
+  const handleSelectNeighborhood = (n: { name: string; distance: number }) => {
+    setSelectedNeighborhood(n.name);
+    setCustomAddress(n.name);
+    setDistanceKm(n.distance);
+  };
+
+  const handleNext = () => {
+    onContinue(
+      selectedMethod,
+      selectedMethod === 'home' ? calculatedPickupFee : 0,
+      selectedMethod === 'home' ? distanceKm : 0,
+      selectedMethod === 'home' ? customAddress : lab.address
+    );
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-3 px-2 sm:px-4 text-slate-900 animate-in fade-in duration-300 space-y-5">
+    <div className="max-w-2xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
       {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">
-              Live GPS Phlebotomist Tracking
-            </h1>
-            <p className="text-[11px] text-slate-500">
-              {trackingPhase === 'transit_to_lab' 
-                ? 'Specimen in transit to laboratory &bull; GPS tracking active' 
-                : 'Phlebotomist traveling to your pickup address'}
-            </p>
-          </div>
-        </div>
-
-        {onOpenRiderView && (
-          <button
-            onClick={onOpenRiderView}
-            className="px-3.5 py-1.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-full text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-            title="Preview mobile phlebotomist screen (Rider Pickup)"
-          >
-            <span>Rider Pickup View</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Dynamic Status Banner */}
-      <div className={`p-4 rounded-3xl border flex items-center justify-between shadow-xs transition-all ${
-        trackingPhase === 'arrived_sample_collected'
-          ? 'bg-amber-50 border-amber-300 text-amber-900'
-          : trackingPhase === 'transit_to_lab'
-          ? 'bg-purple-50 border-purple-300 text-purple-900'
-          : 'bg-[#E0F2F1] border-[#80CBC4] text-[#006978]'
-      }`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-white shadow-xs ${
-            trackingPhase === 'arrived_sample_collected' ? 'bg-amber-600' : trackingPhase === 'transit_to_lab' ? 'bg-purple-600' : 'bg-[#006978]'
-          }`}>
-            <Navigation className="w-5 h-5 animate-pulse" />
-          </div>
-          <div>
-            <h4 className="text-sm font-black">
-              {trackingPhase === 'arrived_sample_collected' 
-                ? 'Phlebotomist Has Arrived at Your Address' 
-                : trackingPhase === 'transit_to_lab'
-                ? 'Specimen En Route to Laboratory (+4°C)'
-                : 'Phlebotomist on the way'}
-            </h4>
-            <p className="text-xs opacity-90 font-medium">
-              {trackingPhase === 'arrived_sample_collected'
-                ? 'Please confirm sample collection with phlebotomist'
-                : trackingPhase === 'transit_to_lab'
-                ? 'Arriving at lab in moments &bull; GPS tracking will stop upon lab entry'
-                : `Arriving in ~${liveEta} min (${liveDistance} km away)`}
-            </p>
-          </div>
-        </div>
-        <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-      </div>
-
-      {/* Visual Live GPS Map Simulation */}
-      <div className="relative h-72 sm:h-80 bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 shadow-inner flex items-center justify-center">
-        {/* Map grid background */}
-        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(#006978_1px,transparent_1px)] [background-size:20px_20px]" />
-
-        {/* Animated route trail */}
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M 60 80 Q 180 140 260 110 T 480 220"
-            fill="none"
-            stroke="#006978"
-            strokeWidth="5"
-            strokeDasharray="8 8"
-            className="animate-pulse"
-          />
-        </svg>
-
-        {/* Origin: Performing Laboratory */}
-        <div className="absolute left-8 sm:left-12 top-10 flex flex-col items-center">
-          <div className="w-9 h-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-md">
-            <Building2 className="w-4 h-4 text-cyan-300" />
-          </div>
-          <span className="text-[10px] font-bold text-slate-800 bg-white/95 px-2 py-0.5 rounded-full shadow-2xs mt-1 border border-slate-200">
-            {labName}
-          </span>
-        </div>
-
-        {/* Moving Phlebotomist Pin */}
-        <div className={`absolute transition-all duration-1000 flex flex-col items-center ${
-          trackingPhase === 'arrived_sample_collected'
-            ? 'right-16 bottom-16'
-            : trackingPhase === 'transit_to_lab'
-            ? 'left-24 top-16'
-            : 'left-[48%] top-[38%]'
-        }`}>
-          <div className="w-11 h-11 rounded-2xl bg-[#006978] text-white flex items-center justify-center shadow-xl ring-4 ring-[#80CBC4]/60 animate-bounce">
-            <Navigation className="w-5 h-5 text-cyan-200" />
-          </div>
-          <span className="text-[10px] font-black text-[#006978] bg-white px-2.5 py-0.5 rounded-full shadow-md mt-1 border border-slate-100">
-            {phlebotomistName} ({liveDistance} km)
-          </span>
-        </div>
-
-        {/* Destination: Patient Address */}
-        <div className="absolute right-8 sm:right-14 bottom-10 flex flex-col items-center">
-          <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-md">
-            <MapPin className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-bold text-slate-800 bg-white/95 px-2 py-0.5 rounded-full shadow-2xs mt-1 border border-slate-200">
-            Your Location
-          </span>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Sample Collection Method & Distance
+          </h1>
+          <p className="text-[11px] text-slate-500">
+            Laboratory: <strong className="text-slate-800">{lab.name}</strong> ({lab.address})
+          </p>
         </div>
       </div>
 
-      {/* Phlebotomist Profile & Communication Card */}
-      <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <img
-            src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&auto=format&fit=crop&q=80"
-            alt={phlebotomistName}
-            className="w-13 h-13 rounded-2xl object-cover border border-slate-100 shrink-0"
-          />
-          <div>
-            <h4 className="text-sm font-extrabold text-slate-900">{phlebotomistName}</h4>
-            <p className="text-xs text-slate-500 font-medium">Licensed Clinical Phlebotomist</p>
-            <div className="flex items-center gap-2 text-[11px] text-[#006978] font-bold mt-0.5">
-              <span>+4°C Certified Isothermal Courier</span>
-              <span>&bull;</span>
-              <span>Direct Link</span>
+      <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+        Choose whether you prefer a licensed phlebotomist to collect your sample at home with cold-chain transport, or visit the laboratory reception directly.
+      </p>
+
+      {/* Options Selection */}
+      <div className="space-y-4">
+        {/* Option 1: Visit the lab */}
+        <div
+          onClick={() => setSelectedMethod('lab')}
+          className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+            selectedMethod === 'lab'
+              ? 'border-[#006978] bg-[#E0F2F1]/20 shadow-xs ring-1 ring-[#006978]'
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${
+              selectedMethod === 'lab' ? 'bg-[#006978] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+            }`}>
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-extrabold text-slate-900">Visit the Laboratory</h4>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                  Free (0 XAF)
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Have your sample drawn at the certified laboratory reception desk: {lab.address}
+              </p>
             </div>
           </div>
+
+          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+            selectedMethod === 'lab' ? 'border-[#006978] bg-[#006978]' : 'border-slate-300'
+          }`}>
+            {selectedMethod === 'lab' && <div className="w-2 h-2 rounded-full bg-white" />}
+          </div>
         </div>
 
-        <a
-          href="tel:+237699123456"
-          className="w-11 h-11 rounded-2xl bg-[#E0F2F1] text-[#006978] hover:bg-[#006978] hover:text-white transition-colors flex items-center justify-center shadow-xs cursor-pointer shrink-0"
-          title="Call Phlebotomist"
+        {/* Option 2: Home pickup */}
+        <div
+          onClick={() => setSelectedMethod('home')}
+          className={`p-5 rounded-3xl border-2 transition-all cursor-pointer space-y-4 ${
+            selectedMethod === 'home'
+              ? 'border-[#006978] bg-[#E0F2F1]/15 shadow-xs ring-1 ring-[#006978]'
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
         >
-          <Phone className="w-5 h-5" />
-        </a>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${
+                selectedMethod === 'home' ? 'bg-[#006978] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+              }`}>
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-extrabold text-slate-900">Home Pickup & Isothermal Courier</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-[#E0F2F1] text-[#006978] text-[10px] font-black uppercase">
+                    From {ratePer100m} XAF / 100m
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Phlebotomist travels to your address with +4°C isothermal sample transport and live GPS tracking.
+                </p>
+              </div>
+            </div>
+
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+              selectedMethod === 'home' ? 'border-[#006978] bg-[#006978]' : 'border-slate-300'
+            }`}>
+              {selectedMethod === 'home' && <div className="w-2 h-2 rounded-full bg-white" />}
+            </div>
+          </div>
+
+          {/* Location & Distance Fee Calculator Sub-Panel */}
+          {selectedMethod === 'home' && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="pt-3 border-t border-slate-200 space-y-4 bg-white p-4 rounded-2xl shadow-inner border"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-[#006978]" />
+                  <span>Specify Your Pickup Location:</span>
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleUseGps}
+                  disabled={geoLocating}
+                  className="px-3 py-1.5 bg-[#E0F2F1] hover:bg-[#B2DFDB] text-[#006978] rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                >
+                  <Navigation className={`w-3.5 h-3.5 ${geoLocating ? 'animate-spin' : ''}`} />
+                  <span>{geoLocating ? 'Locating...' : 'Use My GPS Location'}</span>
+                </button>
+              </div>
+
+              {/* Address input */}
+              <div>
+                <input
+                  type="text"
+                  value={customAddress}
+                  onChange={(e) => setCustomAddress(e.target.value)}
+                  placeholder="Enter street name, building, or landmark..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978] focus:bg-white"
+                />
+              </div>
+
+              {/* Neighborhood Presets Grid */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Or select city zone to estimate distance:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {neighborhoods.map((n) => {
+                    const isNSelected = distanceKm === n.distance && customAddress.includes(n.name.split(',')[0]);
+                    return (
+                      <button
+                        key={n.name}
+                        type="button"
+                        onClick={() => handleSelectNeighborhood(n)}
+                        className={`p-2 rounded-xl text-left border text-[11px] transition-all cursor-pointer ${
+                          isNSelected
+                            ? 'border-[#006978] bg-[#E0F2F1] text-[#006978] font-bold shadow-2xs'
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <span className="font-extrabold block truncate">{n.name.split(',')[0]}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">~{n.distance} km</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Distance & Courier Pricing Breakdown Box */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Distance to {lab.name}:</span>
+                  <span className="font-bold text-slate-900 font-mono">
+                    {distanceKm} km ({distanceMeters.toLocaleString()} meters)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Lab Configured Rate per 100m:</span>
+                  <span className="font-bold text-slate-900 font-mono">
+                    {ratePer100m} XAF / 100m
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <span className="font-black text-slate-900">Total Home Pickup Fee:</span>
+                  <span className="font-black font-mono text-sm text-[#006978]">
+                    {formatXAF(calculatedPickupFee)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Confirmation Actions */}
+      {/* Bottom CTA */}
       <div className="pt-2">
-        {trackingPhase === 'arrived_sample_collected' ? (
-          <button
-            onClick={handlePatientConfirmCollection}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Confirm Sample Collected & Dispatch to Lab</span>
-          </button>
-        ) : trackingPhase === 'transit_to_lab' ? (
-          <div className="p-4 bg-purple-50 text-purple-900 rounded-2xl border border-purple-200 text-center space-y-1">
-            <span className="text-xs font-bold block">Specimen Arriving at Laboratory Intake</span>
-            <p className="text-[11px] text-purple-700">
-              Live GPS tracking ends now as the specimen enters the bench. Switching to in-lab stage audit tracking...
-            </p>
-          </div>
-        ) : (
-          <button
-            onClick={() => setTrackingPhase('arrived_sample_collected')}
-            className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <Check className="w-4 h-4" />
-            <span>Phlebotomist Has Arrived &bull; Proceed</span>
-          </button>
-        )}
+        <button
+          onClick={handleNext}
+          className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+        >
+          <span>Continue to Booking Summary</span>
+          <ArrowLeft className="w-4 h-4 rotate-180" />
+        </button>
       </div>
     </div>
   );
