@@ -31,12 +31,12 @@ import {
   Stethoscope,
   Filter
 } from 'lucide-react';
-import labStaffTrainingImg from '../../assets/images/lab_staff_training_1791662450172.jpg';
-import cashierBillingImg from '../../assets/images/cashier_billing_flow_1791662463889.jpg';
-import biologistValidationImg from '../../assets/images/biologist_validation_1791662476698.jpg';
-import analyzerMachineImg from '../../assets/images/medical_laboratory_analyzer_1789043842712.jpg';
-import phlebotomyDrawingImg from '../../assets/images/phlebotomist_specimen_collection_1789043859023.jpg';
-import labDirectorImg from '../../assets/images/lab_director_hero_1786368225928.jpg';
+// import labStaffTrainingImg from '../../assets/images/lab_staff_training_1791662450172.jpg';
+// import cashierBillingImg from '../../assets/images/cashier_billing_flow_1791662463889.jpg';
+// import biologistValidationImg from '../../assets/images/biologist_validation_1791662476698.jpg';
+// import analyzerMachineImg from '../../assets/images/medical_laboratory_analyzer_1789043842712.jpg';
+// import phlebotomyDrawingImg from '../../assets/images/phlebotomist_specimen_collection_1789043859023.jpg';
+// import labDirectorImg from '../../assets/images/lab_director_hero_1786368225928.jpg';
 
 export interface TrainingLesson {
   id: string;
@@ -79,7 +79,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'The 5-Step Clinical Chain of Custody (ISO 15189 Compliant)',
     summary: 'Understand the end-to-end journey of a patient sample: from front-desk reception, to cashier settlement, barcoded collection, analytical testing, and mandatory biological validation.',
     estimatedMinutes: 5,
-    featuredImage: labStaffTrainingImg,
+    featuredImage:  '',
     steps: [
       {
         number: 1,
@@ -159,7 +159,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Registering Walk-Ins, Selecting Tests & Proper Doctor Referral Formatting',
     summary: 'Master the patient intake workflow: generating patient codes, selecting tests from the catalog, and ensuring self-referrals never mistakenly display the facility name.',
     estimatedMinutes: 6,
-    featuredImage: phlebotomyDrawingImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -230,7 +230,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Settling Orders, Adding Medical Acts with Code (e.g. kb10) & Cashier PIN Authorization',
     summary: 'Step-by-step cashier training: operating the 2-column light modal, adding custom medical consumables with code and price, cash change computation, and official stamped receipts.',
     estimatedMinutes: 7,
-    featuredImage: cashierBillingImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -306,7 +306,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Specimen Collection Protocols, Vacutainer Tube Colors & Bench Dispatch',
     summary: 'Ensure 100% sample integrity by following color-coded vacutainer standards, printing barcoded labels, and dispatching tubes to analytical benches.',
     estimatedMinutes: 5,
-    featuredImage: phlebotomyDrawingImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -371,7 +371,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Entering Test Findings, Reagent Logging & Why Techs CANNOT Print Before Biologist Confirms',
     summary: 'Detailed bench guide: entering biochemical parameters, recording reagent consumption using the card grid, entering tech PIN, and why reports are locked until biological sign-off.',
     estimatedMinutes: 8,
-    featuredImage: analyzerMachineImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -448,7 +448,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Reviewing Findings, Electronic Signing & Unlocking Official Physical Printing',
     summary: 'Clinical Biologist guide: inspecting biochemical values, appending specialist remarks, electronic passcode signing, and releasing official reports to patients and printers.',
     estimatedMinutes: 6,
-    featuredImage: biologistValidationImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -513,7 +513,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Managing Reagent Lots, Setting Safety Thresholds & Consumption Auditing',
     summary: 'Maintain zero stockouts: register supplier shipments, track lot numbers and expiry dates, set low stock threshold alerts, and audit consumption.',
     estimatedMinutes: 5,
-    featuredImage: analyzerMachineImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,
@@ -567,7 +567,7 @@ export const TRAINING_LESSONS: TrainingLesson[] = [
     title: 'Managing Staff PINs, Test Catalog Pricing in FCFA & Financial Audits',
     summary: 'Administrative controls: creating staff accounts, assigning roles, updating master pricing in FCFA, and viewing daily cashier reconciliations.',
     estimatedMinutes: 7,
-    featuredImage: labDirectorImg,
+    featuredImage: '',
     steps: [
       {
         number: 1,

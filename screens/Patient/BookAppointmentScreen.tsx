@@ -48,7 +48,7 @@ import {
   Navigation,
   Compass
 } from 'lucide-react';
-import pinkOctoberBannerImg from 'assets/images/pinkOctober2.jpg';
+import pinkOctoberBannerImg from '../../assets/images/pinkOctober2.jpg';
 
 interface BookAppointmentScreenProps {
   onBack?: () => void;

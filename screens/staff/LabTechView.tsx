@@ -219,6 +219,14 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   // PDF Preview Modal
   const [showPdfModal, setShowPdfModal] = useState(false);
 
+  // Biologist Validation & Reagent Deduction Workflow State
+  const [showBiologistWaitModal, setShowBiologistWaitModal] = useState(false);
+  const [techStaffCode, setTechStaffCode] = useState('');
+  const [techStaffCodeError, setTechStaffCodeError] = useState('');
+  const [reagentSearchTerm, setReagentSearchTerm] = useState('');
+  const [modalReagentsMap, setModalReagentsMap] = useState<Record<string, { id: string; name: string; quantity: number; unit: string; selected: boolean }>>({});
+  const [isSubmittingToBiologist, setIsSubmittingToBiologist] = useState(false);
+
   // Result Template Editor Modal
   const [showResultTemplateModal, setShowResultTemplateModal] = useState(false);
 
@@ -954,6 +962,145 @@ CLINICAL REAGENTS USED:
     setActiveReagentsUsed(activeReagentsUsed.filter(r => r.reagentId !== reagentId));
   };
 
+  // Determine if active booking is confirmed by Biologist
+  const isCurrentBookingBiologistConfirmed = useMemo(() => {
+    if (!activeBooking) return false;
+    return Boolean(
+      activeBooking.biologistSigned || 
+      activeBooking.biologistConfirmed ||
+      (activeBooking.tests && activeBooking.tests.length > 0 && activeBooking.tests.every(t => (t as any).biologistSigned || (t as any).biologistConfirmed))
+    );
+  }, [activeBooking]);
+
+  // Attempt print: blocked if Biologist hasn't confirmed yet!
+  const handleAttemptPrint = (testIndex?: number) => {
+    if (testIndex !== undefined) {
+      setSelectedTestIndexForPdf(testIndex);
+    }
+    if (isCurrentBookingBiologistConfirmed) {
+      setShowPdfModal(true);
+    } else {
+      setShowBiologistWaitModal(true);
+    }
+  };
+
+  const handleToggleReagentSelection = (reagent: ReagentItem) => {
+    setModalReagentsMap(prev => {
+      const existing = prev[reagent.id];
+      if (existing) {
+        return {
+          ...prev,
+          [reagent.id]: {
+            ...existing,
+            selected: !existing.selected
+          }
+        };
+      }
+      return {
+        ...prev,
+        [reagent.id]: {
+          id: reagent.id,
+          name: reagent.name,
+          quantity: 1,
+          unit: reagent.unit || 'Units',
+          selected: true
+        }
+      };
+    });
+  };
+
+  const handleUpdateReagentQuantity = (reagentId: string, delta: number) => {
+    setModalReagentsMap(prev => {
+      const item = prev[reagentId];
+      if (!item) return prev;
+      const newQty = Math.max(0, item.quantity + delta);
+      return {
+        ...prev,
+        [reagentId]: {
+          ...item,
+          quantity: newQty,
+          selected: true
+        }
+      };
+    });
+  };
+
+  const handleSubmitResultsToBiologist = async (skipReagents: boolean = false) => {
+    if (!activeBooking) return;
+    if (!techStaffCode.trim()) {
+      setTechStaffCodeError('Please enter your technician authorization code (e.g. TEC123)');
+      return;
+    }
+    setTechStaffCodeError('');
+    setIsSubmittingToBiologist(true);
+
+    try {
+      const techName = user?.name || 'Medical Technologist';
+
+      // Gather reagents
+      const reagentsList: Array<{ reagentId?: string; reagentName: string; quantity: number; unit: string }> = [];
+      if (!skipReagents) {
+        Object.values(modalReagentsMap).forEach(r => {
+          if (r.selected) {
+            reagentsList.push({
+              reagentId: r.id,
+              reagentName: r.name,
+              quantity: r.quantity || 0,
+              unit: r.unit || 'Units'
+            });
+          }
+        });
+      }
+
+      // Merge with any activeReagentsUsed
+      activeReagentsUsed.forEach(ar => {
+        if (!reagentsList.some(r => r.reagentId === ar.reagentId)) {
+          reagentsList.push({
+            reagentId: ar.reagentId,
+            reagentName: ar.reagentName,
+            quantity: ar.quantity,
+            unit: ar.unit || 'Units'
+          });
+        }
+      });
+
+      const res = await limsService.submitResultsToBiologist({
+        labId: targetLabId,
+        bookingId: activeBooking.id,
+        techName,
+        techCode: techStaffCode.trim(),
+        reagentsUsed: reagentsList
+      });
+
+      if (res.success) {
+        setActionSuccessMessage(`✅ Diagnostic results submitted to Clinical Biologist for validation! Wait for Biologist to confirm before printing.`);
+        setShowBiologistWaitModal(false);
+        setTechStaffCode('');
+        setModalReagentsMap({});
+
+        // Update local active booking
+        setActiveBooking(prev => prev ? {
+          ...prev,
+          labTechSigned: true,
+          labTechCode: techStaffCode.trim(),
+          labTechName: techName,
+          reagentsUsed: reagentsList,
+          overallStatus: 'In_Lab_Testing'
+        } : null);
+
+        await fetchData();
+      } else {
+        setTechStaffCodeError(res.error || 'Failed to submit results to Biologist.');
+      }
+    } catch (err: any) {
+      console.error('Error submitting to biologist:', err);
+      setTechStaffCodeError(err.message || 'Error submitting results.');
+    } finally {
+      setIsSubmittingToBiologist(false);
+    }
+  };
+
+
   // Save / Validate Single Test Item
   const handleSaveCurrentTest = async () => {
     if (!activeBooking || !activeBooking.tests) return;
@@ -1556,11 +1703,26 @@ CLINICAL REAGENTS USED:
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => setShowPdfModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => handleAttemptPrint()}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isCurrentBookingBiologistConfirmed
+                      ? 'bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 border border-emerald-500/40'
+                      : 'bg-slate-800/80 hover:bg-slate-800 text-amber-300 border border-amber-500/30'
+                  }`}
+                  title={isCurrentBookingBiologistConfirmed ? "Print official validated report" : "Print locked: Biologist validation required"}
                 >
-                  <Eye className="w-4 h-4" />
-                  <span>Preview PDF</span>
+                  {isCurrentBookingBiologistConfirmed ? (
+                    <>
+                      <Printer className="w-4 h-4 text-emerald-400" />
+                      <span>Print PDF (Confirmed)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4 text-amber-400" />
+                      <span>Print (Wait for Biologist)</span>
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={() => setActiveBooking(null)}
@@ -1955,9 +2117,8 @@ CLINICAL REAGENTS USED:
                                 testName: 'Consolidated Batch Results'
                               });
                             }}
-                            onPrintPreview={(bookingObj) => {
-                              setSelectedTestIndexForPdf(selectedTestIndex);
-                              setShowPdfModal(true);
+                            onPrintPreview={() => {
+                              handleAttemptPrint(selectedTestIndex);
                             }}
                           />
                         </div>
@@ -2135,13 +2296,17 @@ CLINICAL REAGENTS USED:
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedTestIndexForPdf(selectedTestIndex);
-                                setShowPdfModal(true);
+                                handleAttemptPrint(selectedTestIndex);
                               }}
                               className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                              title={isCurrentBookingBiologistConfirmed ? "Print official test sheet" : "Printing locked until Biologist confirms"}
                             >
-                              <Printer className="w-4 h-4 text-slate-600" />
-                              <span>Preview / Print Sheet</span>
+                              {isCurrentBookingBiologistConfirmed ? (
+                                <Printer className="w-4 h-4 text-emerald-600" />
+                              ) : (
+                                <Lock className="w-4 h-4 text-amber-600" />
+                              )}
+                              <span>{isCurrentBookingBiologistConfirmed ? 'Preview / Print Sheet' : 'Print (Wait for Biologist)'}</span>
                             </button>
 
                             <button
@@ -2244,6 +2409,221 @@ CLINICAL REAGENTS USED:
                 )}
               </div>
 
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* BIOLOGIST VALIDATION & REAGENT CONSUMPTION MODAL */}
+      {showBiologistWaitModal && activeBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in">
+          <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto space-y-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Clinical Biologist Authorization Required
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Order #{activeBooking.bookingCode} • Patient: <strong>{activeBooking.patientName}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBiologistWaitModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Crucial Explanatory Notice */}
+            <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+              <div className="font-extrabold flex items-center gap-2 text-amber-800">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Wait for Biologist to Confirm — Cannot Print Yet</span>
+              </div>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                By laboratory accreditation protocols, the laboratory technician cannot print official test reports without the Clinical Biologist reviewing and validating the analytical report. Are you done with testing? Enter your technician code and select the reagents used below to dispatch this report to the Biologist.
+              </p>
+            </div>
+
+            {/* Technician Security PIN Input */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-teal-600" />
+                  Technician Staff Code / Authorization PIN *
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">e.g. TEC123</span>
+              </label>
+              <input
+                type="password"
+                placeholder="Enter your technician PIN / access code..."
+                value={techStaffCode}
+                onChange={(e) => {
+                  setTechStaffCode(e.target.value);
+                  if (techStaffCodeError) setTechStaffCodeError('');
+                }}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+              />
+              {techStaffCodeError && (
+                <div className="text-[10px] text-rose-600 font-bold flex items-center gap-1 pt-0.5">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>{techStaffCodeError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Reagents Used & Quantity - Card Display with Search */}
+            <div className="p-3.5 bg-slate-50/70 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-teal-600" />
+                    <span>Select Reagents Used & Quantities (Optional)</span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    Search reagents below. You can log quantities or just select the reagent, or continue anyway if none used.
+                  </p>
+                </div>
+                {/* Search Bar */}
+                <div className="relative w-full sm:w-60">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search reagents by name..."
+                    value={reagentSearchTerm}
+                    onChange={(e) => setReagentSearchTerm(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Reagents Card Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                {validUnexpiredReagents
+                  .filter(r => !reagentSearchTerm || r.name.toLowerCase().includes(reagentSearchTerm.toLowerCase()) || ((r as any).code && (r as any).code.toLowerCase().includes(reagentSearchTerm.toLowerCase())))
+                  .map((reagent) => {
+                    const mapped = modalReagentsMap[reagent.id];
+                    const isSelected = Boolean(mapped?.selected);
+                    const qty = mapped?.quantity !== undefined ? mapped.quantity : 1;
+
+                    return (
+                      <div
+                        key={reagent.id}
+                        className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-teal-50 border-teal-400 shadow-xs ring-1 ring-teal-400'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                          <div className="overflow-hidden">
+                            <span className="font-bold text-xs text-slate-900 block truncate" title={reagent.name}>
+                              {reagent.name}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400 block">
+                              Stock: {reagent.quantity} {reagent.unit || 'Units'} • Lot: {reagent.lotNumber || 'N/A'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReagentSelection(reagent)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {isSelected ? 'Used ✓' : '+ Select'}
+                          </button>
+                        </div>
+
+                        {/* Quantity input when selected */}
+                        {isSelected && (
+                          <div className="pt-1.5 border-t border-teal-200/70 flex items-center justify-between">
+                            <span className="text-[10px] text-teal-800 font-semibold">Qty Used:</span>
+                            <div className="flex items-center gap-1 bg-white border border-teal-300 rounded-lg px-1 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateReagentQuantity(reagent.id, -1)}
+                                className="px-1 text-slate-600 hover:text-slate-900 font-bold cursor-pointer text-xs"
+                              >
+                                -
+                              </button>
+                              <span className="w-7 text-center font-mono font-bold text-xs text-teal-900">
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateReagentQuantity(reagent.id, 1)}
+                                className="px-1 text-slate-600 hover:text-slate-900 font-bold cursor-pointer text-xs"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Already Selected summary */}
+              {Object.values(modalReagentsMap).filter(r => r.selected).length > 0 && (
+                <div className="p-2 bg-teal-100/70 rounded-xl text-[10px] text-teal-900 font-bold flex items-center justify-between">
+                  <span>
+                    Selected {Object.values(modalReagentsMap).filter(r => r.selected).length} Reagent(s) for inventory logging
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setModalReagentsMap({})}
+                    className="text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowBiologistWaitModal(false)}
+                className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Cancel / Return to Editing
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  disabled={isSubmittingToBiologist}
+                  onClick={() => handleSubmitResultsToBiologist(true)}
+                  className="flex-1 sm:flex-none px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl cursor-pointer transition-colors"
+                  title="Submit without logging extra reagents"
+                >
+                  Continue Anyway (No Reagents)
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingToBiologist}
+                  onClick={() => handleSubmitResultsToBiologist(false)}
+                  className="flex-1 sm:flex-none px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>{isSubmittingToBiologist ? 'Submitting...' : 'Submit to Biologist'}</span>
+                </button>
+              </div>
             </div>
 
           </div>
@@ -2707,7 +3087,7 @@ CLINICAL REAGENTS USED:
                 return { ...prev, tests: updatedTests, status: 'Completed' };
               });
             }}
-            onPrintPreview={() => setShowPdfModal(true)}
+            onPrintPreview={() => handleAttemptPrint()}
           />
         </div>
       )}

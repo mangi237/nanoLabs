@@ -37,7 +37,7 @@ interface BiologistViewProps {
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
   onRoleSwitcherPress?: () => void;
-}
+}  
 
 export const BiologistView: React.FC<BiologistViewProps> = ({
   onNotificationPress,
@@ -157,6 +157,7 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
         setSelectedBooking(prev => prev ? {
           ...prev,
           biologistSigned: true,
+          biologistConfirmed: true,
           biologistName: authResult.staffName || user?.name || 'Lead Pathologist',
           biologistRemarks,
           overallStatus: 'Completed'
