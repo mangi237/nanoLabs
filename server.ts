@@ -2722,16 +2722,34 @@ Your responsibilities:
 
 Provide a comprehensive, beautifully structured response with markdown formatting (bullet points, clear sections).`;
 
-      const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt
-      });
+      let responseText = '';
+      let usedModel = 'gemini-3.1-flash-lite';
 
-      const responseText = aiResponse.text || 'I have analyzed your request. Please consult your physician for personalized clinical care.';
+      const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      for (const m of candidateModels) {
+        try {
+          const aiResponse = await ai.models.generateContent({
+            model: m,
+            contents: prompt
+          });
+          if (aiResponse && aiResponse.text) {
+            responseText = aiResponse.text;
+            usedModel = m;
+            break;
+          }
+        } catch (mErr: any) {
+          console.warn(`Gemini model ${m} unavailable or busy:`, mErr.message);
+        }
+      }
+
+      if (!responseText) {
+        throw new Error('All Gemini models encountered high demand');
+      }
+
       return res.json({
         success: true,
         answer: responseText,
-        model: 'gemini-3.8-flash',
+        model: usedModel,
         timestamp: new Date().toISOString()
       });
     } catch (aiErr: any) {
