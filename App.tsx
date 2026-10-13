@@ -33,15 +33,18 @@ import RoleSwitcher from './screens/staff/RoleSwitcher';
 import NotificationsScreen from './screens/NotificationScreen';
 import PatientDetailsScreen from './screens/PatientDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
-
+import StaffTrainingBookletPage from './screens/staff/StaffTrainingBookletPage';
 import { Activity, RefreshCw } from 'lucide-react';
 
 // Define all possible screens
+
+
 
 type ScreenType =
   | 'website'
   | 'login'
   | 'register'
+  | 'staff-training'
   | 'registration-complete'
   | 'select-lab'
   | 'verify-report'
@@ -52,10 +55,9 @@ type ScreenType =
   | 'analytics'
   | 'inventory'
   | 'catalog'
-  | 'patientApp'
   | 'patient-list'
   | 'reports'
-  // | 'patient-dashboard'
+  | 'patient-dashboard'
   | 'book-appointment'
   | 'appointment'
   | 'test-history'
@@ -64,6 +66,7 @@ type ScreenType =
   | 'result-view'
   | 'notifications'
   | 'patient-details'
+  | 'staff-training'
   | 'profile'
   | 'role-switcher'
   | 'receptionist';
@@ -83,17 +86,26 @@ const MainAppContent: React.FC = () => {
   const [selectedTest, setSelectedTest] = useState<any>(null);
   const [registeredPatient, setRegisteredPatient] = useState<any>(null);
   const [loginPortal, setLoginPortal] = useState<'lab' | 'patient' | 'doctor'>('lab');
-   
+  const [preselectedBookingTests, setPreselectedBookingTests] = useState<any[]>([]);
+  const [bookingInitialStep, setBookingInitialStep] = useState<1 | 2 | 3>(1);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white select-none">
         <div className="flex flex-col items-center space-y-6 max-w-sm text-center animate-in fade-in duration-300">
-          {/* Branded Logo Container */}
+          {/* Branded Logo Container - Stagnant and Rock-Solid */}
           <div className="relative">
-            <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400 shadow-2xl shadow-teal-500/20 animate-pulse">
-              <Activity className="w-10 h-10 stroke-[2.5]" />
-            </div>
-            <div className="absolute -inset-2 rounded-3xl border border-teal-500/20 animate-ping pointer-events-none opacity-40" />
+            {(lab?.logoUrl || (typeof window !== 'undefined' && localStorage.getItem('nanolabs_active_lab_logo'))) ? (
+              <img
+                src={lab?.logoUrl || (typeof window !== 'undefined' ? localStorage.getItem('nanolabs_active_lab_logo') || '' : '')}
+                alt="Lab Logo"
+                className="w-20 h-20 rounded-3xl object-contain border border-teal-400/30 bg-white/10 p-2 shadow-2xl shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400 shadow-2xl shrink-0">
+                <Activity className="w-10 h-10 stroke-[2.5]" />
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -121,10 +133,9 @@ const MainAppContent: React.FC = () => {
       case 'overview': setScreen('dashboard'); break;
       case 'admin':
       case 'admin-dashboard': setScreen('admin-dashboard'); break;
-      // case 'patient-dashboard': setScreen('patient-dashboard'); break;
+      case 'patient-dashboard': setScreen('patient-dashboard'); break;
       case 'staff': setScreen('staff'); break;
       case 'analytics': setScreen('analytics'); break;
-      case 'PatientApp':setScreen('patientApp'); break;
       case 'inventory': setScreen('inventory'); break;
       case 'catalog': setScreen('catalog'); break;
       case 'reports': setScreen('reports'); break;
@@ -138,6 +149,11 @@ const MainAppContent: React.FC = () => {
       case 'commercial-brochure': setScreen('commercial-brochure'); break;
       case 'role-switcher': setScreen('role-switcher'); break;
       case 'receptionist': setScreen('receptionist'); break;
+      case 'staff-training':
+      case 'training-booklet':
+      case 'staff-manual':
+        setScreen('staff-training');
+        break;
       default: setScreen('dashboard'); break;
     }
   };
@@ -204,7 +220,7 @@ const MainAppContent: React.FC = () => {
     }
 
     const getDefaultDashboard = () => {
-      if (user?.role === 'patient') return 'patientApp';
+      if (user?.role === 'patient') return 'patient-dashboard';
       return 'dashboard';
     };
 
@@ -261,7 +277,7 @@ const MainAppContent: React.FC = () => {
                   roles: ['patient']
                 });
               }
-              setScreen('patientApp');
+              setScreen('patient-dashboard');
             }}
           />
         );
@@ -275,7 +291,10 @@ const MainAppContent: React.FC = () => {
         );
 
       case 'dashboard':
-    
+      case 'patient-dashboard':
+        if (user?.role === 'patient') {
+          return <PatientApp />;
+        }
         return (
           <UnifiedDashboard
             onNavigateTab={handleNavigateTab}
@@ -291,10 +310,8 @@ const MainAppContent: React.FC = () => {
             }}
           />
         );
-   
-  
-    
-        case 'admin-dashboard':
+
+      case 'admin-dashboard':
         return (
           <AdminDashboard
             onNavigateTab={handleNavigateTab}
@@ -303,6 +320,20 @@ const MainAppContent: React.FC = () => {
             onSelectPatient={(patient) => {
               setSelectedPatient(patient);
               setScreen('patient-details');
+            }}
+          />
+        );
+
+      case 'staff-training':
+        return (
+          <StaffTrainingBookletPage
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNavigateDesk={(deskRole) => {
+              if (user) {
+                const updated = { ...user, role: deskRole };
+                setUser(updated);
+              }
+              setScreen('dashboard');
             }}
           />
         );
@@ -324,10 +355,7 @@ const MainAppContent: React.FC = () => {
             onProfilePress={() => setScreen('profile')}
           />
         );
-case 'patientApp': 
-return(
-  <PatientApp />
-);
+
       case 'inventory':
         return (
           <InventoryManagement
@@ -368,6 +396,12 @@ return(
           />
         );
 
+      // case 'commercial-brochure':
+      //   return (
+      //     <CommercialBrochureScreen
+      //       onBack={() => setScreen(getDefaultDashboard())}
+      //     />
+      //   );
 
       case 'book-appointment':
         return (
@@ -376,6 +410,8 @@ return(
             onSuccess={() => setScreen(getDefaultDashboard())}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
+            initialSelectedTests={preselectedBookingTests}
+            initialStep={bookingInitialStep}
           />
         );
 
@@ -483,7 +519,7 @@ return(
           <RoleSwitcher
             onBack={() => setScreen(getDefaultDashboard())}
             onRoleSwitched={(newRole) => {
-              setScreen(newRole === 'patient' ? 'patientApp' : 'dashboard');
+              setScreen(newRole === 'patient' ? 'patient-dashboard' : 'dashboard');
             }}
             onNotificationPress={() => setScreen('notifications')}
             onProfilePress={() => setScreen('profile')}
