@@ -296,7 +296,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {popularTests.map((t:any) => (
+          {popularTests.map((t) => (
             <div
               key={t.id}
               onClick={() => onSelectTest(t)}
@@ -310,7 +310,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-[#006978]">
                     {t.name}
                   </h4>
-                  <p className="text-[11px] text-slate-400">{t.duration} &bull; {t.category}</p>
+                  <p className="text-[11px] text-slate-400">{t.turnaroundTime} &bull; {t.category}</p>
                 </div>
               </div>
 
