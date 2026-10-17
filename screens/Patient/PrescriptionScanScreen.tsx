@@ -78,6 +78,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
       code: test.code,
       name: test.name,
       frenchName: test.frenchName,
+      
       category: test.category,
       basePrice: test.basePrice,
       basePriceXaf: test.basePrice,
@@ -95,7 +96,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const filteredManualTests = MASTER_TEST_DICTIONARY.filter(
     (t) =>
       t.name.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
-      t.frenchName.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
+      t.frenchName?.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
       t.code.toLowerCase().includes(manualSearchQuery.toLowerCase())
   );
 
