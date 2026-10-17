@@ -16,7 +16,7 @@ export const MyInsuranceScreen: React.FC<MyInsuranceScreenProps> = ({ onBack, on
   const policyNumber = (activeProfile as any)?.insurancePolicyNumber || user?.insurancePolicyNumber || 'POL-884920';
 
   const [dob, setDob] = useState(() => `${activeProfile.age || 30} years old`);
-  const [gender, setGender] = useState(activeProfile?.gender || user?.gender || 'Adult');
+  const [gender, setGender] = useState(activeProfile?.gender || user?.gender || 'Adult' || '');
   const [bloodGroup, setBloodGroup] = useState(user?.bloodGroup || 'O+');
   const [isEditing, setIsEditing] = useState(false);
 
@@ -105,7 +105,8 @@ export const MyInsuranceScreen: React.FC<MyInsuranceScreenProps> = ({ onBack, on
             {isEditing ? (
               <select
                 value={gender}
-                onChange={(e) => setGender(e.target.value)}
+                onChange={(e) => setGender(e.target.value as "female" | "male" | "other")}
+
                 className="px-2 py-1 bg-slate-50 border rounded text-xs font-bold"
               >
                 <option value="Female">Female</option>
