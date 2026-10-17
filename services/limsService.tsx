@@ -319,6 +319,7 @@ export const limsService = {
    * Receptionist creates a new Patient Booklet Booking
    */
   async createBooking(params: {
+    
     labId: string;
     patientId: string;
     patientName: string;
