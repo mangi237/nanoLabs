@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,7 +17,7 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-// import { CBCResultDetailScreen } from x/';
+import { CBCResultDetailScreen } from './CBCResultDetailScreen';
 import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorsScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
@@ -381,7 +381,18 @@ const PatientAppInner: React.FC = () => {
         );
 
       // 18. Result Details Screen (CBC / Lab Report)
-    
+      case 'result_detail':
+        return (
+          <CBCResultDetailScreen
+            result={selectedResult}
+            onBack={() => setCurrentView('results')}
+            onAskAI={(res) => {
+              setSelectedResult(res);
+              setCurrentView('nanolabs_ai');
+            }}
+          />
+        );
+
       // 19. My Doctors Directory Screen
       case 'doctors':
         return (
@@ -390,8 +401,8 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onSelectDoctor={(doc : any)) => {
-              setSelectedDoctor(doc : any);
+            onSelectDoctor={(doc) => {
+              setSelectedDoctor(doc);
               setCurrentView('doctor_profile');
             }}
             onViewAppointments={() => setCurrentView('appointments')}

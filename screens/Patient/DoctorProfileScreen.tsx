@@ -5,6 +5,7 @@ import { DoctorDirectoryItem } from './MyDoctorScreen';
 interface DoctorProfileScreenProps {
   doctor: DoctorDirectoryItem;
   onBack: () => void;
+  isConnected : boolean;
   onBookAppointment: (doctor: DoctorDirectoryItem) => void;
   onOpenChat: (doctor: DoctorDirectoryItem) => void;
 }
@@ -13,6 +14,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   doctor,
   onBack,
   onBookAppointment,
+  isConnected,
   onOpenChat
 }) => {
   return (
