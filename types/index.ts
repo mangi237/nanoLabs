@@ -284,7 +284,7 @@ export interface ConnectionRequest {
 
 export interface ReferringDoctor {
   id: string;
-  labId: string;
+  labId?: string;
   doctorId?: string;
   name: string;
   specialty?: string;

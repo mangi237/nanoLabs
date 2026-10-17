@@ -4,7 +4,7 @@ import { DoctorDirectoryItem } from './MyDoctorScreen';
 
 interface DoctorProfileScreenProps {
   doctor: DoctorDirectoryItem;
-  onBack: () => void;
+  onBack: () => {};
   isConnected : boolean;
   isRequestPending : boolean;
   onBookAppointment: (doctor: DoctorDirectoryItem) => void;
