@@ -45,7 +45,7 @@ interface LabRegistrationModalProps {
   isOpen?: boolean;
   onClose: () => void;
   onLabCreated?: () => void;
-  onSuccess: () => void;
+  onSuccess? : () => void;
 }
 
 export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
