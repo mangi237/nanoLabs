@@ -4,12 +4,12 @@ import { DoctorDirectoryItem } from './MyDoctorScreen';
 
 interface DoctorProfileScreenProps {
   doctor: DoctorDirectoryItem;
-  onBack: () => {};
-  isConnected : boolean;
-  isRequestPending : boolean;
+  onBack: () => void;
+  isConnected: boolean;
+  isRequestPending: boolean;
   onBookAppointment: (doctor: DoctorDirectoryItem) => void;
   onOpenChat: (doctor: DoctorDirectoryItem) => void;
-  onSendRequest: () => void;
+  onSendRequest: (doctor: DoctorDirectoryItem) => void;
 }
 
 export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
@@ -21,6 +21,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   isRequestPending,
   onOpenChat
 }) => {
+ 
   return (
     <div className="max-w-4xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
       {/* Top Header */}
