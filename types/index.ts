@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -284,7 +284,7 @@ export interface ConnectionRequest {
 
 export interface ReferringDoctor {
   id: string;
-  labId?: string;
+  labId: string;
   doctorId?: string;
   name: string;
   specialty?: string;
@@ -346,15 +346,6 @@ export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_
 export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  lat?: number;
-  lng?: number;
-  tier?: string | number;
-  averageTurnaroundHours?: number;
-  tatHours?: number;
   id: string;
   name: string;
   location: string;
@@ -411,6 +402,12 @@ export interface Lab {
   requestedSubscriptionTier?: SubscriptionTierType;
   planChangeRequestedAt?: string;
   isCustomSelected?: boolean;
+  acceptOnlinePatients?: boolean;
+  ratePer100m?: number;
+  deliveryRatePer100m?: number;
+  momoNumber?: string;
+  orangeNumber?: string;
+  bankRib?: string;
   createdAt?: string;
 }
 
@@ -636,15 +633,19 @@ export interface FamilyMemberProfile {
   id: string;
   primaryAccountId: string;
   fullName: string;
+  nickname?: string;
   relationship: FamilyRelationship;
   relationshipLabel: string;
   dateOfBirth?: string;
   age: number;
   gender: 'female' | 'male' | 'other';
+  phone?: string;
+  city?: string;
   bloodGroup?: string;
   nationalId?: string;
   allergies?: string[];
   chronicConditions?: string[];
+  employerSociete?: string;
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
   insuranceCoveragePercent?: number;

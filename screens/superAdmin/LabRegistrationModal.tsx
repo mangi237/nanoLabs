@@ -34,7 +34,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import HumanVerificationModal from '../../components/security/HumanVerificationModal';
@@ -45,11 +45,13 @@ interface LabRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLabCreated?: () => void;
+  onSuccess: () => void;
 }
 
 export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   isOpen,
   onClose,
+  onSucces,
   onLabCreated
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -92,6 +94,15 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
     defaultDoctorCommissionRate: 20,
     staffLimit: 15,
     sitesCount: 2,
+
+    // Online Patients & Distance Tariffs
+    acceptOnlinePatients: true,
+    phlebPickupRatePer100m: 60, // 60 XAF per 100m
+    homeDeliveryRatePer100m: 50, // 50 XAF per 100m
+    momoNumber: '+237 677 88 99 00',
+    orangeMoneyNumber: '+237 699 11 22 33',
+    bankName: 'Afriland First Bank',
+    bankAccountNumber: '10005 00012 34567890123 45',
 
     // Step 3: Theme
     primaryColor: '#0D9488',
@@ -338,6 +349,16 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         sitesCount: formData.sitesCount,
         collectionCentresCount: formData.sitesCount,
         verificationStatus: 'pending',
+
+        // Online Patient Intake & Tariffs per 100m
+        acceptOnlinePatients: formData.acceptOnlinePatients,
+        ratePer100m: Number(formData.phlebPickupRatePer100m) || 60,
+        phlebPickupRatePer100m: Number(formData.phlebPickupRatePer100m) || 60,
+        homeDeliveryRatePer100m: Number(formData.homeDeliveryRatePer100m) || 50,
+        momoNumber: formData.momoNumber.trim(),
+        orangeMoneyNumber: formData.orangeMoneyNumber.trim(),
+        bankName: formData.bankName.trim(),
+        bankAccountNumber: formData.bankAccountNumber.trim(),
 
         termsAccepted: true,
         termsAcceptedAt: new Date().toISOString(),
@@ -784,14 +805,14 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                         <Zap className="w-4 h-4 text-amber-500" />
                         {formData.pricingModel === 'pay_per_test' && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
                       </div>
-                      <h4 className="text-xs font-bold text-slate-900">Pay-Per-Test</h4>
-                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">500 FCFA / test processed</p>
+                      <h4 className="text-xs font-bold text-slate-900">5% Record Fee</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">5% on patient portion only</p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
-                        Zero Upfront Cost
+                        0 FCFA for Lab
                       </span>
-                      <span className="text-[9px] font-black text-emerald-700">1 Mo Free</span>
+                      <span className="text-[9px] font-black text-emerald-700">Universal</span>
                     </div>
                   </div>
 
@@ -980,7 +1001,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     Pay-Per-Test Operating Structure
                   </p>
                   <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
-                    Zero monthly baseline software fees. You are billed strictly <strong>500 FCFA (~₦500 / $0.80)</strong> per completed and released test report. Unlimited staff logins and 24/7 patient portal are included with zero upfront commitment.
+                    Zero monthly baseline software fees for the lab. A transparent <strong>5% nanoLabs record management fee</strong> is added to the patient's portion only upon cashier verification. All test payments go directly to the laboratory.
                   </p>
                 </div>
               )}
@@ -1022,6 +1043,134 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     <span className="text-xs font-bold text-teal-800">% (Std 20%)</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Online Patients Intake & Distance-Based Tariffs */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Online Patients & Home Collection Tariffs
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Configure if this laboratory accepts online patient bookings and home sample pickups
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xs font-bold text-slate-700">
+                      {formData.acceptOnlinePatients ? 'Accepting Online' : 'In-Clinic Only'}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={formData.acceptOnlinePatients}
+                      onChange={(e) => setFormData({ ...formData, acceptOnlinePatients: e.target.checked })}
+                      className="w-4 h-4 text-teal-600 rounded-md focus:ring-teal-500"
+                    />
+                  </label>
+                </div>
+
+                {formData.acceptOnlinePatients && (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Phleb Pickup Rate (per 100 meters)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="5"
+                            value={formData.phlebPickupRatePer100m}
+                            onChange={(e) => setFormData({ ...formData, phlebPickupRatePer100m: Number(e.target.value) })}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+                          />
+                          <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-bold">
+                            XAF / 100m ({formData.phlebPickupRatePer100m * 10} XAF/km)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Home Delivery Rate (per 100 meters)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="5"
+                            value={formData.homeDeliveryRatePer100m}
+                            onChange={(e) => setFormData({ ...formData, homeDeliveryRatePer100m: Number(e.target.value) })}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+                          />
+                          <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-bold">
+                            XAF / 100m ({formData.homeDeliveryRatePer100m * 10} XAF/km)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Money & Bank Numbers for Online Payments */}
+                    <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                          <span>MTN Mobile Money Merchant / Tel</span>
+                          <span className="text-[10px] font-bold text-amber-600">MoMo Pay</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="+237 677 00 00 00"
+                          value={formData.momoNumber}
+                          onChange={(e) => setFormData({ ...formData, momoNumber: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                          <span>Orange Money Merchant / Tel</span>
+                          <span className="text-[10px] font-bold text-orange-600">OM WebPay</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="+237 699 00 00 00"
+                          value={formData.orangeMoneyNumber}
+                          onChange={(e) => setFormData({ ...formData, orangeMoneyNumber: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Bank Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Afriland First Bank, BICEC, UBA..."
+                          value={formData.bankName}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Bank Account / RIB Number
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="RIB: 10005 00012 34567890123 45"
+                          value={formData.bankAccountNumber}
+                          onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1182,7 +1331,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
                     <p className="font-bold flex items-center gap-1.5 text-teal-900">
                       <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
                       Plan Selected: {
-                        formData.pricingModel === 'pay_per_test' ? 'Pay-Per-Test (500 FCFA baseline / test)' :
+                        formData.pricingModel === 'pay_per_test' ? '5% Record Management Fee (Patient portion only)' :
                         formData.pricingModel === 'flat_subscription' ? `Flat Subscription (${formData.subscriptionTier.toUpperCase()} - Unlimited Tests)` :
                         'Lifetime Dedicated Cloud Space (15,000 FCFA/mo maintenance)'
                       }

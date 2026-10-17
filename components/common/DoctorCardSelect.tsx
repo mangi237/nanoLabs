@@ -107,11 +107,44 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
   const [customHospital, setCustomHospital] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Combine accredited and connected doctors safely
+  const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>(ACCREDITED_DOCTORS);
+
+  // Fetch real registered doctors from database
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLive = async () => {
+      try {
+        const { limsService } = await import('../../services/limsService');
+        const liveList = await limsService.searchAllAccreditedDoctors('');
+        if (liveList && liveList.length > 0 && isMounted) {
+          const mapped: DoctorOption[] = liveList.map((d, idx) => ({
+            id: d.id || `live-doc-${idx}`,
+            name: d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
+            specialty: d.specialty || 'General Practice & Diagnostics',
+            hospital: d.hospitalAffiliation || d.hospital || 'Accredited Medical Center',
+            verified: true,
+            code: d.licenseNumber || `ONMC-${1000 + idx}`,
+            phone: d.phone || '+237 670 00 00 00'
+          }));
+          
+          // Merge with unique names
+          const existingNames = new Set(mapped.map(m => m.name.toLowerCase()));
+          const extra = ACCREDITED_DOCTORS.filter(d => !existingNames.has(d.name.toLowerCase()));
+          setPlatformDoctors([...mapped, ...extra]);
+        }
+      } catch (err) {
+        console.warn('Could not load live doctors list:', err);
+      }
+    };
+    fetchLive();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Combine accredited, platform, and connected doctors safely
   const safeConnected = Array.isArray(connectedDoctors) ? connectedDoctors : [];
   const allDoctors = [
     ...safeConnected,
-    ...ACCREDITED_DOCTORS.filter(d => !safeConnected.some(cd => 
+    ...platformDoctors.filter(d => !safeConnected.some(cd => 
       (cd.id && d.id && cd.id === d.id) || 
       (cd.name && d.name && cd.name.toLowerCase() === d.name.toLowerCase())
     ))

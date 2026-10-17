@@ -1,257 +1,657 @@
-import React, { useState } from 'react';
-import { 
-  ArrowLeft, 
-  Phone, 
-  MessageCircle, 
-  Navigation, 
-  MapPin, 
-  Compass, 
-  X, 
-  ShieldCheck, 
-  CheckCircle2, 
-  ChevronRight, 
-  MoreVertical,
-  Clock,
-  ThermometerSnowflake,
-  AlertCircle
-} from 'lucide-react';
+// Canonical Enums
+export type AccountType = 'patient' | 'doctor' | 'lab_staff' | 'superadmin';
 
-interface PhlebotomistPickupScreenProps {
-  onBack: () => void;
-  booking?: any;
-  onConfirmPickup?: () => void;
+export type SampleMode = 'walk_in' | 'home_collection';
+
+export type BatchStatus = 
+  | 'intake' 
+  | 'collected' 
+  | 'in_transit' 
+  | 'received' 
+  | 'analysis' 
+  | 'validation' 
+  | 'signed' 
+  | 'ready';
+
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+
+export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
+
+export type ConsultationType = 'video' | 'in_person' | 'waspito';
+
+// Master Test & Catalog
+export interface Test {
+  id: string;
+  code: string;
+  name: string;
+  frenchName?: string;
+  category: 'hematology' | 'biochemistry' | 'parasitology' | 'microbiology' | 'serology' | 'hormones' | 'toxicology' | 'other';
+  sampleType: string;
+  turnaroundTimeHours: number;
+  fastingRequirement: string;
+  basePrice: number;
+  bCode?: string;
+  description?: string;
+  referenceRanges?: {
+    male?: string;
+    female?: string;
+    pediatric?: string;
+    unit?: string;
+  };
 }
 
-export const PhlebotomistPickupScreen: React.FC<PhlebotomistPickupScreenProps> = ({
-  onBack,
-  booking,
-  onConfirmPickup
-}) => {
-  const patientName = booking?.patientName || 'Mme. Chantal Ndongo';
-  const patientPhone = booking?.patientPhone || '+237 670 12 34 56';
-  const pickupLocation = booking?.pickupLocation || 'Boulevard de la Liberté, Akwa, Douala';
-  const testsList = booking?.tests?.map((t: any) => t.name || t.testName).join(', ') || 'Complete Blood Count (CBC), Malaria Thick Smear';
+export interface MasterTestCatalog {
+  version: string;
+  lastUpdated: string;
+  tests: Test[];
+}
 
-  const [pickupStatus, setPickupStatus] = useState<'en_route' | 'picked_up' | 'delivered_to_lab'>('en_route');
-  const [slideProgress, setSlideProgress] = useState(0);
-  const [isSliding, setIsSliding] = useState(false);
+// Test Batch Item
+export interface BatchTestItem {
+  testId: string;
+  code: string;
+  name: string;
+  category: string;
+  sampleType: string;
+  basePrice: number;
+  resultValue?: string;
+  referenceRange?: string;
+  unit?: string;
+  flag?: 'normal' | 'low' | 'high' | 'critical';
+  status: 'pending' | 'in_analysis' | 'validated';
+}
 
-  const handleSlideComplete = () => {
-    if (pickupStatus === 'en_route') {
-      setPickupStatus('picked_up');
-      if (onConfirmPickup) onConfirmPickup();
-    } else if (pickupStatus === 'picked_up') {
-      setPickupStatus('delivered_to_lab');
-    }
-  };
+// Canonical TestBatch
+export interface TestBatch {
+  id: string;
+  batchNumber: string;
+  bookingCode?: string;
+  patientId: string;
+  patientName: string;
+  familyProfileId?: string;
+  familyRelationship?: string;
+  patientPhone?: string;
+  patientAge?: number;
+  patientGender?: string;
+  labId: string;
+  labName: string;
+  sampleMode: SampleMode;
+  status: BatchStatus;
+  tests: BatchTestItem[];
+  recommendingDoctorId?: string;
+  recommendingDoctorName?: string;
+  sampleTubeBarcode?: string;
+  collectedAt?: string;
+  receivedAt?: string;
+  signedAt?: string;
+  biologistName?: string;
+  biologistLicense?: string;
+  qrAuditHash?: string;
+  reportUrl?: string;
+  invoiceId?: string;
+  paymentStatus: PaymentStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
-  return (
-    <div className="max-w-md mx-auto bg-white min-h-[92vh] flex flex-col shadow-2xl rounded-3xl overflow-hidden border border-slate-200 animate-in fade-in duration-300">
-      {/* Top Banner Notice - Matching User Screenshot Title */}
-      <div className="bg-[#FF6A00] text-white px-4 py-3 text-center shadow-xs">
-        <h2 className="text-xs sm:text-sm font-black tracking-wider uppercase">
-          RIDER PHLEBOTOMIST DISPATCH
-        </h2>
-        <p className="text-[10px] text-white/90 font-bold uppercase tracking-tight">
-          {pickupStatus === 'en_route'
-            ? 'Rider gets to patient address and marks status as pickup'
-            : pickupStatus === 'picked_up'
-            ? 'Specimen secured at +4°C • En route to certified laboratory'
-            : 'Specimen successfully delivered to laboratory intake'}
-        </p>
-      </div>
+// Financial Invoices
+export interface InvoiceLine {
+  id: string;
+  testId: string;
+  testCode: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
 
-      {/* App Header & Pickup Location Card */}
-      <div className="p-4 bg-white border-b border-slate-100 space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="p-1.5 -ml-1 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-black text-slate-800">COURIER GPS LIVE</span>
-          </div>
-          <button className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl">
-            <MoreVertical className="w-5 h-5" />
-          </button>
-        </div>
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  batchId: string;
+  batchNumber?: string;
+  patientId: string;
+  patientName: string;
+  familyProfileId?: string;
+  beneficiaryName?: string;
+  policyHolderName?: string;
+  patientPhone?: string;
+  labId: string;
+  labName: string;
+  lines?: InvoiceLine[];
+  items?: Array<{ testId: string; code: string; name: string; price: number }>;
+  subtotal?: number;
+  homeCollectionFee?: number;
+  grossTotal: number;
+  // Insurance split
+  insuranceProviderName?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent: number;
+  insuranceCoveredAmount: number;
+  patientShare: number;
+  // Platform fee on patient share only
+  platformFeePercent: number; // 5
+  platformFeeAmount: number; // 5% of patientShare
+  // Final patient amount due at cashier
+  totalPatientDue: number; // patientShare + platformFeeAmount
+  tvaRatePercent?: number; // 0 (exempt)
+  tvaExemptAmount?: number;
+  paymentMethod?: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  paymentVerifiedAt?: string;
+  verifiedByCashierName?: string;
+  transactionRef?: string;
+  payerPhone?: string;
+  payerName?: string;
+  createdAt: string;
+}
 
-        {/* Pickup Location Row */}
-        <div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-            Pickup Location
-          </span>
-          <h3 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
-            {pickupLocation}
-          </h3>
-        </div>
-      </div>
+export interface PaymentConfirmation {
+  invoiceId: string;
+  batchId: string;
+  amountPaid: number;
+  paymentMethod: PaymentMethod;
+  transactionRef?: string;
+  cashierId: string;
+  cashierName: string;
+  accessCodeVerified: boolean;
+  verifiedAt: string;
+}
 
-      {/* Patient / Passenger Details Card - Matching Mockup */}
-      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-[#006978] text-white flex items-center justify-center font-black text-base shadow-xs shrink-0 border-2 border-white">
-            {patientName.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">{patientName}</h4>
-            <span className="text-[10px] text-[#FF6A00] font-black uppercase tracking-wider block">
-              Patient Details &bull; 80% Insured
-            </span>
-            <span className="text-[10px] text-slate-500 line-clamp-1 max-w-[180px]">
-              {testsList}
-            </span>
-          </div>
-        </div>
+// Monthly Lab Settlement for Super Admin
+export interface LabSettlement {
+  id: string;
+  settlementMonth: string; // "2026-09"
+  monthYear?: string;
+  labId: string;
+  labName: string;
+  totalBatches: number;
+  totalTestsCount?: number;
+  grossRevenue: number;
+  grossTestsRevenue?: number;
+  totalInsuranceBilled: number;
+  totalPatientCollected: number;
+  totalPatientShareRevenue?: number;
+  totalPlatformFeeOwed: number; // 5% on patient share
+  platformFeeTotalDue?: number;
+  settlementStatus: 'pending' | 'invoiced' | 'settled' | 'paid';
+  settledAt?: string;
+  paidAt?: string;
+  settledBy?: string;
+  paymentReceiptRef?: string;
+  paymentTransactionRef?: string;
+}
 
-        <div className="flex items-center gap-2 shrink-0">
-          <a
-            href={`tel:${patientPhone}`}
-            className="w-10 h-10 rounded-full border border-slate-300 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-600 flex items-center justify-center transition-colors shadow-2xs"
-            title="Call Patient"
-          >
-            <Phone className="w-4 h-4" />
-          </a>
-          <button
-            onClick={() => alert(`Starting direct communication channel with ${patientName}`)}
-            className="w-10 h-10 rounded-full border border-slate-300 bg-white hover:bg-[#E0F2F1] text-slate-700 hover:text-[#006978] flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-            title="Message Patient"
-          >
-            <MessageCircle className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+export type MonthlySettlementRecord = LabSettlement;
 
-      {/* Live Map Viewport - Styled Exactly Like Ride App */}
-      <div className="relative flex-1 min-h-[340px] bg-[#E5E3DF] overflow-hidden flex items-center justify-center">
-        {/* Map Grid Pattern */}
-        <div className="absolute inset-0 opacity-40 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] bg-[size:40px_40px]" />
+// Immutable Hash-Chained Audit Logs
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  eventType?: string;
+  index?: number;
+  targetType: 'batch' | 'invoice' | 'report' | 'patient' | 'system';
+  targetId: string;
+  details: Record<string, any>;
+  metadata?: Record<string, any>;
+  previousHash: string;
+  hash: string;
+  entryHash?: string;
+}
 
-        {/* Road Labels Simulation */}
-        <div className="absolute left-6 top-8 text-[9px] font-bold text-slate-500 tracking-wider rotate-[-15deg] select-none">
-          BD DE LA LIBERTÉ
-        </div>
-        <div className="absolute right-10 bottom-24 text-[9px] font-bold text-slate-500 tracking-wider rotate-[30deg] select-none">
-          RUE DES PALMIERS
-        </div>
-        <div className="absolute left-1/3 top-1/2 text-[10px] font-black text-slate-400 tracking-widest select-none">
-          SECTOR AKWA
-        </div>
+export type AuditLogEntry = AuditLog;
 
-        {/* Route Line SVG */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M 80 280 L 140 250 L 180 180 L 260 170 L 290 90"
-            fill="none"
-            stroke="#1E293B"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M 80 280 L 140 250 L 180 180 L 260 170 L 290 90"
-            fill="none"
-            stroke="#38BDF8"
-            strokeWidth="3"
-            strokeDasharray="6 6"
-            className="animate-pulse"
-          />
-        </svg>
+export interface PatientActivityLog {
+  id: string;
+  patientId: string;
+  timestamp: string;
+  title: string;
+  description: string;
+  actionType: 'login' | 'booking_created' | 'sample_collected' | 'analysis_started' | 'report_signed' | 'report_shared' | 'payment_verified';
+  relatedBatchId?: string;
+}
 
-        {/* Phlebotomist Pin (Origin / Moving) */}
-        <div className={`absolute transition-all duration-700 flex flex-col items-center ${
-          pickupStatus === 'picked_up' ? 'right-[22%] top-[18%]' : 'left-16 bottom-16'
-        }`}>
-          <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg ring-4 ring-white animate-bounce">
-            <Navigation className="w-4 h-4 text-white rotate-45" />
-          </div>
-          <span className="text-[9px] font-black bg-white px-2 py-0.5 rounded-full shadow-md mt-1 text-slate-800 border border-slate-200">
-            Rider M. Tchinda
-          </span>
-        </div>
+// Live Phlebotomist Transit
+export interface TransitSession {
+  id: string;
+  batchId: string;
+  batchNumber?: string;
+  status?: string;
+  tubeBarcodeScanned?: string;
+  phlebotomistId: string;
+  phlebotomistName: string;
+  phlebotomistPhone: string;
+  patientAddress?: string;
+  patientLat?: number;
+  patientLng?: number;
+  currentLat?: number;
+  currentLng?: number;
+  currentLocation?: { lat: number; lng: number };
+  targetLocation?: { lat: number; lng: number };
+  etaMinutes: number;
+  coldChainTemperatureCelsius: number;
+  isActive?: boolean;
+  lastPingAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
 
-        {/* Destination Pin: Patient Pickup Location */}
-        <div className="absolute right-14 top-14 flex flex-col items-center">
-          <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xl ring-4 ring-rose-200">
-            <MapPin className="w-4 h-4" />
-          </div>
-          <span className="text-[9px] font-black bg-white text-rose-700 px-2 py-0.5 rounded-full shadow-md mt-1 border border-rose-100">
-            Patient Pickup
-          </span>
-        </div>
+// CEMAC Health Insurers
+export interface InsuranceProvider {
+  id: string;
+  code: string;
+  name: string;
+  fullName: string;
+  coverageTiers: { tier: string; defaultPercent: number }[];
+  requiresPriorAuthorization: boolean;
+  contactEmail?: string;
+  contactPhone?: string;
+  logoUrl?: string;
+}
 
-        {/* Right Floating Map Controls */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3">
-          {/* Compass */}
-          <button className="w-10 h-10 rounded-full bg-white shadow-md border border-slate-200 flex flex-col items-center justify-center text-[9px] font-black text-slate-700">
-            <Compass className="w-4 h-4 text-rose-500" />
-            <span>N</span>
-          </button>
+// Doctor Referral & Collaboration
+export interface ReferralLedger {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  batchId: string;
+  patientId: string;
+  patientName: string;
+  labId: string;
+  labName: string;
+  testCodes: string[];
+  referralDate: string;
+  status: 'pending' | 'completed';
+  notes?: string;
+}
 
-          {/* Navigation Target */}
-          <button className="w-10 h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-800 hover:bg-slate-50 cursor-pointer">
-            <Navigation className="w-4 h-4 text-slate-900" />
-          </button>
+export interface ConnectionRequest {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty?: string;
+  initiatedBy: 'patient' | 'doctor';
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
 
-          {/* Cancel Ride Button */}
-          <button
-            onClick={() => onBack()}
-            className="w-10 h-10 rounded-full bg-white shadow-md border border-slate-200 flex flex-col items-center justify-center text-rose-600 hover:bg-rose-50 cursor-pointer"
-            title="Cancel Dispatch"
-          >
-            <X className="w-4 h-4" />
-            <span className="text-[7px] font-black uppercase leading-none">Cancel</span>
-          </button>
-        </div>
+export interface ReferringDoctor {
+  id: string;
+  labId: string;
+  doctorId?: string;
+  name: string;
+  specialty?: string;
+  hospital?: string;
+  phone?: string;
+  email?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
+  licenseNumber?: string;
+  notes?: string;
+  invitationStatus?: 'accepted' | 'pending' | 'declined';
+  origin?: 'admin_invitation' | 'patient_referral' | 'accredited_network' | 'manual';
+  invitedAt?: string;
+  acceptedAt?: string;
+  totalReferrals?: number;
+  totalTestsDone?: number;
+  totalRevenueGenerated?: number;
+  status?: 'active' | 'inactive' | 'pending';
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-        {/* Temperature Cold-Chain Badge */}
-        <div className="absolute left-4 bottom-4 bg-white/95 backdrop-blur-md border border-slate-200 shadow-md rounded-2xl px-3 py-1.5 flex items-center gap-2 text-xs font-bold text-slate-800">
-          <ThermometerSnowflake className="w-4 h-4 text-[#006978]" />
-          <span>Isothermal Carrier: <strong className="text-emerald-700">+3.8°C</strong></span>
-        </div>
-      </div>
+export type RoleType = 'admin' | 'receptionist' | 'cashier' | 'analyzer' | 'lab_tech' | 'biologist' | 'patient' | 'matron' | 'doctor' | 'nurse' | 'pharmacy' | 'lab' | 'superadmin' | 'super_admin' | 'lab_staff' | 'phlebotomist' | 'technician' | 'lab_admin' | 'inventory_manager';
+export type UserRole = RoleType;
 
-      {/* Bottom Interactive Slide Action - Exactly Matching Screenshot */}
-      <div className="p-4 bg-[#0A192F] text-white">
-        {pickupStatus === 'en_route' ? (
-          <div
-            onClick={handleSlideComplete}
-            className="w-full bg-[#1E3A8A] hover:bg-[#1D4ED8] rounded-2xl p-3 flex items-center justify-between cursor-pointer transition-all shadow-lg select-none group"
-          >
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center group-hover:translate-x-2 transition-transform">
-              <ChevronRight className="w-6 h-6 text-white stroke-[3]" />
-            </div>
-            <span className="text-sm font-black tracking-wider uppercase text-white">
-              Slide to Pickup &bull; Confirm Arrival
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-xs font-black">
-              ✓
-            </div>
-          </div>
-        ) : pickupStatus === 'picked_up' ? (
-          <div
-            onClick={handleSlideComplete}
-            className="w-full bg-emerald-700 hover:bg-emerald-800 rounded-2xl p-3 flex items-center justify-between cursor-pointer transition-all shadow-lg select-none group"
-          >
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center group-hover:translate-x-2 transition-transform">
-              <CheckCircle2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xs sm:text-sm font-black tracking-wider uppercase text-white">
-              Slide to Deliver Specimen to Laboratory
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-xs font-black">
-              →
-            </div>
-          </div>
-        ) : (
-          <div className="w-full bg-emerald-950/80 border border-emerald-500/50 rounded-2xl p-3.5 text-center text-xs font-bold text-emerald-200">
-            ✓ Specimen Delivered & Signed at Laboratory Reception
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  role?: RoleType;
+  primaryRole?: RoleType;
+  roles?: RoleType[];
+  accessCode?: string;
+  labId?: string;
+  labName?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
+  nationalId?: string;
+  age?: number;
+  dateOfBirth?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  isStaffMember?: boolean;
+  staffDesignation?: string;
+  bloodGroup?: string;
+  hasInsurance?: boolean;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceCardUrl?: string;
+  mustChangePassword?: boolean;
+  status?: string;
+}
+
+export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
+export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
+
+export interface Lab {
+  id: string;
+  name: string;
+  location: string;
+  city?: string;
+  slogan?: string;
+  tagline?: string;
+  motto?: string;
+  address?: string;
+  phone?: string;
+  contactNumber?: string;
+  email?: string;
+  contactEmail?: string;
+  website?: string;
+  websiteUrl?: string;
+  licenseNumber?: string;
+  taxId?: string;
+  currency?: string;
+  currencySymbol?: string;
+  directorName?: string;
+  directorPhone?: string;
+  description?: string;
+  patientCount?: number;
+  confirmedTestsCount?: number;
+  totalTestsCount?: number;
+  royaltyEarnings?: number;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  logoUrl?: string;
+  avatarUrl?: string;
+  feePerTest?: number;
+  feePerPatient?: number;
+  pricingModel?: PricingModelType;
+  subscriptionPlan?: PricingModelType;
+  subscriptionTier?: SubscriptionTierType;
+  subscriptionPrice?: number;
+  subscriptionStartDate?: string;
+  billingPeriod?: 'monthly' | 'annual';
+  monthlyMaintenanceFee?: number;
+  staffLimit?: number;
+  patientLimit?: number;
+  sitesCount?: number;
+  collectionCentresCount?: number;
+  verificationStatus?: 'verified' | 'trial_active' | 'pending';
+  verificationToken?: string;
+  verifiedAt?: string;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
+  status?: 'active' | 'pending_approval' | 'suspended' | 'rejected';
+  confirmed?: boolean;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  requestedPricingModel?: PricingModelType;
+  requestedSubscriptionTier?: SubscriptionTierType;
+  planChangeRequestedAt?: string;
+  isCustomSelected?: boolean;
+  acceptOnlinePatients?: boolean;
+  ratePer100m?: number;
+  deliveryRatePer100m?: number;
+  momoNumber?: string;
+  orangeNumber?: string;
+  bankRib?: string;
+  createdAt?: string;
+}
+
+export interface Hospital {
+  id: string;
+  name: string;
+  slogan?: string;
+  location?: string;
+}
+
+export interface LabTest {
+  id: string;
+  name?: string;
+  testName?: string;
+  category?: string;
+  price?: number;
+  basePrice?: number;
+  systemFee?: number;
+  priceDisplay?: string;
+  method?: string;
+  conditions?: string;
+  sampleType?: string;
+  description?: string;
+  turnaroundTime?: string;
+  expectedTime?: string;
+  status?: 'requested' | 'confirmed' | 'collected' | 'sample-collected' | 'processing' | 'completed' | 'paid';
+  paymentStatus?: 'paid' | 'pending';
+  paid?: boolean;
+  receptionistValidated?: boolean;
+  confirmedByReceptionist?: boolean;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  patientId?: string;
+  patientName?: string;
+  requestedDate?: string;
+  appointmentTime?: string;
+  completedDate?: string;
+  result?: string;
+  pdfUrl?: string;
+  fileUrl?: string;
+  virtualRequested?: boolean;
+  virtualRequestedAt?: string;
+  sampleCollected?: boolean;
+  sampleCollectedBy?: string;
+  sampleCollectedByName?: string;
+  sampleCollectedDate?: any;
+  samples?: string[];
+  doctorName?: string;
+  doctorRole?: string;
+  labTechId?: string;
+  labTechName?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Patient {
+  id: string;
+  patientId?: string;
+  name: string;
+  age?: number;
+  dateOfBirth?: string;
+  gender?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  nationalId?: string;
+  bloodGroup?: string;
+  hasInsurance?: boolean;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent?: number;
+  insuranceCoveredAmount?: number;
+  patientCoPayAmount?: number;
+  insuranceCardUrl?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
+  accessCode?: string;
+  isWalkIn?: boolean;
+  registrationType?: 'online' | 'walk_in';
+  emergencyContact?: string;
+  doctorName?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  labId?: string;
+  labName?: string;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
+  healthDataConsent?: boolean;
+  status?: 'active' | 'pending' | 'inactive' | 'lab-pending' | 'lab-sample-collected' | 'pending_confirmation';
+  labTests?: LabTest[];
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  reorderLevel: number;
+  supplier?: string;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface Bill {
+  id: string;
+  description: string;
+  amount: number;
+  category?: string;
+  status: 'paid' | 'pending';
+  patientName?: string;
+  createdAt?: string;
+}
+
+export interface Appointment {
+  id: string;
+  title: string;
+  testId?: string;
+  testName?: string;
+  price?: number;
+  turnaroundTime?: string;
+  date?: string;
+  time?: string;
+  duration?: string;
+  doctorName?: string;
+  labTechId?: string;
+  labTechName?: string;
+  location?: string;
+  notes?: string;
+  type?: string;
+  status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'pending';
+  patientId?: string;
+  patientName?: string;
+  createdAt?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  patientId?: string;
+  patientName?: string;
+}
+
+export interface PatientBooking {
+  id: string;
+  bookingCode?: string;
+  patientId: string;
+  patientName: string;
+  patientPhone?: string;
+  patientEmail?: string;
+  patientAge?: number;
+  patientGender?: string;
+  labId?: string;
+  labName?: string;
+  tests?: any[];
+  totalAmount?: number;
+  totalPrice?: number;
+  status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
+  sampleCollected?: boolean;
+  sampleCollectedAt?: string;
+  resultsReady?: boolean;
+  resultsReleased?: boolean;
+  biologistConfirmed?: boolean;
+  biologistConfirmedAt?: string;
+  biologistName?: string;
+  referringDoctorId?: string;
+  referringDoctor?: string;
+  referralHospital?: string;
+  referralNotes?: string;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  matricule?: string;
+  insuranceCoveragePercent?: number;
+  coPayPercent?: number;
+  insuranceClaimAmount?: number;
+  patientCoPayAmount?: number;
+  paymentDetails?: any;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Doctor {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  specialty?: string;
+  licenseNumber?: string;
+  hospitalAffiliation?: string;
+  hospital?: string;
+  avatarUrl?: string;
+  profilePicture?: string;
+  patientCount?: number;
+  totalTestsDone?: number;
+  accessCode?: string;
+  status?: 'active' | 'pending' | 'suspended';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Multi-Profile Family & Dependent Account Types
+export type FamilyRelationship = 
+  | 'self'
+  | 'mother'
+  | 'father'
+  | 'child'
+  | 'daughter'
+  | 'son'
+  | 'spouse'
+  | 'sibling'
+  | 'grandparent'
+  | 'other';
+
+export interface FamilyMemberProfile {
+  id: string;
+  primaryAccountId: string;
+  fullName: string;
+  nickname?: string;
+  relationship: FamilyRelationship;
+  relationshipLabel: string;
+  dateOfBirth?: string;
+  age: number;
+  gender: 'female' | 'male' | 'other';
+  phone?: string;
+  city?: string;
+  bloodGroup?: string;
+  nationalId?: string;
+  allergies?: string[];
+  chronicConditions?: string[];
+  employerSociete?: string;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceCoveragePercent?: number;
+  isDependentOnPrimaryInsurance?: boolean;
+  notes?: string;
+  createdAt: string;
+  avatarColor?: string;
+}
+

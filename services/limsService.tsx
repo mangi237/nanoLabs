@@ -139,6 +139,7 @@ export interface PatientBooking {
   hasInsurance?: boolean;
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
+  employerSociete?: string;
   matricule?: string;
   insuranceCoveragePercent?: number; // e.g. 80 for 80% coverage
   coPayPercent?: number; // Patient direct co-payment percentage
@@ -318,7 +319,6 @@ export const limsService = {
    * Receptionist creates a new Patient Booklet Booking
    */
   async createBooking(params: {
-    homeCollection?: boolean; 
     labId: string;
     patientId: string;
     patientName: string;
@@ -373,7 +373,6 @@ export const limsService = {
     insuranceClaimAmount?: number;
     patientCoPayAmount?: number;
     prescriptionType?: string;
-    pickupLocation?: string;
     prescriptionImageUrl?: string;
     yeboKycVerified?: boolean;
     yeboReferenceId?: string;
@@ -381,7 +380,6 @@ export const limsService = {
     const {
       labId = 'lab-1',
       patientId,
-  
       patientName,
       patientAge = 30,
       dateOfBirth,
@@ -424,7 +422,6 @@ export const limsService = {
       userCoords,
       batchId
     }: {
-      // homeCollection: string;
       labId: string;
       patientId: string;
       patientName: string;
@@ -516,7 +513,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp:any) => ({
+          subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -3013,13 +3010,9 @@ export const limsService = {
       hospital: d.hospital,
       phone: d.phone,
       email: d.email,
-      status: 'active' as const,
-      invitationStatus: 'accepted' as const,
-      
-      // 🛠️ Added the required missing property
-      // labId: d. || 'YOUR_DEFAULT_LAB_ID' 
+      status: 'active',
+      invitationStatus: 'accepted'
     }));
-    
   },
 
   /**
@@ -3388,7 +3381,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData , id: d.id,};
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -3660,7 +3653,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -3733,7 +3726,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {

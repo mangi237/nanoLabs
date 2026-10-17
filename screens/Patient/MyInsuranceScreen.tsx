@@ -14,11 +14,9 @@ export const MyInsuranceScreen: React.FC<MyInsuranceScreenProps> = ({ onBack, on
 
   const providerName = (activeProfile as any)?.insuranceProvider || user?.insuranceProvider || 'Activa Assurances (NHIS Partner)';
   const policyNumber = (activeProfile as any)?.insurancePolicyNumber || user?.insurancePolicyNumber || 'POL-884920';
-        
+
   const [dob, setDob] = useState(() => `${activeProfile.age || 30} years old`);
-  const [gender, setGender] = useState(activeProfile?.gender || user?.gender || 'Adult' 
-    || ''
-  );
+  const [gender, setGender] = useState(activeProfile?.gender || user?.gender || 'Adult');
   const [bloodGroup, setBloodGroup] = useState(user?.bloodGroup || 'O+');
   const [isEditing, setIsEditing] = useState(false);
 
@@ -60,9 +58,15 @@ export const MyInsuranceScreen: React.FC<MyInsuranceScreenProps> = ({ onBack, on
           </span>
         </div>
 
-        <div className="mt-8 pt-4 border-t border-white/20 flex items-center justify-between text-xs text-cyan-100">
-          <span>Tiers-Payant Coverage: <strong>80%</strong></span>
-          <span>Verified &bull; ONMC Network</span>
+        <div className="mt-8 pt-4 border-t border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-cyan-100">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-cyan-200 block">Sponsor Company / Société:</span>
+            <strong className="text-white text-xs">{activeProfile.employerSociete || (user as any)?.employerSociete || 'ENEO Cameroon SA'}</strong>
+          </div>
+          <div className="sm:text-right">
+            <span>Tiers-Payant Coverage: <strong className="text-white">80%</strong></span>
+            <span className="block text-[10px] text-cyan-200">20% Patient Co-Pay &bull; ONMC Validated</span>
+          </div>
         </div>
       </div>
 
@@ -101,7 +105,7 @@ export const MyInsuranceScreen: React.FC<MyInsuranceScreenProps> = ({ onBack, on
             {isEditing ? (
               <select
                 value={gender}
-                onChange={(e) => setGender(e.target.value as "male" | "female" | "other")}
+                onChange={(e) => setGender(e.target.value)}
                 className="px-2 py-1 bg-slate-50 border rounded text-xs font-bold"
               >
                 <option value="Female">Female</option>

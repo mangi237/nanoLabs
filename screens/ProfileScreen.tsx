@@ -1,703 +1,535 @@
-import React, { useState } from 'react';
-import Header from '../components/common/Header';
-import { useAuth } from '../context/authContext';
-import { useLanguage } from '../context/languageContext';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
-  Mail, 
-  Phone, 
-  Shield, 
-  Building2, 
-  Key, 
-  LogOut, 
   ArrowLeft, 
-  RefreshCw, 
-  CheckCircle2, 
-  UploadCloud, 
-  Camera, 
-  Loader2, 
-  Trash2, 
-  Sparkles, 
-  Activity, 
-  Palette,
+  FileText, 
+  Shield, 
+  MapPin, 
+  Bell, 
+  HelpCircle, 
+  Settings, 
+  ChevronRight, 
+  LogOut, 
+  Check, 
   Edit3,
-  Save,
-  X,
-  Lock,
+  CreditCard,
+  Upload,
+  Camera,
   ShieldCheck,
-  FileText,
-  Globe,
-  Check
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Key,
+  Building2,
+  Receipt,
+  Phone,
+  Mail,
+  Droplet
 } from 'lucide-react';
-import { uploadService } from '../api/upload';
-import { db, doc, updateDoc } from '../services/firebase';
-import LabProfileModal from '../components/admin/LabProfileModal';
-import MedicalBookletModal from '../components/medical/MedicalBookletModal';
+import { useAuth } from '../../context/authContext';
+import { useFamilyProfile } from '../../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
+import { formatXAF } from '../../shared/money';
 
-interface ProfileScreenProps {
+interface PatientProfileScreenProps {
   onBack?: () => void;
-  onNavigateRoleSwitcher?: () => void;
+  onNavigateInsurance?: () => void;
+  onNavigateHealthRecords?: () => void;
   onLogout?: () => void;
-  onNotificationPress?: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onBack,
-  onNavigateRoleSwitcher,
-  onLogout,
-  onNotificationPress
+  onNavigateInsurance,
+  onNavigateHealthRecords,
+  onLogout
 }) => {
-  const { user, lab, logout, setUser } = useAuth();
-  const { language, setLanguage, toggleLanguage, t } = useLanguage();
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showLabModal, setShowLabModal] = useState(false);
-  const [showBookletModal, setShowBookletModal] = useState(false);
+  const { user, logout } = useAuth();
+  const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();
 
-  // Self-Service Profile Editing State
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(user?.name || '');
-  const [editEmail, setEditEmail] = useState(user?.email || '');
-  const [editPhone, setEditPhone] = useState(user?.phone || '');
-  const [editAccessCode, setEditAccessCode] = useState(user?.accessCode || '');
-  const [savingDetails, setSavingDetails] = useState(false);
-  const [profileUpdateMsg, setProfileUpdateMsg] = useState('');
-  const [profileUpdateError, setProfileUpdateError] = useState('');
+  // Basic Demographics State
+  const [fullName, setFullName] = useState(user?.name || user?.fullName || activeProfile.fullName || 'Valued Patient');
+  const [nickname, setNickname] = useState(activeProfile.nickname || user?.nickname || '');
+  const [phone, setPhone] = useState(user?.phone || activeProfile.phone || '+237 671 22 33 44');
+  const [email, setEmail] = useState(user?.email || 'patient@nanolabs.cm');
+  const [gender, setGender] = useState(activeProfile.gender || user?.gender || 'Female');
+  const [bloodGroup, setBloodGroup] = useState(activeProfile.bloodGroup || user?.bloodGroup || 'O+');
+  const [city, setCity] = useState(activeProfile.city || 'Douala');
 
-  // Check if current user is an administrator authorized to manage facility branding & logo
-  const canManageLogo = 
-    user?.role === 'admin' || 
-    user?.role === 'superadmin' || 
-    (Array.isArray(user?.roles) && (user.roles.includes('admin') || user.roles.includes('superadmin')));
+  // National ID Card Verification State
+  const [nationalId, setNationalId] = useState(() => {
+    return localStorage.getItem(`nanolabs_cni_${user?.id || 'demo'}`) || activeProfile.nationalId || '';
+  });
+  const [idCardImage, setIdCardImage] = useState<string | null>(() => {
+    return localStorage.getItem(`nanolabs_cni_img_${user?.id || 'demo'}`) || null;
+  });
+  const [idCardStatus, setIdCardStatus] = useState<'not_uploaded' | 'pending_verification' | 'verified'>(() => {
+    return (localStorage.getItem(`nanolabs_cni_status_${user?.id || 'demo'}`) as any) || (nationalId ? 'pending_verification' : 'not_uploaded');
+  });
 
-  const handleStartEdit = () => {
-    setEditName(user?.name || '');
-    setEditEmail(user?.email || '');
-    setEditPhone(user?.phone || '');
-    setEditAccessCode(user?.accessCode || '');
-    setProfileUpdateMsg('');
-    setProfileUpdateError('');
-    setIsEditing(true);
-  };
+  // Insurance State (Select directly from dropdown)
+  const [selectedInsurance, setSelectedInsurance] = useState(() => {
+    return activeProfile.insuranceProvider || (user as any)?.insuranceProvider || CAMEROON_INSURANCE_COMPANIES[0].name;
+  });
+  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState(() => {
+    return activeProfile.insurancePolicyNumber || (user as any)?.insurancePolicyNumber || '';
+  });
+  const [employerSociete, setEmployerSociete] = useState(() => {
+    return activeProfile.employerSociete || (user as any)?.employerSociete || 'ENEO Cameroon SA';
+  });
 
-  const handleSaveProfileDetails = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editName.trim()) {
-      setProfileUpdateError('Full name cannot be empty.');
-      return;
-    }
+  // Save feedback state
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
-    setSavingDetails(true);
-    setProfileUpdateError('');
-    setProfileUpdateMsg('');
+  // Diagnostic Ledger stats
+  const [ledgerStats, setLedgerStats] = useState({
+    totalTests: 0,
+    totalSpent: 0,
+    receipts: [] as any[]
+  });
 
-    try {
-      const targetLabId = lab?.id || user?.labId || 'lab-1';
-      const updatedUser = {
-        ...user,
-        name: editName.trim(),
-        email: editEmail.trim(),
-        phone: editPhone.trim(),
-        accessCode: editAccessCode.trim() || user?.accessCode
-      };
-
-      // 1. Update Auth Context and LocalStorage
-      setUser(updatedUser);
+  useEffect(() => {
+    const fetchLedger = async () => {
       try {
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      } catch {
-        // ignore
-      }
-
-      // 2. Persist to Firestore
-      if (user?.id) {
-        if (user.role === 'patient') {
-          try {
-            await updateDoc(doc(db, 'labs', targetLabId, 'patients', user.id), {
-              name: editName.trim(),
-              email: editEmail.trim(),
-              phone: editPhone.trim(),
-              accessCode: editAccessCode.trim() || user?.accessCode,
-              updatedAt: new Date().toISOString()
-            });
-          } catch (fsErr) {
-            console.warn('Could not update patient doc in firestore:', fsErr);
-          }
-        } else {
-          try {
-            await updateDoc(doc(db, 'labs', targetLabId, 'staff', user.id), {
-              name: editName.trim(),
-              email: editEmail.trim(),
-              phone: editPhone.trim(),
-              accessCode: editAccessCode.trim() || user?.accessCode,
-              updatedAt: new Date().toISOString()
-            });
-          } catch (fsErr) {
-            console.warn('Could not update staff doc in firestore:', fsErr);
-          }
-        }
-      }
-
-      // 3. Sync to Server Auth Registry
-      try {
-        await fetch('/api/staff/update-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            staffId: user?.id,
-            name: editName.trim(),
-            email: editEmail.trim(),
-            phone: editPhone.trim(),
-            accessCode: editAccessCode.trim()
-          })
+        const { limsService } = await import('../../services/limsService');
+        const labId = user?.labId || 'lab-1';
+        const allBookings = await limsService.fetchAllBookings(labId);
+        const userBookings = allBookings.filter(b => {
+          const matchPid = b.patientPid === activeProfile.id || b.patientId === activeProfile.id;
+          const matchName = b.patientName?.toLowerCase().trim() === fullName.toLowerCase().trim();
+          return matchPid || matchName;
         });
-      } catch {
-        // ignore
+
+        let spent = 0;
+        const paidReceipts: any[] = [];
+        userBookings.forEach(b => {
+          if (b.paymentStatus === 'paid') {
+            const amt = Number(b.totalAmount) || 0;
+            spent += amt;
+            paidReceipts.push({
+              id: b.id,
+              bookingCode: b.bookingCode || 'LAB-001',
+              labName: b.labName || 'BioSanté Lab',
+              amount: amt,
+              date: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent',
+              method: b.paymentMethod || 'MTN MoMo / Orange Money'
+            });
+          }
+        });
+
+        setLedgerStats({
+          totalTests: userBookings.length,
+          totalSpent: spent,
+          receipts: paidReceipts
+        });
+      } catch (err) {
+        console.warn('Error fetching ledger:', err);
       }
+    };
+    fetchLedger();
+  }, [user, activeProfile, fullName]);
 
-      setProfileUpdateMsg('Your personal details have been updated successfully!');
-      setIsEditing(false);
-      setTimeout(() => setProfileUpdateMsg(''), 4000);
-    } catch (err: any) {
-      console.error('Error saving profile details:', err);
-      setProfileUpdateError(err.message || 'Failed to update personal details.');
-    } finally {
-      setSavingDetails(false);
-    }
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle ID card image upload
+  const handleIdCardUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file (PNG, JPG, WebP, SVG).');
-      return;
-    }
-
-    setUploadingAvatar(true);
-    setSaveSuccess(false);
-    try {
-      const res = await uploadService.uploadFile(file);
-      if (res.success && res.fileUrl) {
-        const updatedUser = { ...user, avatarUrl: res.fileUrl, photoUrl: res.fileUrl };
-        setUser(updatedUser);
-        try {
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-        } catch {
-          // ignore
-        }
-
-        // Persist to Firestore if possible
-        const targetLabId = lab?.id || user?.labId || 'lab-1';
-        if (user?.id) {
-          if (user.role === 'patient') {
-            try {
-              await updateDoc(doc(db, 'labs', targetLabId, 'patients', user.id), {
-                avatarUrl: res.fileUrl,
-                updatedAt: new Date().toISOString()
-              });
-            } catch {
-              // Ignore if document not at exact path
-            }
-          } else {
-            try {
-              await updateDoc(doc(db, 'labs', targetLabId, 'staff', user.id), {
-                avatarUrl: res.fileUrl,
-                updatedAt: new Date().toISOString()
-              });
-            } catch {
-              // Ignore if document not at exact path
-            }
-          }
-        }
-
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      } else {
-        alert('Could not upload image. Please try again.');
-      }
-    } catch (err) {
-      console.error('Error uploading avatar:', err);
-      alert('Failed to upload profile picture.');
-    } finally {
-      setUploadingAvatar(false);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setIdCardImage(dataUrl);
+      setIdCardStatus('pending_verification');
+      localStorage.setItem(`nanolabs_cni_img_${user?.id || 'demo'}`, dataUrl);
+      localStorage.setItem(`nanolabs_cni_status_${user?.id || 'demo'}`, 'pending_verification');
+      setSaveNotice('National ID card snapped successfully! Sent to Super Admins for verification.');
+      setTimeout(() => setSaveNotice(null), 5000);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleRemoveAvatar = async () => {
-    if (!user?.avatarUrl) return;
-    const updatedUser = { ...user, avatarUrl: '', photoUrl: '' };
-    setUser(updatedUser);
-    try {
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    } catch {
-      // ignore
+  // Handle Save Profile & Insurance
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Persist CNI and status
+    localStorage.setItem(`nanolabs_cni_${user?.id || 'demo'}`, nationalId);
+    if (nationalId && idCardStatus === 'not_uploaded') {
+      setIdCardStatus('pending_verification');
+      localStorage.setItem(`nanolabs_cni_status_${user?.id || 'demo'}`, 'pending_verification');
     }
 
-    const targetLabId = lab?.id || user?.labId || 'lab-1';
-    if (user?.id) {
-      try {
-        if (user.role === 'patient') {
-          await updateDoc(doc(db, 'labs', targetLabId, 'patients', user.id), { avatarUrl: '' });
-        } else {
-          await updateDoc(doc(db, 'labs', targetLabId, 'staff', user.id), { avatarUrl: '' });
-        }
-      } catch {
-        // ignore
-      }
-    }
+    // Persist Insurance & Demographics to Active Family Profile
+    editFamilyMember(activeProfile.id, {
+      fullName,
+      nickname,
+      phone,
+      bloodGroup,
+      nationalId,
+      insuranceProvider: selectedInsurance,
+      insurancePolicyNumber,
+      employerSociete,
+      city
+    });
+
+    setSaveNotice('Profile, National ID & Insurance settings saved successfully!');
+    setTimeout(() => setSaveNotice(null), 4000);
   };
 
-  const handleLogoutAction = async () => {
-    await logout();
-    if (onLogout) onLogout();
-  };
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'NL';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  };
+  const accessCode = user?.accessCode || `RES-2026-${(fullName.slice(0, 3) || 'PAT').toUpperCase()}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Header
-        title={t('profile_title')}
-        subtitle={t('profile_subtitle')}
-        onNotificationPress={onNotificationPress}
-      />
-
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-teal-600 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-        )}
-
-        {/* Profile Info Header */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-b border-slate-100 pb-6">
-            <div className="flex items-center gap-5">
-              {/* Profile Photo with Upload Trigger */}
-              <div className="relative group">
-                {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.name || 'Profile'}
-                    referrerPolicy="no-referrer"
-                    className="w-20 h-20 rounded-2xl object-cover border-2 border-teal-500 shadow-md"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-extrabold text-2xl shadow-md border-2 border-teal-200">
-                    {getInitials(user?.name)}
-                  </div>
-                )}
-
-                {/* Upload Overlay Button */}
-                <label className="absolute -bottom-2 -right-2 p-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-md cursor-pointer transition-all border-2 border-white">
-                  {uploadingAvatar ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Camera className="w-4 h-4" />
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    disabled={uploadingAvatar}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold text-slate-900">{user?.name || 'Authorized Member'}</h1>
-                  <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-[10px] font-bold uppercase border border-teal-200">
-                    {user?.role?.replace('_', ' ') || 'Staff Member'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Connected to {lab?.name || 'nanoLabs Central Diagnostics'}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <label className="text-[11px] text-teal-700 font-semibold hover:underline cursor-pointer flex items-center gap-1">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    {uploadingAvatar ? 'Uploading...' : 'Change Profile Picture'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      disabled={uploadingAvatar}
-                      className="hidden"
-                    />
-                  </label>
-                  {user?.avatarUrl && (
-                    <button
-                      onClick={handleRemoveAvatar}
-                      className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-end gap-2">
-              {!isEditing && (
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold border border-teal-200 transition-all cursor-pointer shadow-xs"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  Edit My Details
-                </button>
-              )}
-
-              {saveSuccess && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200 animate-fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Photo Updated!
-                </div>
-              )}
-              {profileUpdateMsg && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200 animate-fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  {profileUpdateMsg}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* EDIT FORM (If Editing Mode is Active) */}
-          {isEditing ? (
-            <form onSubmit={handleSaveProfileDetails} className="space-y-4 p-5 bg-teal-50/50 rounded-2xl border border-teal-200/80 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
-                  <Edit3 className="w-4 h-4 text-teal-700" />
-                  Edit Personal Details & Credentials
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 font-semibold"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-              </div>
-
-              {profileUpdateError && (
-                <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl border border-rose-200 font-semibold">
-                  {profileUpdateError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Legal Name</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    required
-                    placeholder="e.g. Dr. Arthur Mbi"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={editEmail}
-                    onChange={e => setEditEmail(e.target.value)}
-                    required
-                    placeholder="staff@nanolabs.com"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={editPhone}
-                    onChange={e => setEditPhone(e.target.value)}
-                    placeholder="+237 670000000"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Security Access Code / Password
-                  </label>
-                  <input
-                    type="text"
-                    value={editAccessCode}
-                    onChange={e => setEditAccessCode(e.target.value)}
-                    placeholder="Enter confidential code"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingDetails}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-teal-600/20 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {savingDetails ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Save className="w-3.5 h-3.5" />
-                  )}
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* User Attributes Grid (Display View) */
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Personal & Security Information</h3>
-                <span className="text-[11px] text-teal-700 font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Self-Managed Profile
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-teal-600 shrink-0" />
-                  <div className="min-w-0">
-                    <span className="text-slate-400 block text-[10px] font-semibold">Email Address</span>
-                    <span className="font-semibold text-slate-800 truncate block">{user?.email || 'user@nanolabs.com'}</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                  <Phone className="w-4 h-4 text-teal-600 shrink-0" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-semibold">Phone Number</span>
-                    <span className="font-semibold text-slate-800">{user?.phone || '+237 670000000'}</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                  <Key className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-semibold">Security Access Code</span>
-                    <span className="font-mono font-bold text-slate-900">{user?.accessCode || '••••••••'}</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                  <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-semibold">Assigned Lab ID</span>
-                    <span className="font-semibold text-slate-800">{lab?.id || user?.labId || 'lab-1'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* LANGUAGE PREFERENCE & TOGGLE CARD (ENGLISH <-> FRENCH) */}
-          <div className="p-5 bg-gradient-to-r from-teal-50/70 via-slate-50 to-emerald-50/70 border border-teal-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-xs">
-            <div className="flex items-start sm:items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-teal-600/20 shrink-0">
-                <Globe className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-bold text-slate-900 text-sm">
-                    {t('language_preference')}
-                  </h4>
-                  <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-[9px] font-extrabold uppercase border border-teal-300/50 font-mono">
-                    {language === 'fr' ? '🇫🇷 Français (Actif)' : '🇬🇧 English (Active)'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 max-w-md">
-                  {t('language_desc')}
-                </p>
-              </div>
-            </div>
-
-            {/* Language Selection Segmented Control */}
-            <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-center justify-end">
-              <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setLanguage('en')}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    language === 'en'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <span>🇬🇧</span>
-                  <span>English</span>
-                  {language === 'en' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setLanguage('fr')}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    language === 'fr'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <span>🇫🇷</span>
-                  <span>Français</span>
-                  {language === 'fr' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Medical Diagnostic Booklet Banner Card (PATIENTS ONLY - NOT FOR STAFF) */}
-          {user?.role === 'patient' && (
-            <div className="p-5 bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border border-teal-800 rounded-2xl text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-bold shrink-0">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-white text-sm flex items-center gap-2">
-                    Official Medical & Diagnostic Booklet
-                    <span className="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[9px] font-mono border border-teal-500/30">
-                      LIMS CERTIFIED
-                    </span>
-                  </h4>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    View lifetime consolidated test findings, specimen collection logs, technologist signatures & print full medical booklet.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowBookletModal(true)}
-                className="w-full sm:w-auto px-5 py-2.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-              >
-                <FileText className="w-4 h-4" />
-                View Medical Booklet
-              </button>
-            </div>
-          )}
-
-          {/* Facility Branding & Custom Logo Card (STRICTLY ADMIN RESTRICTED) */}
-          <div className="p-5 bg-gradient-to-r from-teal-50 via-slate-50 to-blue-50 border border-teal-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              {lab?.logoUrl ? (
-                <img
-                  src={lab.logoUrl}
-                  alt={lab.name || 'Lab Logo'}
-                  referrerPolicy="no-referrer"
-                  className="w-14 h-14 rounded-2xl object-cover border-2 border-teal-500 shadow-md bg-white shrink-0"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex flex-col items-center justify-center shadow-md border-2 border-teal-200 shrink-0">
-                  <Activity className="w-6 h-6 stroke-[2.5]" />
-                  <span className="text-[7px] font-bold uppercase mt-0.5">nanoLabs</span>
-                </div>
-              )}
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-slate-900 text-sm">{lab?.name || 'nanoLabs Central Diagnostics'}</h4>
-                  {lab?.logoUrl ? (
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[9px] font-extrabold uppercase">
-                      Custom Logo Active
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[9px] font-extrabold uppercase">
-                      Default nanoLabs Logo
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {canManageLogo
-                    ? (lab?.logoUrl 
-                        ? 'Your custom facility logo is active across all staff portals, patient certificates & billing receipts.' 
-                        : 'Your facility currently uses the default logo. Click below to customize your official laboratory branding.')
-                    : 'Facility logo & branding customizations are managed exclusively by Laboratory Directors & Administrators.'}
-                </p>
-              </div>
-            </div>
-
-            {/* ONLY Admins can change or upload the lab logo */}
-            {canManageLogo ? (
-              <button
-                type="button"
-                onClick={() => setShowLabModal(true)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-              >
-                <Palette className="w-4 h-4" />
-                {lab?.logoUrl ? 'Change Facility Logo' : 'Upload Lab Logo'}
-              </button>
-            ) : (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-200/70 text-slate-600 text-[11px] font-semibold rounded-xl border border-slate-300/80 shrink-0">
-                <Lock className="w-3.5 h-3.5 text-slate-500" />
-                <span>Admin Managed</span>
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-3">
+    <div className="max-w-3xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
+      {/* Top Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {onBack && (
             <button
-              onClick={handleLogoutAction}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold border border-rose-200 transition-all cursor-pointer"
+              onClick={onBack}
+              className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <LogOut className="w-4 h-4" />
-              Sign Out of Portal
+              <ArrowLeft className="w-5 h-5" />
             </button>
+          )}
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Patient Profile & Credentials
+            </h1>
+            <p className="text-xs text-slate-500">
+              Manage personal identity, National ID verification, insurance caisse, and financial ledger.
+            </p>
           </div>
         </div>
-      </main>
 
-      {/* Medical Booklet Modal */}
-      <MedicalBookletModal
-        isOpen={showBookletModal}
-        onClose={() => setShowBookletModal(false)}
-        patient={user}
-        lab={lab}
-      />
+        {/* Access Code Badge */}
+        <div className="hidden sm:flex flex-col items-end">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Results Access Code</span>
+          <span className="font-mono text-xs font-black text-[#006978] bg-[#E0F2F1] px-2.5 py-1 rounded-lg border border-[#80CBC4]">
+            {accessCode}
+          </span>
+        </div>
+      </div>
 
-      {/* Lab Profile & Logo Modal (Restricted to Admin) */}
-      {canManageLogo && (
-        <LabProfileModal
-          isOpen={showLabModal}
-          onClose={() => setShowLabModal(false)}
-        />
+      {/* Save Notification */}
+      {saveNotice && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-emerald-900 text-xs shadow-sm animate-in slide-in-from-top">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="font-bold">{saveNotice}</span>
+        </div>
       )}
+
+      {/* 1. Profile Header Card */}
+      <div className="p-5 sm:p-6 bg-gradient-to-br from-[#003B42] via-[#005B66] to-[#007A87] text-white rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center font-black text-2xl shadow-md border-2 border-white/30 shrink-0">
+            {fullName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-black text-white">{fullName}</h2>
+              {nickname && (
+                <span className="text-xs font-semibold text-cyan-200 bg-white/10 px-2 py-0.5 rounded-full">
+                  "{nickname}"
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-cyan-100/90 font-medium mt-0.5 flex items-center gap-2">
+              <span>{phone}</span>
+              <span>&bull;</span>
+              <span>{city}</span>
+            </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap text-[10px] font-bold">
+              <span className="px-2.5 py-0.5 rounded-full bg-cyan-400 text-slate-950">
+                Blood Group: {bloodGroup}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/20 font-mono">
+                PID: {activeProfile.id}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="sm:text-right relative z-10 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/15">
+          <span className="text-[10px] uppercase font-bold text-cyan-200 block">Total Diagnostic Spend</span>
+          <span className="text-xl sm:text-2xl font-black text-white font-mono">
+            {formatXAF(ledgerStats.totalSpent)}
+          </span>
+          <span className="text-[10px] text-cyan-100/80 block mt-0.5">
+            {ledgerStats.totalTests} tests recorded in ledger
+          </span>
+        </div>
+
+        {/* Ambient overlay */}
+        <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/5 rounded-full pointer-events-none blur-xl" />
+      </div>
+
+      {/* 2. Main Edit Form (Personal Info + National ID + Insurance Dropdown) */}
+      <form onSubmit={handleSaveProfile} className="space-y-6">
+        {/* Personal Details Section */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+              <User className="w-4 h-4 text-[#006978]" />
+              <span>Personal Information</span>
+            </div>
+            <span className="text-[11px] text-slate-400">Basic Demographics</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">Full Legal Name:</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">
+                Preferred Nickname (Anonymous display for privacy):
+              </label>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="e.g. Marie, Sam, Pat"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">Mobile Phone Number:</label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">Blood Group (Groupe Sanguin):</label>
+              <select
+                value={bloodGroup}
+                onChange={(e) => setBloodGroup(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              >
+                {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'Unknown'].map(bg => (
+                  <option key={bg} value={bg}>{bg}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. National ID Card (CNI) Verification Section */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#006978]" />
+              <span className="text-sm font-black text-slate-900">National ID Card (CNI) Verification</span>
+            </div>
+
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              idCardStatus === 'verified'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : idCardStatus === 'pending_verification'
+                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {idCardStatus === 'verified' ? 'Verified Official' : idCardStatus === 'pending_verification' ? 'Pending Admin Review' : 'Action Required'}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 leading-relaxed">
+            In compliance with CEMAC diagnostic norms, you must link your <strong>National ID Card Number</strong> and snapshot your CNI to activate <strong>Tiers-Payant Health Insurance coverage</strong> for automated 80% coverage on bills.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">
+                National ID Card Number (CNI):
+              </label>
+              <input
+                type="text"
+                value={nationalId}
+                onChange={(e) => setNationalId(e.target.value)}
+                placeholder="e.g. 1029482910 or CNI-LT-2022-9901"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              />
+            </div>
+
+            {/* Snap / Upload ID Card Document */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">
+                Snap or Upload ID Card Photo:
+              </label>
+              <label className="p-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 hover:border-[#006978] rounded-xl flex items-center justify-between cursor-pointer transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleIdCardUpload}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Camera className="w-4 h-4 text-[#006978]" />
+                  <span className="font-semibold text-xs">
+                    {idCardImage ? 'Change ID Card Photo' : 'Snap / Upload CNI Photo'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-[#006978] bg-[#E0F2F1] px-2 py-0.5 rounded-md">
+                  Browse
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* ID Card Image Preview */}
+          {idCardImage && (
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-3">
+                <img
+                  src={idCardImage}
+                  alt="CNI Document"
+                  className="w-16 h-11 object-cover rounded-lg border border-slate-300 shadow-2xs"
+                />
+                <div>
+                  <span className="font-bold text-slate-900 block">National ID Card Snapped</span>
+                  <span className="text-[11px] text-slate-500">Document encrypted & sent for verification</span>
+                </div>
+              </div>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            </div>
+          )}
+        </div>
+
+        {/* 4. Diagnostic Health Insurance (Strict Cameroon Dropdown) */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-[#006978]" />
+              <span className="text-sm font-black text-slate-900">Health Insurance & Tiers-Payant Caisse</span>
+            </div>
+            <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              80% Diagnostic Tariff Cover
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            {/* Insurer Dropdown: Pure Select, No Search/Typing Needed */}
+            <div className="space-y-1 sm:col-span-2">
+              <label className="font-bold text-slate-700 block">
+                Select Your Insurance Company (Cameroon Accredited Caisses):
+              </label>
+              <select
+                value={selectedInsurance}
+                onChange={(e) => setSelectedInsurance(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978] shadow-2xs"
+              >
+                {CAMEROON_INSURANCE_COMPANIES.map((ins) => (
+                  <option key={ins.id} value={ins.name}>
+                    {ins.name} ({ins.city}) &bull; {ins.code || 'CEMAC'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">
+                Insurance Matricule / Policy Number:
+              </label>
+              <input
+                type="text"
+                value={insurancePolicyNumber}
+                onChange={(e) => setInsurancePolicyNumber(e.target.value)}
+                placeholder="e.g. POL-884920 or ASC-2026-09"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block">
+                Sponsor Company / Société (Employer):
+              </label>
+              <input
+                type="text"
+                value={employerSociete}
+                onChange={(e) => setEmployerSociete(e.target.value)}
+                placeholder="e.g. ENEO Cameroon SA, SABC, Orange Cameroun"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <button
+          type="submit"
+          className="w-full py-3.5 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+        >
+          <Check className="w-4 h-4 text-cyan-200" />
+          <span>Save Profile, National ID & Insurance Credentials</span>
+        </button>
+      </form>
+
+      {/* 5. Diagnostic Ledger & Payment Receipts Section */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-[#006978]" />
+            <span className="text-sm font-black text-slate-900">Official Invoices & Payment Receipts</span>
+          </div>
+          <span className="text-xs font-mono font-bold text-[#006978]">
+            {ledgerStats.receipts.length} Settled Receipts
+          </span>
+        </div>
+
+        {ledgerStats.receipts.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {ledgerStats.receipts.map((rec, i) => (
+              <div key={i} className="py-3 flex items-center justify-between text-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <strong className="text-slate-900 font-mono">{rec.bookingCode}</strong>
+                    <span className="text-slate-400">&bull; {rec.date}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{rec.labName} &bull; Paid via {rec.method}</p>
+                </div>
+
+                <div className="text-right">
+                  <span className="font-mono font-black text-slate-900 block">{formatXAF(rec.amount)}</span>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                    Paid & Cleared
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-xs text-slate-400 space-y-1">
+            <CreditCard className="w-6 h-6 text-slate-300 mx-auto" />
+            <p>No paid invoices recorded yet for this profile.</p>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Clean Sign Out Button */}
+      <div className="pt-2 pb-8">
+        <button
+          onClick={() => {
+            if (onLogout) onLogout();
+            else logout();
+          }}
+          className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black transition-colors cursor-pointer flex items-center justify-center gap-2"
+        >
+          <LogOut className="w-4 h-4 text-rose-600" />
+          <span>Sign Out of Patient Account</span>
+        </button>
+      </div>
     </div>
   );
 };
-
-export default ProfileScreen;
-
-
+export default PatientProfileScreen;

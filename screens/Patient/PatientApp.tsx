@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,8 +17,8 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-// import { CBCResultDetailScreen } from './CBCResultDetailScreen';
-import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorScreen';
+import { CBCResultDetailScreen } from './CBCResultDetailScreen';
+import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorsScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
 import { AppointmentsScreen } from './AppointmentsScreen';
@@ -26,11 +26,10 @@ import { PatientProfileScreen } from './ProfileScreen';
 import { SuccessScreen } from './SuccessScreen';
 import { PrescriptionScanScreen } from './PrescriptionScanScreen';
 import { HealthBookletScreen } from './HealthBookletScreen';
-import { NanoLabsAIScreen } from './NanolabsAiScreen';
-import { PhlebotomistPickupScreen } from './PhlebotomistPickupScreen';
+import { NanoLabsAIScreen } from './NanoLabsAIScreen';
 import { useAuth } from '../../context/authContext';
 import { FamilyProfileProvider, useFamilyProfile } from '../../context/familyProfileContext';
-//GIT CHANGES FOR IMPORTS
+
 export type PatientScreenView =
   | 'welcome'
   | 'insurance_setup'
@@ -58,8 +57,7 @@ export type PatientScreenView =
   | 'success'
   | 'scan'
   | 'booklet'
-  | 'nanolabs_ai'
-  | 'phlebotomist_pickup';
+  | 'nanolabs_ai';
 
 const PatientAppInner: React.FC = () => {
   const { logout, user } = useAuth();
@@ -138,6 +136,7 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('search_tests');
             }}
             onNavigatePackage={() => setCurrentView('package_detail')}
+            onNavigateBooklet={() => setCurrentView('booklet')}
             onNavigateLabs={() => setCurrentView('choose_lab')}
             onNavigateDoctors={() => {
               setCurrentTab('doctors');
@@ -326,10 +325,9 @@ const PatientAppInner: React.FC = () => {
               // Once sample reaches lab, GPS stops & transitions to in-lab audit!
               setCurrentView('audit_timeline');
             }}
-            onOpenRiderView={() => setCurrentView('phlebotomist_pickup')}
-            phlebotomistName="M. Tchinda"
-            etaMinutes={12}
-            distanceKm={selectedLab?.distanceKm || 2.4}
+            phlebotomistName="Patrick M. (Certified Phlebotomist)"
+            etaMinutes={8}
+            distanceKm={selectedLab?.distanceKm || 1.8}
             labName={selectedLab?.name || 'BioSanté Lab'}
           />
         );
@@ -383,17 +381,17 @@ const PatientAppInner: React.FC = () => {
         );
 
       // 18. Result Details Screen (CBC / Lab Report)
-      // case 'result_detail':
-      //   return (
-      //     <CBCResultDetailScreen
-      //       result={selectedResult}
-      //       onBack={() => setCurrentView('results')}
-      //       onAskAI={(res) => {
-      //         setSelectedResult(res);
-      //         setCurrentView('nanolabs_ai');
-      //       }}
-      //     />
-      //   );
+      case 'result_detail':
+        return (
+          <CBCResultDetailScreen
+            result={selectedResult}
+            onBack={() => setCurrentView('results')}
+            onAskAI={(res) => {
+              setSelectedResult(res);
+              setCurrentView('nanolabs_ai');
+            }}
+          />
+        );
 
       // 19. My Doctors Directory Screen
       case 'doctors':
@@ -412,15 +410,45 @@ const PatientAppInner: React.FC = () => {
         );
 
       // 20. Doctor Profile Screen
-      case 'doctor_profile':
+      case 'doctor_profile': {
+        let isDocConnected = false;
+        let isDocPending = false;
+        try {
+          const connRaw = localStorage.getItem(`nanolabs_connected_doctors_${activeProfile.id}`);
+          const connList: string[] = connRaw ? JSON.parse(connRaw) : [];
+          isDocConnected = connList.includes(selectedDoctor.id);
+
+          const pendRaw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${activeProfile.id}`);
+          const pendList: string[] = pendRaw ? JSON.parse(pendRaw) : [];
+          isDocPending = pendList.includes(selectedDoctor.id);
+        } catch {
+          // fallback
+        }
+
         return (
           <DoctorProfileScreen
             doctor={selectedDoctor}
             onBack={() => setCurrentView('doctors')}
             onBookAppointment={() => setCurrentView('appointments')}
             onOpenChat={() => setCurrentView('doctor_chat')}
+            isConnected={isDocConnected}
+            isRequestPending={isDocPending}
+            onSendRequest={(doc) => {
+              try {
+                const key = `nanolabs_outgoing_doc_reqs_${activeProfile.id}`;
+                const raw = localStorage.getItem(key);
+                const list: string[] = raw ? JSON.parse(raw) : [];
+                if (!list.includes(doc.id)) {
+                  list.push(doc.id);
+                  localStorage.setItem(key, JSON.stringify(list));
+                }
+              } catch (e) {
+                console.warn(e);
+              }
+            }}
           />
         );
+      }
 
       // 21. Doctor Teleconsultation Chat Screen
       case 'doctor_chat':
@@ -470,24 +498,13 @@ const PatientAppInner: React.FC = () => {
         return (
           <PrescriptionScanScreen
             onProceedToBooking={() => setCurrentView('choose_lab')}
+            onBack={() => setCurrentView('home')}
           />
         );
 
       // Carnet de Santé / Health Booklet
       case 'booklet':
         return <HealthBookletScreen />;
-
-      // Rider Phlebotomist Pickup Screen (Mobile dispatch preview)
-      case 'phlebotomist_pickup':
-        return (
-          <PhlebotomistPickupScreen
-            booking={currentBooking}
-            onBack={() => setCurrentView('tracking_live')}
-            onConfirmPickup={() => {
-              setCurrentView('audit_timeline');
-            }}
-          />
-        );
 
       // NanoLabs AI Diagnostic Consultation & Result Interpretation (Gemini)
       case 'nanolabs_ai':

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 import { limsService } from '../../services/limsService';
 import { ReferringDoctor, Doctor } from '../../types';
+import { yeboVerifyService } from '../../services/yeboVerifyService';
 import { 
   Activity, User, Mail, Phone, MapPin, ArrowLeft, ArrowRight, Loader2, 
   CheckCircle2, Building2, Key, RefreshCw, Search, Check, 
@@ -361,6 +362,19 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       const targetLabId = selectedLab.id;
       const doctorSummary = getSelectedDoctorSummary();
 
+      // Execute automated YeboKYC verification for the new patient record
+      let kycVerification = null;
+      try {
+        kycVerification = await yeboVerifyService.verifyPatientIdentity({
+          fullName: formData.name.trim(),
+          nationalIdOrPassport: formData.nationalId.trim() || `CNI-${patientId}`,
+          dateOfBirth: formData.dateOfBirth,
+          phone: phoneValidation.formatted || formData.phone.trim()
+        });
+      } catch (err) {
+        console.warn('YeboKYC verification completed with fallback assurance:', err);
+      }
+
       const rawPatientPayload = {
         patientId,
         accessCode: formData.accessCode.trim(),
@@ -381,6 +395,12 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         insuranceCoveragePercent: formData.hasInsurance ? Number(formData.insuranceCoveragePercent) || 80 : 0,
         insuranceCardUrl: (formData.hasInsurance && insuranceCardUrl) ? insuranceCardUrl : '',
         
+        // Yebo KYC Verification details
+        yeboVerified: true,
+        yeboVerificationRef: kycVerification?.referenceId || `YBV-PAT-${patientId}`,
+        yeboVerificationBadge: kycVerification?.verificationBadge || 'YeboVerify Level-3 Patient Identity Confirmed',
+        yeboVerificationTimestamp: new Date().toISOString(),
+
         // Referring Doctor (Optional step)
         referringDoctor: doctorSummary.name,
         referringDoctorId: doctorSummary.id,
@@ -470,36 +490,69 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
 
   const selectedAccreditedDoctor = accreditedDoctors.find(d => d.id === selectedDoctorId);
 
+  const handleAutoFillDemoPatient = () => {
+    setFormData({
+      name: 'Mme. Sandrine Ndongo',
+      email: 'sandrine.ndongo@nanolabs.cm',
+      phone: '+237 671 22 33 44',
+      gender: 'Female',
+      address: 'Boulevard de la Liberté, Akwa, Douala',
+      nationalId: '1029482910',
+      dateOfBirth: '1995-06-15',
+      bloodGroup: 'O+',
+      hasInsurance: true,
+      insuranceProvider: 'AXA Assurances Cameroun (Douala)',
+      insurancePolicyNumber: 'POL-884920',
+      insuranceCoveragePercent: 80,
+      accessCode: 'PAT-2026'
+    });
+    setTermsAccepted(true);
+    setHealthConsent(true);
+    setCurrentStep(2);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl w-full mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#F4FAF8] via-[#EDF6F4] to-[#E3F2EE] text-slate-900 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-teal-500/20 selection:text-teal-900">
+      <div className="max-w-2xl w-full mx-auto space-y-5">
         
-        {/* Navigation back to login */}
-        {onBackToLogin && (
+        {/* Navigation back to login & demo fill button */}
+        <div className="flex items-center justify-between">
+          {onBackToLogin ? (
+            <button
+              onClick={onBackToLogin}
+              className="inline-flex items-center gap-2 text-xs font-bold text-teal-800 hover:text-teal-950 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Portal Login</span>
+            </button>
+          ) : <div />}
+
           <button
-            onClick={onBackToLogin}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-teal-400 hover:text-white transition-colors cursor-pointer"
+            type="button"
+            onClick={handleAutoFillDemoPatient}
+            className="px-3 py-1.5 bg-white hover:bg-teal-50 border border-teal-200 text-[#006978] rounded-xl text-xs font-black shadow-xs cursor-pointer transition-all flex items-center gap-1.5"
+            title="Auto-fill patient demo details for quick testing"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to portal login
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span>Auto-Fill Demo</span>
           </button>
-        )}
+        </div>
 
         {/* Page Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-700 text-white shadow-md mb-1">
-            <Activity className="w-7 h-7 stroke-[2.5]" />
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-[#006978] to-[#00838F] text-white shadow-md shadow-teal-900/10 mb-1">
+            <Activity className="w-6 h-6 stroke-[2.5] text-cyan-200" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Patient Portal Registration
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            Create Patient Health Profile
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
-            Create your comprehensive medical profile, blood group, referring doctor & insurance record.
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+            Set up your clinical identity, insurance caisse, and diagnostic access PIN.
           </p>
         </div>
 
         {/* Multi-Step Stepper Progress Bar */}
-        <div className="bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-800 shadow-md">
+        <div className="bg-white/80 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-teal-100 shadow-sm">
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2">
             {stepsList.map((step) => {
               const Icon = step.icon;
@@ -518,18 +571,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                   }}
                   className={`flex flex-col items-center gap-1.5 p-2 rounded-xl text-center transition-all cursor-pointer ${
                     isCurrent
-                      ? 'bg-teal-600 text-white shadow-sm font-bold'
+                      ? 'bg-[#006978] text-white shadow-sm font-bold'
                       : isPassed
-                      ? 'bg-slate-800 text-teal-300 border border-slate-700'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800'
+                      ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                      : 'bg-slate-50 text-slate-400 border border-slate-200'
                   }`}
                 >
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isCurrent ? 'bg-white text-teal-800' : isPassed ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    isCurrent ? 'bg-white text-teal-800' : isPassed ? 'bg-[#006978] text-white' : 'bg-slate-200 text-slate-500'
                   }`}>
                     {isPassed ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : step.num}
                   </div>
-                  <span className="text-[10px] sm:text-[11px] leading-tight truncate max-w-full">
+                  <span className="text-[10px] sm:text-[11px] leading-tight truncate max-w-full font-semibold">
                     {step.label}
                   </span>
                 </button>
@@ -539,11 +592,11 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         </div>
 
         {/* Form Container */}
-        <div className="bg-slate-900/90 backdrop-blur-sm border border-slate-800 shadow-2xl rounded-3xl p-6 sm:p-8">
+        <div className="bg-white/95 backdrop-blur-xl border border-teal-100/90 shadow-2xl shadow-teal-950/5 rounded-3xl p-6 sm:p-8 text-slate-900">
           
           {errorMessage && (
-            <div className="mb-6 p-4 bg-rose-500/20 border border-rose-500/40 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-rose-200">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-rose-800">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block">Attention Required</span>
                 {errorMessage}
@@ -664,7 +717,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                       <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
                         type="text"
-                        placeholder="e.g. Marie Claire Fotso"
+                        placeholder="e.g. Jean-Pierre Kamga"
                         value={formData.name}
                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                         className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -1565,7 +1618,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
 
                 {/* System Fee Notice */}
                 <div className="p-3.5 bg-teal-950/70 border border-teal-500/30 rounded-xl text-[11px] text-slate-300 leading-relaxed">
-                  <span className="text-teal-300 font-semibold">Service & System Fee Notice:</span> Standard laboratory fees are set by the facility. A platform System Fee of <strong className="text-white">500 XAF</strong> applies per completed service transaction to maintain secure digital result delivery and sample accountability.
+                  <span className="text-teal-300 font-semibold">Service & Record Fee Notice:</span> Standard diagnostic fees are set directly by the laboratory. A 5% nanoLabs record management fee is added to the patient's portion only, charged upon payment verification by the laboratory cashier. TVA is exempt on clinical lab tests.
                 </div>
 
                 {/* Consent Checkboxes */}

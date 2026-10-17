@@ -16,11 +16,13 @@ import {
   Send,
   AlertCircle,
   X,
-  Phone
+  Phone,
+  Calendar
 } from 'lucide-react';
 import { db, getDocs, collection } from '../../services/firebase';
 import { ACCREDITED_DOCTORS, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { useFamilyProfile } from '../../context/familyProfileContext';
+import { clinicalAppointmentService } from '../../services/clinicalAppointmentService';
 
 export interface DoctorDirectoryItem {
   id: string;
@@ -190,11 +192,11 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
     return () => { isMounted = false; };
   }, []);
 
-  // Connection requests state stored per patient in localStorage
+  // Real connection requests state stored per patient
   const requestsStorageKey = `nanolabs_doctor_requests_${activeProfile.id}`;
   const [connectedDoctorIds, setConnectedDoctorIds] = useState<string[]>(() => {
     const raw = localStorage.getItem(`nanolabs_connected_doctors_${activeProfile.id}`);
-    return raw ? JSON.parse(raw) : ['doc-1', 'doc-6'];
+    return raw ? JSON.parse(raw) : [];
   });
 
   const [outgoingRequests, setOutgoingRequests] = useState<string[]>(() => {
@@ -202,18 +204,16 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
     return raw ? JSON.parse(raw) : [];
   });
 
-  // Simulated incoming requests from doctors
-  const [incomingRequests, setIncomingRequests] = useState<any[]>([
-    {
-      id: 'req-in-1',
-      doctorId: 'doc-3',
-      doctorName: 'Dr. Alain Fobissie',
-      specialty: 'Cardiology & Vascular Medicine',
-      hospital: 'Douala General Hospital',
-      date: 'Today',
-      note: 'Dr. Fobissie reviewed your referral from BioSanté Lab and requested direct connection to discuss your Lipid Profile.'
+  // Real incoming requests from doctors (default empty, loaded from doctorChatService)
+  const [incomingRequests, setIncomingRequests] = useState<any[]>(() => {
+    try {
+      const { doctorChatService } = require('../../services/doctorChatService');
+      const reqs = doctorChatService.getIncomingRequests ? doctorChatService.getIncomingRequests(activeProfile.id) : [];
+      return reqs || [];
+    } catch {
+      return [];
     }
-  ]);
+  });
 
   const handleSendRequest = (docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -245,8 +245,71 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
 
   const connectedDoctors = doctorsList.filter(d => connectedDoctorIds.includes(d.id));
 
+  // Appointment Booking State
+  const [bookingDoctor, setBookingDoctor] = useState<DoctorDirectoryItem | null>(null);
+  const [appDate, setAppDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [appTime, setAppTime] = useState('10:00 AM');
+  const [appType, setAppType] = useState<'in_person' | 'teleconsultation'>('in_person');
+  const [appReason, setAppReason] = useState('Consultation & Diagnostic Results Interpretation');
+  const [patientBookingNotice, setPatientBookingNotice] = useState<string | null>(null);
+
+  const handleSubmitPatientBooking = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bookingDoctor) return;
+
+    clinicalAppointmentService.createAndSendAppointment({
+      doctorId: bookingDoctor.id,
+      doctorName: bookingDoctor.name,
+      doctorSpecialty: bookingDoctor.specialty,
+      doctorHospital: bookingDoctor.hospital,
+      patientId: activeProfile.id,
+      patientName: activeProfile.fullName,
+      patientNickname: activeProfile.fullName.split(' ')[0],
+      patientPhone: '+237 671 22 33 44',
+      date: appDate,
+      time: appTime,
+      type: appType,
+      status: 'requested',
+      location: appType === 'teleconsultation' ? 'Secure Encrypted Video Room (Telehealth)' : `${bookingDoctor.hospital}, Douala`,
+      reason: appReason,
+      prepInstructions: 'Please have previous lab carnet or test codes ready.'
+    });
+
+    // Automatically ensure connected
+    if (!connectedDoctorIds.includes(bookingDoctor.id)) {
+      const updated = [...connectedDoctorIds, bookingDoctor.id];
+      setConnectedDoctorIds(updated);
+      localStorage.setItem(`nanolabs_connected_doctors_${activeProfile.id}`, JSON.stringify(updated));
+    }
+
+    setBookingDoctor(null);
+    setPatientBookingNotice(
+      `Appointment request sent to ${bookingDoctor.name} for ${appDate} at ${appTime}! You will receive a confirmation alert.`
+    );
+    setTimeout(() => setPatientBookingNotice(null), 6000);
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
+      {/* Toast Notice */}
+      {patientBookingNotice && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 text-xs shadow-md">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-bold">{patientBookingNotice}</span>
+          </div>
+          <button 
+            onClick={() => setPatientBookingNotice(null)} 
+            className="text-emerald-700 hover:text-emerald-950 font-bold p-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -410,10 +473,22 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
 
                     <div className="flex items-center gap-2">
                       {isConnected ? (
-                        <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Connected</span>
-                        </span>
+                        <>
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-[11px] font-bold flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            <span>Connected</span>
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectDoctor(doctor);
+                            }}
+                            className="px-3 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Chat</span>
+                          </button>
+                        </>
                       ) : isRequested ? (
                         <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold">
                           Request Sent
@@ -421,7 +496,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                       ) : (
                         <button
                           onClick={(e) => handleSendRequest(doctor.id, e)}
-                          className="px-3 py-1.5 bg-[#E0F2F1] hover:bg-[#006978] hover:text-white text-[#006978] rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          className="px-3.5 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>Connect</span>
@@ -587,6 +662,123 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                 No pending outgoing requests. You can connect with any doctor from the directory.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Patient Appointment Booking Modal */}
+      {bookingDoctor && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={bookingDoctor.avatarUrl}
+                  alt={bookingDoctor.name}
+                  className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                />
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">{bookingDoctor.name}</h3>
+                  <p className="text-[11px] text-[#006978] font-bold">{bookingDoctor.specialty}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBookingDoctor(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPatientBooking} className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-700 block">Preferred Date:</label>
+                <input
+                  type="date"
+                  value={appDate}
+                  onChange={(e) => setAppDate(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-700 block">Preferred Time Slot:</label>
+                <select
+                  value={appTime}
+                  onChange={(e) => setAppTime(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                >
+                  {['08:30 AM', '09:30 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:30 PM', '04:30 PM'].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-700 block">Consultation Modality:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAppType('in_person')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer ${
+                      appType === 'in_person'
+                        ? 'bg-[#E0F2F1] border-[#006978] text-[#006978] font-black'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <Stethoscope className="w-4 h-4 shrink-0" />
+                    <span>Clinic Visit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAppType('teleconsultation')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer ${
+                      appType === 'teleconsultation'
+                        ? 'bg-[#E0F2F1] border-[#006978] text-[#006978] font-black'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <Video className="w-4 h-4 shrink-0" />
+                    <span>Teleconsultation</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-700 block">Reason for Consultation:</label>
+                <input
+                  type="text"
+                  value={appReason}
+                  onChange={(e) => setAppReason(e.target.value)}
+                  placeholder="e.g. Discuss recent blood test results or symptoms"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                  required
+                />
+              </div>
+
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-[11px] text-teal-800 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                <span>Request sent directly to doctor's clinical agenda.</span>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setBookingDoctor(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-[#006978] hover:bg-[#005a66] text-white font-black rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Send Request</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

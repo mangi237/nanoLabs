@@ -15,7 +15,7 @@ import {
 interface DoctorAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  patient: {
+  patient?: {
     id: string;
     name: string;
     phone?: string;
@@ -38,6 +38,8 @@ export const DoctorAppointmentModal: React.FC<DoctorAppointmentModalProps> = ({
   relatedBookingId,
   onAppointmentScheduled
 }) => {
+  const [selectedPatientName, setSelectedPatientName] = useState(patient?.name || 'Mme. Claire Ngo');
+  const [selectedPatientPhone, setSelectedPatientPhone] = useState(patient?.phone || '+237 670 12 34 56');
   const [appointmentType, setAppointmentType] = useState<'in_person' | 'teleconsultation'>('teleconsultation');
   const [date, setDate] = useState(() => {
     const d = new Date();
@@ -57,9 +59,9 @@ export const DoctorAppointmentModal: React.FC<DoctorAppointmentModalProps> = ({
     setSaving(true);
     try {
       const apptData = {
-        patientId: patient.id,
-        patientName: patient.name,
-        patientPhone: patient.phone || '',
+        patientId: patient?.id || `pat-${Date.now().toString(36)}`,
+        patientName: selectedPatientName,
+        patientPhone: selectedPatientPhone,
         doctorId: doctor.id,
         doctorName: doctor.name,
         doctorSpecialty: doctor.specialty || 'Physician',
@@ -103,8 +105,8 @@ export const DoctorAppointmentModal: React.FC<DoctorAppointmentModalProps> = ({
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Book Clinical Appointment</h3>
-              <p className="text-xs text-slate-500">Patient: <strong className="text-slate-800">{patient.name}</strong></p>
+              <h3 className="text-base font-extrabold text-slate-900">Send Clinical Appointment / Schedule</h3>
+              <p className="text-xs text-slate-500">Patient: <strong className="text-slate-800">{selectedPatientName}</strong></p>
             </div>
           </div>
           <button
@@ -128,6 +130,31 @@ export const DoctorAppointmentModal: React.FC<DoctorAppointmentModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Patient Name & Phone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Patient Name</label>
+                <input
+                  type="text"
+                  required
+                  value={selectedPatientName}
+                  onChange={(e) => setSelectedPatientName(e.target.value)}
+                  placeholder="e.g. Mme. Claire Ngo"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:border-teal-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Phone Number</label>
+                <input
+                  type="text"
+                  value={selectedPatientPhone}
+                  onChange={(e) => setSelectedPatientPhone(e.target.value)}
+                  placeholder="+237 670 00 00 00"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:border-teal-600"
+                />
+              </div>
+            </div>
+
             {/* Appointment Mode Tabs */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Consultation Mode</label>

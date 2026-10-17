@@ -29,90 +29,25 @@ export const RELATIONSHIP_LABELS: Record<FamilyRelationship, string> = {
 
 export const DEFAULT_FAMILY_MEMBERS: FamilyMemberProfile[] = [
   {
-    id: 'profile_self_claire',
-    primaryAccountId: 'patient_demo',
-    fullName: 'Mme. Claire Ngo',
+    id: 'profile_self',
+    primaryAccountId: 'patient_primary',
+    fullName: 'Patient',
+    nickname: 'Patient',
     relationship: 'self',
     relationshipLabel: 'Primary Account (Self)',
-    dateOfBirth: '1988-06-14',
-    age: 38,
+    dateOfBirth: '1995-06-15',
+    age: 31,
     gender: 'female',
-    bloodGroup: 'O+',
-    nationalId: 'CNI-LT-2018-004921',
+    bloodGroup: 'Unknown',
     allergies: [],
     chronicConditions: [],
-    insuranceProvider: 'Ascoma Assurances',
-    insurancePolicyNumber: 'ASC-2026-992014',
-    insuranceCoveragePercent: 80,
-    isDependentOnPrimaryInsurance: false,
-    notes: 'Primary subscriber. Regular checkups, prenatal care follow-up.',
-    createdAt: '2026-01-10T08:00:00.000Z',
+    notes: 'Primary account.',
+    createdAt: new Date().toISOString(),
     avatarColor: 'teal'
-  },
-  {
-    id: 'profile_mother_madeleine',
-    primaryAccountId: 'patient_demo',
-    fullName: 'Mme. Ngo Madeleine',
-    relationship: 'mother',
-    relationshipLabel: 'Mother (Mère, 72 ans)',
-    dateOfBirth: '1954-04-18',
-    age: 72,
-    gender: 'female',
-    bloodGroup: 'A+',
-    nationalId: 'CNI-LT-1982-019382',
-    allergies: ['Pénicilline', 'Sulfamides'],
-    chronicConditions: ['Hypertension Artérielle (HTA)', 'Diabète Type 2'],
-    insuranceProvider: 'Ascoma Assurances',
-    insurancePolicyNumber: 'ASC-2026-992014-DEP1',
-    insuranceCoveragePercent: 80,
-    isDependentOnPrimaryInsurance: true,
-    notes: 'Elderly mother. Quarterly monitoring of Glycated Hemoglobin (HbA1c), lipid panel, and renal creatinine clearance.',
-    createdAt: '2026-01-15T09:30:00.000Z',
-    avatarColor: 'indigo'
-  },
-  {
-    id: 'profile_child_junior',
-    primaryAccountId: 'patient_demo',
-    fullName: 'Junior Kamdem',
-    relationship: 'son',
-    relationshipLabel: 'Son (Fils, 8 ans)',
-    dateOfBirth: '2018-09-22',
-    age: 8,
-    gender: 'male',
-    bloodGroup: 'O+',
-    allergies: ['Arachides (Arachis)'],
-    chronicConditions: ['Asthme léger d\'effort'],
-    insuranceProvider: 'Ascoma Assurances',
-    insurancePolicyNumber: 'ASC-2026-992014-DEP2',
-    insuranceCoveragePercent: 80,
-    isDependentOnPrimaryInsurance: true,
-    notes: 'School-age child. Pediatric blood count, thick blood smear (Goutte épaisse/Paludisme), vaccination boosters.',
-    createdAt: '2026-02-01T11:15:00.000Z',
-    avatarColor: 'amber'
-  },
-  {
-    id: 'profile_child_chloe',
-    primaryAccountId: 'patient_demo',
-    fullName: 'Bébé Chloé Kamdem',
-    relationship: 'daughter',
-    relationshipLabel: 'Daughter (Fille, 2 ans)',
-    dateOfBirth: '2024-03-05',
-    age: 2,
-    gender: 'female',
-    bloodGroup: 'O+',
-    allergies: [],
-    chronicConditions: [],
-    insuranceProvider: 'Ascoma Assurances',
-    insurancePolicyNumber: 'ASC-2026-992014-DEP3',
-    insuranceCoveragePercent: 80,
-    isDependentOnPrimaryInsurance: true,
-    notes: 'Toddler. Pediatric developmental milestones, hemoglobin electrophoresis, routine infant blood checks.',
-    createdAt: '2026-03-10T14:20:00.000Z',
-    avatarColor: 'rose'
   }
 ];
 
-export function getStoredFamilyMembers(primaryAccountId: string = 'patient_demo'): FamilyMemberProfile[] {
+export function getStoredFamilyMembers(primaryAccountId: string = 'patient_primary'): FamilyMemberProfile[] {
   try {
     const raw = localStorage.getItem(FAMILY_PROFILES_STORAGE_KEY);
     if (!raw) {
@@ -120,11 +55,21 @@ export function getStoredFamilyMembers(primaryAccountId: string = 'patient_demo'
       return DEFAULT_FAMILY_MEMBERS;
     }
     const parsed: FamilyMemberProfile[] = JSON.parse(raw);
-    if (parsed.length === 0) {
+    // Filter out old legacy mock profiles
+    const filtered = parsed.filter(p => 
+      p.id !== 'profile_mother_madeleine' && 
+      p.id !== 'profile_child_junior' && 
+      p.id !== 'profile_child_chloe' &&
+      !p.fullName?.toLowerCase().includes('madeleine') &&
+      !p.fullName?.toLowerCase().includes('junior kamdem') &&
+      !p.fullName?.toLowerCase().includes('chloé kamdem')
+    );
+
+    if (filtered.length === 0) {
       saveFamilyMembers(DEFAULT_FAMILY_MEMBERS);
       return DEFAULT_FAMILY_MEMBERS;
     }
-    return parsed;
+    return filtered;
   } catch (e) {
     console.error('Error reading family profiles ledger', e);
     return DEFAULT_FAMILY_MEMBERS;

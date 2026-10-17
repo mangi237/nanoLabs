@@ -28,6 +28,7 @@ interface HomeScreenProps {
   onNavigateBook: () => void;
   onNavigateTests: () => void;
   onNavigatePackage: () => void;
+  onNavigateBooklet?: () => void;
   onNavigateLabs: () => void;
   onNavigateDoctors: () => void;
   onNavigateInsurance: () => void;
@@ -42,6 +43,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateBook,
   onNavigateTests,
   onNavigatePackage,
+  onNavigateBooklet,
   onNavigateLabs,
   onNavigateDoctors,
   onNavigateInsurance,
@@ -75,8 +77,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         setProfileBookings(matching);
 
-        // Check if there is an active (in-progress) order
-        const active = matching.find(b => b.overallStatus !== 'Completed');
+        // Check if there is an active (in-progress) order that has been confirmed by lab
+        const active = matching.find(b => 
+          b.overallStatus !== 'Completed' && 
+          (b.paymentStatus === 'paid' || (b.status as any) === 'confirmed' || (b.overallStatus as any) === 'confirmed' || (b.overallStatus as any) === 'In Progress' || b.overallStatus === 'In_Lab_Testing' || b.overallStatus === 'Ready_For_Pickup')
+        );
         setActiveBooking(active || null);
       } catch (err) {
         console.warn('Error fetching family member bookings:', err);
@@ -101,18 +106,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   });
 
-  const popularTests = POPULAR_CATALOG_TESTS.slice(0, 4);
-
-  const getSalutation = () => {
-    const gender = (activeProfile.gender || user?.gender || '').toLowerCase();
-    if (gender.includes('fem') || gender.includes('wom') || gender === 'f') return 'Mme.';
-    if (gender.includes('mal') || gender.includes('man') || gender === 'm') return 'Sir';
-    return 'M./Mme.';
-  };
+  const patientDisplayName = user?.name || user?.fullName || (activeProfile.fullName !== 'Patient' && !activeProfile.fullName.includes('Claire') ? activeProfile.fullName : 'Valued Patient');
 
   return (
     <div className="max-w-4xl mx-auto py-2 text-slate-900 animate-in fade-in duration-300 space-y-6">
-      {/* 1. TOP STATUS & GREETING BAR */}
+      {/* 1. TOP STATUS & GREETING BAR (REAL PATIENT NAME) */}
       <div className="flex items-center justify-between">
         <div>
           <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
@@ -124,7 +122,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
           </span>
           <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Good morning {getSalutation()} {activeProfile.fullName}
+            Welcome back, {patientDisplayName}
           </h1>
         </div>
 
@@ -134,7 +132,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           title="View profile"
         >
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#006978] text-white flex items-center justify-center font-black text-base shadow-xs border-2 border-white">
-            {activeProfile.fullName.charAt(0).toUpperCase()}
+            {patientDisplayName.charAt(0).toUpperCase()}
           </div>
           <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 absolute bottom-0 right-0 border-2 border-white" />
         </button>
@@ -151,58 +149,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </span>
       </div>
 
-      {/* 3. QUICK ACTION 4 ICONS (Modern Grid) */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4">
+      {/* 3. QUICK ACTION 4 ICONS (Zero text underneath - clean icon badges) */}
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-4">
         <button
           onClick={onNavigateTests}
-          className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-3xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
+          title="Diagnostic Tests Catalog"
+          className="flex items-center justify-center p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
             <FlaskConical className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-slate-800 group-hover:text-[#006978]">
-            Tests
-          </span>
         </button>
 
         <button
           onClick={onNavigatePackage}
-          className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-3xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
+          title="Health Packages & Bundles"
+          className="flex items-center justify-center p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
             <Package className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-slate-800 group-hover:text-[#006978]">
-            Packages
-          </span>
         </button>
 
         <button
           onClick={onNavigateLabs}
-          className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-3xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
+          title="Accredited Partner Laboratories"
+          className="flex items-center justify-center p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
             <Building2 className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-slate-800 group-hover:text-[#006978]">
-            Labs
-          </span>
         </button>
 
         <button
           onClick={onNavigateDoctors}
-          className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-3xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
+          title="ONMC Verified Physicians & Specialists"
+          className="flex items-center justify-center p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 hover:border-[#006978] hover:bg-[#E0F2F1]/30 transition-all cursor-pointer shadow-xs group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
             <Stethoscope className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-slate-800 group-hover:text-[#006978]">
-            Doctors
-          </span>
         </button>
       </div>
 
-      {/* 4. ACTIVE ORDER / PHLEBOTOMIST TRACKING CARD (IF ACTIVE ORDER) */}
+      {/* 4. ACTIVE ORDER / PHLEBOTOMIST TRACKING CARD (ONLY IF CONFIRMED & ACTIVE) */}
       {activeBooking ? (
         <div
           onClick={onNavigateTracking}
@@ -280,73 +270,90 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <ChevronRight className="w-4 h-4 text-slate-400" />
       </div>
 
-      {/* 7. POPULAR TESTS DIRECTORY (NO FIXED PRICES SHOWN UPFRONT) */}
+      {/* 7. DIAGNOSTIC HEALTH PACKAGES (MULTI-TEST BUNDLES) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Frequently Requested Tests
-          </h3>
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Bundled Health Packages
+            </h3>
+            <p className="text-[11px] text-slate-500">Tap any package to inspect all included clinical tests</p>
+          </div>
           <button
-            onClick={onNavigateTests}
+            onClick={onNavigatePackage}
             className="text-xs font-bold text-[#006978] hover:underline flex items-center gap-0.5 cursor-pointer"
           >
-            <span>View all tests</span>
+            <span>Explore packages</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {popularTests.map((t) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            {
+              id: 'pkg-wellness-full',
+              title: 'Comprehensive Annual Wellness',
+              testsCount: 7,
+              tag: 'Most Popular',
+              desc: 'CBC, Glycemia, Lipids, Liver Panel, Kidney Panel, Urinalysis & Uric Acid'
+            },
+            {
+              id: 'pkg-cardio-metabolic',
+              title: 'Cardiovascular & Metabolic Risk',
+              testsCount: 5,
+              tag: 'Heart & Lipids',
+              desc: 'High-Sensitivity CRP, Lipid Panel, HbA1c, Fasting Blood Sugar, Creatinine'
+            },
+            {
+              id: 'pkg-premarital',
+              title: 'Premarital & Infectious Screen',
+              testsCount: 6,
+              tag: 'Pre-nuptial',
+              desc: 'Hemoglobin Electrophoresis, Blood Grouping, HIV 1/2, HBsAg, HCV, VDRL'
+            }
+          ].map((pkg) => (
             <div
-              key={t.id}
-              onClick={() => onSelectTest(t)}
-              className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all group"
+              key={pkg.id}
+              onClick={onNavigatePackage}
+              className="p-4 bg-gradient-to-br from-white to-[#E0F2F1]/30 hover:to-[#E0F2F1]/60 border border-slate-200/90 hover:border-[#006978] rounded-3xl shadow-xs transition-all cursor-pointer flex flex-col justify-between gap-3 group"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 group-hover:bg-[#E0F2F1] text-slate-600 group-hover:text-[#006978] flex items-center justify-center font-bold transition-colors shrink-0">
-                  <FlaskConical className="w-5 h-5" />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 bg-[#E0F2F1] text-[#006978] text-[10px] font-black rounded-full">
+                    {pkg.tag}
+                  </span>
+                  <span className="text-[10px] font-extrabold text-slate-500">
+                    {pkg.testsCount} Tests Included
+                  </span>
                 </div>
-                <div>
-                  <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-[#006978]">
-                    {t.name}
-                  </h4>
-                  <p className="text-[11px] text-slate-400">{t.turnaroundTime} &bull; {t.category}</p>
-                </div>
+                <h4 className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-[#006978] transition-colors">
+                  {pkg.title}
+                </h4>
+                <p className="text-[11px] text-slate-500 line-clamp-2">
+                  {pkg.desc}
+                </p>
               </div>
 
-              <span className="text-xs font-bold text-[#006978] flex items-center gap-0.5 shrink-0">
-                Choose Lab <ChevronRight className="w-3.5 h-3.5" />
-              </span>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#006978]">
+                <span>View all tests</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 8. QUICK SHORTCUTS (DESKTOP & MOBILE RESPONSIVE) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+      {/* 8. QUICK PRESCRIPTION SCANNER SHORTCUT */}
+      <div className="pt-1">
         <button
           onClick={onNavigateScan}
-          className="p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl shadow-xs text-left transition-all cursor-pointer group flex items-center justify-between"
+          className="w-full p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl shadow-xs text-left transition-all cursor-pointer group flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
             <Camera className="w-6 h-6 text-[#006978]" />
             <div>
               <h4 className="text-xs font-bold text-slate-900 group-hover:text-[#006978]">Scan Doctor's Prescription</h4>
               <p className="text-[10px] text-slate-400">AI digitizes doctor notes & extracts tests</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-
-        <button
-          onClick={onNavigatePackage}
-          className="p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl shadow-xs text-left transition-all cursor-pointer group flex items-center justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <BookOpen className="w-6 h-6 text-[#006978]" />
-            <div>
-              <h4 className="text-xs font-bold text-slate-900 group-hover:text-[#006978]">Health Booklet & Carnet</h4>
-              <p className="text-[10px] text-slate-400">Vaccination records & clinical history</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />

@@ -117,16 +117,6 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({
             )}
 
             <FamilyProfileSwitcher />
-
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                title="Sign Out"
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-slate-400 hover:text-rose-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 

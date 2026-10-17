@@ -26,7 +26,7 @@ import { db, collection, addDoc } from '../../services/firebase';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 
 interface DoctorRegistrationModalProps {
-  isOpen: boolean;
+  isOpen: () => void;
   onClose: () => void;
   onSuccess?: (doctor: any) => void;
 }

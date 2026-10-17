@@ -233,28 +233,29 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
               >
                 <div className="flex items-start gap-3.5">
                   <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-1 shadow-2xs shrink-0 group-hover:border-[#006978] transition-colors">
-                    {lab.logoUrl ? (
-                      <img
-                        src={lab.logoUrl}
-                        alt={`${lab.name} logo`}
-                        className="w-full h-full object-contain rounded-xl"
-                        onError={(e) => {
-                          // Fallback to imageUrl if logo fails to load
-                          if (lab.imageUrl && (e.currentTarget.src !== lab.imageUrl)) {
-                            e.currentTarget.src = lab.imageUrl;
-                            e.currentTarget.className = "w-full h-full object-cover rounded-xl";
-                          }
-                        }}
-                      />
-                    ) : lab.imageUrl ? (
-                      <img
-                        src={lab.imageUrl}
-                        alt={lab.name}
-                        className="w-full h-full object-cover rounded-xl"
-                      />
-                    ) : (
-                      <Building2 className="w-8 h-8 text-[#006978]" />
-                    )}
+                    {(() => {
+                      const activeLogo = (typeof window !== 'undefined' ? localStorage.getItem(`lab_logo_${lab.id}`) : null) || lab.logoUrl;
+                      const hasRealLogo = activeLogo && (activeLogo.startsWith('data:') || activeLogo.includes('logo') || activeLogo.includes('firebasestorage') || activeLogo.includes('cloudinary'));
+                      
+                      if (hasRealLogo) {
+                        return (
+                          <img
+                            src={activeLogo}
+                            alt={`${lab.name} logo`}
+                            className="w-full h-full object-contain rounded-xl"
+                          />
+                        );
+                      }
+                      
+                      // AI-generated clean medical emblem fallback with lab initials
+                      const initials = lab.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LB';
+                      return (
+                        <div className="w-full h-full rounded-xl bg-gradient-to-br from-[#006978] to-[#00838F] text-white flex flex-col items-center justify-center font-black p-1 shadow-inner">
+                          <Building2 className="w-4 h-4 text-cyan-200" />
+                          <span className="text-[10px] tracking-tight">{initials}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">

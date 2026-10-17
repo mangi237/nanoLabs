@@ -9,6 +9,7 @@ import {
   Plus, 
   Trash2, 
   ArrowRight, 
+  ArrowLeft,
   FileText, 
   ShieldCheck,
   Check,
@@ -82,8 +83,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
       basePriceXaf: test.basePrice,
       confidenceScore: 100,
       confidencePct: 100,
-      extractedSnippet: 'Manually selected',
-      matchedPhrase: test.name,
+      extractedSnippet: 'Manually selected'
     };
     if (!selectedTests.some((t) => t.code === item.code)) {
       setSelectedTests([...selectedTests, item]);
@@ -95,7 +95,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const filteredManualTests = MASTER_TEST_DICTIONARY.filter(
     (t) =>
       t.name.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
-      t.frenchName?.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
+      t.frenchName.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
       t.code.toLowerCase().includes(manualSearchQuery.toLowerCase())
   );
 
@@ -103,13 +103,24 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-[#0B1F1D] tracking-tight">
-            AI Prescription Scanner
-          </h1>
-          <p className="text-xs sm:text-sm text-[#6B7F7D]">
-            Upload or photograph a doctor's ordonnance to automatically detect and match lab tests.
-          </p>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-[#0B1F1D] tracking-tight">
+              AI Prescription Scanner
+            </h1>
+            <p className="text-xs sm:text-sm text-[#6B7F7D]">
+              Upload or photograph a doctor's ordonnance to automatically detect and match lab tests.
+            </p>
+          </div>
         </div>
       </div>
 
