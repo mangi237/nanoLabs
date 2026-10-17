@@ -34,7 +34,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { collection, addDoc, db } from '../../services/firebase';
-import { uploadService } from '../../services/uploadService';
+import { uploadService } from '../../api/upload';
 import { sendLabWelcomeEmail } from '../../services/emailService';
 import LabTermsModal from '../../components/legal/LabTermsModal';
 import HumanVerificationModal from '../../components/security/HumanVerificationModal';
@@ -42,7 +42,7 @@ import { yeboVerifyService } from '../../services/yeboVerifyService';
 import { PricingModelType, SubscriptionTierType } from '../../types';
 
 interface LabRegistrationModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   onLabCreated?: () => void;
   onSuccess: () => void;
@@ -51,7 +51,7 @@ interface LabRegistrationModalProps {
 export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   isOpen,
   onClose,
-  onSucces,
+  onSuccess,
   onLabCreated
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);

@@ -13,7 +13,7 @@ export interface MatchedPrescriptionTest {
   category: string;
   confidencePct: number; // 0 to 100
   confidenceScore?: number;
-  matchedPhrase: string;
+  matchedPhrase?: string;
   extractedSnippet?: string;
   basePriceXaf: number;
   basePrice?: number;
