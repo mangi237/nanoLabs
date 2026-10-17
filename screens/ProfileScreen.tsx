@@ -26,10 +26,10 @@ import {
   Mail,
   Droplet
 } from 'lucide-react';
-import { useAuth } from '../../context/authContext';
-import { useFamilyProfile } from '../../context/familyProfileContext';
-import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
-import { formatXAF } from '../../shared/money';
+import { useAuth } from '../context/authContext';
+import { useFamilyProfile } from '../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../data/cameroonInsurances';
+import { formatXAF } from '../shared/money';
 
 interface PatientProfileScreenProps {
   onBack?: () => void;
@@ -91,7 +91,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   useEffect(() => {
     const fetchLedger = async () => {
       try {
-        const { limsService } = await import('../../services/limsService');
+        const { limsService } = await import('../services/limsService');
         const labId = user?.labId || 'lab-1';
         const allBookings = await limsService.fetchAllBookings(labId);
         const userBookings = allBookings.filter(b => {
