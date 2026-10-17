@@ -37,7 +37,7 @@ import {
   ConsultationType, 
   AppointmentStatus,
   INITIAL_PATIENT_DIRECTORY 
-} from '../../services/clinicalAppointmentService';
+} from '../../services/clinalAppointmentService';
 import { doctorChatService } from '../../services/doctorChatService';
 
 interface DoctorDashboardProps {
