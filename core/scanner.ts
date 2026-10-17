@@ -298,7 +298,9 @@ export async function scanPrescriptionDocument(
       line.toLowerCase().includes('test')
     ) {
       const isAlreadyMatched = matchedTests.some((m) =>
-        line.toLowerCase().includes(m.matchedPhrase.toLowerCase())
+        m.matchedPhrase && line.toLowerCase().includes(m.matchedPhrase.toLowerCase())
+
+
       );
       if (!isAlreadyMatched && line.length > 5) {
         unmatchedPhrases.push(line);
@@ -356,7 +358,8 @@ export function parsePrescriptionText(rawText: string): {
       line.toLowerCase().includes('radio')
     ) {
       const isAlreadyMatched = matched.some((m) =>
-        line.toLowerCase().includes(m.matchedPhrase.toLowerCase())
+        m.matchedPhrase && line.toLowerCase().includes(m.matchedPhrase.toLowerCase())
+
       );
       if (!isAlreadyMatched && line.length > 5) {
         unmatched.push(line);
