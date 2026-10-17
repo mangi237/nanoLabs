@@ -22,7 +22,7 @@ import {
 import { db, getDocs, collection } from '../../services/firebase';
 import { ACCREDITED_DOCTORS, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { useFamilyProfile } from '../../context/familyProfileContext';
-import { clinicalAppointmentService } from '../../services/clinicalAppointmentService';
+import { clinicalAppointmentService } from '../../services/clinalAppointmentService';
 
 export interface DoctorDirectoryItem {
   id: string;
