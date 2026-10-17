@@ -336,6 +336,13 @@ export const limsService = {
     referralNotes?: string;
     isStaffExemption?: boolean;
     staffMemberName?: string;
+    homeCollection?: boolean ;
+    // pickupLocation: ;c
+ 
+    pickupLocation?: string;
+    landmark?: string;
+    userCoords?: { lat: number; lng: number };
+    batchId?: string;
     staffDesignation?: string;
     sampleCollectedAt?: string;
     selectedMasterTestIds?: string[];

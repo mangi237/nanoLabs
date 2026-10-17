@@ -253,7 +253,7 @@ export const TestBookingScreen: React.FC<TestBookingScreenProps> = ({
           patientAge: activeProfile?.age || (user as any)?.age || 35,
           patientGender: activeProfile?.gender === 'female' ? 'Female' : 'Male',
           homeCollection: sampleMode === 'home_collection',
-          pickupLocation: sampleMode === 'home_collection' ? homeAddress : undefined,
+          pickupLocation: sampleMode === 'home_collection' ? homeAddress : undefined   ,
           creatorName: activeProfile?.fullName|| 'Online Client', // Ensure required creatorName is present
           
           // 👇 Change "tests" to "selectedTests"

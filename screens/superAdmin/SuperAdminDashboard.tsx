@@ -1690,6 +1690,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
       {/* Registration Modal */}
       <LabRegistrationModal 
+      // onSuccess={}
         isOpen={showRegModal}
         onClose={() => setShowRegModal(false)}
         onLabCreated={() => fetchNetworkStats()}
