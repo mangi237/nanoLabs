@@ -6,15 +6,19 @@ interface DoctorProfileScreenProps {
   doctor: DoctorDirectoryItem;
   onBack: () => void;
   isConnected : boolean;
+  isRequestPending : boolean;
   onBookAppointment: (doctor: DoctorDirectoryItem) => void;
   onOpenChat: (doctor: DoctorDirectoryItem) => void;
+  onSendRequest: () => void;
 }
 
 export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   doctor,
   onBack,
+  onSendRequest,
   onBookAppointment,
   isConnected,
+  isRequestPending,
   onOpenChat
 }) => {
   return (

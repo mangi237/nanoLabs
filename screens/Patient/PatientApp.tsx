@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,8 +17,8 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-import { CBCResultDetailScreen } from './CBCResultDetailScreen';
-import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorsScreen';
+// import { CBCResultDetailScreen } from './CBCResultDetailScreen';
+import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
 import { AppointmentsScreen } from './AppointmentsScreen';
@@ -26,7 +26,7 @@ import { PatientProfileScreen } from './ProfileScreen';
 import { SuccessScreen } from './SuccessScreen';
 import { PrescriptionScanScreen } from './PrescriptionScanScreen';
 import { HealthBookletScreen } from './HealthBookletScreen';
-import { NanoLabsAIScreen } from './NanoLabsAIScreen';
+import { NanoLabsAIScreen } from './NanolabsAiScreen';
 import { useAuth } from '../../context/authContext';
 import { FamilyProfileProvider, useFamilyProfile } from '../../context/familyProfileContext';
 
@@ -381,18 +381,7 @@ const PatientAppInner: React.FC = () => {
         );
 
       // 18. Result Details Screen (CBC / Lab Report)
-      case 'result_detail':
-        return (
-          <CBCResultDetailScreen
-            result={selectedResult}
-            onBack={() => setCurrentView('results')}
-            onAskAI={(res) => {
-              setSelectedResult(res);
-              setCurrentView('nanolabs_ai');
-            }}
-          />
-        );
-
+    
       // 19. My Doctors Directory Screen
       case 'doctors':
         return (
@@ -433,7 +422,7 @@ const PatientAppInner: React.FC = () => {
             onOpenChat={() => setCurrentView('doctor_chat')}
             isConnected={isDocConnected}
             isRequestPending={isDocPending}
-            onSendRequest={(doc) => {
+            onSendRequest={(doc:any) => {
               try {
                 const key = `nanolabs_outgoing_doc_reqs_${activeProfile.id}`;
                 const raw = localStorage.getItem(key);
