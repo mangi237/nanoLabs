@@ -322,7 +322,9 @@ export const limsService = {
   async createBooking(params: {
     labId: string;
     patientId: string;
+    pickupLocation?: string;
     patientName: string;
+    // homeCollection?: boolean;
     patientAge?: number;
     dateOfBirth?: string;
     patientGender?: 'Male' | 'Female' | 'Child';
@@ -337,6 +339,7 @@ export const limsService = {
     isStaffExemption?: boolean;
     staffMemberName?: string;
     staffDesignation?: string;
+    homeCollection?: boolean;
     sampleCollectedAt?: string;
     selectedMasterTestIds?: string[];
     selectedTests?: Array<{
@@ -395,6 +398,7 @@ export const limsService = {
       referralNotes,
       isStaffExemption = false,
       staffMemberName,
+      // homeCollection = false,
       staffDesignation,
       sampleCollectedAt = 'Central Diagnostic Facility',
       selectedMasterTestIds = [],
@@ -446,6 +450,7 @@ export const limsService = {
       creatorName?: string;
       clinicalNotes?: string;
       receptionistValidated?: boolean;
+      // homeCollection?: boolean;
       isOnlineBooking?: boolean;
       registrationType?: 'online' | 'walk_in';
       registeredBy?: string;

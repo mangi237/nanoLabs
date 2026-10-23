@@ -344,7 +344,7 @@ export interface User {
 }
 
 export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
-export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
+export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise' | 'budget';
 
 export interface Lab {
   id: string;
@@ -353,6 +353,7 @@ export interface Lab {
   city?: string;
   slogan?: string;
   tagline?: string;
+  tier: SubscriptionTierType;
   motto?: string;
   address?: string;
   phone?: string;
