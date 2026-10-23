@@ -19,7 +19,7 @@ interface FamilyProfileSwitcherProps {
 
 export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () => {
   const { 
-    familyMembers, 
+    familyMembers = [], 
     activeProfile, 
     isDependentActive, 
     switchActiveProfile, 
@@ -31,18 +31,43 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<FamilyMemberProfile | null>(null);
 
-  const handleOpenAddModal = () => {
+  // Safe active profile fallback
+  const safeProfile = activeProfile || {
+    id: 'profile_self',
+    primaryAccountId: 'primary',
+    fullName: 'Account Holder',
+    relationship: 'self' as const,
+    relationshipLabel: 'Primary Account',
+    age: 30,
+    gender: 'female' as const,
+    avatarColor: 'teal',
+    createdAt: new Date().toISOString(),
+    photoUrl: undefined
+  };
+
+  const handleOpenAddModal = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setEditingProfile(null);
-    setIsModalOpen(true);
     setIsDropdownOpen(false);
+    setIsModalOpen(true);
   };
 
   const handleSaveProfile = (data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>) => {
-    if (editingProfile) {
-      editFamilyMember(editingProfile.id, data);
-    } else {
-      const created = createFamilyMember(data);
-      switchActiveProfile(created.id);
+    setIsDropdownOpen(false);
+    setIsModalOpen(false);
+    try {
+      if (editingProfile) {
+        editFamilyMember(editingProfile.id, data);
+      } else {
+        const created = createFamilyMember(data);
+        if (created && created.id) {
+          switchActiveProfile(created.id);
+        }
+      }
+    } catch (err) {
+      console.warn('Error saving family member profile:', err);
+    } finally {
+      setEditingProfile(null);
     }
   };
 
@@ -57,43 +82,68 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
     }
   };
 
+  const hasMultipleProfiles = familyMembers.length > 1;
+
   return (
     <div className="relative">
       {/* Compact, responsive trigger button */}
       <button
         type="button"
-        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!hasMultipleProfiles) {
+            handleOpenAddModal();
+          } else {
+            setIsDropdownOpen(prev => !prev);
+          }
+        }}
         className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full border transition-all cursor-pointer shadow-2xs select-none ${
           isDependentActive
             ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
             : 'bg-white border-slate-200 text-slate-800 hover:border-slate-300'
         }`}
-        title={`Active: ${activeProfile.fullName} (${activeProfile.relationshipLabel})`}
+        title={hasMultipleProfiles ? `Switch profile (Active: ${safeProfile.fullName})` : `Add family profile`}
       >
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${getAvatarBg(activeProfile.avatarColor)}`}>
-          {activeProfile.fullName.charAt(0).toUpperCase()}
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 overflow-hidden ${getAvatarBg(safeProfile.avatarColor)}`}>
+          {safeProfile.photoUrl ? (
+            <img src={safeProfile.photoUrl} alt={safeProfile.fullName} className="w-full h-full object-cover" />
+          ) : (
+            (safeProfile.fullName || 'P').charAt(0).toUpperCase()
+          )}
         </div>
 
         <div className="hidden xs:flex flex-col text-left leading-none max-w-[80px] sm:max-w-[120px]">
           <span className="text-xs font-bold truncate">
-            {activeProfile.fullName.split(' ')[0]}
+            {(safeProfile.fullName || 'User').split(' ')[0]}
           </span>
           <span className="text-[9px] text-slate-400 capitalize truncate">
-            {activeProfile.relationship === 'self' ? 'Primary' : activeProfile.relationship}
+            {safeProfile.relationship === 'self' ? 'Primary' : (safeProfile.relationship || 'Account')}
           </span>
         </div>
 
-        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+        {hasMultipleProfiles ? (
+          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+        ) : (
+          <span title="Add family member profile">
+            <Plus className="w-3.5 h-3.5 text-teal-600 ml-0.5" />
+          </span>
+        )}
       </button>
 
-      {/* Dropdown Menu */}
-      {isDropdownOpen && (
+      {/* Dropdown Menu - ONLY shown if user has multiple profiles and modal is closed */}
+      {isDropdownOpen && !isModalOpen && (
         <>
           <div 
             className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-2xs" 
-            onClick={() => setIsDropdownOpen(false)} 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsDropdownOpen(false);
+            }} 
           />
-          <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-white rounded-3xl border border-slate-200/90 shadow-2xl z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-white rounded-3xl border border-slate-200/90 shadow-2xl z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
             <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#006978] flex items-center gap-1.5">
@@ -105,6 +155,7 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleOpenAddModal}
                 className="text-[11px] font-bold text-[#006978] hover:bg-[#E0F2F1] px-2.5 py-1 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
               >
@@ -116,13 +167,14 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
             {/* Profile List */}
             <div className="max-h-64 overflow-y-auto py-1 space-y-1">
               {familyMembers.map((member) => {
-                const isCurrent = activeProfile.id === member.id;
+                const isCurrent = safeProfile.id === member.id;
                 return (
                   <div
                     key={member.id}
-                    onClick={() => {
-                      switchActiveProfile(member.id);
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setIsDropdownOpen(false);
+                      switchActiveProfile(member.id);
                     }}
                     className={`w-full p-2.5 rounded-2xl flex items-center justify-between text-xs transition-colors cursor-pointer ${
                       isCurrent 
@@ -131,18 +183,22 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${getAvatarBg(member.avatarColor)}`}>
-                        {member.fullName.charAt(0).toUpperCase()}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black overflow-hidden shrink-0 ${getAvatarBg(member.avatarColor)}`}>
+                        {member.photoUrl ? (
+                          <img src={member.photoUrl} alt={member.fullName} className="w-full h-full object-cover" />
+                        ) : (
+                          (member.fullName || 'P').charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div className="text-left">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold">{member.fullName}</span>
+                          <span className="text-xs font-bold">{member.fullName || 'Family Member'}</span>
                           {member.relationship === 'self' && (
                             <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">You</span>
                           )}
                         </div>
                         <span className="text-[10px] text-slate-400 block">
-                          {member.relationshipLabel} &bull; {member.age} yrs
+                          {member.relationshipLabel || member.relationship} &bull; {member.age || 0} yrs
                         </span>
                       </div>
                     </div>
@@ -159,12 +215,18 @@ export const FamilyProfileSwitcher: React.FC<FamilyProfileSwitcherProps> = () =>
       )}
 
       {/* Add / Edit Family Member Modal */}
-      <FamilyMemberModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveProfile}
-        initialData={editingProfile}
-      />
+      {isModalOpen && (
+        <FamilyMemberModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingProfile(null);
+          }}
+          onSave={handleSaveProfile}
+          initialData={editingProfile}
+          primaryUserName={safeProfile.fullName || 'Account Holder'}
+        />
+      )}
     </div>
   );
 };

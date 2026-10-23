@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -284,7 +284,8 @@ export interface ConnectionRequest {
 
 export interface ReferringDoctor {
   id: string;
-  labId?: string;
+  labId?
+  : string;
   doctorId?: string;
   name: string;
   specialty?: string;
@@ -346,11 +347,6 @@ export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_
 export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
-  lat?: number;
-  lng?: number;
-  tier?: string; // Or your specific SubscriptionTierType if applicable
-  averageTurnaroundHours?: number;
-  tatHours?: number;
   id: string;
   name: string;
   location: string;
@@ -658,5 +654,6 @@ export interface FamilyMemberProfile {
   notes?: string;
   createdAt: string;
   avatarColor?: string;
+  photoUrl?: string;
 }
 

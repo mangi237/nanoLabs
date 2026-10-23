@@ -6,8 +6,10 @@ import {
   setActiveFamilyProfile as persistActiveProfile,
   addFamilyMember as serviceAddFamilyMember,
   updateFamilyMember as serviceUpdateFamilyMember,
-  deleteFamilyMember as serviceDeleteFamilyMember
+  deleteFamilyMember as serviceDeleteFamilyMember,
+  syncPrimaryProfileWithUser
 } from '../services/familyProfileServices';
+import { useAuth } from './authContext';
 
 interface FamilyProfileContextType {
   familyMembers: FamilyMemberProfile[];
@@ -23,28 +25,56 @@ interface FamilyProfileContextType {
 const FamilyProfileContext = createContext<FamilyProfileContextType | undefined>(undefined);
 
 export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [familyMembers, setFamilyMembers] = useState<FamilyMemberProfile[]>([]);
   const [activeProfile, setActiveProfileState] = useState<FamilyMemberProfile>(() => getActiveFamilyProfile());
 
   const refreshFamilyMembers = () => {
-    const list = getStoredFamilyMembers();
-    setFamilyMembers(list);
-    const active = getActiveFamilyProfile();
-    setActiveProfileState(active);
+    try {
+      if (user) {
+        syncPrimaryProfileWithUser({
+          id: user.id,
+          name: user.name || user.fullName,
+          phone: user.phone,
+          profilePicture: user.profilePicture || user.avatarUrl
+        });
+      }
+      const list = getStoredFamilyMembers();
+      setFamilyMembers(list);
+      const active = getActiveFamilyProfile();
+      if (active) {
+        setActiveProfileState(active);
+      }
+    } catch (e) {
+      console.warn('Error refreshing family members:', e);
+    }
   };
 
   useEffect(() => {
     refreshFamilyMembers();
-  }, []);
+  }, [user?.name, user?.profilePicture, user?.id]);
 
   const switchActiveProfile = (profileId: string) => {
-    const selected = persistActiveProfile(profileId);
-    setActiveProfileState(selected);
+    try {
+      // Broadcast immediate overlay-dismiss event so all open contextual modals,
+      // payment popups, and report drawers close completely before new profile state is active
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nanolabs_close_all_overlays', { detail: { profileId } }));
+        window.dispatchEvent(new CustomEvent('nanolabs_profile_switched', { detail: { profileId } }));
+      }
+      const selected = persistActiveProfile(profileId);
+      if (selected) {
+        setActiveProfileState(selected);
+      }
+    } catch (err) {
+      console.error('Error switching profile:', err);
+    }
   };
 
   const createFamilyMember = (data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>) => {
     const created = serviceAddFamilyMember(data);
-    refreshFamilyMembers();
+    const list = getStoredFamilyMembers();
+    setFamilyMembers(list);
     return created;
   };
 
@@ -61,7 +91,7 @@ export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     return success;
   };
 
-  const isDependentActive = activeProfile.relationship !== 'self';
+  const isDependentActive = Boolean(activeProfile && activeProfile.relationship && activeProfile.relationship !== 'self');
 
   return (
     <FamilyProfileContext.Provider

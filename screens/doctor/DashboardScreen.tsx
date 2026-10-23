@@ -59,6 +59,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
   const doctorName = user?.name || user?.fullName || 'Dr. Emmanuel Nkuo, MD';
   const doctorSpecialty = user?.specialty || 'Internal Medicine & Clinical Diagnostics';
   const doctorId = user?.id || 'doc_kamga_101';
+  const targetLabId = lab?.id || user?.labId || 'lab-1';
 
   // Appointments State
   const [appointments, setAppointments] = useState<ClinicalAppointment[]>([]);
@@ -111,11 +112,51 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
     return () => window.removeEventListener('nanolabs_appointments_updated', handleUpdate);
   }, [doctorId]);
 
-  // Handle Search Input
+  // Handle Search Input & Fetch real patients cohort
   useEffect(() => {
-    const res = clinicalAppointmentService.searchPatients(searchQuery);
-    setSearchResults(res);
-  }, [searchQuery]);
+    let isMounted = true;
+    const loadRealCohort = async () => {
+      try {
+        const res = clinicalAppointmentService.searchPatients(searchQuery);
+        if (res.length > 0) {
+          if (isMounted) setSearchResults(res);
+          return;
+        }
+        // Load dynamically from limsService bookings
+        const { limsService } = await import('../../services/limsService');
+        const bList = await limsService.fetchAllBookings(targetLabId);
+        const map: Record<string, PatientDirectoryProfile> = {};
+        bList.forEach(b => {
+          const key = b.patientPid || b.patientId || b.id;
+          if (!map[key]) {
+            map[key] = {
+              id: key,
+              name: b.patientName,
+              nickname: (b as any).patientNickname || b.patientName.split(' ')[0],
+              phone: b.patientPhone || '+237 600 00 00 00',
+              email: b.patientEmail,
+              age: b.patientAge || 35,
+              gender: b.patientGender || 'Adult',
+              bloodGroup: 'O+',
+              hasInsurance: Boolean(b.insuranceProvider || b.hasInsurance),
+              insuranceProvider: b.insuranceProvider,
+              societe: (b as any).employerSociete || (b as any).societe || 'Patient',
+              matricule: (b as any).insurancePolicyNumber || (b as any).matricule,
+              city: (b as any).city || 'Douala'
+            };
+          }
+        });
+        const livePatients = Object.values(map);
+        if (isMounted) {
+          setSearchResults(livePatients);
+        }
+      } catch (e) {
+        console.error('Error loading real patient cohort in doctor dashboard:', e);
+      }
+    };
+    loadRealCohort();
+    return () => { isMounted = false; };
+  }, [searchQuery, targetLabId]);
 
   // Filter appointments for schedule tabs
   const todayStr = new Date().toISOString().split('T')[0];
@@ -269,13 +310,26 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
               </button>
             </div>
 
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                {doctorName}
-              </h1>
-              <p className="text-xs sm:text-sm text-cyan-100/90 font-medium mt-0.5">
-                {doctorSpecialty} &bull; {lab?.name || 'Biodiagnostic Labo / Partner Clinic'}
-              </p>
+            <div className="flex items-center gap-3.5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 border-2 border-white/40 overflow-hidden shrink-0 flex items-center justify-center font-black text-2xl text-white shadow-md">
+                {(user?.profilePicture || user?.avatarUrl || localStorage.getItem(`nanolabs_doctor_avatar_${doctorId}`)) ? (
+                  <img 
+                    src={user?.profilePicture || user?.avatarUrl || localStorage.getItem(`nanolabs_doctor_avatar_${doctorId}`) || ''} 
+                    alt={doctorName} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  doctorName.replace('Dr.', '').trim().charAt(0).toUpperCase()
+                )}
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {doctorName}
+                </h1>
+                <p className="text-xs sm:text-sm text-cyan-100/90 font-medium mt-0.5">
+                  {doctorSpecialty} &bull; {lab?.name || 'Biodiagnostic Labo / Partner Clinic'}
+                </p>
+              </div>
             </div>
 
             <p className="text-xs text-cyan-100/80 leading-relaxed font-normal">
@@ -286,7 +340,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
             <div className="pt-2 flex flex-wrap items-center gap-2.5">
               <button
                 onClick={() => {
-                  setSelectedPatient(INITIAL_PATIENT_DIRECTORY[0]);
+                  setSelectedPatient(searchResults.length > 0 ? searchResults[0] : null);
                   setIsScheduleModalOpen(true);
                 }}
                 className="px-5 py-2.5 bg-white text-[#005B66] hover:bg-cyan-50 active:scale-[0.98] rounded-2xl text-xs font-black transition-all shadow-md cursor-pointer flex items-center gap-2 group"
@@ -336,7 +390,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
 
             <div className="p-4 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl text-center space-y-1">
               <span className="text-[11px] font-bold text-cyan-200 uppercase tracking-wider block">Cohort Patients</span>
-              <span className="text-2xl font-black text-white font-mono">{INITIAL_PATIENT_DIRECTORY.length}</span>
+              <span className="text-2xl font-black text-white font-mono">{searchResults.length}</span>
               <span className="text-[10px] text-cyan-100/70 block">Registered files</span>
             </div>
 
@@ -514,7 +568,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                setSelectedPatient(INITIAL_PATIENT_DIRECTORY[0]);
+                setSelectedPatient(searchResults.length > 0 ? searchResults[0] : null);
                 setIsScheduleModalOpen(true);
               }}
               className="px-4 py-2 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white rounded-xl text-xs font-black shadow-md shadow-[#006978]/20 transition-all cursor-pointer flex items-center gap-1.5"
@@ -718,7 +772,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
 
                       <button
                         onClick={() => {
-                          const patientMatch = INITIAL_PATIENT_DIRECTORY.find(p => p.id === app.patientId || p.name === app.patientName);
+                          const patientMatch = searchResults.find(p => p.id === app.patientId || p.name === app.patientName);
                           if (patientMatch) {
                             handleOpenChatWithPatient(patientMatch);
                           } else {
@@ -746,7 +800,7 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
               </div>
               <button
                 onClick={() => {
-                  setSelectedPatient(INITIAL_PATIENT_DIRECTORY[0]);
+                  setSelectedPatient(searchResults.length > 0 ? searchResults[0] : null);
                   setIsScheduleModalOpen(true);
                 }}
                 className="px-4 py-2 bg-[#006978] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
@@ -886,12 +940,15 @@ export const DashboardScreen: React.FC<DoctorDashboardProps> = ({
                 <select
                   value={selectedPatient?.id || ''}
                   onChange={(e) => {
-                    const match = INITIAL_PATIENT_DIRECTORY.find(p => p.id === e.target.value);
+                    const match = searchResults.find(p => p.id === e.target.value);
                     if (match) setSelectedPatient(match);
                   }}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-[#006978]"
                 >
-                  {INITIAL_PATIENT_DIRECTORY.map(p => (
+                  {searchResults.length === 0 && (
+                    <option value="">No patients registered in directory yet</option>
+                  )}
+                  {searchResults.map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.nickname}) &bull; {p.phone} &bull; {p.societe || 'Patient'}
                     </option>

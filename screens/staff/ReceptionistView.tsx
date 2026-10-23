@@ -523,7 +523,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
         
         await fetchData();
       } else {
-        alert(res.error || 'Registration failed. Please check the inputs.');
+        alert((res as any).error || 'Registration failed. Please check the inputs.');
       }
     } catch (err: any) {
       console.error('Patient registration error:', err);

@@ -264,6 +264,7 @@ export interface PatientBooking {
   biologistSigned?: boolean;
   biologistName?: string;
   biologistSignedAt?: string;
+  biologistConfirmedAt?: string;
   biologistRemarks?: string;
   biologistPasscodeVerified?: boolean;
   resultsReady?: boolean;
@@ -319,7 +320,6 @@ export const limsService = {
    * Receptionist creates a new Patient Booklet Booking
    */
   async createBooking(params: {
-    
     labId: string;
     patientId: string;
     patientName: string;
@@ -336,13 +336,6 @@ export const limsService = {
     referralNotes?: string;
     isStaffExemption?: boolean;
     staffMemberName?: string;
-    homeCollection?: boolean ;
-    // pickupLocation: ;c
- 
-    pickupLocation?: string;
-    landmark?: string;
-    userCoords?: { lat: number; lng: number };
-    batchId?: string;
     staffDesignation?: string;
     sampleCollectedAt?: string;
     selectedMasterTestIds?: string[];
@@ -521,7 +514,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp:any) => ({
+          subParameters: t.subParameters ? t.subParameters.map((sp : any) => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -2005,6 +1998,18 @@ export const limsService = {
           details: `Clinical Biologist ${biologistName} verified with passcode, reviewed findings, and officially released test results for Booking ${data.bookingCode}.`
         });
 
+        this.syncLocalBookingUpdate(bookingId, {
+          biologistSigned: true,
+          biologistConfirmed: true,
+          biologistName,
+          biologistSignedAt: timestamp,
+          biologistConfirmedAt: timestamp,
+          biologistRemarks: biologistRemarks || 'Clinical findings reviewed and authorized for official release.',
+          overallStatus: 'Completed',
+          status: 'Completed',
+          tests: updatedTests
+        });
+
         return { success: true };
       }
       return { success: false, error: 'Booking not found.' };
@@ -2710,13 +2715,25 @@ export const limsService = {
   syncLocalBookingUpdate(bookingId: string, patch: Partial<PatientBooking>) {
     try {
       const raw = localStorage.getItem('nanolabs_bookings_ledger');
-      if (raw) {
-        const ledger: PatientBooking[] = JSON.parse(raw);
-        const idx = ledger.findIndex(b => b.id === bookingId || b.bookingCode === bookingId);
-        if (idx >= 0) {
-          ledger[idx] = { ...ledger[idx], ...patch, updatedAt: new Date().toISOString() };
-          localStorage.setItem('nanolabs_bookings_ledger', JSON.stringify(ledger));
-        }
+      const ledger: PatientBooking[] = raw ? JSON.parse(raw) : [];
+      const idx = ledger.findIndex(b => b.id === bookingId || b.bookingCode === bookingId);
+      if (idx >= 0) {
+        ledger[idx] = { ...ledger[idx], ...patch, updatedAt: new Date().toISOString() };
+      } else {
+        ledger.unshift({
+          id: bookingId,
+          bookingCode: bookingId.startsWith('BK-') ? bookingId : `BK-${bookingId.slice(-6).toUpperCase()}`,
+          ...patch,
+          updatedAt: new Date().toISOString()
+        } as any);
+      }
+      localStorage.setItem('nanolabs_bookings_ledger', JSON.stringify(ledger.slice(0, 150)));
+
+      // Broadcast real-time event for Patient and Staff views
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nanolabs_booking_updated', { 
+          detail: { bookingId, patch } 
+        }));
       }
     } catch {}
   },
@@ -2861,14 +2878,59 @@ export const limsService = {
       };
     }
 
+    // Dynamic Billing Engine Formula:
+    // Total Invoice Amount = Primary Lab Test Cost + Justifiable Additional Costs
+    const primaryLabTestCost = Number((options as any)?.testsAmount) || 0;
+    const addOnsItems = options?.addOns || [];
+    const addOnsTotal = addOnsItems.reduce((sum: number, it: any) => sum + (Number(it.price) || 0), 0);
+    const pickupFee = Number((options as any)?.homePickupFee) || 0;
+    const deliveryFee = Number((options as any)?.homeDeliveryFee) || 0;
+    const justifiableAdditionalCosts = pickupFee + deliveryFee + addOnsTotal;
+    const computedTotalAmount = options?.totalAmount !== undefined 
+      ? options.totalAmount 
+      : (primaryLabTestCost + justifiableAdditionalCosts);
+
+    // Call server-side dynamic billing engine for official audit & consistency
+    let serverGeneratedInvoiceNumber = invoiceNumber;
+    try {
+      const resp = await fetch('/api/billing/generate-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labId,
+          bookingId,
+          cashierName,
+          testsAmount: primaryLabTestCost,
+          homePickupFee: pickupFee,
+          homeDeliveryFee: deliveryFee,
+          addOns: addOnsItems
+        })
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json?.invoiceNumber) {
+          serverGeneratedInvoiceNumber = json.invoiceNumber;
+        }
+      }
+    } catch (srvErr) {
+      console.warn('Billing endpoint notice (falling back to client engine):', srvErr);
+    }
+
+    const effectiveInvoiceNumber = serverGeneratedInvoiceNumber || invoiceNumber;
+
     const patch: Partial<PatientBooking> = {
-      invoiceNumber,
+      invoiceNumber: effectiveInvoiceNumber,
       invoiceGenerated: true,
       invoiceGeneratedAt: timestamp,
       invoiceGeneratedBy: cashierName,
+      invoiceStatus: 'invoice_issued',
       labPaymentDetails,
-      totalAmount: options?.totalAmount !== undefined ? options.totalAmount : undefined,
-      addOns: options?.addOns,
+      totalAmount: computedTotalAmount,
+      testsAmount: primaryLabTestCost,
+      homePickupFee: pickupFee,
+      homeDeliveryFee: deliveryFee,
+      addOns: addOnsItems,
+      addOnsAmount: addOnsTotal,
       updatedAt: timestamp
     };
 
@@ -2876,11 +2938,29 @@ export const limsService = {
       const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
       await updateDoc(bookingRef, cleanFirestoreData(patch));
     } catch (e) {
-      console.warn('Firestore update in generateInvoiceByCashier bypassed:', e);
+      try {
+        const qById = query(collection(db, 'labs', labId, 'bookings'), where('id', '==', bookingId));
+        const snapById = await getDocs(qById);
+        if (!snapById.empty) {
+          for (const d of snapById.docs) {
+            await updateDoc(d.ref, cleanFirestoreData(patch));
+          }
+        } else {
+          const qByCode = query(collection(db, 'labs', labId, 'bookings'), where('bookingCode', '==', bookingId));
+          const snapByCode = await getDocs(qByCode);
+          if (!snapByCode.empty) {
+            for (const d of snapByCode.docs) {
+              await updateDoc(d.ref, cleanFirestoreData(patch));
+            }
+          }
+        }
+      } catch (err2) {
+        console.warn('Firestore update in generateInvoiceByCashier bypassed:', err2);
+      }
     }
 
     this.syncLocalBookingUpdate(bookingId, patch);
-    return { success: true, invoiceNumber };
+    return { success: true, invoiceNumber: effectiveInvoiceNumber };
   },
 
   /**
@@ -3018,6 +3098,7 @@ export const limsService = {
       hospital: d.hospital,
       phone: d.phone,
       email: d.email,
+ 
       status: 'active',
       invitationStatus: 'accepted'
     }));
@@ -3389,7 +3470,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData, id: d.id,};
+            return {  ...existingData, id: d.id, };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {

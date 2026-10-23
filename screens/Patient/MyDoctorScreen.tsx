@@ -40,100 +40,8 @@ export interface DoctorDirectoryItem {
   phone?: string;
 }
 
-export const PLATFORM_DOCTORS_DIRECTORY: DoctorDirectoryItem[] = [
-  {
-    id: 'doc-1',
-    name: 'Dr. Emmanuel Nkuo',
-    specialty: 'Internal Medicine & Infectious Diseases',
-    category: 'Specialist',
-    hospital: 'La Quintinie Hospital, Douala',
-    rating: 4.9,
-    reviewsCount: 156,
-    city: 'Douala',
-    online: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80',
-    about: 'Senior Consultant in Internal Medicine and infectious diagnostics at La Quintinie Hospital, Douala. Leads tropical infection and bacterial resistance research.',
-    services: ['Internal Medicine', 'Infectious Diseases', 'Diagnostic Interpretation'],
-    phone: '+237 677 12 34 56'
-  },
-  {
-    id: 'doc-2',
-    name: 'Dr. Beatrice Ndongo',
-    specialty: 'Clinical Hematology & Oncology',
-    category: 'Specialist',
-    hospital: 'Yaoundé Central Hospital',
-    rating: 4.8,
-    reviewsCount: 132,
-    city: 'Yaoundé',
-    online: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=800&auto=format&fit=crop&q=80',
-    about: 'Specialist in blood disorders, hemoglobinopathies (Sickle Cell/Drépanocytose), and diagnostic cytopathology at Yaoundé Central Hospital.',
-    services: ['Hematology Panel Review', 'Anemia Management', 'E-Prescription'],
-    phone: '+237 699 23 45 67'
-  },
-  {
-    id: 'doc-3',
-    name: 'Dr. Alain Fobissie',
-    specialty: 'Cardiology & Vascular Medicine',
-    category: 'Specialist',
-    hospital: 'Douala General Hospital',
-    rating: 4.9,
-    reviewsCount: 178,
-    city: 'Douala',
-    online: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=800&auto=format&fit=crop&q=80',
-    about: 'Cardiovascular practitioner interpreting lipid profiles, cardiac markers, and hypertension risk models at Douala General Hospital.',
-    services: ['Cardiovascular Risk Score', 'Lipid Interpretation', 'Teleconsultation'],
-    phone: '+237 675 34 56 78'
-  },
-  {
-    id: 'doc-4',
-    name: 'Dr. Sylvie Ngassa',
-    specialty: 'Endocrinology & Diabetology',
-    category: 'Specialist',
-    hospital: 'Clinique Bonanjo, Douala',
-    rating: 4.7,
-    reviewsCount: 94,
-    city: 'Douala',
-    online: false,
-    avatarUrl: 'https://images.unsplash.com/photo-1594824813576-96303eb487a5?w=800&auto=format&fit=crop&q=80',
-    about: 'Endocrine consultant focused on diabetes mellitus, thyroid function panels (TSH, FT4), and metabolic monitoring.',
-    services: ['Diabetes Care', 'Thyroid Assessment', 'Follow-up'],
-    phone: '+237 694 45 67 89'
-  },
-  {
-    id: 'doc-5',
-    name: 'Dr. Christian Mbarga',
-    specialty: 'Gastroenterology & Hepatology',
-    category: 'Specialist',
-    hospital: 'CHU de Yaoundé',
-    rating: 4.8,
-    reviewsCount: 112,
-    city: 'Yaoundé',
-    online: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=800&auto=format&fit=crop&q=80',
-    about: 'Practitioner in digestive diseases and viral hepatitis screening (HBsAg, HCV) at the University Teaching Hospital (CHU) Yaoundé.',
-    services: ['Liver Function Review', 'Digestive Health', 'E-Prescription'],
-    phone: '+237 670 56 78 90'
-  },
-  {
-    id: 'doc-6',
-    name: 'Dr. Danielle Ewane',
-    specialty: 'Family Medicine & General Practice',
-    category: 'General',
-    hospital: 'Hôpital Gynéco-Obstétrique de Douala',
-    rating: 4.9,
-    reviewsCount: 204,
-    city: 'Douala',
-    online: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=800&auto=format&fit=crop&q=80',
-    about: 'Family physician with 10 years experience in comprehensive outpatient care, maternal-child health, and routine diagnostic follow-up.',
-    services: ['Family Consultation', 'General Check-Up', 'Prescription'],
-    phone: '+237 691 67 89 01'
-  }
-];
-
-export const REAL_DOCTORS_DIRECTORY = PLATFORM_DOCTORS_DIRECTORY;
+export const PLATFORM_DOCTORS_DIRECTORY: DoctorDirectoryItem[] = [];
+export const REAL_DOCTORS_DIRECTORY: DoctorDirectoryItem[] = [];
 
 interface MyDoctorsScreenProps {
   onBack: () => void;
@@ -153,43 +61,84 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
   const [topTab, setTopTab] = useState<'directory' | 'messages' | 'requests'>('directory');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'All' | 'General' | 'Specialist'>('All');
-  const [doctorsList, setDoctorsList] = useState<DoctorDirectoryItem[]>(PLATFORM_DOCTORS_DIRECTORY);
+  const [doctorsList, setDoctorsList] = useState<DoctorDirectoryItem[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [showDoctorRegisterModal, setShowDoctorRegisterModal] = useState(false);
 
-  // Fetch real platform registered doctors from Firestore/limsService
-  useEffect(() => {
-    let isMounted = true;
-    const fetchLiveDoctors = async () => {
+  // Fetch strictly real platform registered doctors from Firestore and local store
+  const fetchLiveDoctors = async () => {
+    try {
+      setLoadingDoctors(true);
+      const formatted: DoctorDirectoryItem[] = [];
+
+      // 1. Fetch from limsService / Firestore
       try {
-        setLoadingDoctors(true);
         const { limsService } = await import('../../services/limsService');
         const live = await limsService.searchAllAccreditedDoctors('');
-        if (live && live.length > 0 && isMounted) {
-          const formatted: DoctorDirectoryItem[] = live.map((doc, idx) => ({
-            id: doc.id || `doc-live-${idx}`,
-            name: doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`,
-            specialty: doc.specialty || 'General Medicine',
-            category: (doc.specialty && doc.specialty.toLowerCase().includes('general')) ? 'General' : 'Specialist',
-            hospital: doc.hospitalAffiliation || doc.hospital || 'Accredited Medical Center',
-            rating: 4.8 + ((idx % 3) * 0.1),
-            reviewsCount: 50 + (idx * 20),
-            city: 'Douala / Yaoundé',
-            online: doc.status === 'active',
-            avatarUrl: doc.avatarUrl || doc.profilePicture || PLATFORM_DOCTORS_DIRECTORY[idx % PLATFORM_DOCTORS_DIRECTORY.length]?.avatarUrl,
-            about: `Official ONMC-registered medical practitioner at ${doc.hospitalAffiliation || doc.hospital || 'Clinical Diagnostic Center'}.`,
-            services: ['Consultation', 'Diagnostic Review', 'Digital Prescription'],
-            phone: doc.phone || '+237 670 00 00 00'
-          }));
-          setDoctorsList(formatted);
+        if (live && live.length > 0) {
+          live.forEach((doc, idx) => {
+            formatted.push({
+              id: doc.id || `doc-live-${idx}`,
+              name: doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`,
+              specialty: doc.specialty || 'General Medicine',
+              category: (doc.specialty && doc.specialty.toLowerCase().includes('general')) ? 'General' : 'Specialist',
+              hospital: doc.hospitalAffiliation || doc.hospital || 'Accredited Medical Center',
+              rating: 4.9,
+              reviewsCount: 12,
+              city: 'Douala / Yaoundé',
+              online: doc.status === 'active',
+              avatarUrl: doc.avatarUrl || doc.profilePicture || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80',
+              about: `Official ONMC-registered medical practitioner at ${doc.hospitalAffiliation || doc.hospital || 'Clinical Diagnostic Center'}.`,
+              services: ['Consultation', 'Diagnostic Review', 'Digital Prescription'],
+              phone: doc.phone || '+237 670 00 00 00'
+            });
+          });
         }
       } catch (err) {
-        console.warn('Could not load live platform doctors:', err);
-      } finally {
-        if (isMounted) setLoadingDoctors(false);
+        console.warn('Could not query firestore doctors:', err);
       }
-    };
+
+      // 2. Load from locally registered doctors
+      try {
+        const raw = localStorage.getItem('nanolabs_registered_doctors');
+        if (raw) {
+          const localDocs = JSON.parse(raw);
+          if (Array.isArray(localDocs)) {
+            localDocs.forEach((d: any, idx: number) => {
+              if (!formatted.some(f => f.phone === d.phone || f.id === d.id)) {
+                formatted.push({
+                  id: d.id || `doc-local-${idx}`,
+                  name: d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
+                  specialty: d.specialty || 'General Medicine',
+                  category: (d.specialty && d.specialty.toLowerCase().includes('general')) ? 'General' : 'Specialist',
+                  hospital: d.hospital || 'Private Clinic / Medical Center',
+                  rating: 5.0,
+                  reviewsCount: 1,
+                  city: 'Douala',
+                  online: true,
+                  avatarUrl: d.avatarUrl || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80',
+                  about: `Accredited ONMC physician #${d.licenseNumber || 'ONMC-REG'}.`,
+                  services: ['Consultation', 'Lab Review', 'Prescription'],
+                  phone: d.phone
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      setDoctorsList(formatted);
+    } catch (err) {
+      console.warn('Could not load live platform doctors:', err);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  useEffect(() => {
     fetchLiveDoctors();
-    return () => { isMounted = false; };
+    window.addEventListener('nanolabs_doctors_updated', fetchLiveDoctors);
+    return () => window.removeEventListener('nanolabs_doctors_updated', fetchLiveDoctors);
   }, []);
 
   // Real connection requests state stored per patient
@@ -283,7 +232,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
     if (!connectedDoctorIds.includes(bookingDoctor.id)) {
       const updated = [...connectedDoctorIds, bookingDoctor.id];
       setConnectedDoctorIds(updated);
-      localStorage.setItem(`nanolabs_connected_doctors_${activeProfile.id}`, JSON.stringify(updated));
+      localStorage.setItem(`nanolabs_connected_doctors_${activeProfile?.id || 'self'}`, JSON.stringify(updated));
     }
 
     setBookingDoctor(null);
@@ -324,7 +273,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
               Physicians & Clinical Consultations
             </h1>
             <p className="text-[11px] text-slate-500">
-              National Medical Council (ONMC) certified practitioners &bull; Patient: <strong className="text-slate-800">{activeProfile.fullName}</strong>
+              National Medical Council (ONMC) certified practitioners &bull; Patient: <strong className="text-slate-800">{activeProfile?.fullName || 'Family Member'}</strong>
             </p>
           </div>
         </div>

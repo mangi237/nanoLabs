@@ -159,6 +159,14 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('tracking');
               setCurrentView('tracking_live');
             }}
+            onNavigateInvoice={(booking) => {
+              setCurrentBooking(booking);
+              setCurrentView('invoice');
+            }}
+            onNavigateResults={() => {
+              setCurrentTab('results');
+              setCurrentView('results');
+            }}
           />
         );
 
@@ -299,15 +307,33 @@ const PatientAppInner: React.FC = () => {
       case 'invoice':
         return (
           <InvoiceScreen
-            labName={selectedLab?.name}
-            invoiceNumber="INV-2847"
+            bookingId={currentBooking?.id}
+            labId={currentBooking?.labId || selectedLab?.id}
+            labName={currentBooking?.labName || selectedLab?.name}
+            invoiceNumber={currentBooking?.invoiceNumber || (currentBooking as any)?.invoiceCode || 'INV-2026-001'}
             totalAmount={currentBooking?.totalAmount || calculatedLabTariff}
+            testsAmount={currentBooking?.testsAmount}
+            homePickupFee={currentBooking?.homePickupFee}
+            homeDeliveryFee={currentBooking?.homeDeliveryFee}
+            addOns={currentBooking?.addOns || []}
+            tests={currentBooking?.tests || selectedTestsList}
+            labPaymentDetails={(currentBooking as any)?.labPaymentDetails}
             bookingCode={currentBooking?.bookingCode || 'BK-991204'}
-            onBack={() => setCurrentView('booking_summary')}
+            onBack={() => setCurrentView('home')}
             onPaymentConfirmedByPatient={(txRef, method) => {
               // Cashier verifies payment -> notification -> phlebotomist dispatched with live GPS!
-              setCurrentTab('tracking');
-              setCurrentView('tracking_live');
+              if (currentBooking) {
+                currentBooking.paymentStatus = 'paid';
+                currentBooking.transactionReference = txRef;
+              }
+              const isHome = Boolean(currentBooking?.homeCollection || currentBooking?.pickupLocation);
+              if (isHome) {
+                setCurrentTab('tracking');
+                setCurrentView('tracking_live');
+              } else {
+                setCurrentTab('results');
+                setCurrentView('results');
+              }
             }}
             onPayLater={() => setCurrentView('home')}
           />
@@ -381,7 +407,18 @@ const PatientAppInner: React.FC = () => {
         );
 
       // 18. Result Details Screen (CBC / Lab Report)
-    
+      // case 'result_detail':
+      //   return (
+      //     <CBCResultDetailScreen
+      //       result={selectedResult}
+      //       onBack={() => setCurrentView('results')}
+      //       onAskAI={(res : any) => {
+      //         setSelectedResult(res);
+      //         setCurrentView('nanolabs_ai');
+      //       }}
+      //     />
+      //   );
+
       // 19. My Doctors Directory Screen
       case 'doctors':
         return (
@@ -390,7 +427,7 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onSelectDoctor={(doc) => {
+            onSelectDoctor={(doc : any) => {
               setSelectedDoctor(doc);
               setCurrentView('doctor_profile');
             }}
@@ -403,11 +440,12 @@ const PatientAppInner: React.FC = () => {
         let isDocConnected = false;
         let isDocPending = false;
         try {
-          const connRaw = localStorage.getItem(`nanolabs_connected_doctors_${activeProfile.id}`);
+          const profileId = activeProfile?.id || 'self';
+          const connRaw = localStorage.getItem(`nanolabs_connected_doctors_${profileId}`);
           const connList: string[] = connRaw ? JSON.parse(connRaw) : [];
           isDocConnected = connList.includes(selectedDoctor.id);
 
-          const pendRaw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${activeProfile.id}`);
+          const pendRaw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${profileId}`);
           const pendList: string[] = pendRaw ? JSON.parse(pendRaw) : [];
           isDocPending = pendList.includes(selectedDoctor.id);
         } catch {
@@ -422,9 +460,10 @@ const PatientAppInner: React.FC = () => {
             onOpenChat={() => setCurrentView('doctor_chat')}
             isConnected={isDocConnected}
             isRequestPending={isDocPending}
-            onSendRequest={(doc:any) => {
+            onSendRequest={(doc) => {
               try {
-                const key = `nanolabs_outgoing_doc_reqs_${activeProfile.id}`;
+                const profileId = activeProfile?.id || 'self';
+                const key = `nanolabs_outgoing_doc_reqs_${profileId}`;
                 const raw = localStorage.getItem(key);
                 const list: string[] = raw ? JSON.parse(raw) : [];
                 if (!list.includes(doc.id)) {

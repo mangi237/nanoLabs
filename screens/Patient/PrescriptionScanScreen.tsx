@@ -78,7 +78,6 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
       code: test.code,
       name: test.name,
       frenchName: test.frenchName,
-      
       category: test.category,
       basePrice: test.basePrice,
       basePriceXaf: test.basePrice,

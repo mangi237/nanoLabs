@@ -35,21 +35,26 @@ interface PatientProfileScreenProps {
   onBack?: () => void;
   onNavigateInsurance?: () => void;
   onNavigateHealthRecords?: () => void;
+  onNavigateRoleSwitcher?: () => void;
+   onNotificationPress?: () => void;
   onLogout?: () => void;
-  onNavigateRoleSwitcher? : () => void;
-  onNotificationPress? : () => void;
 }
 
 export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onBack,
   onNavigateInsurance,
-  onNavigateHealthRecords,
   onNotificationPress,
-  onNavigateRoleSwitcher ,
+  onNavigateHealthRecords,
+  onNavigateRoleSwitcher,
   onLogout
 }) => {
-  const { user, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();
+
+  // Profile Picture State
+  const [profilePicture, setProfilePicture] = useState<string | null>(() => {
+    return user?.profilePicture || user?.avatarUrl || activeProfile?.photoUrl || localStorage.getItem(`nanolabs_avatar_${user?.id || 'demo'}`) || null;
+  });
 
   // Basic Demographics State
   const [fullName, setFullName] = useState(user?.name || user?.fullName || activeProfile.fullName || 'Valued Patient');
@@ -150,9 +155,38 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Handle Profile Picture upload
+  const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setProfilePicture(dataUrl);
+      localStorage.setItem(`nanolabs_avatar_${user?.id || 'demo'}`, dataUrl);
+      editFamilyMember(activeProfile.id, { photoUrl: dataUrl });
+      if (user && setUser) {
+        setUser({ ...user, profilePicture: dataUrl, avatarUrl: dataUrl });
+      }
+      setSaveNotice('Profile picture updated successfully!');
+      setTimeout(() => setSaveNotice(null), 4000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Screen Mode: Profile Overview vs Profile Edit Settings
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+
   // Handle Save Profile & Insurance
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Enforce requirement: National ID number must be provided to activate insurance
+    if (insurancePolicyNumber.trim() && !nationalId.trim()) {
+      setSaveNotice('National ID Card Number (CNI) is required along with your policy number to activate insurance.');
+      setTimeout(() => setSaveNotice(null), 5000);
+      return;
+    }
 
     // Persist CNI and status
     localStorage.setItem(`nanolabs_cni_${user?.id || 'demo'}`, nationalId);
@@ -174,7 +208,8 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
       city
     });
 
-    setSaveNotice('Profile, National ID & Insurance settings saved successfully!');
+    setSaveNotice('Profile, National ID & Insurance settings saved successfully! Status: Pending Super Admin clearance.');
+    setIsEditingSettings(false);
     setTimeout(() => setSaveNotice(null), 4000);
   };
 
@@ -185,20 +220,30 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {onBack && (
+          {(isEditingSettings || onBack) && (
             <button
-              onClick={onBack}
+              onClick={() => {
+                if (isEditingSettings) {
+                  setIsEditingSettings(false);
+                } else if (onBack) {
+                  onBack();
+                }
+              }}
               className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Back"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Patient Profile & Credentials
+              {isEditingSettings ? 'Edit Profile & Settings' : 'Patient Profile'}
             </h1>
             <p className="text-xs text-slate-500">
-              Manage personal identity, National ID verification, insurance caisse, and financial ledger.
+              {isEditingSettings 
+                ? 'Update your demographics, National ID, and health insurance credentials.'
+                : 'Verified patient credentials, national ID clearance, insurance policy, and diagnostic ledger.'
+              }
             </p>
           </div>
         </div>
@@ -223,8 +268,30 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
       {/* 1. Profile Header Card */}
       <div className="p-5 sm:p-6 bg-gradient-to-br from-[#003B42] via-[#005B66] to-[#007A87] text-white rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
         <div className="flex items-center gap-4 relative z-10">
-          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center font-black text-2xl shadow-md border-2 border-white/30 shrink-0">
-            {fullName.charAt(0).toUpperCase()}
+          <div className="relative group shrink-0">
+            {profilePicture ? (
+              <img 
+                src={profilePicture} 
+                alt={fullName} 
+                className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover shadow-md border-2 border-white/50" 
+              />
+            ) : (
+              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center font-black text-2xl shadow-md border-2 border-white/30">
+                {fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <label 
+              className="absolute -bottom-1 -right-1 p-1.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-xl shadow-md cursor-pointer transition-transform hover:scale-110 flex items-center justify-center"
+              title="Change profile picture"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={handleProfilePictureUpload} 
+              />
+            </label>
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -265,8 +332,153 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
         <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/5 rounded-full pointer-events-none blur-xl" />
       </div>
 
-      {/* 2. Main Edit Form (Personal Info + National ID + Insurance Dropdown) */}
-      <form onSubmit={handleSaveProfile} className="space-y-6">
+      {/* DEDICATED PROFILE OVERVIEW (READ-ONLY DISPLAY WITH EDIT BUTTON) */}
+      {!isEditingSettings ? (
+        <div className="space-y-5 animate-in fade-in">
+          {/* Main Action Bar */}
+          <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-[#006978] flex items-center justify-center font-black">
+                <Settings className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Profile Settings</h3>
+                <p className="text-xs text-slate-500">Edit demographics, national ID card, and health insurance</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsEditingSettings(true)}
+              className="px-4 py-2.5 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white rounded-2xl text-xs font-black shadow-md shadow-[#006978]/25 transition-all cursor-pointer flex items-center gap-2"
+            >
+              <Edit3 className="w-4 h-4 text-cyan-200" />
+              <span>Edit Profile & Settings</span>
+            </button>
+          </div>
+
+          {/* Identity & National ID Clearance Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <Shield className="w-4 h-4 text-[#006978]" />
+                <span>National Identity (CNI) Status</span>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
+                idCardStatus === 'verified'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : idCardStatus === 'pending_verification'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+              }`}>
+                {idCardStatus === 'verified' ? (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>CNI Verified by Super Admin</span>
+                  </>
+                ) : idCardStatus === 'pending_verification' ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Pending Super Admin Clearance</span>
+                  </>
+                ) : (
+                  <span>CNI Not Uploaded</span>
+                )}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">National ID Card Number</span>
+                <p className="font-mono font-black text-slate-900 text-sm">{nationalId || 'Not provided yet'}</p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">KYC Status</span>
+                <p className="font-bold text-slate-800">
+                  {nationalId ? 'Document Submitted & Enqueued' : 'Required to activate third-party insurance co-pay'}
+                </p>
+              </div>
+            </div>
+
+            {idCardImage && (
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <img src={idCardImage} alt="National ID" className="w-12 h-8 rounded-lg object-cover border" />
+                  <span className="font-bold text-slate-700">National ID Snapshot Stored</span>
+                </div>
+                <span className="text-emerald-700 font-bold text-[11px]">Synced</span>
+              </div>
+            )}
+          </div>
+
+          {/* Insurance Information Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <CreditCard className="w-4 h-4 text-[#006978]" />
+                <span>Health Insurance & Coverage Caisse</span>
+              </div>
+              <span className="text-xs font-bold text-[#006978]">{selectedInsurance}</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Insurance Company</span>
+                <p className="font-bold text-slate-900">{selectedInsurance}</p>
+              </div>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Policy / Matricule N°</span>
+                <p className="font-mono font-black text-slate-900">{insurancePolicyNumber || 'None configured'}</p>
+              </div>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Employer / Société</span>
+                <p className="font-bold text-slate-900">{employerSociete || 'Independent'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Demographics Summary Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <User className="w-4 h-4 text-[#006978]" />
+                <span>Personal Demographics</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-2xl">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Gender</span>
+                <span className="font-bold text-slate-900">{gender}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Blood Group</span>
+                <span className="font-black text-rose-600">{bloodGroup}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Phone</span>
+                <span className="font-mono font-bold text-slate-900">{phone}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">City</span>
+                <span className="font-bold text-slate-900">{city}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* EDIT PROFILE SETTINGS FORM */
+        <form onSubmit={handleSaveProfile} className="space-y-6 animate-in fade-in">
+          <div className="flex items-center justify-between pb-2">
+            <h3 className="text-base font-black text-slate-900">Edit Profile & Credentials</h3>
+            <button
+              type="button"
+              onClick={() => setIsEditingSettings(false)}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
         {/* Personal Details Section */}
         <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -478,6 +690,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
           <span>Save Profile, National ID & Insurance Credentials</span>
         </button>
       </form>
+      )}
 
       {/* 5. Diagnostic Ledger & Payment Receipts Section */}
       <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">

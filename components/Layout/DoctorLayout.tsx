@@ -64,6 +64,7 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
 
   const doctorDisplayName = user?.name || user?.fullName || 'Dr. Emmanuel Nkuo';
   const doctorSpecialty = user?.specialty || 'Internal Medicine & Diagnostics';
+  const doctorAvatar = user?.profilePicture || user?.avatarUrl || localStorage.getItem(`nanolabs_doctor_avatar_${user?.id || 'demo'}`) || localStorage.getItem('nanolabs_doctor_avatar_demo');
 
   return (
     <div className="min-h-screen bg-[#F4F7F6] text-[#0A2624] flex antialiased font-sans selection:bg-[#E0F2F1] selection:text-[#006978]">
@@ -128,9 +129,17 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
         {/* Doctor Info Card & Sign Out */}
         <div className="p-4 border-t border-slate-100 space-y-3">
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-100 text-[#006978] flex items-center justify-center font-black text-xs shrink-0">
-              {doctorDisplayName.replace('Dr. ', '').charAt(0)}
-            </div>
+            {doctorAvatar ? (
+              <img
+                src={doctorAvatar}
+                alt={doctorDisplayName}
+                className="w-10 h-10 rounded-xl object-cover shadow-xs border border-teal-200 shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-teal-100 text-[#006978] flex items-center justify-center font-black text-xs shrink-0">
+                {doctorDisplayName.replace('Dr. ', '').charAt(0)}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="text-xs font-black text-slate-900 truncate">
                 {doctorDisplayName}

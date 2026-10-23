@@ -653,5 +653,6 @@ export interface FamilyMemberProfile {
   notes?: string;
   createdAt: string;
   avatarColor?: string;
+  photoUrl?: string;
 }
 

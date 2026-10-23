@@ -48,8 +48,8 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
   onClose,
   onSave,
   initialData,
-  primaryUserName = 'Mme. Claire Ngo',
-  primaryUserInsurance = 'Ascoma Assurances'
+  primaryUserName = 'Account Holder',
+  primaryUserInsurance = 'National Health Insurance'
 }) => {
   if (!isOpen) return null;
 
@@ -77,8 +77,19 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
   const [ownPolicyNumber, setOwnPolicyNumber] = useState(initialData?.insurancePolicyNumber || '');
   const [ownCoveragePercent, setOwnCoveragePercent] = useState(initialData?.insuranceCoveragePercent || 80);
 
+  const [photoUrl, setPhotoUrl] = useState<string | null>(initialData?.photoUrl || null);
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [error, setError] = useState<string | null>(null);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -166,6 +177,7 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
       insuranceCoveragePercent: coveragePercent,
       isDependentOnPrimaryInsurance: isAyantDroit,
       notes: notes.trim() || undefined,
+      photoUrl: photoUrl || undefined,
       avatarColor: relationship === 'mother' || relationship === 'grandparent' ? 'indigo' : (relationship === 'child' || relationship === 'son' || relationship === 'daughter') ? 'amber' : 'teal'
     };
 
@@ -209,6 +221,32 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
             </div>
           )}
 
+          {/* Photo Uploader */}
+          <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            <div className="relative w-14 h-14 rounded-2xl bg-teal-100 border-2 border-teal-300 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+              {photoUrl ? (
+                <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <Users className="w-6 h-6 text-teal-700" />
+              )}
+              <label className="absolute inset-0 bg-black/40 hover:bg-black/50 text-white flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                <Plus className="w-4 h-4" />
+                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+              </label>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900">Member Photo (Optional)</span>
+                <label className="text-[11px] font-bold text-teal-700 hover:text-teal-900 cursor-pointer flex items-center gap-1 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                  <Plus className="w-3 h-3" />
+                  <span>{photoUrl ? 'Change' : 'Upload Photo'}</span>
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                </label>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">Custom photo for this family member dossier</p>
+            </div>
+          </div>
+
           {/* Core Identification */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -251,7 +289,7 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
                     setFullName(e.target.value);
                     if (error) setError(null);
                   }}
-                  placeholder="e.g., Mme. Ngo Madeleine or Junior Kamdem"
+                  placeholder="e.g. Dependent Full Name"
                   className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[#0B1F1D] focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20 focus:border-[#0F766E]"
                 />
               </div>

@@ -297,9 +297,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         setErrorMessage('Please enter a valid date of birth.');
         return false;
       }
-      if (formData.hasInsurance && !formData.insuranceProvider.trim()) {
-        setErrorMessage('Please select or enter your Cameroon insurance company.');
-        return false;
+      if (formData.hasInsurance) {
+        if (!formData.insuranceProvider.trim()) {
+          setErrorMessage('Please select your Cameroon insurance company from the dropdown.');
+          return false;
+        }
+        if (!formData.nationalId.trim()) {
+          setErrorMessage('National ID Card Number (CNI) is required along with your insurance policy to activate health insurance features.');
+          return false;
+        }
       }
       return true;
     }
@@ -424,7 +430,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       const cleanedPatient = cleanFirestoreData(rawPatientPayload);
 
       // Save to Firestore under the selected lab's patients subcollection
-      const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
+      let patientDocId = `pat_${Date.now()}`;
+      try {
+        const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
+        if (docRef?.id) {
+          patientDocId = docRef.id;
+        }
+      } catch (fsErr) {
+        console.warn('Firestore write warning, continuing with local profile:', fsErr);
+      }
 
       // If patient selected a network doctor or provided other doctor details, register in lab's referring doctors
       if (referralSelectionType === 'network' && selectedNetworkDoctor) {
@@ -461,7 +475,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         }
       }
 
-      const fullPatientRecord = { id: docRef.id, ...cleanedPatient };
+      const fullPatientRecord = { id: patientDocId, ...cleanedPatient };
       try {
         localStorage.setItem('last_registered_patient', JSON.stringify(fullPatientRecord));
       } catch (e) {
@@ -626,66 +640,132 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="p-4 bg-teal-950/60 border-2 border-teal-500/50 rounded-2xl flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0">
-                          <Building2 className="w-5 h-5" />
+                    {/* Active Selected Lab Card */}
+                    <div 
+                      onClick={() => setShowLabSelector(!showLabSelector)}
+                      className="p-4 bg-teal-950/70 border-2 border-teal-500/60 hover:border-teal-400 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all shadow-md group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-700 text-white flex items-center justify-center font-black text-sm shadow-md shrink-0">
+                          {selectedLab?.name ? selectedLab.name.substring(0, 2).toUpperCase() : 'NL'}
                         </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-sm text-white truncate">
-                            {selectedLab?.name || 'Main Medical Center'}
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm text-white truncate group-hover:text-teal-300 transition-colors">
+                              {selectedLab?.name || 'Main Medical Center'}
+                            </span>
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-teal-500/30 text-teal-200 border border-teal-400/30 px-2 py-0.5 rounded-md">
+                              ISO 15189
+                            </span>
                           </div>
-                          <div className="text-xs text-slate-300 flex items-center gap-1 truncate">
-                            <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
-                            {selectedLab?.location || 'Central Diagnostic Hub'}
+                          <div className="text-xs text-slate-300 flex items-center gap-1.5 truncate">
+                            <MapPin className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                            <span className="truncate">{selectedLab?.city || selectedLab?.location || 'Douala, Cameroon'} &bull; {selectedLab?.address || 'Central Diagnostic Hub'}</span>
                           </div>
                         </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setShowLabSelector(!showLabSelector)}
-                        className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-semibold rounded-lg border border-teal-400/30 transition-colors shrink-0 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowLabSelector(!showLabSelector)}
+                        }
+                        className="px-3.5 py-2 bg-teal-500/25 hover:bg-teal-500/40 text-teal-200 text-xs font-bold rounded-xl border border-teal-400/40 transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
                       >
-                        Change Facility
+                        <span>{showLabSelector ? 'Close' : 'Change Facility'}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showLabSelector ? 'rotate-180' : ''}`} />
                       </button>
                     </div>
 
+                    {/* Card-Design Searchable Dropdown */}
                     {showLabSelector && (
-                      <div className="bg-slate-900 border border-slate-700 rounded-2xl p-3 space-y-2.5 animate-in fade-in">
+                      <div className="bg-slate-900/95 border-2 border-teal-500/40 rounded-3xl p-3.5 space-y-3 animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
+                            Choose Diagnostic Center
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            {filteredLabs.length} Certified Laboratories
+                          </span>
+                        </div>
+
+                        {/* Search Input */}
                         <div className="relative">
-                          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                           <input
                             type="text"
-                            placeholder="Search medical center by name or city..."
+                            placeholder="Search center by name, city, district or address..."
                             value={labSearchQuery}
                             onChange={e => setLabSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-400 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all"
+                            autoFocus
                           />
                         </div>
 
-                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                          {filteredLabs.map((l) => (
-                            <div
-                              key={l.id}
-                              onClick={() => handleSelectLab(l)}
-                              className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                                selectedLab?.id === l.id
-                                  ? 'bg-teal-500/20 border-teal-400 text-white'
-                                  : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
-                              }`}
-                            >
-                              <div>
-                                <div className="font-bold text-xs">{l.name}</div>
-                                <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                                  <MapPin className="w-3 h-3 text-teal-400" />
-                                  {l.location || 'Cameroon'}
-                                </div>
-                              </div>
-                              {selectedLab?.id === l.id && (
-                                <CheckCircle2 className="w-4 h-4 text-teal-400" />
-                              )}
+                        {/* Lab Cards List */}
+                        <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1">
+                          {filteredLabs.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-slate-400">
+                              No laboratories found matching "{labSearchQuery}".
                             </div>
-                          ))}
+                          ) : (
+                            filteredLabs.map((l) => {
+                              const isSelected = selectedLab?.id === l.id;
+                              return (
+                                <div
+                                  key={l.id}
+                                  onClick={() => {
+                                    handleSelectLab(l);
+                                    setShowLabSelector(false);
+                                  }}
+                                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                                    isSelected
+                                      ? 'bg-teal-900/40 border-teal-400 shadow-md ring-1 ring-teal-400/50'
+                                      : 'bg-slate-950/70 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm ${
+                                      isSelected 
+                                        ? 'bg-teal-500 text-white' 
+                                        : 'bg-slate-800 text-teal-300 border border-slate-700'
+                                    }`}>
+                                      {l.name ? l.name.substring(0, 2).toUpperCase() : 'NL'}
+                                    </div>
+                                    <div className="min-w-0 space-y-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="font-extrabold text-xs text-white truncate">
+                                          {l.name}
+                                        </h4>
+                                        <span className="text-[9px] font-bold bg-teal-500/20 text-teal-300 px-1.5 py-0.2 rounded border border-teal-500/30">
+                                          Certified
+                                        </span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-300 flex items-center gap-1.5 truncate">
+                                        <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
+                                        <span>{l.city || l.location || 'Cameroon'} &bull; {l.address || 'Central'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-[9px] font-semibold text-slate-400 flex-wrap">
+                                        <span className="bg-slate-800 px-2 py-0.5 rounded text-teal-300">Home Collection</span>
+                                        <span className="bg-slate-800 px-2 py-0.5 rounded text-cyan-300">Fast Results</span>
+                                        <span className="bg-slate-800 px-2 py-0.5 rounded text-emerald-300">24/7 Intake</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="shrink-0">
+                                    {isSelected ? (
+                                      <div className="w-6 h-6 rounded-full bg-teal-500 text-white flex items-center justify-center shadow-xs">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full border border-slate-700 hover:border-teal-400" />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                     )}

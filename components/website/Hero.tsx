@@ -10,9 +10,9 @@ interface HeroProps {
 }
 
 const phoneScreens = [
-  { src: '/assets/phone-live-tracking.png', label: 'Live tracking' },
-  { src: '/assets/phone-nanoscan-result.png', label: 'nanoScan AI' },
-  { src: '/assets/phone-lab-compare.png', label: 'Lab compare' },
+  { src: 'assets/images/Tracking.png', label: 'Live tracking' },
+  { src: 'assets/images/DoctorProfile.png', label: 'nanoScan AI' },
+  { src: 'assets/images/SelectLab.png', label: 'Lab compare' },
 ];
 
 const labs = [
@@ -178,9 +178,9 @@ export const Hero: React.FC<HeroProps> = ({ onGoToPortal }) => {
             >
               <div className="absolute -inset-8 bg-gradient-to-tr from-nl-teal/20 via-nl-light/15 to-nl-blue/10 rounded-[3rem] blur-3xl pointer-events-none" />
 
-              <div className="relative rounded-[2.5rem] bg-gradient-to-b from-slate-100 to-white p-3 shadow-[0_40px_100px_rgba(15,118,110,0.2)] border border-slate-200">
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 w-24 h-5 bg-slate-900 rounded-full z-10" />
-                <div className="rounded-[2rem] bg-white overflow-hidden relative border border-slate-100">
+              <div className="">
+                <div className="" />
+                <div className="">
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={screenIndex}

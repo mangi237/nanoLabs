@@ -165,7 +165,7 @@ export const siteConfig: SiteConfig = {
         'Home collection with live phlebotomist map and ETA'
       ],
       roleAttribution: 'Patients & Family Members',
-      mockupImage: '/assets/phone-nanoscan-result.png'
+      mockupImage: 'assets/images/invoice.png'
     },
     {
       id: 'doctor',

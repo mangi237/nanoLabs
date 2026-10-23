@@ -60,237 +60,11 @@ export interface PatientDirectoryProfile {
 
 const STORAGE_KEY = 'nanolabs_clinical_appointments_v3';
 
-// Seed appointments for immediate responsiveness
-const INITIAL_APPOINTMENTS: ClinicalAppointment[] = [
-  {
-    id: 'apt-001',
-    doctorId: 'doc_kamga_101',
-    doctorName: 'Dr. Joseph Kamga, MD',
-    doctorSpecialty: 'Internal Medicine & Diagnostics',
-    doctorHospital: 'Clinique des Roses, Douala',
-    patientId: 'pat_claire_01',
-    patientName: 'Mme. Claire Ngo',
-    patientNickname: 'Claire N.',
-    patientPhone: '+237 671 22 33 44',
-    patientAge: 38,
-    patientGender: 'Female',
-    patientInsurance: 'AXA Assurances',
-    patientSociete: 'ENEO Cameroon SA',
-    date: new Date().toISOString().split('T')[0],
-    time: '10:30 AM',
-    type: 'in_person',
-    status: 'confirmed',
-    location: 'Cabinet Médical Akwa, Salle 2, Douala',
-    reason: 'Follow-up on Complete Blood Count (NFS) & Fasting Glycemia',
-    prepInstructions: 'Please bring previous diagnostic carnet and arrive 10 min early.',
-    sentToPatientAt: new Date(Date.now() - 3600000).toISOString(),
-    smsNotificationSent: true,
-    whatsappNotificationSent: true,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'apt-002',
-    doctorId: 'doc_kamga_101',
-    doctorName: 'Dr. Joseph Kamga, MD',
-    doctorSpecialty: 'Internal Medicine & Diagnostics',
-    doctorHospital: 'Clinique des Roses, Douala',
-    patientId: 'pat_roland_02',
-    patientName: 'M. Roland Tchouassi',
-    patientNickname: 'Roland T.',
-    patientPhone: '+237 690 55 66 77',
-    patientAge: 52,
-    patientGender: 'Male',
-    patientInsurance: 'Activa Assurances',
-    patientSociete: 'SABC Boissons',
-    date: new Date().toISOString().split('T')[0],
-    time: '02:00 PM',
-    type: 'teleconsultation',
-    status: 'confirmed',
-    location: 'Secure Encrypted Video Room #04 (Telehealth)',
-    reason: 'Cardiovascular Lipid Panel & High-Sensitivity CRP interpretation',
-    prepInstructions: 'Join video room 5 minutes prior via patient app.',
-    sentToPatientAt: new Date(Date.now() - 7200000).toISOString(),
-    smsNotificationSent: true,
-    whatsappNotificationSent: true,
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'apt-003',
-    doctorId: 'doc_kamga_101',
-    doctorName: 'Dr. Joseph Kamga, MD',
-    doctorSpecialty: 'Internal Medicine & Diagnostics',
-    doctorHospital: 'Clinique des Roses, Douala',
-    patientId: 'pat_beatrice_03',
-    patientName: 'Mme. Béatrice Nguemo',
-    patientNickname: 'Béatrice',
-    patientPhone: '+237 699 11 22 33',
-    patientAge: 45,
-    patientGender: 'Female',
-    patientInsurance: 'Gras Savoye',
-    patientSociete: 'Orange Cameroun',
-    date: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      return d.toISOString().split('T')[0];
-    })(),
-    time: '11:15 AM',
-    type: 'lab_review',
-    status: 'requested',
-    location: 'Biodiagnostic Labo Consultation Room, Douala',
-    reason: 'Liver Functional Panel (ASAT/ALAT) & Hepatitis B Serology review',
-    prepInstructions: 'Lab results will be digitally synced directly onto doctor console.',
-    sentToPatientAt: new Date().toISOString(),
-    smsNotificationSent: true,
-    whatsappNotificationSent: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'apt-004',
-    doctorId: 'doc_kamga_101',
-    doctorName: 'Dr. Joseph Kamga, MD',
-    doctorSpecialty: 'Internal Medicine & Diagnostics',
-    doctorHospital: 'Clinique des Roses, Douala',
-    patientId: 'pat_samuel_04',
-    patientName: 'M. Samuel Eboa',
-    patientNickname: 'Sam E.',
-    patientPhone: '+237 677 88 99 00',
-    patientAge: 29,
-    patientGender: 'Male',
-    patientInsurance: 'Chanas Assurances',
-    patientSociete: 'TotalEnergies Marketing',
-    date: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 2);
-      return d.toISOString().split('T')[0];
-    })(),
-    time: '04:30 PM',
-    type: 'home_visit',
-    status: 'confirmed',
-    location: 'Patient Residence - Bonapriso, Douala',
-    reason: 'Post-Malaria convalescence evaluation and full metabolic review',
-    prepInstructions: 'Home phlebotomy sample collected earlier today.',
-    sentToPatientAt: new Date().toISOString(),
-    smsNotificationSent: true,
-    whatsappNotificationSent: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+// Purged all mock placeholder appointments - only real appointments booked by patients or doctors are stored
+const INITIAL_APPOINTMENTS: ClinicalAppointment[] = [];
 
-// Baseline directory of searchable patients
-export const INITIAL_PATIENT_DIRECTORY: PatientDirectoryProfile[] = [
-  {
-    id: 'pat_claire_01',
-    name: 'Mme. Claire Ngo',
-    nickname: 'Claire N.',
-    phone: '+237 671 22 33 44',
-    email: 'claire.ngo@eneo.cm',
-    age: 38,
-    gender: 'Female',
-    bloodGroup: 'O+',
-    hasInsurance: true,
-    insuranceProvider: 'AXA Assurances',
-    societe: 'ENEO Cameroon SA',
-    matricule: 'ENEO-7842',
-    city: 'Douala',
-    lastTestDate: 'Yesterday',
-    lastTestName: 'Complete Blood Count (NFS) & Fasting Glycemia',
-    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'pat_roland_02',
-    name: 'M. Roland Tchouassi',
-    nickname: 'Roland T.',
-    phone: '+237 690 55 66 77',
-    email: 'roland.tchouassi@sabc.cm',
-    age: 52,
-    gender: 'Male',
-    bloodGroup: 'A+',
-    hasInsurance: true,
-    insuranceProvider: 'Activa Assurances',
-    societe: 'SABC Boissons',
-    matricule: 'SABC-1092',
-    city: 'Douala',
-    lastTestDate: '3 days ago',
-    lastTestName: 'Lipid Profile & High-Sensitivity CRP',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'pat_beatrice_03',
-    name: 'Mme. Béatrice Nguemo',
-    nickname: 'Béatrice',
-    phone: '+237 699 11 22 33',
-    email: 'beatrice.nguemo@orange.cm',
-    age: 45,
-    gender: 'Female',
-    bloodGroup: 'B+',
-    hasInsurance: true,
-    insuranceProvider: 'Gras Savoye',
-    societe: 'Orange Cameroun',
-    matricule: 'ORA-9921',
-    city: 'Douala',
-    lastTestDate: '5 days ago',
-    lastTestName: 'Liver Functional Panel (Transaminases ASAT/ALAT)',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'pat_samuel_04',
-    name: 'M. Samuel Eboa',
-    nickname: 'Sam E.',
-    phone: '+237 677 88 99 00',
-    email: 'samuel.eboa@total.cm',
-    age: 29,
-    gender: 'Male',
-    bloodGroup: 'O-',
-    hasInsurance: true,
-    insuranceProvider: 'Chanas Assurances',
-    societe: 'TotalEnergies Marketing',
-    matricule: 'TOT-4401',
-    city: 'Douala',
-    lastTestDate: 'Today',
-    lastTestName: 'Thick Smear & Malaria RDT + Full Blood Count',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'pat_aissatou_05',
-    name: 'Mme. Aïssatou Bello',
-    nickname: 'Aïcha B.',
-    phone: '+237 675 44 33 22',
-    email: 'aissatou.bello@gmail.com',
-    age: 33,
-    gender: 'Female',
-    bloodGroup: 'AB+',
-    hasInsurance: true,
-    insuranceProvider: 'Saham / Sanlam',
-    societe: 'CIMENCAM',
-    matricule: 'CIM-2033',
-    city: 'Yaoundé',
-    lastTestDate: '1 week ago',
-    lastTestName: 'Thyroid Function Test (TSH, Free T4)',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'pat_jean_06',
-    name: 'Dr. Jean-Paul Mbarga (Patient)',
-    nickname: 'Jean-Paul',
-    phone: '+237 691 22 44 66',
-    email: 'jp.mbarga@yahoo.fr',
-    age: 61,
-    gender: 'Male',
-    bloodGroup: 'O+',
-    hasInsurance: true,
-    insuranceProvider: 'Allianz Cameroun',
-    societe: 'Port Autonome de Douala',
-    matricule: 'PAD-5120',
-    city: 'Douala',
-    lastTestDate: '2 weeks ago',
-    lastTestName: 'Prostate Specific Antigen (PSA Total/Libre) & Urea/Creatinine',
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&auto=format&fit=crop&q=80'
-  }
-];
+// Real directory of patients populated dynamically from platform users and bookings
+export const INITIAL_PATIENT_DIRECTORY: PatientDirectoryProfile[] = [];
 
 class ClinicalAppointmentService {
   private getStoredAppointments(): ClinicalAppointment[] {
@@ -444,12 +218,19 @@ class ClinicalAppointmentService {
 
   public searchPatients(queryStr: string): PatientDirectoryProfile[] {
     const q = queryStr.trim().toLowerCase();
-    if (!q) return INITIAL_PATIENT_DIRECTORY;
+    let storedList: PatientDirectoryProfile[] = [];
+    try {
+      const raw = localStorage.getItem('nanolabs_real_patient_directory');
+      if (raw) storedList = JSON.parse(raw);
+    } catch {}
 
-    return INITIAL_PATIENT_DIRECTORY.filter(p => 
+    const source = storedList.length > 0 ? storedList : INITIAL_PATIENT_DIRECTORY;
+    if (!q) return source;
+
+    return source.filter(p => 
       p.name.toLowerCase().includes(q) ||
-      p.nickname.toLowerCase().includes(q) ||
-      p.phone.toLowerCase().includes(q) ||
+      (p.nickname && p.nickname.toLowerCase().includes(q)) ||
+      (p.phone && p.phone.toLowerCase().includes(q)) ||
       (p.email && p.email.toLowerCase().includes(q)) ||
       (p.societe && p.societe.toLowerCase().includes(q)) ||
       (p.insuranceProvider && p.insuranceProvider.toLowerCase().includes(q)) ||

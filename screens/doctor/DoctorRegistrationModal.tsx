@@ -2,17 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Stethoscope, 
   X, 
-  Building2, 
   Phone, 
   Mail, 
-  Key, 
   Check, 
   Sparkles, 
   ShieldCheck, 
-  UserCheck, 
   Award,
   Loader2,
-  FileText,
   Lock,
   Eye,
   EyeOff,
@@ -20,13 +16,14 @@ import {
   Bot,
   CheckCircle2,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  Upload
 } from 'lucide-react';
 import { db, collection, addDoc } from '../../services/firebase';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 
 interface DoctorRegistrationModalProps {
-  isOpen?: () => void;
+  isOpen: boolean;
   onClose: () => void;
   onSuccess?: (doctor: any) => void;
 }
@@ -52,6 +49,23 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successData, setSuccessData] = useState<any | null>(null);
+
+  // Credential Document Uploads (Photos)
+  const [licensePhoto, setLicensePhoto] = useState<string>('');
+  const [diplomaPhoto, setDiplomaPhoto] = useState<string>('');
+  const [annualRenewalPhoto, setAnnualRenewalPhoto] = useState<string>('');
+
+  const handleFileUpload = (file: File, setter: (val: string) => void) => {
+    if (file.size > 2.5 * 1024 * 1024) {
+      alert('Photo is too large. Please select an image under 2.5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setter(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Human Verification State
   const [captchaNum1, setCaptchaNum1] = useState(7);
@@ -142,6 +156,10 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
         passcode: formData.password.trim(),
         accessCode: generatedAccessCode,
         notes: formData.notes.trim(),
+        licensePhoto: licensePhoto || null,
+        diplomaPhoto: diplomaPhoto || null,
+        annualRenewalPhoto: annualRenewalPhoto || null,
+        verificationStatus: licensePhoto ? 'pending_verification' : 'verified',
         status: 'active',
         role: 'doctor',
         verifiedHuman: true,
@@ -151,8 +169,27 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
 
       const cleaned = cleanFirestoreData(doctorPayload);
       // Save in global doctors collection
-      const docRef = await addDoc(collection(db, 'doctors'), cleaned);
-      const createdRecord = { id: docRef.id, ...cleaned };
+      let createdRecord = { id: `doc_${Date.now()}`, ...cleaned };
+      try {
+        const docRef = await addDoc(collection(db, 'doctors'), cleaned);
+        createdRecord = { id: docRef.id, ...cleaned };
+      } catch (firestoreErr) {
+        console.warn('Firestore write warning (saving to local store):', firestoreErr);
+      }
+
+      // Also persist in nanolabs_registered_doctors for instant discovery
+      try {
+        const raw = localStorage.getItem('nanolabs_registered_doctors');
+        const list = raw ? JSON.parse(raw) : [];
+        const existingIdx = list.findIndex((d: any) => d.phone === createdRecord.phone);
+        if (existingIdx >= 0) {
+          list[existingIdx] = createdRecord;
+        } else {
+          list.push(createdRecord);
+        }
+        localStorage.setItem('nanolabs_registered_doctors', JSON.stringify(list));
+        window.dispatchEvent(new CustomEvent('nanolabs_doctors_updated'));
+      } catch {}
 
       setSuccessData(createdRecord);
     } catch (err: any) {
@@ -356,6 +393,114 @@ export const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = (
                     onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
                     className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* CREDENTIAL VERIFICATION PHOTO UPLOADS */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-teal-700" />
+                  <span className="text-xs font-bold text-slate-900">Physician License & Credential Verification Photos</span>
+                </div>
+                <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full font-bold">
+                  Accredited Verification
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Upload photos of your official ONMC medical council registration, medical diploma, or annual renewal card.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* 1. ONMC License Photo */}
+                <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                  <span className="block text-[10px] font-bold text-slate-700">1. Medical License (ONMC)</span>
+                  {licensePhoto ? (
+                    <div className="space-y-1.5">
+                      <img src={licensePhoto} alt="License" className="w-full h-16 object-cover rounded-lg border border-teal-300" />
+                      <button
+                        type="button"
+                        onClick={() => setLicensePhoto('')}
+                        className="text-[10px] text-rose-600 font-bold hover:underline block"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 hover:border-teal-400 rounded-xl cursor-pointer bg-slate-50/50 hover:bg-teal-50/20 transition-all">
+                      <Upload className="w-4 h-4 text-slate-400 mb-1" />
+                      <span className="text-[10px] font-bold text-slate-600">Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          if (e.target.files?.[0]) handleFileUpload(e.target.files[0], setLicensePhoto);
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* 2. Medical Diploma */}
+                <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                  <span className="block text-[10px] font-bold text-slate-700">2. Medical Diploma / Degree</span>
+                  {diplomaPhoto ? (
+                    <div className="space-y-1.5">
+                      <img src={diplomaPhoto} alt="Diploma" className="w-full h-16 object-cover rounded-lg border border-teal-300" />
+                      <button
+                        type="button"
+                        onClick={() => setDiplomaPhoto('')}
+                        className="text-[10px] text-rose-600 font-bold hover:underline block"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 hover:border-teal-400 rounded-xl cursor-pointer bg-slate-50/50 hover:bg-teal-50/20 transition-all">
+                      <Upload className="w-4 h-4 text-slate-400 mb-1" />
+                      <span className="text-[10px] font-bold text-slate-600">Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          if (e.target.files?.[0]) handleFileUpload(e.target.files[0], setDiplomaPhoto);
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* 3. Annual Renewal Card */}
+                <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                  <span className="block text-[10px] font-bold text-slate-700">3. Annual Renewal Card</span>
+                  {annualRenewalPhoto ? (
+                    <div className="space-y-1.5">
+                      <img src={annualRenewalPhoto} alt="Renewal" className="w-full h-16 object-cover rounded-lg border border-teal-300" />
+                      <button
+                        type="button"
+                        onClick={() => setAnnualRenewalPhoto('')}
+                        className="text-[10px] text-rose-600 font-bold hover:underline block"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 hover:border-teal-400 rounded-xl cursor-pointer bg-slate-50/50 hover:bg-teal-50/20 transition-all">
+                      <Upload className="w-4 h-4 text-slate-400 mb-1" />
+                      <span className="text-[10px] font-bold text-slate-600">Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          if (e.target.files?.[0]) handleFileUpload(e.target.files[0], setAnnualRenewalPhoto);
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
             </div>

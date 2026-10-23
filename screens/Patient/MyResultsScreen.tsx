@@ -59,9 +59,12 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
         const allBookings = await limsService.fetchAllBookings(labId);
 
         // Filter bookings for this member that are completed or released
+        const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
+        const activeId = activeProfile?.id || '';
+
         const completedBookings = allBookings.filter(b => {
-          const matchPid = b.patientPid === activeProfile.id || b.patientId === activeProfile.id;
-          const matchName = b.patientName?.toLowerCase().trim() === activeProfile.fullName.toLowerCase().trim();
+          const matchPid = Boolean(activeId && (b.patientPid === activeId || b.patientId === activeId));
+          const matchName = Boolean(activeName && b.patientName?.toLowerCase().trim() === activeName);
           const isDone = b.overallStatus === 'Completed' || b.paymentStatus === 'paid';
           return (matchPid || matchName) && isDone;
         });

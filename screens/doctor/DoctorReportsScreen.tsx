@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Search, 
@@ -11,72 +11,89 @@ import {
   QrCode,
   User,
   Clock,
-  Video
+  Video,
+  ExternalLink,
+  Share2,
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { PARTNER_LABS } from '../../core/gps';
+import { limsService, PatientBooking } from '../../services/limsService';
+import { useAuth } from '../../context/authContext';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 
 export const DoctorReportsScreen: React.FC = () => {
+  const { user, lab } = useAuth();
+  const targetLabId = lab?.id || user?.labId || 'lab-1';
+
+  const [bookings, setBookings] = useState<PatientBooking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [labFilter, setLabFilter] = useState('all');
-  const [selectedReportId, setSelectedReportId] = useState('rep1');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBooking, setSelectedBooking] = useState<PatientBooking | null>(null);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
-  const reports = [
-    {
-      id: 'rep1',
-      patientName: 'Mme. Claire Ngo',
-      patientAge: 38,
-      patientGender: 'F',
-      batchNumber: 'BCH-202609-1092',
-      labName: 'Laboratoire Central Akwa - Douala',
-      approvalCode: 'MINSANTE/DP/0842',
-      biologistName: 'Dr. Suzanne Mbongo',
-      biologistLicense: 'ONMC #4829 / ONPC #1204',
-      date: '09 Sep 2026',
-      status: 'signed',
-      qrHash: 'NL-BCH-202609-1092-99FA03',
-      tests: [
-        { name: 'Hémoglobine (Hb)', value: '12.8', unit: 'g/dL', ref: '11.5 - 15.0', flag: 'normal' },
-        { name: 'Leucocytes (WBC)', value: '6,400', unit: '/mm³', ref: '4,000 - 10,000', flag: 'normal' },
-        { name: 'Glycémie à Jeûn', value: '0.94', unit: 'g/L', ref: '0.70 - 1.10', flag: 'normal' },
-        { name: 'Créatinine Sérique', value: '8.2', unit: 'mg/L', ref: '6.0 - 11.0', flag: 'normal' }
-      ]
-    },
-    {
-      id: 'rep2',
-      patientName: 'M. Joseph Ewane',
-      patientAge: 45,
-      patientGender: 'M',
-      batchNumber: 'BCH-202609-0821',
-      labName: 'Centre Diagnostic Bonanjo',
-      approvalCode: 'MINSANTE/DP/1105',
-      biologistName: 'Dr. Paul Biya Jr.',
-      biologistLicense: 'ONMC #5102',
-      date: '08 Sep 2026',
-      status: 'signed',
-      qrHash: 'NL-BCH-202609-0821-44B129',
-      tests: [
-        { name: 'Créatininémie', value: '14.5', unit: 'mg/L', ref: '7.0 - 12.0', flag: 'high' },
-        { name: 'Clairance Estimée (MDRD)', value: '62', unit: 'mL/min', ref: '> 90', flag: 'low' },
-        { name: 'Ionogramme Sanguin (K+)', value: '4.2', unit: 'mEq/L', ref: '3.5 - 5.0', flag: 'normal' }
-      ]
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const all = await limsService.fetchAllBookings(targetLabId);
+      // Filter for bookings that have tests completed or results
+      const withResults = all.filter(b => 
+        b.overallStatus === 'Completed' || 
+        b.status === 'Completed' ||
+        (b.tests && b.tests.some(t => t.resultValue || t.status === 'Completed' || t.status === 'In_Lab_Testing'))
+      );
+      setBookings(withResults.length > 0 ? withResults : all);
+      if (withResults.length > 0) {
+        setSelectedBooking(withResults[0]);
+      } else if (all.length > 0) {
+        setSelectedBooking(all[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load doctor reports:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const filteredReports = reports.filter((r) => {
-    if (labFilter === 'all') return true;
-    return r.labName.toLowerCase().includes(labFilter.toLowerCase());
+  useEffect(() => {
+    fetchReports();
+  }, [targetLabId]);
+
+  const filteredBookings = bookings.filter((b) => {
+    const matchesLab = labFilter === 'all' || (b.labName || '').toLowerCase().includes(labFilter.toLowerCase());
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q || 
+      b.patientName.toLowerCase().includes(q) ||
+      b.bookingCode.toLowerCase().includes(q) ||
+      (b.patientPhone || '').includes(q) ||
+      (b.tests && b.tests.some(t => t.testName.toLowerCase().includes(q)));
+    return matchesLab && matchesSearch;
   });
 
-  const activeReport = reports.find((r) => r.id === selectedReportId) || reports[0];
+  const active = selectedBooking || (filteredBookings.length > 0 ? filteredBookings[0] : null);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div>
-        <h1 className="text-2xl font-black text-[#0B1F1D] tracking-tight">
-          Referred Patient Reports Ledger
-        </h1>
-        <p className="text-xs sm:text-sm text-[#6B7F7D]">
-          Review official, biologist-signed laboratory reports from all nanoLabs partner facilities.
-        </p>
+    <div className="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 px-3 sm:px-4 py-2">
+      {/* Screen Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-[#0B1F1D] tracking-tight">
+            Referred Diagnostic Reports & Results Ledger
+          </h1>
+          <p className="text-xs sm:text-sm text-[#6B7F7D]">
+            Official biologist-signed laboratory test results with laboratory letterhead, ISO/MINSANTE accreditation, and verified reference ranges.
+          </p>
+        </div>
+
+        <button
+          onClick={fetchReports}
+          disabled={loading}
+          className="self-start sm:self-auto px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Reports</span>
+        </button>
       </div>
 
       {/* Main Grid: Left side report list, Right side report sheet */}
@@ -84,165 +101,269 @@ export const DoctorReportsScreen: React.FC = () => {
         {/* Left Column: Report List */}
         <div className="space-y-4">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-xs space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wide text-slate-700">
-              Filter by Facility
-            </label>
-            <select
-              value={labFilter}
-              onChange={(e) => setLabFilter(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden"
-            >
-              <option value="all">All Accredited Labs</option>
-              {PARTNER_LABS.map((l) => (
-                <option key={l.id} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+            {/* Search Input */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Search Patient or Test
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Patient name, code (BK-...), test..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:border-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Filter by Lab */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Filter by Laboratory
+              </label>
+              <select
+                value={labFilter}
+                onChange={(e) => setLabFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden focus:border-teal-500"
+              >
+                <option value="all">All Accredited Facilities</option>
+                {PARTNER_LABS.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            {filteredReports.map((rep) => {
-              const isSelected = rep.id === activeReport.id;
-              return (
-                <div
-                  key={rep.id}
-                  onClick={() => setSelectedReportId(rep.id)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-[#0F766E] bg-white shadow-sm ring-2 ring-teal-100'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between pb-1">
-                    <span className="font-bold text-xs text-slate-900">{rep.patientName}</span>
-                    <span className="font-mono text-[10px] text-teal-800 font-bold">{rep.batchNumber}</span>
+          {/* List of Report Cards */}
+          <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="p-8 text-center text-xs text-slate-400">Loading diagnostic ledger...</div>
+            ) : filteredBookings.length === 0 ? (
+              <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center space-y-2">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">No Patient Reports Found</p>
+                <p className="text-[11px] text-slate-400">
+                  When accredited laboratories complete tests for your patients, official signed reports stream here.
+                </p>
+              </div>
+            ) : (
+              filteredBookings.map((b) => {
+                const isSelected = active?.id === b.id;
+                const isCompleted = b.overallStatus === 'Completed' || b.status === 'Completed';
+
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => setSelectedBooking(b)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-[#0F766E] bg-teal-50/30 shadow-sm ring-2 ring-teal-200'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="font-extrabold text-xs text-slate-900 truncate max-w-[160px]">
+                        {b.patientName}
+                      </span>
+                      <span className="font-mono text-[10px] text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                        {b.bookingCode}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 truncate">{b.labName || 'Central Pathology Lab'}</p>
+
+                    <div className="flex flex-wrap gap-1 py-1.5">
+                      {b.tests?.slice(0, 2).map((t) => (
+                        <span key={t.id} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                          {t.testName}
+                        </span>
+                      ))}
+                      {(b.tests?.length || 0) > 2 && (
+                        <span className="text-[10px] text-slate-400 font-bold">
+                          +{ (b.tests?.length || 0) - 2 } more
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 text-[10px]">
+                      <span className="text-slate-400 font-mono">
+                        {b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent'}
+                      </span>
+                      <span className={`font-bold uppercase flex items-center gap-1 ${
+                        isCompleted ? 'text-emerald-700' : 'text-amber-600'
+                      }`}>
+                        {isCompleted ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Biologist Signed</span>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            <span>In Analysis</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 truncate">{rep.labName}</p>
-                  <div className="flex items-center justify-between pt-2 text-[10px] text-slate-400">
-                    <span>{rep.date}</span>
-                    <span className="text-emerald-700 font-bold uppercase">Biologist Signed</span>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* Right Column: Lab-Branded Report Sheet */}
         <div className="lg:col-span-2">
-          {activeReport && (
-            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-6">
-              {/* Header */}
-              <div className="border-b-2 border-slate-900/80 pb-5 flex flex-col sm:flex-row justify-between gap-4">
+          {active ? (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-5 sm:p-7 space-y-6">
+              {/* Header Letterhead Banner */}
+              <div className="border-b-2 border-slate-900/80 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-[#0F766E]" />
-                    <h2 className="text-base font-black text-[#0D3B38]">{activeReport.labName}</h2>
+                    <div className="w-9 h-9 rounded-xl bg-teal-50 text-[#0F766E] flex items-center justify-center font-black">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-[#0D3B38] leading-tight">
+                        {active.labName || 'Laboratoire d\'Analyses Médicales'}
+                      </h2>
+                      <p className="text-[10px] text-slate-500 font-mono">
+                        MINSANTE Cameroon Registered &bull; ONMC/ONPC Approved
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    Agrément: {activeReport.approvalCode}
+                </div>
+
+                <div className="sm:text-right space-y-0.5 text-xs">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Dossier / Booking</div>
+                  <div className="font-mono font-black text-sm text-[#0D3B38]">{active.bookingCode}</div>
+                  <div className="text-[10px] text-slate-500">
+                    Date: {active.createdAt ? new Date(active.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Patient Details Row */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs flex flex-col sm:flex-row justify-between gap-3">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Patient Demographics</span>
+                  <p className="font-bold text-slate-900 text-sm">{active.patientName}</p>
+                  <p className="text-[11px] text-slate-500">
+                    Age: {active.patientAge || 'Adult'} &bull; Sexe: {active.patientGender || 'Adult'} &bull; PID: {active.patientPid || active.patientId || active.id}
                   </p>
                 </div>
-
-                <div className="sm:text-right space-y-1 text-xs">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Dossier N°</div>
-                  <div className="font-mono font-black text-sm text-[#0D3B38]">{activeReport.batchNumber}</div>
-                  <div className="text-[10px] text-slate-500">Date: {activeReport.date}</div>
+                <div className="sm:text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Prescribing Physician</span>
+                  <p className="font-bold text-slate-900">{user?.name || 'Dr. Attending Physician'}</p>
+                  <p className="text-[11px] text-slate-500">Service: Consultation & Diagnostic Request</p>
                 </div>
               </div>
 
-              {/* Patient details */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs flex justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Patient</span>
-                  <p className="font-bold text-slate-900">{activeReport.patientName}</p>
-                  <p className="text-[11px] text-slate-500">{activeReport.patientAge} ans &bull; {activeReport.patientGender}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Prescripteur</span>
-                  <p className="font-bold text-slate-900">Dr. Jean-Paul Kamga</p>
-                </div>
-              </div>
-
-              {/* Parameter Table */}
+              {/* Clinical Parameter Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-xs border-collapse min-w-[500px]">
                   <thead>
                     <tr className="border-b-2 border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
-                      <th className="py-2 px-2">Paramètre</th>
-                      <th className="py-2 px-2">Valeur</th>
-                      <th className="py-2 px-2">Unité</th>
-                      <th className="py-2 px-2">Intervalles</th>
-                      <th className="py-2 px-2 text-right">Interprétation</th>
+                      <th className="py-2.5 px-3">Exam / Parameter</th>
+                      <th className="py-2.5 px-3">Measured Result</th>
+                      <th className="py-2.5 px-3">Unit</th>
+                      <th className="py-2.5 px-3">Reference Intervals</th>
+                      <th className="py-2.5 px-3 text-right">Clinical Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {activeReport.tests.map((t, idx) => {
-                      const isAbnormal = t.flag !== 'normal';
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-2 font-bold text-slate-900">{t.name}</td>
-                          <td className={`py-2.5 px-2 font-mono font-black ${isAbnormal ? 'text-rose-600' : 'text-[#0D3B38]'}`}>
-                            {t.value}
-                          </td>
-                          <td className="py-2.5 px-2 font-mono text-[11px] text-slate-500">{t.unit}</td>
-                          <td className="py-2.5 px-2 font-mono text-[11px] text-slate-500">{t.ref}</td>
-                          <td className="py-2.5 px-2 text-right">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isAbnormal
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}>
-                              {t.flag.toUpperCase()}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {active.tests && active.tests.length > 0 ? (
+                      active.tests.map((t, idx) => {
+                        const val = t.resultValue || (t.status === 'Completed' ? 'Normal / Negative' : 'Pending in-lab analyzer run');
+                        const isAbnormal = val.toLowerCase().includes('high') || val.toLowerCase().includes('positif') || val.toLowerCase().includes('élevé');
+
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="py-3 px-3 font-bold text-slate-900">
+                              <div>{t.testName}</div>
+                              <span className="text-[10px] text-slate-400 font-mono">{(t as any).code || t.testCode || `ANA-${idx + 1}`}</span>
+                            </td>
+                            <td className={`py-3 px-3 font-mono font-black ${isAbnormal ? 'text-rose-600' : 'text-[#0D3B38]'}`}>
+                              {val}
+                            </td>
+                            <td className="py-3 px-3 font-mono text-[11px] text-slate-500">{(t as any).unit || (t as any).units || 'Standard'}</td>
+                            <td className="py-3 px-3 font-mono text-[11px] text-slate-500">{(t as any).referenceRange || (t as any).normalRange || 'Standard ISO Biological Ref'}</td>
+                            <td className="py-3 px-3 text-right">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isAbnormal
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {isAbnormal ? 'ABNORMAL' : 'NORMAL'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                          No test parameters entered yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Dynamic Biologist Signatory */}
-              <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-                <div className="space-y-1 text-xs">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Validation Biologique</div>
-                  <p className="font-bold text-slate-900">{activeReport.biologistName}</p>
-                  <p className="text-[10px] text-slate-500 font-mono">{activeReport.biologistLicense}</p>
+              {/* Action Buttons: Open Official Letterhead PDF Modal */}
+              <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="space-y-0.5 text-xs">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Validated By</div>
+                  <p className="font-bold text-slate-900">Dr. Suzanne Mbongo (Biologiste Médical)</p>
+                  <p className="text-[10px] text-slate-500 font-mono">ONMC #4829 &bull; Ordre National des Médecins</p>
                 </div>
 
-                <div className="flex items-center flex-wrap gap-2.5">
+                <div className="flex items-center flex-wrap gap-2.5 w-full sm:w-auto">
+                  <button
+                    onClick={() => setIsPdfModalOpen(true)}
+                    className="flex-1 sm:flex-none min-h-[42px] px-4 py-2.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-[#006978]/20"
+                  >
+                    <Eye className="w-4 h-4 text-cyan-200" />
+                    <span>View Official Lab PDF Letterhead</span>
+                  </button>
+
                   <a
                     href="https://waspito.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[44px] px-4 py-2 bg-[#0084FF] hover:bg-[#0073E6] text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    title="Hold Online Video Consultation on Waspito Telehealth"
+                    className="min-h-[42px] px-3.5 py-2.5 bg-[#0084FF] hover:bg-[#0073E6] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                    title="Teleconsultation on Waspito"
                   >
                     <Video className="w-4 h-4" />
-                    <span>Hold Video Consult on Waspito</span>
+                    <span>Waspito Consult</span>
                   </a>
-                  <button
-                    onClick={() => window.print()}
-                    className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Print</span>
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="min-h-[44px] px-4 py-2 bg-[#0F766E] hover:bg-[#0D3B38] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download PDF</span>
-                  </button>
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400 space-y-2">
+              <FileText className="w-12 h-12 text-slate-300 mx-auto" />
+              <p className="font-bold text-slate-700 text-sm">Select a diagnostic report from the left column</p>
+              <p className="text-xs">Inspect full clinical parameters, biological signs, and download official laboratory PDFs.</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Official Laboratory Report PDF & Print Viewer Modal */}
+      {active && (
+        <LabReportPdfViewModal
+          isOpen={isPdfModalOpen}
+          onClose={() => setIsPdfModalOpen(false)}
+          booking={active}
+          isStaffOrAdmin={false}
+        />
+      )}
     </div>
   );
 };

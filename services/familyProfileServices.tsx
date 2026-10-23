@@ -62,7 +62,9 @@ export function getStoredFamilyMembers(primaryAccountId: string = 'patient_prima
       p.id !== 'profile_child_chloe' &&
       !p.fullName?.toLowerCase().includes('madeleine') &&
       !p.fullName?.toLowerCase().includes('junior kamdem') &&
-      !p.fullName?.toLowerCase().includes('chloé kamdem')
+      !p.fullName?.toLowerCase().includes('chloé kamdem') &&
+      !p.fullName?.toLowerCase().includes('claire ngo') &&
+      !p.fullName?.toLowerCase().includes('claire_')
     );
 
     if (filtered.length === 0) {
@@ -95,19 +97,62 @@ export function getActiveFamilyProfile(): FamilyMemberProfile {
   } catch (e) {
     // fallback
   }
-  // Default to self/first profile
+  // Safe default to self/first profile
   return members[0] || DEFAULT_FAMILY_MEMBERS[0];
 }
 
 export function setActiveFamilyProfile(profileId: string): FamilyMemberProfile {
   const members = getStoredFamilyMembers();
-  const profile = members.find((m) => m.id === profileId) || members[0];
+  let profile = members.find((m) => m.id === profileId);
+  if (!profile) {
+    profile = members[0] || DEFAULT_FAMILY_MEMBERS[0];
+  }
   try {
-    localStorage.setItem(ACTIVE_PROFILE_ID_STORAGE_KEY, profile.id);
+    if (profile && profile.id) {
+      localStorage.setItem(ACTIVE_PROFILE_ID_STORAGE_KEY, profile.id);
+    }
   } catch (e) {
     console.error('Error setting active family profile', e);
   }
-  return profile;
+  return profile || DEFAULT_FAMILY_MEMBERS[0];
+}
+
+/**
+ * Synchronize primary 'self' family member profile with logged in patient
+ */
+export function syncPrimaryProfileWithUser(userInfo: { id?: string; name?: string; phone?: string; gender?: string; profilePicture?: string }): FamilyMemberProfile {
+  const members = getStoredFamilyMembers();
+  const primaryIndex = members.findIndex(m => m.relationship === 'self');
+  const realName = userInfo?.name?.trim() || 'Patient';
+  
+  if (primaryIndex >= 0) {
+    const existing = members[primaryIndex];
+    const isMockName = existing.fullName.toLowerCase().includes('claire');
+    const finalName = realName !== 'Patient' ? realName : (isMockName ? 'Valued Patient' : existing.fullName);
+    
+    if (existing.fullName !== finalName || (userInfo.profilePicture && existing.photoUrl !== userInfo.profilePicture)) {
+      members[primaryIndex] = {
+        ...existing,
+        fullName: finalName,
+        nickname: finalName.split(' ')[0],
+        phone: userInfo.phone || existing.phone,
+        photoUrl: userInfo.profilePicture || existing.photoUrl
+      };
+      saveFamilyMembers(members);
+    }
+    return members[primaryIndex];
+  } else {
+    const newSelf: FamilyMemberProfile = {
+      ...DEFAULT_FAMILY_MEMBERS[0],
+      fullName: realName,
+      nickname: realName.split(' ')[0],
+      phone: userInfo.phone,
+      photoUrl: userInfo.profilePicture
+    };
+    members.unshift(newSelf);
+    saveFamilyMembers(members);
+    return newSelf;
+  }
 }
 
 export function addFamilyMember(data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>): FamilyMemberProfile {

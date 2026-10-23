@@ -1,399 +1,277 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  User, 
-  Phone, 
-  Calendar, 
-  MapPin, 
-  Droplet, 
-  ShieldCheck, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  Loader2, 
-  CheckCircle2, 
-  Building2, 
-  CreditCard, 
-  Sparkles,
-  AlertCircle
+import {
+  X, User, Phone, Mail, Lock, Eye, EyeOff, Loader2,
+  CheckCircle2, AlertCircle, MapPin, Shield
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { db, addDoc, collection } from '../../services/firebase';
+import { cleanFirestoreData } from '../../utils/sanitizeData';
+import { hashPassword } from '../../utils/passwordHash';
 import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
 
 interface PatientRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (patient: any) => void;
-  defaultLabId?: string;
-  defaultLabName?: string;
 }
+
+const field =
+  'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:bg-white transition';
+const label = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
 export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> = ({
   isOpen,
   onClose,
-  onSuccess,
-  defaultLabId = 'lab-1',
-  defaultLabName = 'nanoLabs Central Diagnostics'
+  onSuccess
 }) => {
-  const { setUser, setLab } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [createdPatient, setCreatedPatient] = useState<any | null>(null);
+  const { setUser } = useAuth();
 
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     name: '',
-    phone: '',
     email: '',
-    dateOfBirth: '1995-05-15',
-    gender: 'Male',
-    city: 'Douala',
-    address: '',
-    bloodGroup: 'Unknown',
+    phone: '',
+    city: '',
+    password: '',
+    confirm: '',
     hasInsurance: false,
-    insuranceProvider: 'ASCOMA CAMEROUN S.A.',
-    insurancePolicyNumber: '',
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-    passcode: ''
+    insuranceProvider: '',
+    insurancePolicyNumber: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [created, setCreated] = useState<any | null>(null);
 
   if (!isOpen) return null;
+
+  const update = (key: string, value: any) => setForm((f) => ({ ...f, [key]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!formData.name.trim()) {
-      setError('Please enter your full legal name.');
-      return;
-    }
-    const cleanPhone = formData.phone.trim();
-    if (!cleanPhone || cleanPhone.length < 8) {
-      setError('Please enter a valid mobile phone number for SMS notifications and login.');
-      return;
-    }
-    const cleanPass = formData.passcode.trim();
-    if (!cleanPass || cleanPass.length < 4) {
-      setError('Please set a secure password or PIN (minimum 4 characters).');
-      return;
-    }
+    const name = form.name.trim();
+    const phone = form.phone.trim();
+    const phoneDigits = phone.replace(/\D/g, '');
+    const email = form.email.trim().toLowerCase();
 
-    setLoading(true);
+    if (!name) return setError('Please enter your full name.');
+    if (phoneDigits.length < 8) return setError('Please enter a valid phone number.');
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) return setError('Please enter a valid email address, or leave it empty.');
+    if (form.password.length < 8) return setError('Your password needs at least 8 characters.');
+    if (form.password !== form.confirm) return setError('The two passwords do not match.');
+    if (form.hasInsurance && !form.insuranceProvider) return setError('Choose your insurance company.');
+
+    setSaving(true);
     try {
-      const generatedPid = 'PAT-2026-' + Math.floor(1000 + Math.random() * 9000);
-      const accessCode = cleanPass.toUpperCase();
+      const { salt, hash } = await hashPassword(form.password);
+      const now = new Date().toISOString();
 
-      const newPatientData = {
-        name: formData.name.trim(),
-        phone: cleanPhone,
-        email: (formData.email || '').trim().toLowerCase(),
-        dateOfBirth: formData.dateOfBirth,
-        gender: formData.gender,
-        city: formData.city,
-        address: formData.address.trim(),
-        bloodGroup: formData.bloodGroup,
-        hasInsurance: formData.hasInsurance,
-        insuranceProvider: formData.hasInsurance ? formData.insuranceProvider : '',
-        insurancePolicyNumber: formData.hasInsurance ? formData.insurancePolicyNumber.trim() : '',
-        insuranceCoveragePercent: formData.hasInsurance ? 80 : 0,
-        emergencyContactName: formData.emergencyContactName.trim(),
-        emergencyContactPhone: formData.emergencyContactPhone.trim(),
-        patientId: generatedPid,
-        accessCode: accessCode,
-        passcode: cleanPass,
+      const record = cleanFirestoreData({
         role: 'patient',
-        roles: ['patient'],
-        labId: defaultLabId,
-        labName: defaultLabName,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        name,
+        email,
+        phone,
+        city: form.city.trim(),
+        hasInsurance: form.hasInsurance,
+        insuranceProvider: form.hasInsurance ? form.insuranceProvider : '',
+        insurancePolicyNumber: form.hasInsurance ? form.insurancePolicyNumber.trim() : '',
+        passwordSalt: salt,
+        passwordHash: hash,
+        termsAcceptedAt: now,
+        createdAt: now,
+        updatedAt: now
+      });
 
-      // 1. Save to Firestore under target lab patients collection
-      try {
-        const docRef = await addDoc(collection(db, 'labs', defaultLabId, 'patients'), newPatientData);
-        (newPatientData as any).id = docRef.id;
-      } catch (fsErr) {
-        console.warn('Firestore direct save note:', fsErr);
-        (newPatientData as any).id = 'pat_' + Date.now();
-      }
+      const docRef = await addDoc(collection(db, 'patients'), record);
 
-      // 2. Cache in local storage for instant offline/relogin verification
-      try {
-        localStorage.setItem('last_registered_patient', JSON.stringify(newPatientData));
-      } catch {}
-
-      setCreatedPatient(newPatientData);
+      // Only non-secret details are kept in memory
+      setCreated({
+        id: docRef.id,
+        name,
+        email,
+        phone,
+        city: form.city.trim(),
+        hasInsurance: form.hasInsurance,
+        insuranceProvider: form.hasInsurance ? form.insuranceProvider : '',
+        insurancePolicyNumber: form.hasInsurance ? form.insurancePolicyNumber.trim() : '',
+        role: 'patient',
+        roles: ['patient']
+      });
     } catch (err: any) {
-      setError(err?.message || 'Failed to create patient account. Please check your inputs.');
+      console.error('Patient registration error:', err);
+      setError(
+        'We could not create your account: ' +
+          (err?.message || 'unknown error') +
+          '. Check your connection and try again.'
+      );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleEnterDashboard = () => {
-    if (createdPatient) {
-      setUser(createdPatient);
-      setLab({ id: defaultLabId, name: defaultLabName });
-      if (onSuccess) onSuccess(createdPatient);
-      onClose();
-    }
+  const handleEnter = () => {
+    if (!created) return;
+    setUser(created);
+    onSuccess?.(created);
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-teal-800 to-teal-950 text-white p-5 sm:p-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-600/30 border border-teal-400/40 flex items-center justify-center text-teal-300">
-              <User className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <h2 className="text-lg sm:text-xl font-black tracking-tight text-white">Create Patient Account</h2>
-              <p className="text-xs text-teal-200">Instant registration for patient health records & test booking</p>
-            </div>
+    <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-lg rounded-[28px] shadow-2xl my-auto">
+        <div className="flex items-start justify-between p-6 pb-2">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight">Create your account</h2>
+            <p className="text-sm text-slate-500 mt-1">It takes about a minute.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-teal-200 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 transition-all cursor-pointer"
-          >
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 cursor-pointer" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 text-slate-900">
-          {createdPatient ? (
-            /* Registration Success Banner */
-            <div className="space-y-6 text-center py-4 animate-in zoom-in-95 duration-200">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-md">
-                <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900">Patient Account Created!</h3>
-                <p className="text-xs text-slate-600 max-w-md mx-auto">
-                  Your patient account has been registered with encrypted health storage. You can now track results, schedule analyses, and view digital booklets.
-                </p>
-              </div>
-
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl max-w-md mx-auto text-left space-y-2.5 font-mono text-xs">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Patient Name:</span>
-                  <strong className="text-slate-900 font-sans">{createdPatient.name}</strong>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Patient ID (PID):</span>
-                  <strong className="text-teal-700 font-bold">{createdPatient.patientId}</strong>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Phone Number:</span>
-                  <strong className="text-slate-800">{createdPatient.phone}</strong>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Access Passcode:</span>
-                  <strong className="text-emerald-700 font-bold">{createdPatient.passcode}</strong>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleEnterDashboard}
-                className="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-sm shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                <span>Enter Patient Dashboard Now</span>
-                <Sparkles className="w-4 h-4 text-teal-200" />
-              </button>
+        {created ? (
+          <div className="p-6 pt-4 space-y-5 text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
+              <CheckCircle2 className="w-7 h-7 text-emerald-600" />
             </div>
-          ) : (
-            /* Registration Form */
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-2xl flex items-center gap-2 animate-in fade-in duration-150">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span className="font-medium">{error}</span>
-                </div>
+            <h3 className="text-xl font-black">Your account is ready</h3>
+            <p className="text-sm text-slate-600">
+              Sign in any time with your phone number or email and the password you chose.
+            </p>
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left text-sm space-y-2">
+              <div className="flex justify-between"><span className="text-slate-500">Name</span><strong>{created.name}</strong></div>
+              <div className="flex justify-between"><span className="text-slate-500">Phone</span><strong>{created.phone}</strong></div>
+              {created.email && (
+                <div className="flex justify-between"><span className="text-slate-500">Email</span><strong>{created.email}</strong></div>
               )}
+            </div>
+            <button
+              type="button"
+              onClick={handleEnter}
+              className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer"
+            >
+              Continue to my account
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 pt-4 space-y-4 max-h-[75vh] overflow-y-auto">
+            {error && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-sm text-rose-800">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
-              {/* Full Name */}
+            <div>
+              <label className={label}>Full name</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+                <input className={`${field} pl-11`} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="e.g. Sandrine Ndongo" />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Full Legal Name *
-                </label>
+                <label className={label}>Phone number</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Christianus Nweke"
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+                  <input type="tel" className={`${field} pl-11`} value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="6 71 22 33 44" />
                 </div>
               </div>
-
-              {/* Phone & Email */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Mobile Phone (Used for Login) *
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="tel"
-                      required
-                      placeholder="+237 670 00 00 00"
-                      value={formData.phone}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Email Address (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="patient@email.com"
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              {/* DOB & Gender */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Date of Birth *
-                  </label>
-                  <div className="relative">
-                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="date"
-                      required
-                      value={formData.dateOfBirth}
-                      onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Gender *
-                  </label>
-                  <select
-                    value={formData.gender}
-                    onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="Male">Male (Masculin)</option>
-                    <option value="Female">Female (Féminin)</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* City & Blood Group */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    City / Residential Hub
-                  </label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="text"
-                      placeholder="e.g. Douala / Yaoundé"
-                      value={formData.city}
-                      onChange={e => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Blood Group (Optional)
-                  </label>
-                  <div className="relative">
-                    <Droplet className="w-4 h-4 text-rose-400 absolute left-3.5 top-3.5" />
-                    <select
-                      value={formData.bloodGroup}
-                      onChange={e => setFormData({ ...formData, bloodGroup: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      <option value="Unknown">Unknown / Verify at Lab</option>
-                      <option value="O+">O Positive (O+)</option>
-                      <option value="O-">O Negative (O-)</option>
-                      <option value="A+">A Positive (A+)</option>
-                      <option value="A-">A Negative (A-)</option>
-                      <option value="B+">B Positive (B+)</option>
-                      <option value="B-">B Negative (B-)</option>
-                      <option value="AB+">AB Positive (AB+)</option>
-                      <option value="AB-">AB Negative (AB-)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Account Passcode / PIN */}
-              <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl space-y-2">
-                <label className="block text-xs font-bold text-teal-950 uppercase tracking-wider">
-                  Create Secret Password / PIN *
-                </label>
+              <div>
+                <label className={label}>Email (optional)</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-teal-600 absolute left-3.5 top-3.5" />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+                  <input type="email" className={`${field} pl-11`} value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="you@email.com" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className={label}>Where do you live?</label>
+              <div className="relative">
+                <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+                <input className={`${field} pl-11`} value={form.city} onChange={(e) => update('city', e.target.value)} placeholder="e.g. Douala - Akwa" />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className={label}>Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Enter your private password or PIN"
-                    value={formData.passcode}
-                    onChange={e => setFormData({ ...formData, passcode: e.target.value })}
-                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-teal-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono font-bold"
+                    className={`${field} pl-11 pr-11`}
+                    value={form.password}
+                    onChange={(e) => update('password', e.target.value)}
+                    placeholder="At least 8 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-teal-800">
-                  You will use your Phone Number and this Password to sign in securely anytime.
-                </p>
               </div>
+              <div>
+                <label className={label}>Confirm password</label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className={field}
+                  value={form.confirm}
+                  onChange={(e) => update('confirm', e.target.value)}
+                  placeholder="Type it again"
+                />
+              </div>
+            </div>
 
-              {/* Submit Button */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer transition-all"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Creating Patient Profile...</span>
-                    </>
-                  ) : (
-                    <span>Register & Create Account</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+            <div className="p-4 rounded-2xl bg-teal-50/60 border border-teal-100 space-y-3">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Shield className="w-4 h-4 text-teal-600" />
+                  I have health insurance
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.hasInsurance}
+                  onChange={(e) => update('hasInsurance', e.target.checked)}
+                  className="w-5 h-5 accent-teal-600 cursor-pointer"
+                />
+              </label>
+
+              {form.hasInsurance && (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <select className={field} value={form.insuranceProvider} onChange={(e) => update('insuranceProvider', e.target.value)}>
+                    <option value="">Choose your insurer</option>
+                    {CAMEROON_INSURANCE_COMPANIES.map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                  <input
+                    className={field}
+                    value={form.insurancePolicyNumber}
+                    onChange={(e) => update('insurancePolicyNumber', e.target.value)}
+                    placeholder="Policy or member number"
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white font-bold shadow-lg shadow-teal-600/25 flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create my account'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -49,7 +49,8 @@ import {
   Send,
   Share2,
   Briefcase,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import { formatReferringDoctorWithHospital } from '../../utils/formatDoctor';
 import { numberToFrenchWords } from '../../utils/frenchNumberToWords';
@@ -97,21 +98,150 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [expandedPatientKey, setExpandedPatientKey] = useState<string | null>(null);
   const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null);
 
-  const handleGenerateInvoice = async (booking: PatientBooking) => {
+  // Customized Itemized Invoice Builder for Online & Walk-in Patients
+  const [invoiceBuilderBooking, setInvoiceBuilderBooking] = useState<PatientBooking | null>(null);
+  const [builderTestsAmount, setBuilderTestsAmount] = useState<number>(0);
+  const [builderIncludeHomePickup, setBuilderIncludeHomePickup] = useState<boolean>(true);
+  const [builderHomePickupFee, setBuilderHomePickupFee] = useState<number>(2500);
+  const [builderIncludeDelivery, setBuilderIncludeDelivery] = useState<boolean>(false);
+  const [builderDeliveryFee, setBuilderDeliveryFee] = useState<number>(1500);
+  const [builderAddOns, setBuilderAddOns] = useState<{ id: string; name: string; category: string; price: number }[]>([]);
+  const [builderNewItemName, setBuilderNewItemName] = useState<string>('');
+  const [builderNewItemCategory, setBuilderNewItemCategory] = useState<string>('Consumables');
+  const [builderNewItemPrice, setBuilderNewItemPrice] = useState<string>('');
+  const [isSendingInvoice, setIsSendingInvoice] = useState<boolean>(false);
+
+  const handleOpenInvoiceBuilder = (booking: PatientBooking) => {
+    setInvoiceBuilderBooking(booking);
+    const testsSum = (booking.tests || []).reduce((acc, t) => acc + (Number(t.price) || 0), 0);
+    setBuilderTestsAmount(testsSum || Number(booking.totalAmount) || 5000);
+    const isHome = Boolean(booking.homeCollection || booking.pickupLocation);
+    setBuilderIncludeHomePickup(isHome);
+    setBuilderHomePickupFee(Number(booking.homePickupFee) || (isHome ? 2500 : 0));
+    setBuilderIncludeDelivery(Boolean(booking.homeDeliveryRequested || booking.homeDeliveryFee));
+    setBuilderDeliveryFee(Number(booking.homeDeliveryFee) || 1500);
+    setBuilderAddOns((booking.addOns || []).map((a: any, idx: number) => ({
+      id: a.id || `addon-${idx}`,
+      name: a.name || a.description || 'Medical Consumable',
+      category: a.category || 'Consumables',
+      price: Number(a.price) || 1000
+    })));
+  };
+
+  const handleAddBuilderAddOn = () => {
+    if (!builderNewItemName.trim() || !builderNewItemPrice.trim()) return;
+    const priceNum = parseFloat(builderNewItemPrice) || 0;
+    setBuilderAddOns(prev => [
+      ...prev,
+      {
+        id: `addon-${Date.now()}`,
+        name: builderNewItemName.trim(),
+        category: builderNewItemCategory,
+        price: priceNum
+      }
+    ]);
+    setBuilderNewItemName('');
+    setBuilderNewItemPrice('');
+  };
+
+  const handleRemoveBuilderAddOn = (id: string) => {
+    setBuilderAddOns(prev => prev.filter(it => it.id !== id));
+  };
+
+  const handleDispatchCustomInvoice = async () => {
+    if (!invoiceBuilderBooking) return;
+    setIsSendingInvoice(true);
     try {
-      setGeneratingInvoiceId(booking.id);
+      const homeFee = builderIncludeHomePickup ? Number(builderHomePickupFee) || 0 : 0;
+      const deliveryFee = builderIncludeDelivery ? Number(builderDeliveryFee) || 0 : 0;
+      const addOnsTotal = builderAddOns.reduce((s, it) => s + (Number(it.price) || 0), 0);
+      const grandTotal = Number(builderTestsAmount) + homeFee + deliveryFee + addOnsTotal;
+
+      const effectiveLabId = invoiceBuilderBooking.labId || targetLabId;
       await limsService.generateInvoiceByCashier(
-        targetLabId,
-        booking.id,
-        user?.name || 'Cashier Desk'
+        effectiveLabId,
+        invoiceBuilderBooking.id,
+        user?.name || 'Cashier Desk',
+        {
+          bookingCode: invoiceBuilderBooking.bookingCode,
+          totalAmount: grandTotal,
+          testsAmount: Number(builderTestsAmount),
+          homePickupFee: homeFee,
+          homeDeliveryFee: deliveryFee,
+          addOns: builderAddOns,
+          addOnsAmount: addOnsTotal
+        } as any
       );
+
+      // Local update
+      setBookings(prev => prev.map(b => b.id === invoiceBuilderBooking.id ? {
+        ...b,
+        invoiceGenerated: true,
+        invoiceStatus: 'invoice_issued',
+        totalAmount: grandTotal,
+        testsAmount: Number(builderTestsAmount),
+        homePickupFee: homeFee,
+        homeDeliveryFee: deliveryFee,
+        addOns: builderAddOns as any
+      } : b));
+
+      setInvoiceBuilderBooking(null);
       await fetchData();
     } catch (err) {
-      console.error('Error generating invoice:', err);
-      alert('Failed to generate invoice. Please try again.');
+      console.error('Error generating customized invoice:', err);
+      alert('Failed to send invoice. Please try again.');
     } finally {
-      setGeneratingInvoiceId(null);
+      setIsSendingInvoice(false);
     }
+  };
+
+  const handleApproveOnlinePayment = async (booking: PatientBooking) => {
+    try {
+      setIsProcessing(true);
+      const nowIso = new Date().toISOString();
+      const isHome = Boolean(booking.homeCollection || booking.pickupLocation);
+      // Routing rule:
+      // If home collection requested -> 'Pending_Collection' for Mobile Phlebotomist!
+      // If walk-in clinic intake -> 'In_Lab_Testing' for Analyzer / Lab Technologists!
+      const targetOverallStatus = isHome ? ('Pending_Collection' as const) : ('In_Lab_Testing' as const);
+
+      await limsService.processPayment({
+        labId: targetLabId,
+        bookingId: booking.id,
+        paymentMethod: (booking.paymentMethod as any) || 'mobile_money',
+        processedByName: `${user?.name || 'Head Cashier'} [Online Approval]`,
+        paymentDetails: {
+          transactionReference: booking.transactionReference || 'MOMO-ONLINE-CONFIRMED',
+          actualPaidAmount: booking.totalAmount || 0,
+          overallStatus: targetOverallStatus
+        }
+      });
+
+      // Update local state immediately
+      setBookings(prev => prev.map(b => b.id === booking.id ? {
+        ...b,
+        paymentStatus: 'paid',
+        paidAt: nowIso,
+        invoiceStatus: 'payment_confirmed',
+        overallStatus: targetOverallStatus,
+        tests: (b.tests || []).map(t => ({
+          ...t,
+          status: targetOverallStatus === 'In_Lab_Testing' ? 'In_Lab_Testing' : 'Pending_Collection',
+          paid: true
+        }))
+      } : b));
+
+      await fetchData();
+    } catch (err) {
+      console.error('Error approving payment:', err);
+      alert('Failed to approve payment. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleGenerateInvoice = async (booking: PatientBooking) => {
+    handleOpenInvoiceBuilder(booking);
   };
 
   // Billable Medical Acts & Add-ons state
@@ -172,13 +302,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
   const [accessCodeError, setAccessCodeError] = useState('');
 
   const [revenuePeriod, setRevenuePeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
-  const [activeTab, setActiveTab] = useState<'unpaid' | 'history' | 'insurance_claims'>('unpaid');
+  const [activeTab, setActiveTab] = useState<'unpaid' | 'waiting_confirmation' | 'history' | 'insurance_claims'>('unpaid');
 
   // Online Invoice Creation Form State
   const [showOnlineInvoiceModal, setShowOnlineInvoiceModal] = useState(false);
-  const [onlinePatientName, setOnlinePatientName] = useState('Mme. Claire Ngo');
-  const [onlinePatientNickname, setOnlinePatientNickname] = useState('Claire_N');
-  const [onlinePatientPhone, setOnlinePatientPhone] = useState('+237 670 12 34 56');
+  const [onlinePatientName, setOnlinePatientName] = useState('');
+  const [onlinePatientNickname, setOnlinePatientNickname] = useState('');
+  const [onlinePatientPhone, setOnlinePatientPhone] = useState('');
   const [onlinePatientAge, setOnlinePatientAge] = useState(38);
   const [onlinePatientGender, setOnlinePatientGender] = useState('Female');
   const [onlineCollectionType, setOnlineCollectionType] = useState<'walk_in' | 'home_pickup' | 'home_delivery'>('home_pickup');
@@ -675,10 +805,18 @@ export const CashierView: React.FC<CashierViewProps> = ({
     }
   };
 
-  // ONLY show bookings that have been validated/checked-in by Receptionist
+  // Bookings awaiting Cashier payment verification / confirmation from online payments
+  const waitingConfirmationBookings = bookings.filter(b => 
+    b.paymentStatus !== 'paid' && 
+    (b.invoiceStatus === 'payment_submitted' || b.paymentProofSubmitted || (b.transactionReference && b.transactionReference.length > 2))
+  );
+
+  // Unpaid bookings awaiting invoice issuance or in-clinic cash settlement
   const unpaidBookings = bookings.filter(b => 
     b.paymentStatus === 'unpaid' && 
-    (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in')
+    b.invoiceStatus !== 'payment_submitted' &&
+    !b.paymentProofSubmitted &&
+    (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in' || b.homeCollection || b.pickupLocation)
   );
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
 
@@ -710,6 +848,13 @@ export const CashierView: React.FC<CashierViewProps> = ({
     b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredWaitingConfirmation = waitingConfirmationBookings.filter(b => 
+    b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (b.transactionReference || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (b.patientPhone || '').includes(searchQuery)
   );
 
   const patientGroups = React.useMemo(() => {
@@ -1004,8 +1149,8 @@ export const CashierView: React.FC<CashierViewProps> = ({
       </div>
 
       {/* VIEW TAB SWITCHER */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-2 gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveTab('unpaid')}
             className={`px-4 py-2 rounded-xl font-extrabold text-xs transition-all cursor-pointer flex items-center gap-2 ${
@@ -1019,6 +1164,21 @@ export const CashierView: React.FC<CashierViewProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('waiting_confirmation')}
+            className={`px-4 py-2 rounded-xl font-extrabold text-xs transition-all cursor-pointer flex items-center gap-2 relative ${
+              activeTab === 'waiting_confirmation'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-50'
+            }`}
+          >
+            <Clock className="w-4 h-4 text-amber-300" />
+            <span>Waiting for Confirmation ({waitingConfirmationBookings.length})</span>
+            {waitingConfirmationBookings.length > 0 && (
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping absolute -top-1 -right-1" />
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('history')}
             className={`px-4 py-2 rounded-xl font-extrabold text-xs transition-all cursor-pointer flex items-center gap-2 ${
               activeTab === 'history'
@@ -1027,7 +1187,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
             }`}
           >
             <DollarSign className="w-4 h-4" />
-            <span>Revenue Breakdown & Settlement History ({filteredPaidBookings.length})</span>
+            <span>Revenue Breakdown & History ({filteredPaidBookings.length})</span>
           </button>
         </div>
 
@@ -1051,7 +1211,124 @@ export const CashierView: React.FC<CashierViewProps> = ({
       </div>
 
       {/* CONTENT AREA BASED ON ACTIVE TAB */}
-      {activeTab === 'unpaid' ? (
+      {activeTab === 'waiting_confirmation' ? (
+        /* WAITING FOR PAYMENT CONFIRMATION QUEUE */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/50">
+            <div>
+              <h3 className="font-extrabold text-sm text-amber-950 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                Online Patient Payments Awaiting Cashier Clearance ({filteredWaitingConfirmation.length})
+              </h3>
+              <p className="text-xs text-amber-800/80">
+                Patients who paid via MTN MoMo, Orange Money, or Card and submitted their transaction reference. Review and approve to release orders to phlebotomy or laboratory testing.
+              </p>
+            </div>
+            <div className="text-right font-mono font-bold text-xs text-amber-900 bg-amber-100/80 px-3 py-1.5 rounded-xl border border-amber-200">
+              Total Pending: {filteredWaitingConfirmation.reduce((s, b) => s + (b.totalAmount || 0), 0).toLocaleString()} XAF
+            </div>
+          </div>
+
+          {filteredWaitingConfirmation.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h4 className="font-extrabold text-sm text-slate-800">All Online Payments Cleared</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No orders are currently waiting for confirmation. When patients pay online and submit their transaction reference, they will appear here immediately for cashier clearance.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredWaitingConfirmation.map((b) => {
+                const isHome = Boolean(b.homeCollection || b.pickupLocation);
+                return (
+                  <div key={b.id} className="p-5 hover:bg-slate-50/60 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-black text-slate-900">{b.bookingCode}</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-700" /> Payment Submitted &bull; Awaiting Cashier Approval
+                        </span>
+                        {isHome ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 flex items-center gap-1">
+                            <Truck className="w-3 h-3 text-purple-700" /> Home Sample Draw Requested
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-blue-700" /> Walk-in Clinic Intake
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-900">{b.patientName}</h4>
+                        <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span className="font-mono font-bold text-teal-700">PID: {b.patientPid || b.patientId}</span>
+                          <span>&bull;</span>
+                          <span>Tél: {b.patientPhone || 'N/A'}</span>
+                          {b.pickupLocation && (
+                            <>
+                              <span>&bull;</span>
+                              <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400" />{b.pickupLocation}</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Payment Verification Proof Badge */}
+                      <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-emerald-900">Payment Reference:</span>
+                          <span className="font-mono font-black text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-300">
+                            {b.transactionReference || 'REF-ONLINE'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-emerald-800">
+                          <span>Channel: {b.paymentMethod === 'om' ? 'Orange Money' : b.paymentMethod === 'card' ? 'Bank Card' : 'MTN Mobile Money'}</span>
+                          <span>Submitted: {b.paymentProofSubmittedAt ? new Date(b.paymentProofSubmittedAt).toLocaleTimeString() : 'Recent'}</span>
+                        </div>
+                      </div>
+
+                      {/* Tests ordered */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {b.tests?.map((t) => (
+                          <span key={t.id} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium">
+                            {t.testName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row lg:flex-col items-end gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Verified Total</span>
+                        <span className="text-xl font-black text-emerald-700 font-mono">
+                          {(b.totalAmount || 0).toLocaleString()} XAF
+                        </span>
+                        <span className="text-[10px] text-slate-500 block">
+                          {isHome ? 'Will route to Mobile Phlebotomist' : 'Will route directly to Analyzer'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApproveOnlinePayment(b)}
+                        disabled={isProcessing}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-700/20 transition-all cursor-pointer flex items-center gap-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>{isProcessing ? 'Confirming...' : 'Approve & Release Order'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'unpaid' ? (
         /* Unpaid Invoices Queue Table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
@@ -1294,41 +1571,66 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 shrink-0">
                                   <div className="text-right">
-                                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Invoice Total</div>
-                                    <div className="text-sm font-black text-emerald-700 font-mono">
-                                      {(booking.totalAmount || 0).toLocaleString()} FCFA
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Amount Due</div>
+                                    <div className="text-sm sm:text-base font-black text-slate-900 font-mono">
+                                      {(booking.totalAmount || 0).toLocaleString()} <span className="text-[11px] font-bold text-slate-500">FCFA</span>
                                     </div>
                                   </div>
 
                                   {!booking.invoiceGenerated ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleGenerateInvoice(booking)}
-                                      disabled={generatingInvoiceId === booking.id}
-                                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                                    >
-                                      {generatingInvoiceId === booking.id ? (
-                                        <>
-                                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                          Issuing...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Receipt className="w-3.5 h-3.5" />
-                                          Generate Invoice
-                                        </>
-                                      )}
-                                    </button>
+                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenInvoiceBuilder(booking)}
+                                        className="relative group flex items-center gap-3 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-teal-700 via-teal-800 to-cyan-900 hover:from-teal-600 hover:via-teal-700 hover:to-cyan-800 active:scale-98 text-white rounded-2xl shadow-md hover:shadow-lg hover:shadow-teal-900/30 transition-all cursor-pointer border-2 border-teal-400/60 ring-2 ring-teal-500/20"
+                                        title="Create Official Itemized Laboratory Invoice: Primary Tests + Justifiable Add-ons"
+                                      >
+                                        <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
+                                          <Receipt className="w-4 h-4 text-cyan-200" />
+                                        </div>
+                                        <div className="flex flex-col text-left leading-tight">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-black tracking-tight text-white">Generate Official Invoice</span>
+                                            <span className="px-1.5 py-0.2 rounded-md text-[8.5px] font-black uppercase bg-amber-400 text-slate-950 tracking-wider">Required</span>
+                                          </div>
+                                          <span className="text-[10px] text-cyan-200/90 font-medium">
+                                            Itemize: Primary Tests + Add-ons
+                                          </span>
+                                        </div>
+                                      </button>
+                                      <span className="text-[9px] text-teal-700 font-semibold flex items-center gap-1 pr-1">
+                                        <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Dispatches instantly to Patient App
+                                      </span>
+                                    </div>
                                   ) : (
-                                    <button
-                                      onClick={() => setSelectedBooking(booking)}
-                                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                                    >
-                                      <DollarSign className="w-3.5 h-3.5" />
-                                      Verify & Pay Order
-                                    </button>
+                                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                      <div className="flex flex-col text-left">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-800 rounded-lg text-[10px] font-black border border-teal-200">
+                                          <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
+                                          <span>Invoice Issued</span>
+                                        </span>
+                                        <span className="text-[9px] font-mono text-slate-400 pl-0.5">
+                                          #{booking.invoiceNumber || 'INV-2026'}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenInvoiceBuilder(booking)}
+                                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer border border-slate-200"
+                                        title="Review or adjust itemized invoice"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => setSelectedBooking(booking)}
+                                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                                      >
+                                        <DollarSign className="w-3.5 h-3.5" />
+                                        <span>Pay Order</span>
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -2071,6 +2373,291 @@ export const CashierView: React.FC<CashierViewProps> = ({
             actualPaidAmount: showReceipt.actualPaidAmount
           }}
         />
+      )}
+
+      {/* ============================================================== */}
+      {/* CASHIER ITEMIZED INVOICE BUILDER & CATEGORIES DISPATCH MODAL   */}
+      {/* ============================================================== */}
+      {invoiceBuilderBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-6 space-y-5 shadow-2xl my-auto animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">
+                    Itemized Diagnostic Invoice Builder
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Patient: <strong>{invoiceBuilderBooking.patientName}</strong> &bull; #{invoiceBuilderBooking.bookingCode}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInvoiceBuilderBooking(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-xs">
+              {/* Patient Info Card */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Details</span>
+                  <span className="font-extrabold text-slate-900 text-xs block">{invoiceBuilderBooking.patientName}</span>
+                  <span className="text-[11px] text-slate-500 font-mono">PID: {invoiceBuilderBooking.patientPid || invoiceBuilderBooking.patientId} &bull; Tél: {invoiceBuilderBooking.patientPhone || 'N/A'}</span>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Intake / Collection Mode</span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 ${
+                    invoiceBuilderBooking.homeCollection 
+                      ? 'bg-purple-100 text-purple-900 border border-purple-200' 
+                      : 'bg-blue-100 text-blue-900 border border-blue-200'
+                  }`}>
+                    {invoiceBuilderBooking.homeCollection ? <Truck className="w-3 h-3" /> : <Building2 className="w-3 h-3" />}
+                    {invoiceBuilderBooking.homeCollection ? 'Home Sample Draw' : 'Walk-in Clinic Intake'}
+                  </span>
+                  {invoiceBuilderBooking.pickupLocation && (
+                    <span className="text-[10px] text-slate-500 block mt-0.5 truncate max-w-[200px]">
+                      {invoiceBuilderBooking.pickupLocation}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* CATEGORY 1: Prescribed Laboratory Tests Cost */}
+              <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-teal-950">
+                    <FlaskConical className="w-4 h-4 text-teal-700" />
+                    <span>Category 1: Laboratory Diagnostic Exams & Analysis</span>
+                  </div>
+                  <span className="font-mono font-black text-teal-900 text-xs">
+                    {Number(builderTestsAmount).toLocaleString()} XAF
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 bg-white p-3 rounded-xl border border-teal-100">
+                  {invoiceBuilderBooking.tests?.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                      <span className="text-slate-800 font-medium">{t.testName}</span>
+                      <span className="font-mono font-bold text-slate-900">{(Number(t.price) || 0).toLocaleString()} XAF</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <span className="text-[11px] font-bold text-slate-500">Exams Subtotal:</span>
+                    <input
+                      type="number"
+                      value={builderTestsAmount}
+                      onChange={(e) => setBuilderTestsAmount(Number(e.target.value) || 0)}
+                      className="w-28 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-right font-mono font-bold text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* CATEGORY 2: Mobile Phlebotomist Home Sample Collection Fee */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-slate-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={builderIncludeHomePickup}
+                      onChange={(e) => setBuilderIncludeHomePickup(e.target.checked)}
+                      className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                    />
+                    <Truck className="w-4 h-4 text-teal-600" />
+                    <span>Category 2: Home Phlebotomist Dispatch & Logistics</span>
+                  </label>
+                  {builderIncludeHomePickup && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={builderHomePickupFee}
+                        onChange={(e) => setBuilderHomePickupFee(Number(e.target.value) || 0)}
+                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-right font-mono font-bold text-xs"
+                      />
+                      <span className="text-[10px] text-slate-500 font-mono">XAF</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 pl-6">
+                  Certified phlebotomist travel to patient address with temperature-monitored isothermal collection box.
+                </p>
+              </div>
+
+              {/* CATEGORY 3: Doorstep Result Delivery Fee */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-slate-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={builderIncludeDelivery}
+                      onChange={(e) => setBuilderIncludeDelivery(e.target.checked)}
+                      className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                    />
+                    <Send className="w-4 h-4 text-teal-600" />
+                    <span>Category 3: Hardcopy Biologist-Signed Result Delivery</span>
+                  </label>
+                  {builderIncludeDelivery && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={builderDeliveryFee}
+                        onChange={(e) => setBuilderDeliveryFee(Number(e.target.value) || 0)}
+                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-right font-mono font-bold text-xs"
+                      />
+                      <span className="text-[10px] text-slate-500 font-mono">XAF</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 pl-6">
+                  Physical official laboratory results printed on official letterhead delivered directly to patient residence.
+                </p>
+              </div>
+
+              {/* CATEGORY 4: Additional Clinical Items, Consumables & STAT Fees */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Tag className="w-4 h-4 text-teal-600" />
+                    <span>Category 4: Additional Clinical Items & Consumables</span>
+                  </span>
+                  <span className="font-mono font-bold text-xs text-slate-600">
+                    {builderAddOns.reduce((s, it) => s + (Number(it.price) || 0), 0).toLocaleString()} XAF
+                  </span>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBuilderAddOns(prev => [...prev, { id: `stat-${Date.now()}`, name: 'Urgent STAT Diagnostic Processing Surcharge', category: 'STAT Fee', price: 2000 }]);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    + Urgent STAT (2,000 XAF)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBuilderAddOns(prev => [...prev, { id: `vac-${Date.now()}`, name: 'Sterile Vacutainer Micro-Collection Kit', category: 'Consumables', price: 800 }]);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    + Sterile Tube Kit (800 XAF)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBuilderAddOns(prev => [...prev, { id: `cryo-${Date.now()}`, name: 'Cryo-Cold Chain Matrix Preservation', category: 'Preservation', price: 1200 }]);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    + Cryo Preservation (1,200 XAF)
+                  </button>
+                </div>
+
+                {/* Added items list */}
+                {builderAddOns.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    {builderAddOns.map((item) => (
+                      <div key={item.id} className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-slate-900">{item.name}</span>
+                          <span className="text-[10px] text-slate-400 block">Category: {item.category}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-900">{item.price.toLocaleString()} XAF</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBuilderAddOn(item.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Custom Add Item Input */}
+                <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Custom Act Name (e.g. Needle Kit)"
+                    value={builderNewItemName}
+                    onChange={(e) => setBuilderNewItemName(e.target.value)}
+                    className="sm:col-span-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Price XAF"
+                    value={builderNewItemPrice}
+                    onChange={(e) => setBuilderNewItemPrice(e.target.value)}
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddBuilderAddOn}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+              </div>
+
+              {/* GRAND TOTAL SUMMARY CARD */}
+              <div className="p-4 bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white rounded-2xl shadow-md flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-emerald-200 block">Calculated Invoice Grand Total</span>
+                  <p className="text-xs text-emerald-100">
+                    Includes all 4 categories &bull; Sent to patient app
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-black text-2xl text-white">
+                    {(
+                      Number(builderTestsAmount) + 
+                      (builderIncludeHomePickup ? Number(builderHomePickupFee) || 0 : 0) + 
+                      (builderIncludeDelivery ? Number(builderDeliveryFee) || 0 : 0) + 
+                      builderAddOns.reduce((s, it) => s + (Number(it.price) || 0), 0)
+                    ).toLocaleString()} XAF
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setInvoiceBuilderBooking(null)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDispatchCustomInvoice}
+                disabled={isSendingInvoice}
+                className="px-6 py-2.5 bg-[#006978] hover:bg-[#005a66] active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Receipt className="w-4 h-4 text-cyan-200" />
+                <span>{isSendingInvoice ? 'Dispatching...' : 'Issue & Send Official Invoice to Patient'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

@@ -1398,6 +1398,103 @@ app.post('/api/staff/set-permanent-password', (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// DYNAMIC BILLING & INVOICING ENGINE
+// Total Invoice Amount = Primary Lab Test Cost + Justifiable Additional Costs
+// ==========================================
+app.post('/api/billing/generate-invoice', async (req: Request, res: Response) => {
+  try {
+    const {
+      labId = 'lab-1',
+      bookingId,
+      cashierName = 'Cashier Desk',
+      testsAmount = 0,
+      homePickupFee = 0,
+      homeDeliveryFee = 0,
+      addOns = [],
+      patientPid,
+      bookingCode
+    } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({ success: false, error: 'bookingId is required.' });
+    }
+
+    const primaryLabTestCost = Number(testsAmount) || 0;
+    const addOnsTotal = Array.isArray(addOns) 
+      ? addOns.reduce((sum: number, it: any) => sum + (Number(it.price) || 0), 0) 
+      : 0;
+    const justifiableAdditionalCosts = (Number(homePickupFee) || 0) + (Number(homeDeliveryFee) || 0) + addOnsTotal;
+    const totalInvoiceAmount = primaryLabTestCost + justifiableAdditionalCosts;
+    const invoiceNumber = `INV-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+    const timestamp = new Date().toISOString();
+
+    const invoicePayload = {
+      invoiceNumber,
+      bookingId,
+      bookingCode: bookingCode || `BK-${Math.floor(100000 + Math.random() * 900000)}`,
+      labId,
+      cashierName,
+      primaryLabTestCost,
+      testsAmount: primaryLabTestCost,
+      homePickupFee: Number(homePickupFee) || 0,
+      homeDeliveryFee: Number(homeDeliveryFee) || 0,
+      addOns,
+      addOnsAmount: addOnsTotal,
+      justifiableAdditionalCosts,
+      totalInvoiceAmount,
+      totalAmount: totalInvoiceAmount,
+      invoiceStatus: 'invoice_issued',
+      invoiceGenerated: true,
+      invoiceGeneratedAt: timestamp,
+      invoiceGeneratedBy: cashierName
+    };
+
+    // Log security audit for financial invoicing
+    logAuditEvent(
+      'OFFICIAL_LAB_INVOICE_GENERATED',
+      'SECURITY',
+      { id: 'cashier', name: cashierName, role: 'cashier' },
+      `Generated official laboratory invoice ${invoiceNumber} for booking ${bookingId}. Primary Tests: ${primaryLabTestCost} XAF, Justifiable Add-ons: ${justifiableAdditionalCosts} XAF, Total: ${totalInvoiceAmount} XAF.`,
+      { id: patientPid || bookingId, name: bookingCode || invoiceNumber }
+    );
+
+    res.json({
+      success: true,
+      ...invoicePayload
+    });
+  } catch (error: any) {
+    console.error('Error in /api/billing/generate-invoice:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+app.post('/api/billing/calculate-total', async (req: Request, res: Response) => {
+  try {
+    const { testsAmount = 0, homePickupFee = 0, homeDeliveryFee = 0, addOns = [] } = req.body;
+    const primaryLabTestCost = Number(testsAmount) || 0;
+    const addOnsTotal = Array.isArray(addOns) ? addOns.reduce((sum: number, it: any) => sum + (Number(it.price) || 0), 0) : 0;
+    const justifiableAdditionalCosts = (Number(homePickupFee) || 0) + (Number(homeDeliveryFee) || 0) + addOnsTotal;
+    const totalInvoiceAmount = primaryLabTestCost + justifiableAdditionalCosts;
+
+    res.json({
+      success: true,
+      formula: 'Total Invoice Amount = Primary Lab Test Cost + Justifiable Additional Costs',
+      primaryLabTestCost,
+      justifiableAdditionalCosts,
+      breakdown: {
+        testsAmount: primaryLabTestCost,
+        homePickupFee: Number(homePickupFee) || 0,
+        homeDeliveryFee: Number(homeDeliveryFee) || 0,
+        addOnsTotal
+      },
+      totalInvoiceAmount
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
 // Admin Resets Staff Access Code directly (Generates / Sets new temporary code)
 app.post('/api/staff/reset-code', async (req: Request, res: Response) => {
   try {

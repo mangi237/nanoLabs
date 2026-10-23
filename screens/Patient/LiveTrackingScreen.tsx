@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   ArrowLeft, 
   Phone, 
@@ -19,7 +21,9 @@ import {
   X,
   Compass,
   QrCode,
-  FileText
+  FileText,
+  LocateFixed,
+  Maximize2
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
@@ -58,9 +62,12 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
         const { limsService } = await import('../../services/limsService');
         const labId = user?.labId || 'lab-1';
         const allBookings = await limsService.fetchAllBookings(labId);
+        const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
+        const activeId = activeProfile?.id || '';
+
         const match = allBookings.find(b => {
-          const matchPid = b.patientPid === activeProfile.id || b.patientId === activeProfile.id;
-          const matchName = b.patientName?.toLowerCase().trim() === activeProfile.fullName?.toLowerCase().trim();
+          const matchPid = Boolean(activeId && (b.patientPid === activeId || b.patientId === activeId));
+          const matchName = Boolean(activeName && b.patientName?.toLowerCase().trim() === activeName);
           return (matchPid || matchName) && b.overallStatus !== 'Completed';
         });
         setActiveBooking(match || null);
@@ -72,6 +79,11 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
     };
     checkBooking();
   }, [user, activeProfile]);
+
+  const effectiveLabName = activeBooking?.labName || user?.labName || labName || 'nanoLabs Central Diagnostics';
+  const effectivePatientAddress = activeBooking?.pickupLocation || user?.address || (activeProfile?.city ? `${activeProfile.city}, Cameroon` : 'Patient Residence (Douala)');
+  const effectivePhlebotomistName = activeBooking?.assignedOfficer || activeBooking?.phlebotomistName || activeBooking?.riderName || phlebotomistName;
+  const effectivePhlebotomistPhone = activeBooking?.phlebotomistPhone || '+237 671 22 33 44';
 
   // Tracking phases: 'en_route' | 'turning' | 'arrived' | 'specimen_collected' | 'transit_to_lab'
   const [trackingPhase, setTrackingPhase] = useState<'en_route' | 'arrived' | 'specimen_collected' | 'transit_to_lab'>('en_route');
@@ -90,19 +102,59 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   // Contact Modal
   const [showContactModal, setShowContactModal] = useState(false);
 
+  // Real-time Leaflet Map & GPS Geolocation State
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const courierMarkerRef = useRef<L.Marker | null>(null);
+  const patientMarkerRef = useRef<L.Marker | null>(null);
+  const polylineRef = useRef<L.Polyline | null>(null);
+
+  const labCoords: [number, number] = [4.0511, 9.7042]; // nanoLabs Central Lab Akwa, Douala
+  const [patientCoords, setPatientCoords] = useState<{ lat: number; lng: number }>({
+    lat: 4.0620,
+    lng: 9.7150 // Akwa / Bonanjo residential area
+  });
+  const [gpsAcquired, setGpsAcquired] = useState(false);
+  const [locatingUser, setLocatingUser] = useState(false);
+
+  // Request actual device GPS location for patient
+  const handleAcquireDeviceLocation = () => {
+    if (!navigator.geolocation) return;
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setPatientCoords({ lat: latitude, lng: longitude });
+        setGpsAcquired(true);
+        setLocatingUser(false);
+
+        if (patientMarkerRef.current && mapInstanceRef.current) {
+          patientMarkerRef.current.setLatLng([latitude, longitude]);
+          mapInstanceRef.current.fitBounds([labCoords, [latitude, longitude]], { padding: [50, 50] });
+        }
+      },
+      (err) => {
+        console.warn('Geolocation acquisition error:', err);
+        setLocatingUser(false);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
   // Real-time animation: Courier moving along Douala route
   useEffect(() => {
     if (trackingPhase === 'en_route') {
       const interval = setInterval(() => {
         setCourierProgress(prev => {
           const next = prev + 8;
+          const patientStreet = effectivePatientAddress.split(',')[0] || 'your location';
           if (next >= 40 && next < 65) {
-            setCurrentTip('Arriving in ~4 minutes. Phlebotomist is turning onto Boulevard de la Liberté, Akwa.');
+            setCurrentTip(`En route: Phlebotomist navigating on courier corridor towards ${patientStreet}.`);
           } else if (next >= 65 && next < 90) {
-            setCurrentTip('Phlebotomist approaching your street (near Rue Joss). Preparing sterile blood collection kits.');
+            setCurrentTip(`Approaching destination: Entering ${patientStreet}. Preparing sterile collection kit and vacuum tubes.`);
           } else if (next >= 90) {
             setTrackingPhase('arrived');
-            setCurrentTip('Phlebotomist has arrived at your address. Please provide the 4-digit confirmation code.');
+            setCurrentTip(`Courier arrived at ${patientStreet}. Please present the security code to verify intake.`);
             return 95;
           }
           return next;
@@ -114,7 +166,129 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
 
       return () => clearInterval(interval);
     }
-  }, [trackingPhase]);
+  }, [trackingPhase, effectivePatientAddress]);
+
+  // Initialize production Leaflet OpenStreetMap
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    try {
+      const map = L.map(mapContainerRef.current, {
+        center: [4.0565, 9.7096],
+        zoom: 14,
+        zoomControl: false
+      });
+
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // OpenStreetMap Production Tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      // Route intermediate waypoint
+      const midLat = labCoords[0] + (patientCoords.lat - labCoords[0]) * 0.45 + 0.002;
+      const midLng = labCoords[1] + (patientCoords.lng - labCoords[1]) * 0.45 - 0.001;
+
+      const routePoints: [number, number][] = [
+        labCoords,
+        [midLat, midLng],
+        [patientCoords.lat, patientCoords.lng]
+      ];
+
+      // Route Polyline
+      const line = L.polyline(routePoints, {
+        color: '#0284c7',
+        weight: 5,
+        opacity: 0.85,
+        dashArray: '8, 6'
+      }).addTo(map);
+      polylineRef.current = line;
+
+      // Lab Custom Icon
+      const labIcon = L.divIcon({
+        className: 'custom-lab-icon',
+        html: `
+          <div style="display:flex; flex-direction:column; align-items:center; transform:translate(-50%, -100%);">
+            <div style="background:#0f172a; border:2px solid #38bdf8; color:white; width:36px; height:36px; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+              🏥
+            </div>
+            <span style="background:#0284c7; color:white; font-size:9px; font-weight:800; padding:2px 6px; border-radius:8px; margin-top:3px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+              ${effectiveLabName.slice(0, 16)}
+            </span>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36]
+      });
+      L.marker(labCoords, { icon: labIcon }).addTo(map).bindPopup(`<b>${effectiveLabName}</b><br/>Specimen Departure Hub`);
+
+      // Patient Destination Custom Icon
+      const patientIcon = L.divIcon({
+        className: 'custom-patient-icon',
+        html: `
+          <div style="display:flex; flex-direction:column; align-items:center; transform:translate(-50%, -100%);">
+            <div style="background:#059669; border:2px solid #34d399; color:white; width:36px; height:36px; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+              📍
+            </div>
+            <span style="background:#059669; color:white; font-size:9px; font-weight:800; padding:2px 6px; border-radius:8px; margin-top:3px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+              Patient Location
+            </span>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36]
+      });
+      const patMarker = L.marker([patientCoords.lat, patientCoords.lng], { icon: patientIcon }).addTo(map)
+        .bindPopup(`<b>Your Address</b><br/>${effectivePatientAddress}`);
+      patientMarkerRef.current = patMarker;
+
+      // Courier Motorcycle Custom Icon
+      const courierIcon = L.divIcon({
+        className: 'custom-courier-icon',
+        html: `
+          <div style="display:flex; flex-direction:column; align-items:center; transform:translate(-50%, -100%);">
+            <div style="background:linear-gradient(135deg, #0284c7, #06b6d4); border:2px solid white; color:white; width:40px; height:40px; border-radius:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(2,132,199,0.5);">
+              🛵
+            </div>
+            <span style="background:#0f172a; color:#38bdf8; border:1px solid #0284c7; font-size:9px; font-weight:900; padding:2px 6px; border-radius:8px; margin-top:3px; white-space:nowrap;">
+              ${effectivePhlebotomistName.split(' ')[0]}
+            </span>
+          </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+      });
+
+      const initialCourierLat = labCoords[0] + (patientCoords.lat - labCoords[0]) * 0.25;
+      const initialCourierLng = labCoords[1] + (patientCoords.lng - labCoords[1]) * 0.25;
+      const courierMarker = L.marker([initialCourierLat, initialCourierLng], { icon: courierIcon }).addTo(map);
+      courierMarkerRef.current = courierMarker;
+
+      map.fitBounds([labCoords, [patientCoords.lat, patientCoords.lng]], { padding: [60, 60] });
+      mapInstanceRef.current = map;
+    } catch (mErr) {
+      console.warn('Leaflet map initialization notice:', mErr);
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [effectiveLabName, effectivePhlebotomistName]);
+
+  // Update courier position dynamically on map as courierProgress updates
+  useEffect(() => {
+    if (courierMarkerRef.current) {
+      const ratio = Math.min(0.95, courierProgress / 100);
+      const curLat = labCoords[0] + (patientCoords.lat - labCoords[0]) * ratio;
+      const curLng = labCoords[1] + (patientCoords.lng - labCoords[1]) * ratio;
+      courierMarkerRef.current.setLatLng([curLat, curLng]);
+    }
+  }, [courierProgress, patientCoords]);
 
   // Handle patient confirming specimen collection with two-way code
   const handleVerifyCodeAndConfirm = (e: React.FormEvent) => {
@@ -294,100 +468,61 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
         </div>
       </div>
 
-      {/* 2. Full-Size Interactive Live GPS Map Area */}
-      <div className="relative flex-1 min-h-[380px] sm:min-h-[460px] bg-slate-900 overflow-hidden flex items-center justify-center">
-        {/* Cartographic dark city grid pattern */}
-        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:32px_32px]" />
+      {/* 2. Full-Size Interactive Live Production OpenStreetMap Area */}
+      <div className="relative flex-1 min-h-[420px] sm:min-h-[500px] bg-slate-900 overflow-hidden">
+        {/* Leaflet DOM Container */}
+        <div ref={mapContainerRef} className="w-full h-full min-h-[420px] sm:min-h-[500px] z-0" />
 
-        {/* Realistic SVG Street Roads (Douala Akwa to Bonanjo) */}
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          {/* Main Boulevards */}
-          <path
-            d="M 50 120 L 220 180 L 450 160 L 680 280 L 850 340"
-            fill="none"
-            stroke="#334155"
-            strokeWidth="18"
-            strokeLinecap="round"
-          />
-          <path
-            d="M 220 180 L 300 360 L 520 400"
-            fill="none"
-            stroke="#1e293b"
-            strokeWidth="12"
-          />
-          
-          {/* Active Phlebotomist GPS Route Polyline */}
-          <path
-            d="M 60 120 Q 240 180 460 220 T 780 340"
-            fill="none"
-            stroke="#0284c7"
-            strokeWidth="6"
-            strokeDasharray="8 6"
-            className="animate-pulse"
-          />
-        </svg>
-
-        {/* Origin: Performing Accredited Laboratory */}
-        <div className="absolute left-6 sm:left-12 top-10 flex flex-col items-center z-10">
-          <div className="w-10 h-10 rounded-2xl bg-slate-800 border-2 border-slate-600 text-white flex items-center justify-center shadow-lg">
-            <Building2 className="w-5 h-5 text-cyan-400" />
-          </div>
-          <span className="text-[10px] font-bold text-slate-200 bg-slate-950/90 px-2 py-0.5 rounded-full mt-1 border border-slate-700 shadow-md">
-            {labName}
-          </span>
-        </div>
-
-        {/* Moving Phlebotomist Motorcycle Pin (Follows Courier) */}
-        <div 
-          className="absolute transition-all duration-1000 flex flex-col items-center z-20 cursor-pointer"
-          style={{
-            left: `${Math.min(85, Math.max(15, courierProgress))}%`,
-            top: `${Math.min(75, Math.max(25, 20 + courierProgress * 0.55))}%`
-          }}
-        >
-          <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center shadow-xl ring-4 ring-cyan-400/40 animate-bounce">
-              <Navigation className="w-6 h-6 text-white rotate-45" />
-            </div>
-            <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 absolute -top-1 -right-1 border-2 border-slate-900 animate-ping" />
-          </div>
-
-          <div className="bg-slate-950/95 text-cyan-200 border border-slate-700 px-3 py-1 rounded-full shadow-xl mt-1.5 flex items-center gap-1.5 text-[11px] font-black font-mono">
-            <span>{phlebotomistName}</span>
-            <span>&bull;</span>
-            <span className="text-white">{liveDistance} km</span>
-          </div>
-        </div>
-
-        {/* Destination: Patient Residence */}
-        <div className="absolute right-6 sm:right-16 bottom-12 flex flex-col items-center z-10">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-600 border-2 border-emerald-400 text-white flex items-center justify-center shadow-xl">
-            <MapPin className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-[10px] font-bold text-slate-200 bg-slate-950/90 px-2 py-0.5 rounded-full mt-1 border border-slate-700 shadow-md">
-            Your Residence (Akwa)
-          </span>
-        </div>
-
-        {/* Floating Courier Live Details Card */}
-        <div className="absolute bottom-4 inset-x-4 max-w-lg mx-auto bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl p-3.5 shadow-2xl flex items-center justify-between text-xs text-white z-20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-cyan-300">
-              PM
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-100">{phlebotomistName}</h4>
-              <p className="text-[11px] text-slate-400">CEMAC Isothermal Courier &bull; License #CMR-PH-2026</p>
-            </div>
-          </div>
-
+        {/* Floating Top Controls: Real GPS Locator & Live Telemetry */}
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
           <button
-            onClick={() => setShowContactModal(true)}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl transition-colors cursor-pointer"
-            title="Courier Contact Information"
+            type="button"
+            onClick={handleAcquireDeviceLocation}
+            disabled={locatingUser}
+            className="px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-slate-700/80 backdrop-blur-md rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Bind live device GPS coordinates"
           >
-            <Phone className="w-4 h-4" />
+            <LocateFixed className={`w-3.5 h-3.5 ${locatingUser ? 'animate-spin' : ''}`} />
+            <span>{locatingUser ? 'Acquiring GPS...' : gpsAcquired ? 'GPS Locked' : 'Use Device GPS'}</span>
           </button>
+
+          <span className="hidden sm:inline-flex px-2.5 py-1 bg-slate-900/80 border border-slate-800 text-slate-300 text-[10px] font-mono rounded-lg backdrop-blur-xs">
+            Live Geolocation &bull; OpenStreetMap
+          </span>
+        </div>
+
+        {/* Floating Courier Live Details Card & Direct Map Navigation */}
+        <div className="absolute bottom-4 inset-x-4 max-w-lg mx-auto bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl p-3.5 shadow-2xl flex items-center justify-between text-xs text-white z-10 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-cyan-300 shrink-0">
+              {effectivePhlebotomistName.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h4 className="font-bold text-slate-100 truncate">{effectivePhlebotomistName}</h4>
+              <p className="text-[11px] text-slate-400 truncate">Cold-Chain Courier &bull; {effectivePatientAddress}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(effectiveLabName)}&destination=${encodeURIComponent(effectivePatientAddress)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 bg-teal-800/80 hover:bg-teal-700 text-teal-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="Open Navigation in External Maps"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Maps</span>
+            </a>
+
+            <button
+              onClick={() => setShowContactModal(true)}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl transition-colors cursor-pointer"
+              title="Courier Contact Information"
+            >
+              <Phone className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -460,16 +595,6 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
               <ShieldCheck className="w-4 h-4 text-[#006978] shrink-0" />
               <span>Real-time courier GPS active &bull; Cold-chain temperature continuously monitored</span>
             </div>
-
-            <button
-              onClick={() => {
-                setTrackingPhase('arrived');
-                setCourierProgress(95);
-              }}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-            >
-              Simulate Arrival
-            </button>
           </div>
         )}
       </div>
