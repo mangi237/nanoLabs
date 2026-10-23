@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid' | 'verified';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -374,6 +374,10 @@ export interface Lab {
   royaltyEarnings?: number;
   primaryColor?: string;
   secondaryColor?: string;
+  lat?: string;
+  lng?: string;
+  averageTurnaroundHours?: number;
+  tatHours?: number;
   accentColor?: string;
   logoUrl?: string;
   avatarUrl?: string;

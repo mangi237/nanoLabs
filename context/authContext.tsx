@@ -137,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginPatient = async (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => {
     try {
-      const result = await authService.loginPatient(phoneOrIdentifier, passwordOrCode, targetLabId);
+      const result = await authService.loginPatient(phoneOrIdentifier, passwordOrCode, );
       if (result.success && result.user) {
         credentialsRef.current = { code: passwordOrCode, labId: result.lab?.id || targetLabId || 'lab-1' };
         startSession(result.user, result.lab);
