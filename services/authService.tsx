@@ -612,47 +612,34 @@ export const authService = {
     }
   },
 
-  async getAllLabs(options?: { includePending?: boolean }) {
+   async getAllLabs(options?: { includePending?: boolean }) {
     try {
-      const labsRef = collection(db, 'labs');
-      const snapshot = await getDocs(labsRef);
-      let labs = snapshot.docs.map(doc => {
-        const data = doc.data();
+      const snapshot = await getDocs(collection(db, 'labs'));
+      let labs = snapshot.docs.map((d) => {
+        const data: any = d.data();
         return {
-          id: doc.id,
+          id: d.id,
           ...data,
-          logoUrl: data.logoUrl || data.logo || null
+          logoUrl: data.logoUrl || data.logo || null,
         };
       });
 
+      // Hide labs that were rejected or suspended. Hide labs still awaiting
+      // approval unless the super admin has confirmed them.
       if (!options?.includePending) {
-        labs = labs.filter(l => (l as any).status !== 'pending_approval' && (l as any).status !== 'suspended' && (l as any).status !== 'rejected');
+        labs = labs.filter((l: any) => {
+          if (l.status === 'suspended' || l.status === 'rejected') return false;
+          if (l.status === 'pending_approval' && l.confirmed !== true) return false;
+          return true;
+        });
       }
-
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id && !labs.some(l => l.id === cLab.id)) {
-            labs.unshift(cLab);
-          }
-        }
-      } catch {}
 
       return labs;
     } catch (error) {
       console.error('Error fetching labs:', error);
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id) return [cLab];
-        }
-      } catch {}
       return [];
     }
   },
-
   async getLabDetails(labId: string) {
     try {
       if (!labId) return null;
