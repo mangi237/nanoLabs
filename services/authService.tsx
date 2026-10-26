@@ -634,6 +634,8 @@ export const authService = {
         });
       }
 
+      //check authentication
+
       return labs;
     } catch (error) {
       console.error('Error fetching labs:', error);
