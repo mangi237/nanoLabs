@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { useMessages } from '../../hooks/useDoctorDataExtra';
+// import { useMessages } from '../../hooks/useDoctorDataExtra';
+import { useLiveDocument } from '../../hooks/useDoctorDataExtra';
 import { Button, EmptyState, Skeleton } from '../../components/doctor/ui';
 import { MessageSquare } from 'lucide-react';
+import { useMessages } from '../../hooks/useDoctorDataExtra';
 
 export default function ConversationScreen({
   doctorId,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNav } from '../../components/doctor/nav';
-import { useLiveDocument } from '../../hooks/useDoctorDataExtra';
-import { usePatientAppointments, usePatientResults } from '../../hooks/useDoctorDataExtra';
+
+import { usePatientAppointments, useLiveDocument, usePatientResults } from '../../hooks/useDoctorDataExtra';
 import { Card, EmptyState, Button, Avatar, Pill, SectionLabel, Skeleton, PageHeader } from '../../components/doctor/ui';
 import { Calendar, FileText } from 'lucide-react';
 
