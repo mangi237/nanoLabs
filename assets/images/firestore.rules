@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.email.matches('690000000@.*')
+      );
+    }
+
+    function ownsPhone(phone) {
+      return signedIn() && (
+        request.auth.token.email == phone + '@pulse-buea.app' ||
+        request.auth.token.email == phone + '@pulse.cm' ||
+        request.auth.token.email == phone + '@pulse-buea.cm'
+      );
+    }
+
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ----- Residents -----
+    match /users/{phone} {
+      allow read: if signedIn();
+
+      allow create: if ownsPhone(phone)
+        && request.resource.data.get('coins', 500) <= 500000
+        && !('password' in request.resource.data);
+
+      allow update: if ownsPhone(phone)
+        || isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ----- Council feed -----
+    match /council_messages/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    // ----- Table posts -----
+    match /table_posts/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    // ----- Tables (groups) -----
+    match /tables/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    // ----- Jobs -----
+    match /jobs/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    // ----- System / other -----
+    match /system/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /withdrawals/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /approvals/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /moderation/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /admins/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './context/authContext';
 import { ThemeProvider } from './context/themeContext';
 import { LanguageProvider } from './context/languageContext';
 import { LandingPage } from './components/website/LandingPage';
-
+import DoctorApp from './screens/doctor/DoctorApp';
 // Auth screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
