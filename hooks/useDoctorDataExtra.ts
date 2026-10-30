@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, where, type Query, type DocumentData } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
 // Live single document. Pass null to skip.
@@ -28,7 +28,7 @@ export function useLiveDocument<T = any>(path: string | null) {
 }
 
 // Live list for any query. Pass null to skip.
-function useLiveList<T = any>(q: any | null) {
+function useLiveList<T = any>(q: Query<DocumentData> | null) {
   const [data, setData] = useState<(T & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +42,7 @@ function useLiveList<T = any>(q: any | null) {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setData(snap.docs.map((d) => ({ id: d.id, ...(d.data() as T) })));
+        setData(snap.docs.map((d :any) => ({ id: d.id, ...(d.data() as T) })));
         setLoading(false);
       },
       () => setLoading(false)
