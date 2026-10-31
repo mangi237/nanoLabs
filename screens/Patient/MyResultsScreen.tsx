@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, ChevronRight, CheckCircle2, Inbox, Layers } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
-import { BatchConsolidatedReportModal } from '../../components/patient/BatchConsolidatedReportModal';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 
 export interface PatientResultItem {
   id: string;
@@ -10,6 +10,7 @@ export interface PatientResultItem {
   bookingCode?: string;
   labId?: string;
   testId?: string;
+  testIndex?: number;
   testName: string;
   labName: string;
   date: string;
@@ -116,6 +117,7 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
             bookingCode: b.bookingCode,
             labId: b.labId || 'lab-1',
             testId: t.id || t.testId,
+            testIndex: idx,
             testName: t.testName || t.name || 'Diagnostic Test',
             labName: b.labName || 'Performing Laboratory',
             date: b.biologistSignedAt
@@ -274,10 +276,12 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
       )}
 
       {selectedBatchModal && (
-        <BatchConsolidatedReportModal
+        <LabReportPdfViewModal
           isOpen={!!selectedBatchModal}
           onClose={() => setSelectedBatchModal(null)}
           booking={selectedBatchModal}
+          isStaffOrAdmin={false}
+          filterTestIndex={null}
         />
       )}
     </div>

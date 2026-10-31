@@ -822,7 +822,8 @@ import { formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
 import { formatReferringDoctorWithHospital } from '../../utils/formatDoctor';
 import { useAuth } from '../../context/authContext';
-import { useLabBranding, setActiveLabHeader } from '../../utils/labBranding';
+import { useLabBranding } from '../../utils/labBranding';
+import { db, doc, getDoc } from '../../services/firebase';
 
 interface LabReportPdfViewModalProps {
   isOpen: boolean;
@@ -831,6 +832,7 @@ interface LabReportPdfViewModalProps {
   labInfo?: any;
   isStaffOrAdmin?: boolean;
   filterTestIndex?: number | null;
+  inlineEmbedded?: boolean;
 }
 
 export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
@@ -839,23 +841,52 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   booking,
   labInfo,
   isStaffOrAdmin,
-  filterTestIndex: initialFilterTestIndex
+  filterTestIndex: initialFilterTestIndex,
+  inlineEmbedded = false
 }) => {
   const { user, lab } = useAuth();
-  const targetLab = lab || labInfo;
+  const [fetchedLabProfile, setFetchedLabProfile] = useState<any | null>(null);
+  const targetLab =
+    (lab && (!booking?.labId || lab.id === booking.labId) ? lab : null) ||
+    labInfo ||
+    fetchedLabProfile;
   const { logoUrl: brandLogo, headerUrl: brandHeader, setHeader } = useLabBranding(targetLab);
 
-  const canCustomizeTemplates = isStaffOrAdmin !== undefined ? isStaffOrAdmin : (user?.role && user.role !== 'patient');
+  const canCustomizeTemplates = isStaffOrAdmin !== undefined ? isStaffOrAdmin : Boolean(user?.role && user.role !== 'patient');
   const [templates, setTemplates] = useState<HeaderFooterTemplateConfig[]>(DEFAULT_HEADER_FOOTER_TEMPLATES);
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [headerChoice, setHeaderChoice] = useState<'auto' | 'image' | 'profile' | 'placeholder'>('auto');
   const [selectedTestFilter, setSelectedTestFilter] = useState<number | null>(
     initialFilterTestIndex !== undefined ? initialFilterTestIndex : null
   );
-  const [showUploadPanel, setShowUploadPanel] = useState(false);
 
   const headerFileInputRef = useRef<HTMLInputElement>(null);
   const footerFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSelectedTestFilter(initialFilterTestIndex !== undefined ? initialFilterTestIndex : null);
+  }, [initialFilterTestIndex, booking?.id]);
+
+  // Fetch performing lab's live Firestore profile & configured header when viewed by a patient
+  useEffect(() => {
+    let active = true;
+    const loadLabDoc = async () => {
+      const targetId = booking?.labId || 'lab-1';
+      if (!targetId) return;
+      try {
+        const snap = await getDoc(doc(db, 'labs', targetId));
+        if (active && snap.exists()) {
+          setFetchedLabProfile({ id: snap.id, ...snap.data() });
+        }
+      } catch {}
+    };
+    if (isOpen && booking) {
+      loadLabDoc();
+    }
+    return () => {
+      active = false;
+    };
+  }, [isOpen, booking?.labId]);
 
   useEffect(() => {
     try {
@@ -948,7 +979,12 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   const footerNotes = currentTpl.footerNotes || 'Compte-rendu conforme aux exigences de validation biologique médicale.';
 
   // Determine active header image & profile validity
-  const activeHeaderImageUrl = currentTpl.headerImageUrl || brandHeader;
+  const activeHeaderImageUrl =
+    targetLab?.headerImageUrl ||
+    booking?.labHeaderUrl ||
+    currentTpl.headerImageUrl ||
+    brandHeader;
+  const effectiveLogoUrl = targetLab?.logoUrl || booking?.labLogoUrl || brandLogo;
   const hasRealLabHeader = !!activeLabName;
 
   const showHeaderImage = (headerChoice === 'image' && !!activeHeaderImageUrl) ||
@@ -957,28 +993,50 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
   const showHeaderProfile = (headerChoice === 'profile' && hasRealLabHeader) ||
     (headerChoice === 'auto' && !activeHeaderImageUrl && hasRealLabHeader);
 
-  const showPlaceholderBox = !showHeaderImage && !showHeaderProfile;
-
   const handlePrint = () => {
     window.print();
   };
 
-  // Generate formatted registration, collection, and reporting timestamps
-  const registeredTimeStr = booking.createdAt 
-    ? new Date(booking.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '02:31 PM 02 Dec, 2026';
-    
-  const collectedTimeStr = booking.sampleCollectedAtDate
-    ? new Date(booking.sampleCollectedAtDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.sampleCollectedAtDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '03:11 PM 02 Dec, 2026';
+  // Real registration, collection, and biologist sign-off timestamps (zero hardcoded mock dates)
+  const formatTs = (iso?: string) => {
+    if (!iso) return 'Recorded in LIMS';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return (
+      d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' +
+      d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
+  };
 
-  const reportedTimeStr = (booking.completedAt || booking.tests?.[0]?.completedAt)
-    ? new Date(booking.completedAt || booking.tests?.[0]?.completedAt || '').toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date(booking.completedAt || booking.tests?.[0]?.completedAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '04:35 PM 02 Dec, 2026';
+  const registeredTimeStr = formatTs(booking.createdAt);
+  const collectedTimeStr = formatTs(
+    booking.sampleCollectedAtDate || booking.sampleCollectedAt || booking.createdAt
+  );
+  const reportedTimeStr = formatTs(
+    booking.biologistSignedAt ||
+      booking.completedAt ||
+      booking.tests?.[0]?.completedAt ||
+      booking.updatedAt
+  );
+
+  const bookingExternalPdf = booking.externalPdfUrl || booking.pdfReportUrl || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
+    <div
+      className={
+        inlineEmbedded
+          ? 'w-full'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto'
+      }
+    >
+      <div
+        className={
+          inlineEmbedded
+            ? 'bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl w-full p-3 sm:p-5 shadow-xl flex flex-col'
+            : 'bg-slate-900 border border-slate-700 text-slate-900 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col'
+        }
+      >
         
         {/* Top Control Bar (Non-printable) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 text-white shrink-0 print:hidden gap-3">
@@ -1115,12 +1173,14 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               <Printer className="w-4 h-4" />
               <span>Print / Save PDF</span>
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {!inlineEmbedded && (
+              <button
+                onClick={onClose}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1176,9 +1236,9 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   {/* Left Lab Branding */}
                   <div className="flex items-center gap-3">
-                    {brandLogo ? (
+                    {effectiveLogoUrl ? (
                       <img
-                        src={brandLogo}
+                        src={effectiveLogoUrl}
                         alt={activeLabName || 'Lab Logo'}
                         className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-xl object-contain border border-slate-200 bg-white p-0.5 shadow-sm shrink-0"
                       />
@@ -1235,24 +1295,28 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                 <div className="h-0.5 w-full bg-slate-900 mt-3"></div>
               </div>
             ) : (
-              /* Required Dynamic Box When Lab Does Not Have a Header */
+              /* Official Laboratory Header Box When Lab Image Is Not Uploaded */
               <div className="border-b-2 border-slate-900 pb-3">
                 <div className="w-full border-2 border-dashed border-teal-500 bg-teal-50/50 rounded-xl p-6 sm:p-8 text-center text-teal-950 flex flex-col items-center justify-center gap-2 print:border-slate-800 print:bg-white select-none">
                   <Building2 className="w-8 h-8 text-teal-700 print:text-black" />
                   <div className="font-black text-base sm:text-lg uppercase tracking-wider text-teal-950 print:text-black">
-                    LAB HEADER WILL GO HERE
+                    {activeLabName || 'OFFICIAL LABORATORY LETTERHEAD'}
                   </div>
-                  <p className="text-xs text-teal-800/80 print:text-slate-600 max-w-md">
-                    No official laboratory letterhead configured. Upload your header image now using the button above.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => headerFileInputRef.current?.click()}
-                    className="no-print mt-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Upload Lab Header Image</span>
-                  </button>
+                  {canCustomizeTemplates && (
+                    <>
+                      <p className="text-xs text-teal-800/80 print:text-slate-600 max-w-md">
+                        No official laboratory letterhead image uploaded yet. Upload your header image using the button below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => headerFileInputRef.current?.click()}
+                        className="no-print mt-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>Upload Lab Header Image</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1264,23 +1328,29 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               <div className="md:col-span-4 space-y-1.5">
                 <div>
                   <div className="text-base font-black text-slate-900 notranslate" translate="no">
-                    {booking.patientName || 'CHIKWADO NWEKE CHRISTIANUS'}
+                    {booking.patientName || 'Patient'}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-700">
                   <div>
                     <span className="text-slate-500">Age: </span>
-                    <strong className="text-slate-900">{booking.patientAge || 39} Years</strong>
+                    <strong className="text-slate-900">{booking.patientAge ? `${booking.patientAge} Years` : 'Adult'}</strong>
                   </div>
                   <div>
                     <span className="text-slate-500">Sex: </span>
-                    <strong className="text-slate-900">{booking.patientGender || 'Male'}</strong>
+                    <strong className="text-slate-900">{booking.patientGender || 'Unspecified'}</strong>
                   </div>
                 </div>
                 <div>
                   <span className="text-slate-500">PID / Code: </span>
-                  <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode || 'PID-555'}</strong>
+                  <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode}</strong>
                 </div>
+                {booking.sampleBarcode && (
+                  <div>
+                    <span className="text-slate-500">Tube Barcode: </span>
+                    <strong className="font-mono text-slate-900">{booking.sampleBarcode}</strong>
+                  </div>
+                )}
               </div>
 
               {/* Middle Sample / Ref By Column */}
@@ -1309,7 +1379,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     ||||| | ||| |||| || | || ||||
                   </div>
                   <div className="font-mono text-[9px] text-slate-600">
-                    {booking.bookingCode || '0 35545 62336 78 1'}
+                    {booking.sampleBarcode || booking.bookingCode}
                   </div>
                 </div>
 
@@ -1323,7 +1393,7 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                     <strong className="text-slate-800">{collectedTimeStr}</strong>
                   </div>
                   <div>
-                    <span>Reported on: </span>
+                    <span>Certified on: </span>
                     <strong className="text-slate-800">{reportedTimeStr}</strong>
                   </div>
                 </div>
@@ -1331,27 +1401,81 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
 
             </div>
 
+            {/* If Lab Uploaded an Official Signed External PDF for the Entire Dossier, Embed It Directly */}
+            {bookingExternalPdf && (
+              <div className="border border-slate-300 rounded-xl overflow-hidden bg-slate-50 space-y-2 p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-black text-slate-900 uppercase">
+                    Attached Signed Laboratory PDF Document
+                  </span>
+                  <a
+                    href={bookingExternalPdf}
+                    download={`LabReport-${booking.bookingCode || 'Signed'}.pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="no-print px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Original Lab PDF</span>
+                  </a>
+                </div>
+                <iframe
+                  src={bookingExternalPdf}
+                  title="Official Signed Laboratory PDF"
+                  className="w-full h-[520px] rounded-lg border border-slate-200 bg-white"
+                />
+              </div>
+            )}
+
             {/* Test Results Section with Multi-tier Hierarchy (Department -> Sub-Header -> Parameters) */}
             {((selectedTestFilter !== null && selectedTestFilter !== undefined && booking.tests?.[selectedTestFilter])
               ? [booking.tests[selectedTestFilter]]
               : (booking.tests || [])
-            ).map((testItem: BookingTestItem, tIdx: number) => (
+            ).map((testItem: BookingTestItem, tIdx: number) => {
+              const testPdfUrl = testItem.externalPdfUrl || testItem.pdfReportUrl || testItem.pdfUrl || testItem.fileUrl;
+              return (
               <div key={testItem.id || tIdx} className="space-y-2 pt-1">
                 
                 {/* Centered Bold Test Title */}
                 <div className="text-center border-b-2 border-slate-800 pb-1 bg-slate-50/50 p-2 rounded-t-lg">
                   <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
-                    {testItem.testName || 'Complete Blood Count (CBC)'}
+                    {testItem.testName || testItem.name || 'Diagnostic Examination'}
                   </h2>
                   <div className="text-[11px] font-semibold text-slate-600 flex items-center justify-center gap-2">
-                    <span>Sample: <strong>{testItem.sampleTypeRequired || 'Whole Blood'}</strong></span>
-                    <span>•</span>
-                    <span>Department: <strong>{testItem.category || 'Hematology'}</strong></span>
+                    <span>Sample: <strong>{testItem.sampleTypeRequired || 'Biological Specimen'}</strong></span>
+                    {testItem.category && (
+                      <>
+                        <span>•</span>
+                        <span>Department: <strong>{testItem.category}</strong></span>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* If test was completed via A4 Rich Canvas, render richReportHtml cleanly */}
-                {testItem.richReportHtml ? (
+                {/* 1. If Lab Tech uploaded an external PDF specifically for this test */}
+                {testPdfUrl ? (
+                  <div className="space-y-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800">Signed Laboratory Assay PDF</span>
+                      <a
+                        href={testPdfUrl}
+                        download={`${testItem.testName || 'Test'}-Signed.pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="no-print px-2.5 py-1 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-bold text-[11px] flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Download PDF</span>
+                      </a>
+                    </div>
+                    <iframe
+                      src={testPdfUrl}
+                      title={testItem.testName || 'Signed Test PDF'}
+                      className="w-full h-[480px] rounded-lg border border-slate-200 bg-white"
+                    />
+                  </div>
+                ) : testItem.richReportHtml ? (
+                  /* 2. If test was completed via Lab's A4 Rich Canvas, render exact richReportHtml */
                   <div 
                     className="py-3 px-2 bg-white text-slate-900 overflow-x-auto print:p-0"
                     dangerouslySetInnerHTML={{ __html: testItem.richReportHtml }}
@@ -1517,20 +1641,31 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
                   </div>
                 )}
 
-                {/* Instruments & Interpretation */}
+                {/* Instruments, Lab Tech Notes & Biologist Signed Remarks */}
                 <div className="pt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-200">
-                  <div>
-                    <strong className="text-slate-900">Method / Instruments: </strong>
-                    <span>{testItem.reagentsUsed?.length ? `Reagents: ${testItem.reagentsUsed.map(r => r.reagentName).join(', ')} • ` : ''}Automated Diagnostic Analyzer Platform</span>
-                  </div>
-                  <div>
-                    <strong className="text-slate-900">Clinical Interpretation: </strong>
-                    <span>{testItem.labNotes || 'Biological parameters evaluated per validated clinical standard operating procedures.'}</span>
-                  </div>
+                  {testItem.reagentsUsed && testItem.reagentsUsed.length > 0 && (
+                    <div>
+                      <strong className="text-slate-900">Reagents / Method: </strong>
+                      <span>{testItem.reagentsUsed.map(r => r.reagentName).join(', ')}</span>
+                    </div>
+                  )}
+                  {testItem.labNotes && (
+                    <div>
+                      <strong className="text-slate-900">Technologist Notes: </strong>
+                      <span>{testItem.labNotes}</span>
+                    </div>
+                  )}
+                  {booking.biologistRemarks && (
+                    <div>
+                      <strong className="text-slate-900">Biologist Clinical Conclusion: </strong>
+                      <span>{booking.biologistRemarks}</span>
+                    </div>
+                  )}
                 </div>
 
               </div>
-            ))}
+              );
+            })}
 
             {/* End of Report Strip */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-600 border-t border-slate-200">
