@@ -18,11 +18,11 @@ import {
   FlaskConical,
   Phone
 } from 'lucide-react';
-import { useAuth } from '../../context/authContext';
-import { useFamilyProfile } from '../../context/familyProfileContext';
-import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
-import { formatXAF } from '../../shared/money';
-import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
+import { useAuth } from '../context/authContext';
+import { useFamilyProfile } from '../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../data/cameroonInsurances';
+import { formatXAF } from '../shared/money';
+import { MedicalReceiptModal } from '../components/common/MedicalReceiptModal';
 
 interface PatientProfileScreenProps {
   onBack?: () => void;
@@ -98,7 +98,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        const { limsService } = await import('../../services/limsService');
+        const { limsService } = await import('../services/limsService');
         const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
           user?.labId ? [user.labId] : []
         );
