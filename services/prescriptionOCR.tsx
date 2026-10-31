@@ -10,6 +10,9 @@ export interface PrescriptionScanResult {
   matchedTests: MatchedPrescriptionTest[];
   unmatchedLines: string[];
   rawDetectedText: string;
+  detectedDoctorName?: string;
+ detectedHospital?:string;
+ 
 }
 
 /**
