@@ -309,7 +309,7 @@ export const HomePickupLocationPicker: React.FC<HomePickupLocationPickerProps> =
           mapId="DEMO_MAP_ID"
           gestureHandling="greedy"
           internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
-          onClick={(ev) => {
+          onClick={(ev : any  ) => {
             const ll = ev.detail?.latLng;
             if (ll) {
               const next = { lat: ll.lat, lng: ll.lng };
