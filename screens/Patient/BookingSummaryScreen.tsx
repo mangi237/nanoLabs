@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Building2, Home, Calendar, Clock, ChevronRight, CheckCircle2, ShieldCheck, MapPin, Shield, Stethoscope, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  Building2,
+  CheckCircle2,
+  MapPin,
+  Shield,
+  Stethoscope,
+  Phone,
+  Info,
+  Send
+} from 'lucide-react';
 import { PartnerLabItem } from './ChooseLabScreen';
 import { formatXAF } from '../../shared/money';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { limsService } from '../../services/limsService';
-import { ACCREDITED_DOCTORS, DoctorOption } from '../../components/common/DoctorCardSelect';
+import { DoctorOption } from '../../components/common/DoctorCardSelect';
 
 interface BookingSummaryScreenProps {
   lab: PartnerLabItem;
@@ -13,6 +23,9 @@ interface BookingSummaryScreenProps {
   collectionMethod: 'home' | 'lab';
   collectionFee: number;
   labTestTariff: number;
+  pickupAddress?: string;
+  pickupCoords?: { lat: number; lng: number };
+  pickupDistanceKm?: number;
   onBack: () => void;
   onBookingRequested: (bookingData: any) => void;
 }
@@ -23,111 +36,183 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
   collectionMethod,
   collectionFee,
   labTestTariff,
+  pickupAddress: initialPickupAddress,
+  pickupCoords,
+  pickupDistanceKm,
   onBack,
   onBookingRequested
 }) => {
   const { user } = useAuth();
   const { activeProfile } = useFamilyProfile();
 
-  const [useInsurance, setUseInsurance] = useState<boolean>(true);
-  const [appointmentDate, setAppointmentDate] = useState('Today &bull; Immediate Dispatch (Next Available)');
-  const [pickupAddress, setPickupAddress] = useState('Akwa Central, Douala');
+  // Check real configured insurance on profile/user (never force mock insurance if unconfigured)
+  const configuredInsuranceProvider =
+    activeProfile?.insuranceProvider || (user as any)?.insuranceProvider || '';
+  const configuredPolicyNumber =
+    activeProfile?.insurancePolicyNumber || (user as any)?.insurancePolicyNumber || '';
+  const hasConfiguredInsurance = Boolean(configuredInsuranceProvider && configuredPolicyNumber);
+
+  const [useInsurance, setUseInsurance] = useState<boolean>(hasConfiguredInsurance);
+  const [insuranceProviderInput, setInsuranceProviderInput] = useState<string>(
+    configuredInsuranceProvider || 'ASCOMA Cameroun'
+  );
+  const [policyNumberInput, setPolicyNumberInput] = useState<string>(configuredPolicyNumber);
+  const [pickupAddress, setPickupAddress] = useState<string>(
+    initialPickupAddress || 'Boulevard de la Liberté, Akwa, Douala'
+  );
   const [submitting, setSubmitting] = useState(false);
 
-  // Referral Doctor state
+  // Real platform doctors directory (zero mock doctors)
+  const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
   const [referringDoctorType, setReferringDoctorType] = useState<'accredited' | 'self' | 'other'>('self');
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(ACCREDITED_DOCTORS[0].id);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [manualDoctorName, setManualDoctorName] = useState<string>('');
   const [manualHospitalName, setManualHospitalName] = useState<string>('');
 
-  const insuranceProvider = user?.insuranceProvider || 'Activa Assurances (NHIS Partner)';
-  const policyNumber = user?.insurancePolicyNumber || 'POL-884920';
-  const coveragePercent = 80; // 80% Tiers Payant standard in Cameroon
+  useEffect(() => {
+    let mounted = true;
+    const loadDoctorsAndScannedPrescription = async () => {
+      try {
+        const scannedDoc = sessionStorage.getItem('nanolabs_scanned_doctor') || '';
+        const scannedHosp = sessionStorage.getItem('nanolabs_scanned_hospital') || '';
+        if (scannedDoc) {
+          setReferringDoctorType('other');
+          setManualDoctorName(scannedDoc);
+          if (scannedHosp) setManualHospitalName(scannedHosp);
+        }
 
-  // Calculations
-  const grossTotal = labTestTariff + (collectionMethod === 'home' ? collectionFee : 0);
-  const insuranceCovered = useInsurance ? Math.round(labTestTariff * (coveragePercent / 100)) : 0;
-  const netPayable = grossTotal - insuranceCovered;
+        const liveDocs = await limsService.searchAllAccreditedDoctors('');
+        const mapped: DoctorOption[] = (liveDocs || []).map((d: any, i: number) => ({
+          id: d.id || `doc-${i}`,
+          name: d.name?.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
+          specialty: d.specialty || 'General Medicine',
+          hospital: d.hospitalAffiliation || d.hospital || 'Accredited Medical Center',
+          verified: true
+        }));
+
+        try {
+          const rawLocal = localStorage.getItem('nanolabs_registered_doctors');
+          if (rawLocal) {
+            const parsed = JSON.parse(rawLocal);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((ld: any, idx: number) => {
+                if (!mapped.some((m) => m.id === ld.id || m.name === ld.name)) {
+                  mapped.push({
+                    id: ld.id || `doc-local-${idx}`,
+                    name: ld.name?.startsWith('Dr.') ? ld.name : `Dr. ${ld.name}`,
+                    specialty: ld.specialty || 'General Medicine',
+                    hospital: ld.hospital || 'Medical Center',
+                    verified: true
+                  });
+                }
+              });
+            }
+          }
+        } catch {}
+
+        if (mounted) {
+          setPlatformDoctors(mapped);
+          if (mapped.length > 0) {
+            setSelectedDoctorId(mapped[0].id);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load platform doctors:', e);
+      }
+    };
+    loadDoctorsAndScannedPrescription();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const coveragePercent = 80;
+  const platformFeePercent = 5;
+  const platformFeeAmount = Math.round(labTestTariff * (platformFeePercent / 100));
+  const homeFee = collectionMethod === 'home' ? collectionFee : 0;
+  const grossEstimate = labTestTariff + homeFee;
+  const insuranceCovered = useInsurance && policyNumberInput.trim()
+    ? Math.round(labTestTariff * (coveragePercent / 100))
+    : 0;
+  const estimatedPatientShare = Math.max(0, grossEstimate - insuranceCovered);
+
+  const selectedPlatformDoc = platformDoctors.find((d) => d.id === selectedDoctorId);
 
   const handleRequestBooking = async () => {
     try {
       setSubmitting(true);
-      const bookingCode = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
-
-      const bookingPayload = {
-        bookingCode,
-        patientName: activeProfile.fullName,
-        patientPhone: (activeProfile as any).phone || user?.phone || '+237 670 000 000',
-        patientEmail: user?.email || 'patient@nanolabs.cm',
-        patientPid: activeProfile.id || user?.patientId || `PT-${Math.floor(10000 + Math.random() * 90000)}`,
-        patientAge: activeProfile.age || 30,
-        patientGender: activeProfile.gender || 'Female',
-        relationship: activeProfile.relationship,
-        labId: lab.id,
-        labName: lab.name,
-        pickupLocation: collectionMethod === 'home' ? pickupAddress : lab.address,
-        homeCollection: collectionMethod === 'home',
-        appointmentTime: appointmentDate,
-        totalAmount: netPayable,
-        grossAmount: grossTotal,
-        hasInsurance: useInsurance,
-        insuranceProvider: useInsurance ? insuranceProvider : undefined,
-        insurancePolicyNumber: useInsurance ? policyNumber : undefined,
-        insuranceCoveragePercent: useInsurance ? coveragePercent : 0,
-        insuranceCoveredAmount: insuranceCovered,
-        paymentStatus: 'unpaid' as const,
-        overallStatus: 'Pending' as const,
-        receptionistValidated: false, // Waits for Receptionist code authorization
-        referringDoctorType,
-        referringDoctorName: referringDoctorType === 'accredited' 
-          ? ACCREDITED_DOCTORS.find(d => d.id === selectedDoctorId)?.name 
-          : referringDoctorType === 'other' 
-          ? manualDoctorName.trim() || undefined 
-          : 'Self-Referred / None',
-        referringDoctorHospital: referringDoctorType === 'accredited'
-          ? ACCREDITED_DOCTORS.find(d => d.id === selectedDoctorId)?.hospital
+      const patientPid =
+        activeProfile.id || user?.patientId || user?.id || `PT-${Math.floor(10000 + Math.random() * 90000)}`;
+      const resolvedReferringDoc =
+        referringDoctorType === 'accredited'
+          ? selectedPlatformDoc?.name || undefined
           : referringDoctorType === 'other'
-          ? manualHospitalName.trim() || undefined
-          : undefined,
-        referringDoctorId: referringDoctorType === 'accredited' ? selectedDoctorId : undefined,
-        tests: tests.map((t, idx) => ({
-          id: `t-${idx}`,
-          testName: t.name,
-          name: t.name,
-          price: Math.round(labTestTariff / (tests.length || 1)),
-          status: 'Pending'
-        })),
-        createdAt: new Date().toISOString()
-      };
+            ? manualDoctorName.trim() || undefined
+            : 'Self-Referred';
+      const resolvedHospital =
+        referringDoctorType === 'accredited'
+          ? selectedPlatformDoc?.hospital || undefined
+          : referringDoctorType === 'other'
+            ? manualHospitalName.trim() || undefined
+            : undefined;
 
-      const labId = lab.id || user?.labId || 'lab-1';
+      const insuranceActive = Boolean(useInsurance && policyNumberInput.trim());
+      const perTestBasePrice = Math.round(labTestTariff / Math.max(1, tests.length));
+
       const created = await limsService.createBooking({
-        labId,
-        patientId: bookingPayload.patientPid,
-        patientName: bookingPayload.patientName,
-        patientAge: bookingPayload.patientAge,
-        patientGender: bookingPayload.patientGender as any,
-        patientPhone: bookingPayload.patientPhone,
-        patientEmail: bookingPayload.patientEmail,
-        patientPid: bookingPayload.patientPid,
-        pickupLocation: bookingPayload.pickupLocation,
-        homeCollection: bookingPayload.homeCollection,
-        totalAmount: netPayable,
-        selectedTests: bookingPayload.tests
-      } as any);
-
-      onBookingRequested(created || bookingPayload);
-    } catch (err) {
-      console.error('Failed to create booking:', err);
-      onBookingRequested({
-        bookingCode: `BK-${Math.floor(100000 + Math.random() * 900000)}`,
-        patientName: activeProfile.fullName,
+        labId: lab.id || 'lab-1',
         labName: lab.name,
-        totalAmount: netPayable,
-        grossAmount: grossTotal,
-        tests,
-        collectionMethod
+        labAddress: lab.address,
+        labPhone: lab.phone,
+        labLogoUrl: lab.logoUrl,
+        patientId: patientPid,
+        patientPid,
+        patientName: activeProfile.fullName || user?.name || 'Patient',
+        patientAge: activeProfile.age || 30,
+        patientGender: (activeProfile.gender as any) || 'Female',
+        patientPhone: activeProfile.phone || user?.phone || '+237 670 00 00 00',
+        patientEmail: user?.email || '',
+        creatorName: activeProfile.fullName || user?.name || 'Online Patient',
+        isOnlineBooking: true,
+        registrationType: 'online',
+        registeredBy: 'Online Patient App',
+        receptionistValidated: false,
+        referringDoctorId: referringDoctorType === 'accredited' ? selectedDoctorId : undefined,
+        referringDoctor: resolvedReferringDoc,
+        referralHospital: resolvedHospital,
+        hasInsurance: insuranceActive,
+        insuranceProvider: insuranceActive ? insuranceProviderInput.trim() : undefined,
+        insurancePolicyNumber: insuranceActive ? policyNumberInput.trim() : undefined,
+        insuranceCoveragePercent: insuranceActive ? coveragePercent : 0,
+        coPayPercent: insuranceActive ? 100 - coveragePercent : 100,
+        insuranceCoveredAmount: insuranceActive ? insuranceCovered : 0,
+        insuranceClaimAmount: insuranceActive ? insuranceCovered : 0,
+        patientCoPayAmount: insuranceActive ? estimatedPatientShare : grossEstimate,
+        homeCollection: collectionMethod === 'home',
+        pickupLocation: collectionMethod === 'home' ? pickupAddress : lab.address,
+        userCoords: collectionMethod === 'home' ? pickupCoords : undefined,
+        pickupDistanceMeters:
+          collectionMethod === 'home' && pickupDistanceKm
+            ? Math.round(pickupDistanceKm * 1000)
+            : undefined,
+        homePickupFee: homeFee,
+        platformFeePercent,
+        platformFeeAmount,
+        selectedTests: tests.map((t, idx) => ({
+          id: `t-${Date.now()}-${idx}`,
+          name: t.name,
+          testName: t.name,
+          price: perTestBasePrice,
+          basePrice: perTestBasePrice,
+          totalPrice: perTestBasePrice
+        }))
       });
+
+      sessionStorage.removeItem('nanolabs_scanned_doctor');
+      sessionStorage.removeItem('nanolabs_scanned_hospital');
+      onBookingRequested(created);
+    } catch (err) {
+      console.error('Failed to submit online test request:', err);
     } finally {
       setSubmitting(false);
     }
@@ -145,40 +230,54 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         </button>
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">
-            Booking Summary & Tariff Breakdown
+            Review & Send Test Request
           </h1>
           <p className="text-[11px] text-slate-500">
-            For: <strong className="text-slate-800">{activeProfile.fullName}</strong> ({activeProfile.relationshipLabel})
+            Patient: <strong className="text-slate-800">{activeProfile.fullName}</strong> ({activeProfile.relationshipLabel}) &middot; No pre-payment required now
           </p>
         </div>
       </div>
 
-      {/* Lab Card */}
-      <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between">
+      {/* Selected Performing Laboratory + Direct Inquiry Phone */}
+      <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold shrink-0">
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Selected Performing Laboratory</span>
+            <span className="text-[10px] font-semibold text-slate-400">Selected Performing Laboratory</span>
             <h3 className="text-base font-black text-slate-900">{lab.name}</h3>
-            <span className="text-xs text-slate-500">{lab.distanceKm} km from your location &bull; {lab.city}</span>
+            <span className="text-xs text-slate-500">
+              {lab.address} &middot; TAT: {lab.turnaroundTime}
+            </span>
           </div>
         </div>
+
+        {lab.phone && (
+          <a
+            href={`tel:${lab.phone.replace(/\s+/g, '')}`}
+            className="px-3.5 py-2 bg-[#E0F2F1] hover:bg-[#B2DFDB] text-[#006978] rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 self-start sm:self-center"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span className="font-mono">{lab.phone}</span>
+          </a>
+        )}
       </div>
 
-      {/* Insurance Toggle Option */}
+      {/* Insurance Toggle & Details (Sent to Receptionist & Cashier for Automatic Split) */}
       <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Shield className="w-5 h-5 text-[#006978]" />
             <div>
               <h4 className="text-xs font-extrabold text-slate-900">Apply Health Insurance (Tiers-Payant)</h4>
-              <p className="text-[11px] text-slate-500">80% covered by caisse, you only pay 20% co-pay</p>
+              <p className="text-[11px] text-slate-500">
+                Lab Cashier sees your insurance details and automatically splits your invoice ({coveragePercent}% insurer / {100 - coveragePercent}% patient)
+              </p>
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
               type="checkbox"
               checked={useInsurance}
@@ -190,20 +289,32 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         </div>
 
         {useInsurance && (
-          <div className="p-3 bg-[#E0F2F1]/50 rounded-2xl border border-[#80CBC4] text-xs space-y-1">
-            <div className="flex justify-between font-bold text-[#006978]">
-              <span>Caisse Provider:</span>
-              <span>{insuranceProvider}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">Insurance Provider (Caisse):</label>
+              <input
+                type="text"
+                value={insuranceProviderInput}
+                onChange={(e) => setInsuranceProviderInput(e.target.value)}
+                placeholder="e.g. ASCOMA, Activa, AXA, Allianz"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900"
+              />
             </div>
-            <div className="flex justify-between text-slate-600 font-mono text-[11px]">
-              <span>Policy Matricule:</span>
-              <span>{policyNumber}</span>
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">Policy / Matricule Number:</label>
+              <input
+                type="text"
+                value={policyNumberInput}
+                onChange={(e) => setPolicyNumberInput(e.target.value)}
+                placeholder="Enter policy matricule (required for split)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+              />
             </div>
           </div>
         )}
       </div>
 
-      {/* Referral Doctor Selection Card */}
+      {/* Referring Physician Selection (Zero Mock Doctors) */}
       <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-3">
         <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
           <Stethoscope className="w-4 h-4 text-[#006978]" />
@@ -212,73 +323,68 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
               Referring / Prescribing Physician (Optional)
             </h4>
             <p className="text-[11px] text-slate-500">
-              Informs the lab so your doctor receives automated reports directly
+              Select a registered platform physician or enter an external doctor's name
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setReferringDoctorType('self')}
-            className={`py-2 px-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-              referringDoctorType === 'self'
-                ? 'border-[#006978] bg-[#E0F2F1] text-[#006978]'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
-            }`}
-          >
-            Self-Referred
-          </button>
-          <button
-            type="button"
-            onClick={() => setReferringDoctorType('accredited')}
-            className={`py-2 px-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-              referringDoctorType === 'accredited'
-                ? 'border-[#006978] bg-[#E0F2F1] text-[#006978]'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
-            }`}
-          >
-            Platform Doctor
-          </button>
-          <button
-            type="button"
-            onClick={() => setReferringDoctorType('other')}
-            className={`py-2 px-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-              referringDoctorType === 'other'
-                ? 'border-[#006978] bg-[#E0F2F1] text-[#006978]'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
-            }`}
-          >
-            External Doctor
-          </button>
+          {[
+            { key: 'self', label: 'Self-Referred' },
+            { key: 'accredited', label: `Platform Doctor (${platformDoctors.length})` },
+            { key: 'other', label: 'External Doctor' }
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setReferringDoctorType(opt.key as any)}
+              className={`py-2 px-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                referringDoctorType === opt.key
+                  ? 'border-[#006978] bg-[#E0F2F1] text-[#006978]'
+                  : 'border-slate-200 bg-slate-50 text-slate-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {referringDoctorType === 'accredited' && (
           <div className="pt-1 space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-600 block">Select from Accredited Doctors Directory:</label>
-            <select
-              value={selectedDoctorId}
-              onChange={(e) => setSelectedDoctorId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-            >
-              {ACCREDITED_DOCTORS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} &bull; {d.specialty} ({d.hospital})
-                </option>
-              ))}
-            </select>
+            {platformDoctors.length > 0 ? (
+              <>
+                <label className="text-[11px] font-bold text-slate-600 block">
+                  Registered Platform Physicians:
+                </label>
+                <select
+                  value={selectedDoctorId}
+                  onChange={(e) => setSelectedDoctorId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+                >
+                  {platformDoctors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} &middot; {d.specialty} ({d.hospital})
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                No platform doctors registered yet. Switch to <strong>External Doctor</strong> to type your prescribing physician's name and hospital.
+              </p>
+            )}
           </div>
         )}
 
         {referringDoctorType === 'other' && (
           <div className="pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">Doctor Name:</label>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">Prescribing Doctor Name:</label>
               <input
                 type="text"
                 value={manualDoctorName}
                 onChange={(e) => setManualDoctorName(e.target.value)}
-                placeholder="Dr. Full Name"
+                placeholder="e.g. Dr. Full Name"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
               />
             </div>
@@ -288,7 +394,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
                 type="text"
                 value={manualHospitalName}
                 onChange={(e) => setManualHospitalName(e.target.value)}
-                placeholder="Clinic or Hospital Name"
+                placeholder="Hospital or Clinic Name"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
               />
             </div>
@@ -296,51 +402,60 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         )}
       </div>
 
-      {/* Tests breakdown with Lab Specific Tariff */}
+      {/* Requested Tests & Preliminary Estimate */}
       <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-3">
-        <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2">
-          <span>Requested Tests ({tests.length})</span>
-          <span>Laboratory Rate</span>
+        <div className="flex items-center justify-between text-xs font-bold text-slate-500 border-b border-slate-100 pb-2">
+          <span>Requested Diagnostic Tests ({tests.length})</span>
+          <span>Preliminary Tariff</span>
         </div>
 
         {tests.map((t, idx) => (
           <div key={idx} className="flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-800">{t.name}</span>
-            <span className="font-mono text-slate-600">Tariff by {lab.name}</span>
+            <span className="font-mono tabular-nums text-slate-700">
+              {formatXAF(Math.round(labTestTariff / Math.max(1, tests.length)))}
+            </span>
           </div>
         ))}
 
-        <div className="pt-2 border-t space-y-1.5 text-xs">
+        <div className="pt-2 border-t border-slate-100 space-y-1.5 text-xs">
           <div className="flex justify-between">
-            <span className="text-slate-600">Lab Diagnostic Tariff:</span>
-            <span className="font-mono font-bold text-slate-900">{formatXAF(labTestTariff)}</span>
+            <span className="text-slate-600">Primary Lab Tests Subtotal (incl. {platformFeePercent}% nanoLabs platform fee — {formatXAF(platformFeeAmount)}):</span>
+            <span className="font-mono tabular-nums font-bold text-slate-900">{formatXAF(labTestTariff)}</span>
           </div>
 
           <div className="flex justify-between">
             <span className="text-slate-600">
-              Collection ({collectionMethod === 'home' ? `Home Pickup & Courier (${lab.distanceKm} km)` : 'Walk-in Intake'}):
+              Sample Collection ({collectionMethod === 'home' ? 'Home Pickup via Google Maps' : 'Walk-In at Laboratory'}):
             </span>
-            <span className="font-mono font-bold text-slate-900">
-              {collectionMethod === 'home' ? `+${formatXAF(collectionFee)}` : 'Free'}
+            <span className="font-mono tabular-nums font-bold text-slate-900">
+              {collectionMethod === 'home' ? `+${formatXAF(homeFee)}` : '0 FCFA'}
             </span>
           </div>
 
-          {useInsurance && (
+          {insuranceCovered > 0 && (
             <div className="flex justify-between text-emerald-700 font-bold">
-              <span>Insurance Caisse Share (80%):</span>
-              <span className="font-mono">-{formatXAF(insuranceCovered)}</span>
+              <span>Estimated Insurance Coverage ({coveragePercent}%):</span>
+              <span className="font-mono tabular-nums">-{formatXAF(insuranceCovered)}</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Collection Location if Home */}
+      {/* Home Pickup Location Confirmation */}
       {collectionMethod === 'home' && (
         <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-2">
-          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <MapPin className="w-4 h-4 text-[#006978]" />
-            <span>Phlebotomist Dispatch Address:</span>
-          </span>
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-700 flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-[#006978]" />
+              <span>Pinned Google Maps Pickup Location:</span>
+            </span>
+            {pickupCoords && (
+              <span className="font-mono text-[10px] text-slate-500">
+                {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
+              </span>
+            )}
+          </div>
           <input
             type="text"
             value={pickupAddress}
@@ -350,28 +465,47 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         </div>
       )}
 
-      {/* Grand Total Bar */}
-      <div className="p-5 bg-gradient-to-br from-[#E0F2F1] to-[#F2FBFA] border border-[#80CBC4] rounded-3xl flex items-center justify-between">
-        <div>
-          <span className="text-xs font-black uppercase tracking-wider text-[#006978]">
-            {useInsurance ? 'Patient Co-Pay Share (Ticket Modérateur)' : 'Total Payable'}
-          </span>
-          <div className="text-2xl font-black text-[#006978] font-mono mt-0.5">
-            {formatXAF(netPayable)}
-          </div>
-          <span className="text-[10px] text-slate-500">Official invoice generated upon lab reception</span>
+      {/* Mandatory Fee & Clinical Add-On Transparency Notice */}
+      <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-1.5 text-xs text-amber-950">
+        <div className="flex items-center gap-2 font-extrabold">
+          <Info className="w-4 h-4 text-amber-700 shrink-0" />
+          <span>Fee Transparency & Official Laboratory Invoicing Notice</span>
         </div>
-        <CheckCircle2 className="w-7 h-7 text-[#006978]" />
+        <p className="text-[11px] text-amber-900/90 leading-relaxed">
+          1. You do <strong>not</strong> pay now. Your request goes first to the <strong>Lab Receptionist</strong> for confirmation, then to the <strong>Lab Cashier</strong>.<br />
+          2. A <strong>5% nanoLabs platform fee ({formatXAF(platformFeeAmount)})</strong> is factored into the online tariff calculation.<br />
+          3. The final invoice sent by the Lab Cashier may include justifiable clinical fees (such as <em>acte de prélèvement</em>, sterile draw consumables, or specialized transport tubes).
+          {lab.phone ? (
+            <> For advance tariff or fasting inquiries, call <strong>{lab.name}</strong> at <a href={`tel:${lab.phone.replace(/\s+/g, '')}`} className="underline font-mono font-bold">{lab.phone}</a>.</>
+          ) : null}
+        </p>
       </div>
 
-      {/* Request Booking Action */}
-      <div className="pt-2">
+      {/* Preliminary Estimate Summary */}
+      <div className="p-5 bg-gradient-to-br from-[#E0F2F1] to-[#F2FBFA] border border-[#80CBC4] rounded-3xl flex items-center justify-between">
+        <div>
+          <span className="text-xs font-bold text-[#006978]">
+            {insuranceCovered > 0 ? 'Estimated Patient Co-Pay (Before Cashier Invoice)' : 'Preliminary Test Request Estimate'}
+          </span>
+          <div className="text-2xl font-black text-[#006978] font-mono tabular-nums mt-0.5">
+            {formatXAF(estimatedPatientShare)}
+          </div>
+          <span className="text-[11px] text-slate-600">
+            Official payable invoice will be sent to your Home screen after Receptionist & Cashier review
+          </span>
+        </div>
+        <CheckCircle2 className="w-7 h-7 text-[#006978] shrink-0" />
+      </div>
+
+      {/* Submit Test Request Button (No Pre-Payment) */}
+      <div className="pt-1">
         <button
           onClick={handleRequestBooking}
           disabled={submitting}
           className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
-          <span>{submitting ? 'Submitting to Lab Reception...' : 'Submit Booking Request'}</span>
+          <Send className="w-4 h-4" />
+          <span>{submitting ? 'Sending Test Request to Receptionist...' : 'Send Test Request to Laboratory (No Payment Now)'}</span>
         </button>
       </div>
     </div>

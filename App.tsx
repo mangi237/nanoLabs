@@ -266,7 +266,15 @@ const MainAppContent: React.FC = () => {
       />
     );
   }
-
+  // Doctors use the new doctor app
+  if (user.role === 'doctor') {
+    return (
+      <div className="min-h-[100dvh] bg-[#F4F6F6]">
+        <OfflineStatusIndicator />
+        <DoctorApp />
+      </div>
+    );
+  }
   // 5. Signed in: route to the right screen
   const renderScreen = () => {
     switch (screen) {

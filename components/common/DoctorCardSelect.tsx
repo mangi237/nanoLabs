@@ -22,62 +22,7 @@ export interface DoctorOption {
   code?: string;
 }
 
-export const ACCREDITED_DOCTORS: DoctorOption[] = [
-  {
-    id: 'doc-1',
-    name: 'Dr. Emmanuel Nkuo',
-    specialty: 'Internal Medicine & Infectious Diseases',
-    hospital: 'La Quintinie Hospital, Douala',
-    verified: true,
-    code: 'DOC-LQD-01',
-    phone: '+237 677 12 34 56'
-  },
-  {
-    id: 'doc-2',
-    name: 'Dr. Beatrice Ndongo',
-    specialty: 'Clinical Hematology & Oncology',
-    hospital: 'Yaoundé Central Hospital',
-    verified: true,
-    code: 'DOC-YCH-02',
-    phone: '+237 699 23 45 67'
-  },
-  {
-    id: 'doc-3',
-    name: 'Dr. Alain Fobissie',
-    specialty: 'Cardiology & Vascular Medicine',
-    hospital: 'Douala General Hospital',
-    verified: true,
-    code: 'DOC-DGH-03',
-    phone: '+237 675 34 56 78'
-  },
-  {
-    id: 'doc-4',
-    name: 'Dr. Sylvie Ngassa',
-    specialty: 'Endocrinology & Diabetology',
-    hospital: 'Clinique Bonanjo, Douala',
-    verified: true,
-    code: 'DOC-CBN-04',
-    phone: '+237 694 45 67 89'
-  },
-  {
-    id: 'doc-5',
-    name: 'Dr. Christian Mbarga',
-    specialty: 'Gastroenterology & Hepatology',
-    hospital: 'CHU de Yaoundé',
-    verified: true,
-    code: 'DOC-CHU-05',
-    phone: '+237 670 56 78 90'
-  },
-  {
-    id: 'doc-6',
-    name: 'Dr. Danielle Ewane',
-    specialty: 'Obstetrics & Reproductive Endocrinology',
-    hospital: 'Hôpital Gynéco-Obstétrique de Douala',
-    verified: true,
-    code: 'DOC-HGO-06',
-    phone: '+237 691 67 89 01'
-  }
-];
+export const ACCREDITED_DOCTORS: DoctorOption[] = [];
 
 interface DoctorCardSelectProps {
   value: string; // The formatted doctor name or string
@@ -95,7 +40,7 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
   hospitalValue,
   onChange,
   label = 'Referring / Prescribing Doctor',
-  placeholder = 'Search accredited doctors or type manually...',
+  placeholder = 'Search registered platform doctors or type manually...',
   required = false,
   className = '',
   connectedDoctors = []
@@ -107,30 +52,39 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
   const [customHospital, setCustomHospital] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>(ACCREDITED_DOCTORS);
+  const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
 
-  // Fetch real registered doctors from database
+  // Fetch real registered doctors from database and registered local directory (zero mock data)
   useEffect(() => {
     let isMounted = true;
     const fetchLive = async () => {
       try {
         const { limsService } = await import('../../services/limsService');
         const liveList = await limsService.searchAllAccreditedDoctors('');
-        if (liveList && liveList.length > 0 && isMounted) {
-          const mapped: DoctorOption[] = liveList.map((d, idx) => ({
-            id: d.id || `live-doc-${idx}`,
-            name: d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
-            specialty: d.specialty || 'General Practice & Diagnostics',
-            hospital: d.hospitalAffiliation || d.hospital || 'Accredited Medical Center',
-            verified: true,
-            code: d.licenseNumber || `ONMC-${1000 + idx}`,
-            phone: d.phone || '+237 670 00 00 00'
-          }));
-          
-          // Merge with unique names
-          const existingNames = new Set(mapped.map(m => m.name.toLowerCase()));
-          const extra = ACCREDITED_DOCTORS.filter(d => !existingNames.has(d.name.toLowerCase()));
-          setPlatformDoctors([...mapped, ...extra]);
+        const localRaw = localStorage.getItem('nanolabs_registered_doctors');
+        const localDocs: any[] = localRaw ? JSON.parse(localRaw) : [];
+
+        const combinedRaw = [...(liveList || []), ...localDocs];
+        if (isMounted) {
+          const seen = new Set<string>();
+          const mapped: DoctorOption[] = [];
+          combinedRaw.forEach((d, idx) => {
+            if (!d || !d.name) return;
+            const formattedName = d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`;
+            const key = (d.id || formattedName).toLowerCase().trim();
+            if (seen.has(key)) return;
+            seen.add(key);
+            mapped.push({
+              id: d.id || `live-doc-${idx}`,
+              name: formattedName,
+              specialty: d.specialty || 'General Medicine & Diagnostics',
+              hospital: d.hospitalAffiliation || d.hospital || 'Registered Medical Practice',
+              verified: true,
+              code: d.licenseNumber || undefined,
+              phone: d.phone || undefined
+            });
+          });
+          setPlatformDoctors(mapped);
         }
       } catch (err) {
         console.warn('Could not load live doctors list:', err);

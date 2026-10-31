@@ -65,6 +65,7 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
   const [signError, setSignError] = useState('');
   const [isReleasing, setIsReleasing] = useState(false);
   const [releaseSuccessMsg, setReleaseSuccessMsg] = useState('');
+  const [releaseChannel, setReleaseChannel] = useState<'online_and_physical' | 'online_only' | 'physical_pickup'>('online_and_physical');
 
   useEffect(() => {
     fetchData();
@@ -140,15 +141,22 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
     setIsReleasing(true);
     try {
       const res = await limsService.signAndReleaseByBiologist({
-        labId: targetLabId,
+        labId: selectedBooking.labId || targetLabId,
         bookingId: selectedBooking.id,
         biologistName: authResult.staffName || user?.name || 'Verified Clinical Biologist',
         biologistAccessCode: cleanCode,
-        biologistRemarks: biologistRemarks.trim() || 'Clinical findings reviewed and authorized for official release.'
+        biologistRemarks: biologistRemarks.trim() || 'Clinical findings reviewed and authorized for official release.',
+        releaseChannel
       });
 
       if (res.success) {
-        setReleaseSuccessMsg(`✅ Diagnostic Report for Booking ${selectedBooking.bookingCode} (${selectedBooking.patientName}) successfully signed & released to the Patient Portal!`);
+        const channelNote =
+          releaseChannel === 'online_only'
+            ? 'Published to Online Patient Portal'
+            : releaseChannel === 'physical_pickup'
+              ? 'Published Online + Ready for Sealed Front-Desk Pickup'
+              : 'Published to Online Portal + Certified Hardcopy Ready at Lab';
+        setReleaseSuccessMsg(`Diagnostic Report for Booking ${selectedBooking.bookingCode} (${selectedBooking.patientName}) signed & released (${channelNote})!`);
         setShowSignModal(false);
         setBiologistCode('');
         
@@ -160,6 +168,7 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
           biologistConfirmed: true,
           biologistName: authResult.staffName || user?.name || 'Lead Pathologist',
           biologistRemarks,
+          releaseChannel,
           overallStatus: 'Completed'
         } : null);
       } else {
@@ -632,6 +641,33 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                 </div>
                 <div className="text-[11px] text-purple-800">
                   Tests: {selectedBooking.tests?.map(t => t.testName).join(', ')}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Report Delivery & Release Channel
+                </label>
+                <div className="grid grid-cols-1 gap-1.5 text-xs">
+                  {[
+                    { id: 'online_and_physical' as const, label: 'Online Patient Portal + Certified Physical Hardcopy', desc: 'Instant digital PDF in Patient App + printed copy at Reception' },
+                    { id: 'online_only' as const, label: 'Online Patient Portal Only', desc: 'Immediate encrypted delivery to Patient App & Results vault' },
+                    { id: 'physical_pickup' as const, label: 'Sealed Physical Hardcopy Pickup (+ Portal Notice)', desc: 'Notifies patient that signed official report is ready at Front Desk' }
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setReleaseChannel(opt.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        releaseChannel === opt.id
+                          ? 'bg-purple-50 border-purple-400 text-purple-950 ring-1 ring-purple-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{opt.label}</div>
+                      <div className="text-[10.5px] text-slate-500">{opt.desc}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
 

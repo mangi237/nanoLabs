@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, ChevronRight, CheckCircle2, Download, Sparkles, Clock, Building2, Inbox } from 'lucide-react';
+import { ArrowLeft, FileText, ChevronRight, CheckCircle2, Inbox, Layers } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
+import { BatchConsolidatedReportModal } from '../../components/patient/BatchConsolidatedReportModal';
 
 export interface PatientResultItem {
   id: string;
+  bookingId?: string;
+  bookingCode?: string;
+  labId?: string;
+  testId?: string;
   testName: string;
   labName: string;
   date: string;
+  biologistName?: string;
+  releaseChannel?: string;
+  booking?: any;
   status: 'normal' | 'flagged';
   statusText: string;
   parameters: {
@@ -20,18 +28,13 @@ export interface PatientResultItem {
 }
 
 export const DEFAULT_RESULT_TEMPLATE: PatientResultItem = {
-  id: 'res-cbc',
-  testName: 'Complete Blood Count (CBC)',
-  labName: 'BioSanté Lab',
-  date: 'Today',
+  id: 'res-empty',
+  testName: 'Diagnostic Test Result',
+  labName: 'Performing Laboratory',
+  date: 'Recent',
   status: 'normal',
-  statusText: 'Within normal range &bull; Certified',
-  parameters: [
-    { name: 'Hemoglobin', value: '14.2', unit: 'g/dL', referenceRange: '12.0 - 16.0', isNormal: true },
-    { name: 'White Blood Cells (WBC)', value: '6.8', unit: '10^3/µL', referenceRange: '4.5 - 11.0', isNormal: true },
-    { name: 'Platelets', value: '254', unit: '10^3/µL', referenceRange: '150 - 450', isNormal: true },
-    { name: 'Hematocrit', value: '41.5', unit: '%', referenceRange: '37.0 - 48.0', isNormal: true }
-  ]
+  statusText: 'Certified by Medical Biologist',
+  parameters: []
 };
 
 interface MyResultsScreenProps {
@@ -44,65 +47,106 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
   onSelectResult
 }) => {
   const { user } = useAuth();
-  const { activeProfile } = useFamilyProfile();
+  const { activeProfile, isDependentActive } = useFamilyProfile();
 
-  const [activeTab, setActiveTab] = useState<'Recent' | 'History'>('Recent');
+  const [activeTab, setActiveTab] = useState<'Single' | 'Batches'>('Single');
   const [results, setResults] = useState<PatientResultItem[]>([]);
+  const [completedBatches, setCompletedBatches] = useState<any[]>([]);
+  const [selectedBatchModal, setSelectedBatchModal] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const fetchLivePatientResults = async () => {
-      try {
-        setLoading(true);
-        const { limsService } = await import('../../services/limsService');
-        const labId = user?.labId || 'lab-1';
-        const allBookings = await limsService.fetchAllBookings(labId);
+  const fetchLivePatientResults = async () => {
+    try {
+      setLoading(true);
+      const { limsService } = await import('../../services/limsService');
+      const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
+        user?.labId ? [user.labId] : []
+      );
 
-        // Filter bookings for this member that are completed or released
-        const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
-        const activeId = activeProfile?.id || '';
+      const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
+      const activeId = activeProfile?.id || '';
+      const userId = user?.id || '';
+      const userName = (user?.name || '').toLowerCase().trim();
 
-        const completedBookings = allBookings.filter(b => {
-          const matchPid = Boolean(activeId && (b.patientPid === activeId || b.patientId === activeId));
-          const matchName = Boolean(activeName && b.patientName?.toLowerCase().trim() === activeName);
-          const isDone = b.overallStatus === 'Completed' || b.paymentStatus === 'paid';
-          return (matchPid || matchName) && isDone;
-        });
+      // Strictly show results ONLY once signed & released by the Biologist (or overallStatus === 'Completed')
+      const releasedBookings = allBookings.filter((b) => {
+        const bPid = (b.patientPid || b.patientId || '').trim();
+        const bName = (b.patientName || '').toLowerCase().trim();
+        const isMatch = isDependentActive
+          ? Boolean((activeId && bPid === activeId) || (activeName && bName === activeName))
+          : Boolean(
+              (activeId && bPid === activeId) ||
+                (userId && bPid === userId) ||
+                (activeName && bName === activeName) ||
+                (userName && bName === userName)
+            );
+        const isBiologistCertified = Boolean(
+          b.biologistSigned || b.resultsReleased || b.overallStatus === 'Completed'
+        );
+        return isMatch && isBiologistCertified;
+      });
 
-        if (completedBookings.length > 0) {
-          const mapped: PatientResultItem[] = [];
-          completedBookings.forEach(b => {
-            (b.tests || []).forEach((t: any, idx: number) => {
-              mapped.push({
-                id: `${b.id}-t-${idx}`,
-                testName: t.testName || t.name || 'Complete Blood Count (CBC)',
-                labName: b.labName || 'BioSanté Lab',
-                date: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent',
-                status: 'normal',
-                statusText: 'Within normal range &bull; Certified',
-                parameters: [
-                  { name: 'Hemoglobin', value: '14.2', unit: 'g/dL', referenceRange: '12.0 - 16.0', isNormal: true },
-                  { name: 'White Blood Cells (WBC)', value: '6.8', unit: '10^3/µL', referenceRange: '4.5 - 11.0', isNormal: true },
-                  { name: 'Platelets', value: '254', unit: '10^3/µL', referenceRange: '150 - 450', isNormal: true },
-                  { name: 'Hematocrit', value: '41.5', unit: '%', referenceRange: '37.0 - 48.0', isNormal: true }
-                ]
-              });
-            });
+      setCompletedBatches(releasedBookings);
+
+      const mapped: PatientResultItem[] = [];
+      releasedBookings.forEach((b) => {
+        (b.tests || []).forEach((t: any, idx: number) => {
+          const subParams = Array.isArray(t.subParameters) && t.subParameters.length > 0
+            ? t.subParameters.map((sp: any) => ({
+                name: sp.name || sp.parameterName || 'Parameter',
+                value: String(sp.value ?? sp.resultValue ?? 'Validated'),
+                unit: sp.units || sp.unit || '',
+                referenceRange: sp.refRange || sp.referenceRange || 'Standard',
+                isNormal: !sp.flag || sp.flag.toLowerCase() === 'normal'
+              }))
+            : [
+                {
+                  name: t.testName || t.name || 'Diagnostic Assay',
+                  value: String(t.resultValue || 'Validated'),
+                  unit: t.units || '',
+                  referenceRange: t.refRangeMale || t.referenceRange || 'Reference Range',
+                  isNormal: !t.resultFlag || t.resultFlag.toLowerCase() === 'normal'
+                }
+              ];
+
+          const hasAbnormal = subParams.some((p: any) => !p.isNormal);
+          mapped.push({
+            id: `${b.id}-t-${idx}`,
+            bookingId: b.id,
+            bookingCode: b.bookingCode,
+            labId: b.labId || 'lab-1',
+            testId: t.id || t.testId,
+            testName: t.testName || t.name || 'Diagnostic Test',
+            labName: b.labName || 'Performing Laboratory',
+            date: b.biologistSignedAt
+              ? new Date(b.biologistSignedAt).toLocaleDateString()
+              : b.createdAt
+                ? new Date(b.createdAt).toLocaleDateString()
+                : 'Recent',
+            biologistName: b.biologistName || 'Medical Biologist',
+            releaseChannel: b.releaseChannel,
+            booking: b,
+            status: hasAbnormal ? 'flagged' : 'normal',
+            statusText: hasAbnormal ? 'Attention Required · Certified' : 'Within Reference Range · Certified',
+            parameters: subParams
           });
-          setResults(mapped);
-        } else {
-          setResults([]);
-        }
-      } catch (err) {
-        console.warn('Error fetching live results:', err);
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+        });
+      });
 
+      setResults(mapped);
+    } catch (err) {
+      console.warn('Error fetching live results:', err);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchLivePatientResults();
-  }, [user, activeProfile]);
+    window.addEventListener('nanolabs_booking_updated', fetchLivePatientResults);
+    return () => window.removeEventListener('nanolabs_booking_updated', fetchLivePatientResults);
+  }, [user?.id, activeProfile?.id, isDependentActive]);
 
   return (
     <div className="max-w-2xl mx-auto py-3 px-2 sm:px-4 text-slate-900 animate-in fade-in duration-300 space-y-5">
@@ -116,120 +160,125 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
         </button>
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">
-            Verified Diagnostic Results
+            Biologist Certified Results
           </h1>
           <p className="text-[11px] text-slate-500">
-            For: <strong className="text-slate-800">{activeProfile.fullName}</strong> ({activeProfile.relationshipLabel})
+            Patient: <strong className="text-slate-800">{activeProfile.fullName}</strong> ({activeProfile.relationshipLabel})
           </p>
         </div>
       </div>
 
-      {/* Hero Announcement Banner (if results exist) */}
-      {results.length > 0 && (
-        <div className="p-5 bg-gradient-to-br from-[#E0F2F1] via-[#F2FBFA] to-[#E0F7FA] border border-[#80CBC4] rounded-3xl shadow-xs space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#006978] text-white flex items-center justify-center font-bold shrink-0">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-black text-base text-slate-900">
-                Your results don land! 🎉
-              </h3>
-              <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                Biologist certified reports are ready to download, review, or securely share with your physician.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => onSelectResult(results[0])}
-            className="w-full py-2.5 bg-[#006978] hover:bg-[#005a66] text-white font-extrabold text-xs rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
-          >
-            <span>View latest report ({results[0].testName})</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Tabs */}
+      {/* Mode Tabs: Single Test Reports vs Consolidated Batch Reports */}
       <div className="flex items-center border-b border-slate-200">
         <button
-          onClick={() => setActiveTab('Recent')}
+          onClick={() => setActiveTab('Single')}
           className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 ${
-            activeTab === 'Recent'
+            activeTab === 'Single'
               ? 'border-[#006978] text-[#006978]'
               : 'border-transparent text-slate-400 hover:text-slate-700'
           }`}
         >
-          Recent ({results.length})
+          Single Test Reports ({results.length})
         </button>
         <button
-          onClick={() => setActiveTab('History')}
+          onClick={() => setActiveTab('Batches')}
           className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 ${
-            activeTab === 'History'
+            activeTab === 'Batches'
               ? 'border-[#006978] text-[#006978]'
               : 'border-transparent text-slate-400 hover:text-slate-700'
           }`}
         >
-          Historical Archive
+          Consolidated Batch Dossiers ({completedBatches.length})
         </button>
       </div>
 
-      {/* Results List or Zero Data State */}
       {loading ? (
         <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200">
-          Loading diagnostic dossier from laboratory network...
+          Synchronizing certified biological reports...
         </div>
-      ) : results.length > 0 ? (
-        <div className="space-y-3">
-          {results.map((res) => (
-            <div
-              key={res.id}
-              onClick={() => onSelectResult(res)}
-              className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all group"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold shrink-0">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
-                    {res.testName}
-                  </h4>
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                    <span>{res.date}</span>
-                    <span>&bull;</span>
-                    <span className="font-semibold text-slate-700">{res.labName}</span>
+      ) : activeTab === 'Single' ? (
+        results.length > 0 ? (
+          <div className="space-y-3">
+            {results.map((res) => (
+              <div
+                key={res.id}
+                onClick={() => onSelectResult(res)}
+                className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all group"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center font-bold shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
+                      {res.testName}
+                    </h4>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                      <span className="font-semibold text-slate-700">{res.labName}</span>
+                      <span>&middot;</span>
+                      <span>{res.date}</span>
+                      <span>&middot;</span>
+                      <span className="text-emerald-700 font-semibold">Signed by {res.biologistName}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectResult(res);
-                }}
-                className="px-4 py-2 bg-[#E0F2F1] hover:bg-[#006978] hover:text-white text-[#006978] rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
-              >
-                View
-              </button>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[#006978] shrink-0" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <Inbox className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-slate-800">
+                No Certified Results Released Yet for {activeProfile.fullName}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                As soon as the Medical Biologist validates and signs your laboratory findings, your official report with the laboratory's header appears here immediately.
+              </p>
+            </div>
+          </div>
+        )
+      ) : completedBatches.length > 0 ? (
+        <div className="space-y-3">
+          {completedBatches.map((batch) => (
+            <div
+              key={batch.id}
+              onClick={() => setSelectedBatchModal(batch)}
+              className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-[#E0F2F1] text-[#006978] flex items-center justify-center shrink-0">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-900">
+                    Batch #{batch.bookingCode} &middot; {(batch.tests || []).length} Test(s)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {batch.labName || 'Performing Laboratory'} &middot; Signed by {batch.biologistName || 'Medical Biologist'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-[#006978]">Open Dossier</span>
             </div>
           ))}
         </div>
       ) : (
-        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-            <Inbox className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-black text-slate-800">
-              No laboratory results yet for {activeProfile.fullName}
-            </h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-              Once a test is ordered, processed in the laboratory, and signed off by the medical biologist, certified digital reports will appear here.
-            </p>
-          </div>
+        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-xs text-slate-500">
+          No consolidated batch dossiers released yet.
         </div>
+      )}
+
+      {selectedBatchModal && (
+        <BatchConsolidatedReportModal
+          isOpen={!!selectedBatchModal}
+          onClose={() => setSelectedBatchModal(null)}
+          booking={selectedBatchModal}
+        />
       )}
     </div>
   );

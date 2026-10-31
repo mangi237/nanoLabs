@@ -188,7 +188,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const handleConfirmCollection = async () => {
     if (!selectedBooking) return;
     if (checkedMatrices.length === 0) {
-      alert('Please check off at least one sample matrix physically drawn/collected.');
+      setPasscodeError('Please check off at least one sample matrix physically drawn/collected.');
       return;
     }
 
@@ -209,15 +209,19 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     setIsSubmitting(true);
     setPasscodeError('');
     try {
-      const sampleLabel = `${sampleBarcodeName || generateSampleName(selectedBooking.patientName)} ${storageLocation ? `[Loc: ${storageLocation}]` : ''}`;
+      const resolvedBarcode = sampleBarcodeName.trim() || generateSampleName(selectedBooking.patientName);
+      const resolvedRack = storageLocation.trim() || 'Rack A-1 (Main Specimen Box)';
+      const sampleLabel = `${resolvedBarcode} [Loc: ${resolvedRack}]`;
 
       await limsService.completeSampleCollection({
-        labId: targetLabId,
+        labId: selectedBooking.labId || targetLabId,
         bookingId: selectedBooking.id,
         singleTestId: selectedSingleTest ? (selectedSingleTest.id || selectedSingleTest.testId || selectedSingleTest.testName) : undefined,
         collectedSamples: [sampleLabel, ...checkedMatrices],
-        collectorName: user?.name || 'Phlebotomist / Specimen Collector',
+        collectorName: user?.name || 'In-Lab Phlebotomist',
         collectorAccessCode: codeInput,
+        sampleBarcode: resolvedBarcode,
+        storageLocation: resolvedRack,
         testStorageMap
       });
 
@@ -231,12 +235,16 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
     }
   };
 
-  // Keep booking in phlebotomy queue as long as it has at least one paid/confirmed test not yet drawn
+  // Keep booking in In-Lab Phlebotomy queue once paid (for Walk-Ins) OR once Mobile Phlebotomist handover completes (for Home Pickups)
   const pendingCollection = bookings.filter(b => {
     if (b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup') return false;
     if (b.paymentStatus !== 'paid') return false;
+    const isHomeOrder = Boolean(b.homeCollection || b.pickupLocation);
+    if (isHomeOrder && !b.sampleHandoverVerified && b.transitStatus !== 'arrived_at_lab') {
+      return false;
+    }
 
-    // Check if at least one test is waiting for specimen collection
+    // Check if at least one test is waiting for specimen collection / rack storage
     const hasUncollectedTests = b.tests?.some(t => 
       t.receptionistValidated !== false && 
       !t.sampleCollected && 

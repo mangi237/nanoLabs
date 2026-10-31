@@ -7,7 +7,7 @@ import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '..
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
-import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
+import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditorModal';
 import { SplitScreenResultEntry } from '../../components/results/SplitScreenResultEntry';
 import { A4CanvasResultEditor, A4_CLINICAL_TEMPLATES } from '../../components/results/A4CanvasResultEditor';
 import { clinicalTemplatesService, ClinicalTemplate } from '../../data/clinicalTemplates';
@@ -441,14 +441,20 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
       loadTestState(booking.tests[0]);
     }
 
-    // Claim / Verify technologist assignment
+    // Claim / Verify technologist assignment & log live booklet-opened audit event
     try {
+      const effectiveLabId = booking.labId || targetLabId;
       await limsService.claimOrVerifyTechAssignment({
-        labId: targetLabId,
+        labId: effectiveLabId,
         bookingId: booking.id,
         techId: user?.id || 'tech-1',
         techName: user?.name || 'Medical Technologist'
       });
+      await limsService.logTechBookletOpened(
+        effectiveLabId,
+        booking.id,
+        user?.name || 'Medical Technologist'
+      );
     } catch (err) {
       console.warn('Assignment claim notice:', err);
     }

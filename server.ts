@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const app = express();
 const PORT = 3000;
@@ -12,12 +12,19 @@ const PORT = 3000;
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Initialize Google Gemini AI lazily/safely
+// Initialize Google Gemini AI lazily/safely with mandatory User-Agent telemetry
 let geminiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
   if (!geminiClient) {
     const apiKey = process.env.GEMINI_API_KEY || '';
-    geminiClient = new GoogleGenAI({ apiKey });
+    geminiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
   }
   return geminiClient;
 }
@@ -1005,57 +1012,70 @@ app.post('/api/ocr/prescription', async (req: Request, res: Response) => {
     }
 
     const ai = getGeminiClient();
-    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+    const cleanBase64 = imageBase64.replace(/^data:[a-zA-Z0-9/+.-]+;base64,/, '');
     const cleanMime = mimeType || 'image/jpeg';
 
-    const prompt = `You are an expert clinical laboratory OCR scanner analyzing medical prescriptions in Cameroon/Africa.
-Read the handwriting and printed text on this doctor prescription.
-Extract the verbatim medical test names, analyses, or biological workup requested.
-If a prescribing doctor or health facility is explicitly written or stamped, extract the name.
-If a date is written, extract it.
-DO NOT hallucinate or guess. If no medical text or handwriting is readable, return rawText as "".
-
-Return strict JSON with this schema:
-{
-  "rawText": "all extracted text or empty string",
-  "detectedDoctorName": "doctor name if found or null",
-  "prescriptionDate": "prescription date if found or null"
-}`;
+    const prompt = `You are an expert clinical laboratory OCR scanner analyzing medical prescriptions (ordonnances médicales) in Cameroon and Central Africa (English and French).
+Read all handwritten and printed text on this prescription or lab request form.
+1. Extract every requested laboratory test, diagnostic panel, or biological analysis (e.g., NFS / CBC, Glycémie, Widal, Goutte Épaisse / Malaria, Bilan Lipidique, Créatinine, Urée, CRP, ECBU, Sérologie, etc.) into "detectedTests" (one test per item) and include full verbatim text in "rawText".
+2. If a prescribing doctor or hospital/clinic is visible, extract into "detectedDoctorName" and "detectedHospital".
+3. If a date is visible, extract into "prescriptionDate".
+Do not invent tests that are not written on the document. If unreadable, return empty rawText and empty detectedTests.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: cleanBase64,
-                mimeType: cleanMime
-              }
-            }
-          ]
-        }
-      ],
+      model: 'gemini-3.8-flash',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: cleanMime,
+            },
+          },
+          { text: prompt },
+        ],
+      },
       config: {
-        responseMimeType: 'application/json'
-      }
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            rawText: { type: Type.STRING, description: 'All extracted medical text lines separated by newlines' },
+            detectedTests: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'List of individual medical or laboratory test names requested on the prescription',
+            },
+            detectedDoctorName: { type: Type.STRING, description: 'Prescribing physician name if visible' },
+            detectedHospital: { type: Type.STRING, description: 'Prescribing clinic or hospital if visible' },
+            prescriptionDate: { type: Type.STRING, description: 'Date on the prescription if visible' },
+          },
+        },
+      },
     });
 
-    const contentText = response.text || '{}';
-    let parsed: any = { rawText: '', detectedDoctorName: null, prescriptionDate: null };
+    const contentText = (response.text ?? '{}').trim();
+    let parsed: any = { rawText: '', detectedTests: [], detectedDoctorName: '', detectedHospital: '', prescriptionDate: '' };
     try {
       parsed = JSON.parse(contentText);
     } catch {
       parsed.rawText = contentText;
     }
 
+    const combinedLines = [
+      ...(Array.isArray(parsed.detectedTests) ? parsed.detectedTests : []),
+      parsed.rawText || '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
     return res.json({
       success: true,
-      rawText: parsed.rawText || '',
+      rawText: combinedLines,
+      detectedTests: Array.isArray(parsed.detectedTests) ? parsed.detectedTests : [],
       detectedDoctorName: parsed.detectedDoctorName || undefined,
-      prescriptionDate: parsed.prescriptionDate || undefined
+      detectedHospital: parsed.detectedHospital || undefined,
+      prescriptionDate: parsed.prescriptionDate || undefined,
     });
   } catch (err: any) {
     console.error('Prescription OCR error:', err);
@@ -2479,7 +2499,7 @@ Return ONLY valid JSON (no markdown formatting, no code blocks) matching this sc
     try {
       const ai = getGeminiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json'
@@ -2820,10 +2840,9 @@ Your responsibilities:
 Provide a comprehensive, beautifully structured response with markdown formatting (bullet points, clear sections).`;
 
       let responseText = '';
-      let usedModel = 'gemini-2.5-flash';
+      let usedModel = 'gemini-3.8-flash';
 
-      // Use official Google GenAI models for free/standard tier
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       for (const m of candidateModels) {
         try {
           const aiResponse = await ai.models.generateContent({

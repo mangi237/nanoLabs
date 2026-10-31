@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,8 +17,8 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-// import { CBCResultDetailScreen } from './CBCResultDetailScreen';
-import { MyDoctorsScreen, DoctorDirectoryItem, REAL_DOCTORS_DIRECTORY } from './MyDoctorScreen';
+import { CBCResultDetailScreen } from './CBCResultDetailScreen';
+import { MyDoctorsScreen, DoctorDirectoryItem } from './MyDoctorsScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
 import { AppointmentsScreen } from './AppointmentsScreen';
@@ -26,7 +26,7 @@ import { PatientProfileScreen } from './ProfileScreen';
 import { SuccessScreen } from './SuccessScreen';
 import { PrescriptionScanScreen } from './PrescriptionScanScreen';
 import { HealthBookletScreen } from './HealthBookletScreen';
-import { NanoLabsAIScreen } from './NanolabsAiScreen';
+import { NanoLabsAIScreen } from './NanoLabsAIScreen';
 import { useAuth } from '../../context/authContext';
 import { FamilyProfileProvider, useFamilyProfile } from '../../context/familyProfileContext';
 
@@ -60,7 +60,7 @@ export type PatientScreenView =
   | 'nanolabs_ai';
 
 const PatientAppInner: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   const { activeProfile } = useFamilyProfile();
 
   const [currentTab, setCurrentTab] = useState<PatientNavTab>('home');
@@ -75,12 +75,14 @@ const PatientAppInner: React.FC = () => {
   ]);
   const [collectionMethod, setCollectionMethod] = useState<'home' | 'lab'>('home');
   const [collectionFee, setCollectionFee] = useState<number>(2000);
+  const [pickupAddress, setPickupAddress] = useState<string>('Boulevard de la Liberté, Akwa, Douala');
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [pickupDistanceKm, setPickupDistanceKm] = useState<number>(2.3);
   const [calculatedLabTariff, setCalculatedLabTariff] = useState<number>(8000);
   const [currentBooking, setCurrentBooking] = useState<any | null>(null);
   const [selectedResult, setSelectedResult] = useState<PatientResultItem>(DEFAULT_RESULT_TEMPLATE);
-  const [selectedDoctor, setSelectedDoctor] = useState<DoctorDirectoryItem>(REAL_DOCTORS_DIRECTORY[0]);
+  const [selectedDoctor, setSelectedDoctor] = useState<DoctorDirectoryItem | null>(null);
 
-  // Handle Tab Navigation from Glassy Floating Dock
   const handleTabChange = (tab: PatientNavTab) => {
     setCurrentTab(tab);
     switch (tab) {
@@ -106,7 +108,6 @@ const PatientAppInner: React.FC = () => {
 
   const renderContent = () => {
     switch (currentView) {
-      // 1. Welcome / Onboarding Screen
       case 'welcome':
         return (
           <WelcomeScreen
@@ -115,7 +116,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 2. Set Up Your Insurance Screen
       case 'insurance_setup':
         return (
           <InsuranceSetupScreen
@@ -125,7 +125,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 3. Home Screen
       case 'home':
         return (
           <HomeScreen
@@ -143,9 +142,14 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('doctors');
             }}
             onNavigateInsurance={() => setCurrentView('my_insurance')}
-            onNavigateTracking={() => {
+            onNavigateTracking={(booking) => {
+              if (booking) setCurrentBooking(booking);
               setCurrentTab('tracking');
               setCurrentView('tracking_live');
+            }}
+            onNavigateAudit={(booking) => {
+              if (booking) setCurrentBooking(booking);
+              setCurrentView('audit_timeline');
             }}
             onNavigateProfile={() => {
               setCurrentTab('profile');
@@ -164,13 +168,11 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('invoice');
             }}
             onNavigateResults={() => {
-              setCurrentTab('results');
               setCurrentView('results');
             }}
           />
         );
 
-      // 4. Search Tests Screen (Without fixed platform prices)
       case 'search_tests':
         return (
           <SearchTestsScreen
@@ -183,7 +185,7 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('test_detail');
             }}
             onSelectMultipleTests={(tests) => {
-              setSelectedTestsList(tests.map(t => ({ name: t.name, price: 4500 })));
+              setSelectedTestsList(tests.map((t) => ({ name: t.name, price: 4500 })));
               setCurrentView('choose_lab');
             }}
             onSelectPackage={() => setCurrentView('package_detail')}
@@ -191,7 +193,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 5. Test Details Screen
       case 'test_detail':
         return (
           <TestDetailScreen
@@ -202,25 +203,25 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('choose_lab');
             }}
             onSelectRelatedTest={(tName) => {
-              const found = POPULAR_CATALOG_TESTS.find(t => t.name.toLowerCase().includes(tName.toLowerCase()));
+              const found = POPULAR_CATALOG_TESTS.find((t) =>
+                t.name.toLowerCase().includes(tName.toLowerCase())
+              );
               if (found) setSelectedTest(found);
             }}
           />
         );
 
-      // 6. Health Check Package Screen
       case 'package_detail':
         return (
           <HealthPackageScreen
             onBack={() => setCurrentView('home')}
             onViewAvailableLabs={(pkgTests) => {
-              setSelectedTestsList(pkgTests.map(name => ({ name, price: 5000 })));
+              setSelectedTestsList(pkgTests.map((name) => ({ name, price: 5000 })));
               setCurrentView('choose_lab');
             }}
           />
         );
 
-      // 7. My Insurance Screen
       case 'my_insurance':
         return (
           <MyInsuranceScreen
@@ -229,12 +230,11 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 8. Choose Laboratory Screen (Lab determines price + distance fee)
       case 'choose_lab':
         return (
           <ChooseLabScreen
             onBack={() => setCurrentView('home')}
-            selectedTestsNames={selectedTestsList.map(t => t.name)}
+            selectedTestsNames={selectedTestsList.map((t) => t.name)}
             onSelectLab={(lab, calculatedTariff, calculatedCourier) => {
               setSelectedLab(lab);
               setCalculatedLabTariff(calculatedTariff);
@@ -244,7 +244,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 9. Lab Profile Screen
       case 'lab_profile':
         return (
           <LabProfileScreen
@@ -254,25 +253,27 @@ const PatientAppInner: React.FC = () => {
               setSelectedLab(lab);
               setCurrentView('collection_method');
             }}
-            selectedTests={selectedTestsList.map(t => t.name)}
+            selectedTests={selectedTestsList.map((t) => t.name)}
           />
         );
 
-      // 10. Collection Method Screen
       case 'collection_method':
         return (
           <CollectionMethodScreen
+            lab={selectedLab}
             onBack={() => setCurrentView('choose_lab')}
             initialMethod={collectionMethod}
-            onContinue={(method, fee) => {
+            onContinue={(method, fee, distanceKm, address, coords) => {
               setCollectionMethod(method);
-              setCollectionFee(method === 'home' ? collectionFee : 0);
+              setCollectionFee(method === 'home' ? fee : 0);
+              setPickupDistanceKm(distanceKm);
+              setPickupAddress(address);
+              setPickupCoords(coords);
               setCurrentView('booking_summary');
             }}
           />
         );
 
-      // 11. Booking Summary Screen (Insurance selection + Lab Tariff calculation)
       case 'booking_summary':
         return (
           <BookingSummaryScreen
@@ -281,15 +282,19 @@ const PatientAppInner: React.FC = () => {
             collectionMethod={collectionMethod}
             collectionFee={collectionFee}
             labTestTariff={calculatedLabTariff}
+            pickupAddress={pickupAddress}
+            pickupCoords={pickupCoords}
+            pickupDistanceKm={pickupDistanceKm}
             onBack={() => setCurrentView('collection_method')}
             onBookingRequested={(booking) => {
+              // Do NOT jump to invoice! Test request goes to Receptionist first; patient tracks live status on Home screen.
               setCurrentBooking(booking);
-              setCurrentView('invoice');
+              setCurrentTab('home');
+              setCurrentView('home');
             }}
           />
         );
 
-      // 12. Lab Accepted Screen
       case 'lab_accepted':
         return (
           <LabAcceptedScreen
@@ -303,10 +308,10 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 13. Official Invoice Screen (Patient pays with 3rd-party app & clicks confirm payment)
       case 'invoice':
         return (
           <InvoiceScreen
+            booking={currentBooking}
             bookingId={currentBooking?.id}
             labId={currentBooking?.labId || selectedLab?.id}
             labName={currentBooking?.labName || selectedLab?.name}
@@ -318,47 +323,42 @@ const PatientAppInner: React.FC = () => {
             addOns={currentBooking?.addOns || []}
             tests={currentBooking?.tests || selectedTestsList}
             labPaymentDetails={(currentBooking as any)?.labPaymentDetails}
-            bookingCode={currentBooking?.bookingCode || 'BK-991204'}
+            bookingCode={currentBooking?.bookingCode || 'BK-000000'}
             onBack={() => setCurrentView('home')}
             onPaymentConfirmedByPatient={(txRef, method) => {
-              // Cashier verifies payment -> notification -> phlebotomist dispatched with live GPS!
+              // Keep paymentStatus as 'unpaid' until Lab Cashier verifies under Pending Confirmation!
               if (currentBooking) {
-                currentBooking.paymentStatus = 'paid';
-                currentBooking.transactionReference = txRef;
+                setCurrentBooking({
+                  ...currentBooking,
+                  paymentProofSubmitted: true,
+                  invoiceStatus: 'payment_submitted',
+                  transactionReference: txRef,
+                  paymentMethod: method
+                });
               }
-              const isHome = Boolean(currentBooking?.homeCollection || currentBooking?.pickupLocation);
-              if (isHome) {
-                setCurrentTab('tracking');
-                setCurrentView('tracking_live');
-              } else {
-                setCurrentTab('results');
-                setCurrentView('results');
-              }
+              setCurrentTab('home');
+              setCurrentView('home');
             }}
             onPayLater={() => setCurrentView('home')}
           />
         );
 
-      // 14. Live GPS Tracking Screen (Phlebotomist moving, stops when specimen reaches lab)
       case 'tracking_live':
         return (
           <LiveTrackingScreen
+            booking={currentBooking}
             onBack={() => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
             onSampleDeliveredToLab={() => {
-              // Once sample reaches lab, GPS stops & transitions to in-lab audit!
               setCurrentView('audit_timeline');
             }}
-            phlebotomistName="Patrick M. (Certified Phlebotomist)"
-            etaMinutes={8}
             distanceKm={selectedLab?.distanceKm || 1.8}
-            labName={selectedLab?.name || 'BioSanté Lab'}
+            labName={currentBooking?.labName || selectedLab?.name || ''}
           />
         );
 
-      // 15. Sample Collected Screen
       case 'sample_collected':
         return (
           <SampleCollectedScreen
@@ -367,31 +367,26 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 16. In-Lab Stage Progression & Audit Screen
       case 'audit_timeline':
         return (
           <AuditTimelineScreen
+            booking={currentBooking}
             onBack={() => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
             onViewResults={() => {
-              setCurrentTab('tracking');
               setCurrentView('results');
             }}
             onShareWithDoctor={() => {
               setCurrentTab('doctors');
-              setCurrentView('doctor_chat');
+              setCurrentView('doctors');
             }}
-            onRequestHomeDelivery={() => {
-              // Confirmed
-            }}
-            labName={selectedLab?.name || 'BioSanté Lab'}
-            bookingCode={currentBooking?.bookingCode || 'BK-991204'}
+            labName={currentBooking?.labName || selectedLab?.name || ''}
+            bookingCode={currentBooking?.bookingCode || ''}
           />
         );
 
-      // 17. My Results Screen (Real Data for Active Profile)
       case 'results':
         return (
           <MyResultsScreen
@@ -406,20 +401,18 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 18. Result Details Screen (CBC / Lab Report)
-      // case 'result_detail':
-      //   return (
-      //     <CBCResultDetailScreen
-      //       result={selectedResult}
-      //       onBack={() => setCurrentView('results')}
-      //       onAskAI={(res : any) => {
-      //         setSelectedResult(res);
-      //         setCurrentView('nanolabs_ai');
-      //       }}
-      //     />
-      //   );
+      case 'result_detail':
+        return (
+          <CBCResultDetailScreen
+            result={selectedResult}
+            onBack={() => setCurrentView('results')}
+            onAskAI={(res) => {
+              setSelectedResult(res);
+              setCurrentView('nanolabs_ai');
+            }}
+          />
+        );
 
-      // 19. My Doctors Directory Screen
       case 'doctors':
         return (
           <MyDoctorsScreen
@@ -427,7 +420,7 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onSelectDoctor={(doc : any) => {
+            onSelectDoctor={(doc) => {
               setSelectedDoctor(doc);
               setCurrentView('doctor_profile');
             }}
@@ -435,8 +428,19 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 20. Doctor Profile Screen
       case 'doctor_profile': {
+        if (!selectedDoctor) {
+          return (
+            <MyDoctorsScreen
+              onBack={() => setCurrentView('home')}
+              onSelectDoctor={(doc) => {
+                setSelectedDoctor(doc);
+                setCurrentView('doctor_profile');
+              }}
+              onViewAppointments={() => setCurrentView('appointments')}
+            />
+          );
+        }
         let isDocConnected = false;
         let isDocPending = false;
         try {
@@ -448,9 +452,7 @@ const PatientAppInner: React.FC = () => {
           const pendRaw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${profileId}`);
           const pendList: string[] = pendRaw ? JSON.parse(pendRaw) : [];
           isDocPending = pendList.includes(selectedDoctor.id);
-        } catch {
-          // fallback
-        }
+        } catch {}
 
         return (
           <DoctorProfileScreen
@@ -478,8 +480,18 @@ const PatientAppInner: React.FC = () => {
         );
       }
 
-      // 21. Doctor Teleconsultation Chat Screen
       case 'doctor_chat':
+        if (!selectedDoctor) {
+          return (
+            <MyDoctorsScreen
+              onBack={() => setCurrentView('home')}
+              onSelectDoctor={(doc) => {
+                setSelectedDoctor(doc);
+                setCurrentView('doctor_profile');
+              }}
+            />
+          );
+        }
         return (
           <DoctorChatScreen
             doctor={selectedDoctor}
@@ -487,7 +499,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 22. Appointments Screen
       case 'appointments':
         return (
           <AppointmentsScreen
@@ -496,7 +507,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 23. Profile Screen
       case 'profile':
         return (
           <PatientProfileScreen
@@ -510,7 +520,6 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // 24. Success Screen
       case 'success':
         return (
           <SuccessScreen
@@ -521,20 +530,27 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // Scan Prescription
       case 'scan':
         return (
           <PrescriptionScanScreen
-            onProceedToBooking={() => setCurrentView('choose_lab')}
+            onProceedToBooking={(matchedTests?: any[]) => {
+              if (Array.isArray(matchedTests) && matchedTests.length > 0) {
+                setSelectedTestsList(
+                  matchedTests.map((t: any) => ({
+                    name: t.name || t.testName || 'Diagnostic Test',
+                    price: Number(t.basePriceXaf || t.price) || 4500
+                  }))
+                );
+              }
+              setCurrentView('choose_lab');
+            }}
             onBack={() => setCurrentView('home')}
           />
         );
 
-      // Carnet de Santé / Health Booklet
       case 'booklet':
         return <HealthBookletScreen />;
 
-      // NanoLabs AI Diagnostic Consultation & Result Interpretation (Gemini)
       case 'nanolabs_ai':
         return (
           <NanoLabsAIScreen
@@ -562,9 +578,14 @@ const PatientAppInner: React.FC = () => {
               setCurrentView('doctors');
             }}
             onNavigateInsurance={() => setCurrentView('my_insurance')}
-            onNavigateTracking={() => {
+            onNavigateTracking={(booking) => {
+              if (booking) setCurrentBooking(booking);
               setCurrentTab('tracking');
               setCurrentView('tracking_live');
+            }}
+            onNavigateAudit={(booking) => {
+              if (booking) setCurrentBooking(booking);
+              setCurrentView('audit_timeline');
             }}
             onNavigateProfile={() => {
               setCurrentTab('profile');

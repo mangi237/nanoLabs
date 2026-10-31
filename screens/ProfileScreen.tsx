@@ -1,71 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  ArrowLeft, 
-  FileText, 
-  Shield, 
-  MapPin, 
-  Bell, 
-  HelpCircle, 
-  Settings, 
-  ChevronRight, 
-  LogOut, 
-  Check, 
+import {
+  User,
+  ArrowLeft,
+  Shield,
+  Settings,
+  LogOut,
+  Check,
   Edit3,
   CreditCard,
-  Upload,
   Camera,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   Clock,
-  Key,
   Building2,
   Receipt,
-  Phone,
-  Mail,
-  Droplet
+  Stethoscope,
+  FlaskConical,
+  Phone
 } from 'lucide-react';
-import { useAuth } from '../context/authContext';
-import { useFamilyProfile } from '../context/familyProfileContext';
-import { CAMEROON_INSURANCE_COMPANIES } from '../data/cameroonInsurances';
-import { formatXAF } from '../shared/money';
+import { useAuth } from '../../context/authContext';
+import { useFamilyProfile } from '../../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
+import { formatXAF } from '../../shared/money';
+import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 
 interface PatientProfileScreenProps {
   onBack?: () => void;
   onNavigateInsurance?: () => void;
   onNavigateHealthRecords?: () => void;
-  onNavigateRoleSwitcher?: () => void;
-   onNotificationPress?: () => void;
   onLogout?: () => void;
 }
 
 export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onBack,
-  onNavigateInsurance,
-  onNotificationPress,
-  onNavigateHealthRecords,
-  onNavigateRoleSwitcher,
   onLogout
 }) => {
   const { user, setUser, logout } = useAuth();
   const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();
 
-  // Profile Picture State
   const [profilePicture, setProfilePicture] = useState<string | null>(() => {
-    return user?.profilePicture || user?.avatarUrl || activeProfile?.photoUrl || localStorage.getItem(`nanolabs_avatar_${user?.id || 'demo'}`) || null;
+    return (
+      user?.profilePicture ||
+      user?.avatarUrl ||
+      activeProfile?.photoUrl ||
+      localStorage.getItem(`nanolabs_avatar_${user?.id || 'demo'}`) ||
+      null
+    );
   });
 
-  // Basic Demographics State
-  const [fullName, setFullName] = useState(user?.name || user?.fullName || activeProfile.fullName || 'Valued Patient');
+  const [fullName, setFullName] = useState(
+    user?.name || user?.fullName || activeProfile.fullName || 'Patient'
+  );
   const [nickname, setNickname] = useState(activeProfile.nickname || user?.nickname || '');
-  const [phone, setPhone] = useState(user?.phone || activeProfile.phone || '+237 671 22 33 44');
-  const [email, setEmail] = useState(user?.email || 'patient@nanolabs.cm');
-  const [gender, setGender] = useState(activeProfile.gender || user?.gender || 'Female');
+  const [phone, setPhone] = useState(user?.phone || activeProfile.phone || '+237 670 00 00 00');
+  const [gender] = useState(activeProfile.gender || user?.gender || 'Female');
   const [bloodGroup, setBloodGroup] = useState(activeProfile.bloodGroup || user?.bloodGroup || 'O+');
-  const [city, setCity] = useState(activeProfile.city || 'Douala');
+  const [city] = useState(activeProfile.city || 'Douala');
 
-  // National ID Card Verification State
   const [nationalId, setNationalId] = useState(() => {
     return localStorage.getItem(`nanolabs_cni_${user?.id || 'demo'}`) || activeProfile.nationalId || '';
   });
@@ -73,72 +64,136 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
     return localStorage.getItem(`nanolabs_cni_img_${user?.id || 'demo'}`) || null;
   });
   const [idCardStatus, setIdCardStatus] = useState<'not_uploaded' | 'pending_verification' | 'verified'>(() => {
-    return (localStorage.getItem(`nanolabs_cni_status_${user?.id || 'demo'}`) as any) || (nationalId ? 'pending_verification' : 'not_uploaded');
+    return (
+      (localStorage.getItem(`nanolabs_cni_status_${user?.id || 'demo'}`) as any) ||
+      (nationalId ? 'pending_verification' : 'not_uploaded')
+    );
   });
 
-  // Insurance State (Select directly from dropdown)
   const [selectedInsurance, setSelectedInsurance] = useState(() => {
-    return activeProfile.insuranceProvider || (user as any)?.insuranceProvider || CAMEROON_INSURANCE_COMPANIES[0].name;
+    return (
+      activeProfile.insuranceProvider ||
+      (user as any)?.insuranceProvider ||
+      CAMEROON_INSURANCE_COMPANIES[0].name
+    );
   });
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState(() => {
     return activeProfile.insurancePolicyNumber || (user as any)?.insurancePolicyNumber || '';
   });
   const [employerSociete, setEmployerSociete] = useState(() => {
-    return activeProfile.employerSociete || (user as any)?.employerSociete || 'ENEO Cameroon SA';
+    return activeProfile.employerSociete || (user as any)?.employerSociete || '';
   });
 
-  // Save feedback state
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [activePortfolioTab, setActivePortfolioTab] = useState<
+    'tests' | 'receipts' | 'labs' | 'doctors' | 'credentials'
+  >('tests');
 
-  // Diagnostic Ledger stats
-  const [ledgerStats, setLedgerStats] = useState({
-    totalTests: 0,
-    totalSpent: 0,
-    receipts: [] as any[]
-  });
+  // Real runtime data for Profile: Booked Tests, Amount Spent, Receipts, Visited Labs, Connected Doctors
+  const [userBookings, setUserBookings] = useState<any[]>([]);
+  const [connectedDoctors, setConnectedDoctors] = useState<any[]>([]);
+  const [selectedBookingForReceipt, setSelectedBookingForReceipt] = useState<any | null>(null);
 
   useEffect(() => {
-    const fetchLedger = async () => {
+    const fetchProfileData = async () => {
       try {
-        const { limsService } = await import('../services/limsService');
-        const labId = user?.labId || 'lab-1';
-        const allBookings = await limsService.fetchAllBookings(labId);
-        const userBookings = allBookings.filter(b => {
-          const matchPid = b.patientPid === activeProfile.id || b.patientId === activeProfile.id;
-          const matchName = b.patientName?.toLowerCase().trim() === fullName.toLowerCase().trim();
-          return matchPid || matchName;
-        });
+        const { limsService } = await import('../../services/limsService');
+        const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
+          user?.labId ? [user.labId] : []
+        );
 
-        let spent = 0;
-        const paidReceipts: any[] = [];
-        userBookings.forEach(b => {
-          if (b.paymentStatus === 'paid') {
-            const amt = Number(b.totalAmount) || 0;
-            spent += amt;
-            paidReceipts.push({
-              id: b.id,
-              bookingCode: b.bookingCode || 'LAB-001',
-              labName: b.labName || 'BioSanté Lab',
-              amount: amt,
-              date: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent',
-              method: b.paymentMethod || 'MTN MoMo / Orange Money'
-            });
+        const activeName = (activeProfile?.fullName || fullName || '').toLowerCase().trim();
+        const activeId = activeProfile?.id || '';
+        const userId = user?.id || '';
+
+        const matchedBookings = allBookings.filter((b) => {
+          const bPid = (b.patientPid || b.patientId || '').trim();
+          const bName = (b.patientName || '').toLowerCase().trim();
+          if (isDependentActive) {
+            return Boolean((activeId && bPid === activeId) || (activeName && bName === activeName));
           }
+          return Boolean(
+            (activeId && bPid === activeId) ||
+              (userId && bPid === userId) ||
+              (activeName && bName === activeName)
+          );
         });
 
-        setLedgerStats({
-          totalTests: userBookings.length,
-          totalSpent: spent,
-          receipts: paidReceipts
-        });
+        setUserBookings(matchedBookings);
+
+        // Connected doctors (strictly real connected doctors)
+        const connRaw = localStorage.getItem(`nanolabs_connected_doctors_${activeProfile.id}`);
+        const connIds: string[] = connRaw ? JSON.parse(connRaw) : [];
+        if (connIds.length > 0) {
+          const liveDocs = await limsService.searchAllAccreditedDoctors('');
+          const combinedDocs: any[] = [...(liveDocs || [])];
+          try {
+            const locRaw = localStorage.getItem('nanolabs_registered_doctors');
+            if (locRaw) {
+              const parsed = JSON.parse(locRaw);
+              if (Array.isArray(parsed)) {
+                parsed.forEach((d) => {
+                  if (!combinedDocs.some((x) => x.id === d.id)) combinedDocs.push(d);
+                });
+              }
+            }
+          } catch {}
+          setConnectedDoctors(combinedDocs.filter((d) => connIds.includes(d.id)));
+        } else {
+          setConnectedDoctors([]);
+        }
       } catch (err) {
-        console.warn('Error fetching ledger:', err);
+        console.warn('Error loading patient profile records:', err);
       }
     };
-    fetchLedger();
-  }, [user, activeProfile, fullName]);
 
-  // Handle ID card image upload
+    fetchProfileData();
+    const handleCloseOverlays = () => setSelectedBookingForReceipt(null);
+    window.addEventListener('nanolabs_booking_updated', fetchProfileData);
+    window.addEventListener('nanolabs_close_all_overlays', handleCloseOverlays);
+    window.addEventListener('nanolabs_profile_switched', handleCloseOverlays);
+    return () => {
+      window.removeEventListener('nanolabs_booking_updated', fetchProfileData);
+      window.removeEventListener('nanolabs_close_all_overlays', handleCloseOverlays);
+      window.removeEventListener('nanolabs_profile_switched', handleCloseOverlays);
+    };
+  }, [user?.id, activeProfile?.id, fullName, isDependentActive]);
+
+  const paidBookings = userBookings.filter((b) => b.paymentStatus === 'paid');
+  const totalSpent = paidBookings.reduce(
+    (sum, b) => sum + (Number(b.actualPaidAmount ?? b.patientCoPayAmount ?? b.totalAmount) || 0),
+    0
+  );
+  const totalTestsBooked = userBookings.reduce(
+    (sum, b) => sum + ((b.tests || []).length || 1),
+    0
+  );
+
+  // Aggregate unique laboratories the patient has booked/visited
+  const visitedLabsMap = new Map<
+    string,
+    { name: string; address?: string; phone?: string; ordersCount: number; spent: number }
+  >();
+  userBookings.forEach((b) => {
+    const lName = b.labName || 'Performing Laboratory';
+    const prev = visitedLabsMap.get(lName) || {
+      name: lName,
+      address: b.labAddress,
+      phone: b.labPhone,
+      ordersCount: 0,
+      spent: 0
+    };
+    prev.ordersCount += 1;
+    if (b.paymentStatus === 'paid') {
+      prev.spent += Number(b.actualPaidAmount ?? b.patientCoPayAmount ?? b.totalAmount) || 0;
+    }
+    if (!prev.address && b.labAddress) prev.address = b.labAddress;
+    if (!prev.phone && b.labPhone) prev.phone = b.labPhone;
+    visitedLabsMap.set(lName, prev);
+  });
+  const visitedLabs = Array.from(visitedLabsMap.values());
+
   const handleIdCardUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -149,13 +204,12 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
       setIdCardStatus('pending_verification');
       localStorage.setItem(`nanolabs_cni_img_${user?.id || 'demo'}`, dataUrl);
       localStorage.setItem(`nanolabs_cni_status_${user?.id || 'demo'}`, 'pending_verification');
-      setSaveNotice('National ID card snapped successfully! Sent to Super Admins for verification.');
-      setTimeout(() => setSaveNotice(null), 5000);
+      setSaveNotice('National ID card uploaded and queued for verification.');
+      setTimeout(() => setSaveNotice(null), 4000);
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle Profile Picture upload
   const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -168,572 +222,529 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
       if (user && setUser) {
         setUser({ ...user, profilePicture: dataUrl, avatarUrl: dataUrl });
       }
-      setSaveNotice('Profile picture updated successfully!');
+      setSaveNotice('Profile photo updated.');
       setTimeout(() => setSaveNotice(null), 4000);
     };
     reader.readAsDataURL(file);
   };
 
-  // Screen Mode: Profile Overview vs Profile Edit Settings
-  const [isEditingSettings, setIsEditingSettings] = useState(false);
-
-  // Handle Save Profile & Insurance
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Enforce requirement: National ID number must be provided to activate insurance
     if (insurancePolicyNumber.trim() && !nationalId.trim()) {
-      setSaveNotice('National ID Card Number (CNI) is required along with your policy number to activate insurance.');
+      setSaveNotice(
+        'National ID Card Number (CNI) is required alongside your policy number to activate insurance.'
+      );
       setTimeout(() => setSaveNotice(null), 5000);
       return;
     }
 
-    // Persist CNI and status
     localStorage.setItem(`nanolabs_cni_${user?.id || 'demo'}`, nationalId);
     if (nationalId && idCardStatus === 'not_uploaded') {
       setIdCardStatus('pending_verification');
       localStorage.setItem(`nanolabs_cni_status_${user?.id || 'demo'}`, 'pending_verification');
     }
 
-    // Persist Insurance & Demographics to Active Family Profile
     editFamilyMember(activeProfile.id, {
       fullName,
       nickname,
       phone,
       bloodGroup,
       nationalId,
-      insuranceProvider: selectedInsurance,
-      insurancePolicyNumber,
+      insuranceProvider: insurancePolicyNumber.trim() ? selectedInsurance : '',
+      insurancePolicyNumber: insurancePolicyNumber.trim(),
       employerSociete,
       city
     });
 
-    setSaveNotice('Profile, National ID & Insurance settings saved successfully! Status: Pending Super Admin clearance.');
+    setSaveNotice('Profile, National ID & Insurance settings saved.');
     setIsEditingSettings(false);
     setTimeout(() => setSaveNotice(null), 4000);
   };
 
-  const accessCode = user?.accessCode || `RES-2026-${(fullName.slice(0, 3) || 'PAT').toUpperCase()}`;
-
   return (
-    <div className="max-w-3xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
+    <div className="max-w-4xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {(isEditingSettings || onBack) && (
             <button
               onClick={() => {
-                if (isEditingSettings) {
-                  setIsEditingSettings(false);
-                } else if (onBack) {
-                  onBack();
-                }
+                if (isEditingSettings) setIsEditingSettings(false);
+                else if (onBack) onBack();
               }}
               className="p-2 -ml-2 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-              title="Back"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {isEditingSettings ? 'Edit Profile & Settings' : 'Patient Profile'}
+              {isEditingSettings ? 'Edit Profile & Insurance' : 'Patient Profile & Health Ledger'}
             </h1>
             <p className="text-xs text-slate-500">
-              {isEditingSettings 
-                ? 'Update your demographics, National ID, and health insurance credentials.'
-                : 'Verified patient credentials, national ID clearance, insurance policy, and diagnostic ledger.'
-              }
+              Booked tests, total spent, certified lab receipts, visited laboratories & connected doctors
             </p>
           </div>
         </div>
 
-        {/* Access Code Badge */}
-        <div className="hidden sm:flex flex-col items-end">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Results Access Code</span>
-          <span className="font-mono text-xs font-black text-[#006978] bg-[#E0F2F1] px-2.5 py-1 rounded-lg border border-[#80CBC4]">
-            {accessCode}
-          </span>
-        </div>
+        {!isEditingSettings && (
+          <button
+            onClick={() => setIsEditingSettings(true)}
+            className="px-4 py-2 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>Edit Settings</span>
+          </button>
+        )}
       </div>
 
-      {/* Save Notification */}
       {saveNotice && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-emerald-900 text-xs shadow-sm animate-in slide-in-from-top">
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-emerald-900 text-xs">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span className="font-bold">{saveNotice}</span>
         </div>
       )}
 
-      {/* 1. Profile Header Card */}
-      <div className="p-5 sm:p-6 bg-gradient-to-br from-[#003B42] via-[#005B66] to-[#007A87] text-white rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="relative group shrink-0">
-            {profilePicture ? (
-              <img 
-                src={profilePicture} 
-                alt={fullName} 
-                className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover shadow-md border-2 border-white/50" 
-              />
-            ) : (
-              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center font-black text-2xl shadow-md border-2 border-white/30">
-                {fullName.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <label 
-              className="absolute -bottom-1 -right-1 p-1.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-xl shadow-md cursor-pointer transition-transform hover:scale-110 flex items-center justify-center"
-              title="Change profile picture"
-            >
-              <Camera className="w-3.5 h-3.5" />
-              <input 
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleProfilePictureUpload} 
-              />
-            </label>
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg sm:text-xl font-black text-white">{fullName}</h2>
-              {nickname && (
-                <span className="text-xs font-semibold text-cyan-200 bg-white/10 px-2 py-0.5 rounded-full">
-                  "{nickname}"
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-cyan-100/90 font-medium mt-0.5 flex items-center gap-2">
-              <span>{phone}</span>
-              <span>&bull;</span>
-              <span>{city}</span>
-            </p>
-            <div className="flex items-center gap-2 mt-2 flex-wrap text-[10px] font-bold">
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-400 text-slate-950">
-                Blood Group: {bloodGroup}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/20 font-mono">
-                PID: {activeProfile.id}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="sm:text-right relative z-10 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/15">
-          <span className="text-[10px] uppercase font-bold text-cyan-200 block">Total Diagnostic Spend</span>
-          <span className="text-xl sm:text-2xl font-black text-white font-mono">
-            {formatXAF(ledgerStats.totalSpent)}
-          </span>
-          <span className="text-[10px] text-cyan-100/80 block mt-0.5">
-            {ledgerStats.totalTests} tests recorded in ledger
-          </span>
-        </div>
-
-        {/* Ambient overlay */}
-        <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/5 rounded-full pointer-events-none blur-xl" />
-      </div>
-
-      {/* DEDICATED PROFILE OVERVIEW (READ-ONLY DISPLAY WITH EDIT BUTTON) */}
-      {!isEditingSettings ? (
-        <div className="space-y-5 animate-in fade-in">
-          {/* Main Action Bar */}
-          <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-[#006978] flex items-center justify-center font-black">
-                <Settings className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900">Profile Settings</h3>
-                <p className="text-xs text-slate-500">Edit demographics, national ID card, and health insurance</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setIsEditingSettings(true)}
-              className="px-4 py-2.5 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white rounded-2xl text-xs font-black shadow-md shadow-[#006978]/25 transition-all cursor-pointer flex items-center gap-2"
-            >
-              <Edit3 className="w-4 h-4 text-cyan-200" />
-              <span>Edit Profile & Settings</span>
-            </button>
-          </div>
-
-          {/* Identity & National ID Clearance Card */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <Shield className="w-4 h-4 text-[#006978]" />
-                <span>National Identity (CNI) Status</span>
-              </div>
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
-                idCardStatus === 'verified'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : idCardStatus === 'pending_verification'
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                  : 'bg-slate-100 text-slate-600 border border-slate-200'
-              }`}>
-                {idCardStatus === 'verified' ? (
-                  <>
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>CNI Verified by Super Admin</span>
-                  </>
-                ) : idCardStatus === 'pending_verification' ? (
-                  <>
-                    <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Pending Super Admin Clearance</span>
-                  </>
-                ) : (
-                  <span>CNI Not Uploaded</span>
-                )}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">National ID Card Number</span>
-                <p className="font-mono font-black text-slate-900 text-sm">{nationalId || 'Not provided yet'}</p>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">KYC Status</span>
-                <p className="font-bold text-slate-800">
-                  {nationalId ? 'Document Submitted & Enqueued' : 'Required to activate third-party insurance co-pay'}
-                </p>
-              </div>
-            </div>
-
-            {idCardImage && (
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2.5">
-                  <img src={idCardImage} alt="National ID" className="w-12 h-8 rounded-lg object-cover border" />
-                  <span className="font-bold text-slate-700">National ID Snapshot Stored</span>
+      {/* 1. Profile Hero Summary Card (Identity + Total Spent + Tests Booked + Labs + Doctors) */}
+      <div className="p-5 sm:p-6 bg-gradient-to-br from-[#003B42] via-[#005B66] to-[#007A87] text-white rounded-3xl shadow-lg space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              {profilePicture ? (
+                <img
+                  src={profilePicture}
+                  alt={fullName}
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-white/50"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/20 text-white flex items-center justify-center font-black text-2xl border-2 border-white/30">
+                  {fullName.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-emerald-700 font-bold text-[11px]">Synced</span>
-              </div>
-            )}
-          </div>
-
-          {/* Insurance Information Card */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <CreditCard className="w-4 h-4 text-[#006978]" />
-                <span>Health Insurance & Coverage Caisse</span>
-              </div>
-              <span className="text-xs font-bold text-[#006978]">{selectedInsurance}</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Insurance Company</span>
-                <p className="font-bold text-slate-900">{selectedInsurance}</p>
-              </div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Policy / Matricule N°</span>
-                <p className="font-mono font-black text-slate-900">{insurancePolicyNumber || 'None configured'}</p>
-              </div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Employer / Société</span>
-                <p className="font-bold text-slate-900">{employerSociete || 'Independent'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Demographics Summary Card */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <User className="w-4 h-4 text-[#006978]" />
-                <span>Personal Demographics</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Gender</span>
-                <span className="font-bold text-slate-900">{gender}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Blood Group</span>
-                <span className="font-black text-rose-600">{bloodGroup}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Phone</span>
-                <span className="font-mono font-bold text-slate-900">{phone}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">City</span>
-                <span className="font-bold text-slate-900">{city}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* EDIT PROFILE SETTINGS FORM */
-        <form onSubmit={handleSaveProfile} className="space-y-6 animate-in fade-in">
-          <div className="flex items-center justify-between pb-2">
-            <h3 className="text-base font-black text-slate-900">Edit Profile & Credentials</h3>
-            <button
-              type="button"
-              onClick={() => setIsEditingSettings(false)}
-              className="text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        {/* Personal Details Section */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <User className="w-4 h-4 text-[#006978]" />
-              <span>Personal Information</span>
-            </div>
-            <span className="text-[11px] text-slate-400">Basic Demographics</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">Full Legal Name:</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-                required
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">
-                Preferred Nickname (Anonymous display for privacy):
-              </label>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="e.g. Marie, Sam, Pat"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">Mobile Phone Number:</label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-                required
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">Blood Group (Groupe Sanguin):</label>
-              <select
-                value={bloodGroup}
-                onChange={(e) => setBloodGroup(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
+              )}
+              <label
+                className="absolute -bottom-1 -right-1 p-1.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-xl shadow-md cursor-pointer flex items-center justify-center"
+                title="Upload profile picture"
               >
-                {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'Unknown'].map(bg => (
-                  <option key={bg} value={bg}>{bg}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. National ID Card (CNI) Verification Section */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#006978]" />
-              <span className="text-sm font-black text-slate-900">National ID Card (CNI) Verification</span>
-            </div>
-
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              idCardStatus === 'verified'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                : idCardStatus === 'pending_verification'
-                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                : 'bg-slate-100 text-slate-600'
-            }`}>
-              {idCardStatus === 'verified' ? 'Verified Official' : idCardStatus === 'pending_verification' ? 'Pending Admin Review' : 'Action Required'}
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-500 leading-relaxed">
-            In compliance with CEMAC diagnostic norms, you must link your <strong>National ID Card Number</strong> and snapshot your CNI to activate <strong>Tiers-Payant Health Insurance coverage</strong> for automated 80% coverage on bills.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 block">
-                National ID Card Number (CNI):
-              </label>
-              <input
-                type="text"
-                value={nationalId}
-                onChange={(e) => setNationalId(e.target.value)}
-                placeholder="e.g. 1029482910 or CNI-LT-2022-9901"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-              />
-            </div>
-
-            {/* Snap / Upload ID Card Document */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 block">
-                Snap or Upload ID Card Photo:
-              </label>
-              <label className="p-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 hover:border-[#006978] rounded-xl flex items-center justify-between cursor-pointer transition-colors">
+                <Camera className="w-3.5 h-3.5" />
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment"
-                  onChange={handleIdCardUpload}
                   className="hidden"
+                  onChange={handleProfilePictureUpload}
                 />
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Camera className="w-4 h-4 text-[#006978]" />
-                  <span className="font-semibold text-xs">
-                    {idCardImage ? 'Change ID Card Photo' : 'Snap / Upload CNI Photo'}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-[#006978] bg-[#E0F2F1] px-2 py-0.5 rounded-md">
-                  Browse
-                </span>
               </label>
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-black text-white">{fullName}</h2>
+              <p className="text-xs text-cyan-100/90 mt-0.5">
+                {phone} &middot; {city} &middot; Blood Group {bloodGroup} &middot; PID {activeProfile.id}
+              </p>
             </div>
           </div>
 
-          {/* ID Card Image Preview */}
-          {idCardImage && (
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3">
-                <img
-                  src={idCardImage}
-                  alt="CNI Document"
-                  className="w-16 h-11 object-cover rounded-lg border border-slate-300 shadow-2xs"
+          <div className="sm:text-right border-t sm:border-t-0 border-white/15 pt-3 sm:pt-0">
+            <span className="text-[11px] font-semibold text-cyan-200 block">Total Amount Spent</span>
+            <span className="text-2xl font-black text-white font-mono tabular-nums">
+              {formatXAF(totalSpent)}
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Key Portfolio Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-white/15 text-xs">
+          <div className="p-3 rounded-2xl bg-white/10">
+            <span className="text-cyan-200 text-[11px] block">Tests Booked</span>
+            <strong className="text-lg font-black font-mono tabular-nums text-white">{totalTestsBooked}</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10">
+            <span className="text-cyan-200 text-[11px] block">Certified Receipts</span>
+            <strong className="text-lg font-black font-mono tabular-nums text-white">{paidBookings.length}</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10">
+            <span className="text-cyan-200 text-[11px] block">Laboratories</span>
+            <strong className="text-lg font-black font-mono tabular-nums text-white">{visitedLabs.length}</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10">
+            <span className="text-cyan-200 text-[11px] block">Connected Doctors</span>
+            <strong className="text-lg font-black font-mono tabular-nums text-white">{connectedDoctors.length}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* EDIT SETTINGS MODE */}
+      {isEditingSettings ? (
+        <form onSubmit={handleSaveProfile} className="space-y-6 animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <h3 className="text-sm font-black text-slate-900">Personal Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Full Legal Name:</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                  required
                 />
-                <div>
-                  <span className="font-bold text-slate-900 block">National ID Card Snapped</span>
-                  <span className="text-[11px] text-slate-500">Document encrypted & sent for verification</span>
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Preferred Nickname:</label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Mobile Phone Number:</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Blood Group:</label>
+                <select
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                >
+                  {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'Unknown'].map((bg) => (
+                    <option key={bg} value={bg}>
+                      {bg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <h3 className="text-sm font-black text-slate-900">National ID Card (CNI) & Insurance Caisse</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">National ID Card Number (CNI):</label>
+                <input
+                  type="text"
+                  value={nationalId}
+                  onChange={(e) => setNationalId(e.target.value)}
+                  placeholder="Required for insurance activation"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Upload ID Card Photo:</label>
+                <label className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-between cursor-pointer">
+                  <input type="file" accept="image/*" onChange={handleIdCardUpload} className="hidden" />
+                  <span className="font-semibold text-slate-600">
+                    {idCardImage ? 'Replace CNI Photo' : 'Choose CNI Image'}
+                  </span>
+                  <Camera className="w-4 h-4 text-[#006978]" />
+                </label>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="font-bold text-slate-700 block">Insurance Company:</label>
+                <select
+                  value={selectedInsurance}
+                  onChange={(e) => setSelectedInsurance(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                >
+                  {CAMEROON_INSURANCE_COMPANIES.map((ins) => (
+                    <option key={ins.id} value={ins.name}>
+                      {ins.name} ({ins.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Policy / Matricule Number:</label>
+                <input
+                  type="text"
+                  value={insurancePolicyNumber}
+                  onChange={(e) => setInsurancePolicyNumber(e.target.value)}
+                  placeholder="Leave blank if self-paying (uninsured)"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Employer / Société (Optional):</label>
+                <input
+                  type="text"
+                  value={employerSociete}
+                  onChange={(e) => setEmployerSociete(e.target.value)}
+                  placeholder="Employer name"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-2xl text-sm font-black shadow-md cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4" />
+            <span>Save Profile & Insurance Settings</span>
+          </button>
+        </form>
+      ) : (
+        /* PORTFOLIO TABS: BOOKED TESTS | RECEIPTS | VISITED LABS | CONNECTED DOCTORS | CREDENTIALS */
+        <div className="space-y-4">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl overflow-x-auto">
+            {[
+              { id: 'tests', label: `Booked Tests (${userBookings.length})` },
+              { id: 'receipts', label: `Receipts (${paidBookings.length})` },
+              { id: 'labs', label: `Labs (${visitedLabs.length})` },
+              { id: 'doctors', label: `Doctors (${connectedDoctors.length})` },
+              { id: 'credentials', label: 'ID & Insurance' }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActivePortfolioTab(t.id as any)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activePortfolioTab === t.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* TAB 1: BOOKED TESTS */}
+          {activePortfolioTab === 'tests' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <FlaskConical className="w-4 h-4 text-[#006978]" />
+                <span>All Booked Diagnostic Orders</span>
+              </h3>
+
+              {userBookings.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {userBookings.map((b) => (
+                    <div
+                      key={b.id || b.bookingCode}
+                      className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <strong className="font-mono text-slate-900">#{b.bookingCode}</strong>
+                          <span>&middot;</span>
+                          <span className="font-bold text-[#006978]">
+                            {b.labName || 'Performing Laboratory'}
+                          </span>
+                          <span>&middot;</span>
+                          <span className="text-slate-400">
+                            {b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Recent'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600">
+                          {(b.tests || []).map((t: any) => t.testName || t.name).join(', ')}
+                        </p>
+                      </div>
+
+                      <div className="sm:text-right">
+                        <span className="font-mono tabular-nums font-black text-slate-900 block">
+                          {formatXAF(Number(b.patientCoPayAmount ?? b.totalAmount) || 0)}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {b.biologistSigned || b.overallStatus === 'Completed'
+                            ? 'Certified & Released'
+                            : b.paymentStatus === 'paid'
+                              ? 'Paid · In Progress'
+                              : b.paymentProofSubmitted
+                                ? 'Payment Pending Cashier Check'
+                                : b.invoiceGenerated
+                                  ? 'Invoice Ready'
+                                  : b.receptionistValidated
+                                    ? 'Confirmed by Reception'
+                                    : 'Awaiting Receptionist'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No diagnostic tests booked yet for this profile.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: CERTIFIED LAB RECEIPTS */}
+          {activePortfolioTab === 'receipts' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-[#006978]" />
+                  <span>Certified Laboratory Receipts (Immutable Lab Header)</span>
+                </h3>
+                <span className="text-xs font-mono font-bold text-[#006978]">
+                  Total: {formatXAF(totalSpent)}
+                </span>
+              </div>
+
+              {paidBookings.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {paidBookings.map((b) => (
+                    <div
+                      key={b.id || b.bookingCode}
+                      className="py-3.5 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="font-mono text-slate-900">
+                            {b.invoiceNumber || b.bookingCode}
+                          </strong>
+                          <span>&middot;</span>
+                          <span className="font-semibold text-slate-800">
+                            {b.labName || 'Performing Laboratory'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {b.paidAt
+                            ? new Date(b.paidAt).toLocaleDateString()
+                            : new Date(b.createdAt).toLocaleDateString()}{' '}
+                          &middot; {b.hasInsurance ? `Insured (${b.insuranceProvider})` : 'Direct Patient Settlement'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono tabular-nums font-black text-slate-900">
+                          {formatXAF(Number(b.actualPaidAmount ?? b.patientCoPayAmount ?? b.totalAmount) || 0)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBookingForReceipt(b)}
+                          className="px-3.5 py-2 bg-[#006978] hover:bg-[#005a66] text-white font-bold rounded-xl cursor-pointer"
+                        >
+                          View Receipt
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  Certified receipts appear here once the Lab Cashier verifies your payment.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: VISITED LABORATORIES */}
+          {activePortfolioTab === 'labs' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#006978]" />
+                <span>Laboratories Connected & Booked With</span>
+              </h3>
+
+              {visitedLabs.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {visitedLabs.map((l) => (
+                    <div key={l.name} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <strong className="text-slate-900 block">{l.name}</strong>
+                        <span className="text-[11px] text-slate-500">
+                          {l.address || 'Diagnostic Center'} &middot; {l.ordersCount} order(s)
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono tabular-nums font-bold text-slate-900 block">
+                          {formatXAF(l.spent)}
+                        </span>
+                        {l.phone && (
+                          <a
+                            href={`tel:${l.phone.replace(/\s+/g, '')}`}
+                            className="inline-flex items-center gap-1 text-[11px] font-mono text-[#006978] hover:underline"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>{l.phone}</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  Laboratories you book tests with appear here automatically.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: CONNECTED DOCTORS */}
+          {activePortfolioTab === 'doctors' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Stethoscope className="w-4 h-4 text-[#006978]" />
+                <span>Connected Physicians</span>
+              </h3>
+
+              {connectedDoctors.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {connectedDoctors.map((docItem, idx) => (
+                    <div key={docItem.id || idx} className="py-3.5 flex items-center justify-between text-xs">
+                      <div>
+                        <strong className="text-slate-900 block">
+                          {docItem.name?.startsWith('Dr.') ? docItem.name : `Dr. ${docItem.name}`}
+                        </strong>
+                        <span className="text-[11px] text-slate-500">
+                          {docItem.specialty || 'General Medicine'} &middot;{' '}
+                          {docItem.hospitalAffiliation || docItem.hospital || 'Medical Center'}
+                        </span>
+                      </div>
+                      <span className="text-emerald-700 font-bold">Connected</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No connected doctors yet. Connect with registered physicians in the Doctors tab.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: CNI & INSURANCE CREDENTIALS */}
+          {activePortfolioTab === 'credentials' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 block">National ID (CNI)</span>
+                  <strong className="font-mono text-slate-900">{nationalId || 'Not configured'}</strong>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 block">Insurance Policy</span>
+                  <strong className="text-slate-900">
+                    {insurancePolicyNumber
+                      ? `${selectedInsurance} (#${insurancePolicyNumber})`
+                      : 'Self-Pay (No active insurance policy)'}
+                  </strong>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 block">Gender</span>
+                  <strong className="text-slate-900">{gender}</strong>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 block">Employer / Société</span>
+                  <strong className="text-slate-900">{employerSociete || 'Not specified'}</strong>
                 </div>
               </div>
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             </div>
           )}
         </div>
-
-        {/* 4. Diagnostic Health Insurance (Strict Cameroon Dropdown) */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-[#006978]" />
-              <span className="text-sm font-black text-slate-900">Health Insurance & Tiers-Payant Caisse</span>
-            </div>
-            <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              80% Diagnostic Tariff Cover
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            {/* Insurer Dropdown: Pure Select, No Search/Typing Needed */}
-            <div className="space-y-1 sm:col-span-2">
-              <label className="font-bold text-slate-700 block">
-                Select Your Insurance Company (Cameroon Accredited Caisses):
-              </label>
-              <select
-                value={selectedInsurance}
-                onChange={(e) => setSelectedInsurance(e.target.value)}
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-hidden focus:border-[#006978] shadow-2xs"
-              >
-                {CAMEROON_INSURANCE_COMPANIES.map((ins) => (
-                  <option key={ins.id} value={ins.name}>
-                    {ins.name} ({ins.city}) &bull; {ins.code || 'CEMAC'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">
-                Insurance Matricule / Policy Number:
-              </label>
-              <input
-                type="text"
-                value={insurancePolicyNumber}
-                onChange={(e) => setInsurancePolicyNumber(e.target.value)}
-                placeholder="e.g. POL-884920 or ASC-2026-09"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">
-                Sponsor Company / Société (Employer):
-              </label>
-              <input
-                type="text"
-                value={employerSociete}
-                onChange={(e) => setEmployerSociete(e.target.value)}
-                placeholder="e.g. ENEO Cameroon SA, SABC, Orange Cameroun"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <button
-          type="submit"
-          className="w-full py-3.5 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
-        >
-          <Check className="w-4 h-4 text-cyan-200" />
-          <span>Save Profile, National ID & Insurance Credentials</span>
-        </button>
-      </form>
       )}
 
-      {/* 5. Diagnostic Ledger & Payment Receipts Section */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-[#006978]" />
-            <span className="text-sm font-black text-slate-900">Official Invoices & Payment Receipts</span>
-          </div>
-          <span className="text-xs font-mono font-bold text-[#006978]">
-            {ledgerStats.receipts.length} Settled Receipts
-          </span>
-        </div>
-
-        {ledgerStats.receipts.length > 0 ? (
-          <div className="divide-y divide-slate-100">
-            {ledgerStats.receipts.map((rec, i) => (
-              <div key={i} className="py-3 flex items-center justify-between text-xs">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <strong className="text-slate-900 font-mono">{rec.bookingCode}</strong>
-                    <span className="text-slate-400">&bull; {rec.date}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{rec.labName} &bull; Paid via {rec.method}</p>
-                </div>
-
-                <div className="text-right">
-                  <span className="font-mono font-black text-slate-900 block">{formatXAF(rec.amount)}</span>
-                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
-                    Paid & Cleared
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 text-center text-xs text-slate-400 space-y-1">
-            <CreditCard className="w-6 h-6 text-slate-300 mx-auto" />
-            <p>No paid invoices recorded yet for this profile.</p>
-          </div>
-        )}
-      </div>
-
-      {/* 6. Clean Sign Out Button */}
+      {/* Sign Out Button */}
       <div className="pt-2 pb-8">
         <button
           onClick={() => {
@@ -746,7 +757,17 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
           <span>Sign Out of Patient Account</span>
         </button>
       </div>
+
+      {/* Certified Lab Receipt Modal */}
+      {selectedBookingForReceipt && (
+        <MedicalReceiptModal
+          isOpen={!!selectedBookingForReceipt}
+          onClose={() => setSelectedBookingForReceipt(null)}
+          booking={selectedBookingForReceipt}
+        />
+      )}
     </div>
   );
 };
+
 export default PatientProfileScreen;

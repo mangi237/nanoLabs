@@ -189,7 +189,6 @@ export const CashierView: React.FC<CashierViewProps> = ({
       await fetchData();
     } catch (err) {
       console.error('Error generating customized invoice:', err);
-      alert('Failed to send invoice. Please try again.');
     } finally {
       setIsSendingInvoice(false);
     }
@@ -200,41 +199,45 @@ export const CashierView: React.FC<CashierViewProps> = ({
       setIsProcessing(true);
       const nowIso = new Date().toISOString();
       const isHome = Boolean(booking.homeCollection || booking.pickupLocation);
-      // Routing rule:
-      // If home collection requested -> 'Pending_Collection' for Mobile Phlebotomist!
-      // If walk-in clinic intake -> 'In_Lab_Testing' for Analyzer / Lab Technologists!
-      const targetOverallStatus = isHome ? ('Pending_Collection' as const) : ('In_Lab_Testing' as const);
+      // Both Home Pickup and Walk-In Online Patients enter 'Pending_Collection':
+      // - Home Pickup -> Mobile Phlebotomist (transitStatus: 'pending_dispatch')
+      // - Walk-In -> In-Lab Phlebotomist Bench (AnalyzerView)
+      const targetOverallStatus = 'Pending_Collection' as const;
+      const effectiveLabId = booking.labId || targetLabId;
 
       await limsService.processPayment({
-        labId: targetLabId,
+        labId: effectiveLabId,
         bookingId: booking.id,
         paymentMethod: (booking.paymentMethod as any) || 'mobile_money',
-        processedByName: `${user?.name || 'Head Cashier'} [Online Approval]`,
+        processedByName: `${user?.name || 'Head Cashier'} [Online Verification]`,
         paymentDetails: {
-          transactionReference: booking.transactionReference || 'MOMO-ONLINE-CONFIRMED',
-          actualPaidAmount: booking.totalAmount || 0,
+          transactionReference: booking.transactionReference || 'ONLINE-CONFIRMED',
+          actualPaidAmount: booking.patientCoPayAmount && booking.hasInsurance ? booking.patientCoPayAmount : (booking.totalAmount || 0),
           overallStatus: targetOverallStatus
         }
       });
 
-      // Update local state immediately
-      setBookings(prev => prev.map(b => b.id === booking.id ? {
-        ...b,
+      const settledBooking: PatientBooking = {
+        ...booking,
         paymentStatus: 'paid',
         paidAt: nowIso,
         invoiceStatus: 'payment_confirmed',
         overallStatus: targetOverallStatus,
-        tests: (b.tests || []).map(t => ({
+        transitStatus: isHome ? 'pending_dispatch' : undefined,
+        tests: (booking.tests || []).map(t => ({
           ...t,
-          status: targetOverallStatus === 'In_Lab_Testing' ? 'In_Lab_Testing' : 'Pending_Collection',
+          status: 'Pending_Collection',
           paid: true
         }))
-      } : b));
+      };
+
+      // Update local state immediately and open Certified Lab Receipt
+      setBookings(prev => prev.map(b => b.id === booking.id ? settledBooking : b));
+      setShowReceipt(settledBooking);
 
       await fetchData();
     } catch (err) {
       console.error('Error approving payment:', err);
-      alert('Failed to approve payment. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -811,12 +814,12 @@ export const CashierView: React.FC<CashierViewProps> = ({
     (b.invoiceStatus === 'payment_submitted' || b.paymentProofSubmitted || (b.transactionReference && b.transactionReference.length > 2))
   );
 
-  // Unpaid bookings awaiting invoice issuance or in-clinic cash settlement
+  // Unpaid bookings awaiting invoice issuance (Online Patients confirmed by Receptionist) or in-clinic settlement (Walk-In)
   const unpaidBookings = bookings.filter(b => 
     b.paymentStatus === 'unpaid' && 
     b.invoiceStatus !== 'payment_submitted' &&
     !b.paymentProofSubmitted &&
-    (b.receptionistValidated === true || b.validatedBy || b.overallStatus === 'Pending_Payment' || (b as any).registrationType === 'walk_in' || b.homeCollection || b.pickupLocation)
+    (b.receptionistValidated === true || Boolean(b.validatedBy) || b.overallStatus === 'Pending_Payment' || ((b as any).registrationType === 'walk_in' && !b.isOnlineBooking))
   );
   const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
 
@@ -890,133 +893,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
       )
     );
 
-    if (raw.length > 0) return raw;
-
-    // Realistic baseline insured dossiers for immediate rich operational view
-    return [
-      {
-        id: 'bk-ins-01',
-        invoiceNumber: 'INV-ASC-8910',
-        bookingCode: 'BK-99101',
-        patientName: 'Mme. Claire Ngo',
-        patientNickname: 'Claire_N',
-        patientPhone: '+237 670 12 34 56',
-        patientPid: 'PID-8821',
-        hasInsurance: true,
-        insuranceProvider: 'ASCOMA CAMEROUN S.A.',
-        insurancePolicyNumber: 'ASC-2026-9041',
-        employerSociete: 'ENEO Cameroon SA',
-        insuranceCoveragePercent: 80,
-        totalAmount: 18000,
-        patientCoPayAmount: 3600,
-        insuranceClaimAmount: 14400,
-        paymentStatus: 'paid',
-        paidAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-        tests: [
-          { testName: 'Numération Formule Sanguine (NFS)', price: 4500 },
-          { testName: 'Glycémie à Jeûn', price: 2500 },
-          { testName: 'Bilan Lipidique Complet', price: 8500 },
-          { testName: 'Prélèvement Sanguin Standard', price: 2500 }
-        ]
-      },
-      {
-        id: 'bk-ins-02',
-        invoiceNumber: 'INV-AXA-8911',
-        bookingCode: 'BK-99102',
-        patientName: 'M. Roland Tchouassi',
-        patientNickname: 'Roland_T',
-        patientPhone: '+237 699 23 45 67',
-        patientPid: 'PID-8822',
-        hasInsurance: true,
-        insuranceProvider: 'AXA Assurances Cameroun',
-        insurancePolicyNumber: 'AXA-CM-4819',
-        employerSociete: 'SABC Boissons',
-        insuranceCoveragePercent: 80,
-        totalAmount: 24000,
-        patientCoPayAmount: 4800,
-        insuranceClaimAmount: 19200,
-        paymentStatus: 'paid',
-        paidAt: new Date(Date.now() - 3600000 * 6).toISOString(),
-        tests: [
-          { testName: 'Bilan Hépatique (Transaminases SGOT/SGPT)', price: 12000 },
-          { testName: 'Bilan Rénal (Créatinine & Urée)', price: 10000 },
-          { testName: 'Kit Sous-Vide Stérile', price: 2000 }
-        ]
-      },
-      {
-        id: 'bk-ins-03',
-        invoiceNumber: 'INV-ACT-8912',
-        bookingCode: 'BK-99103',
-        patientName: 'Mlle. Sandrine Mbarga',
-        patientNickname: 'Sandrine_M',
-        patientPhone: '+237 677 34 56 78',
-        patientPid: 'PID-8823',
-        hasInsurance: true,
-        insuranceProvider: 'Activa Assurances',
-        insurancePolicyNumber: 'ACT-POL-7712',
-        employerSociete: 'MTN Cameroon SA',
-        insuranceCoveragePercent: 85,
-        totalAmount: 32000,
-        patientCoPayAmount: 4800,
-        insuranceClaimAmount: 27200,
-        paymentStatus: 'paid',
-        paidAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-        tests: [
-          { testName: 'Profil Thyroïdien Complet (TSH, FT4)', price: 18000 },
-          { testName: 'Numération Formule Sanguine (NFS)', price: 4500 },
-          { testName: 'CRP Haute Sensibilité', price: 6500 },
-          { testName: 'Prélèvement à Domicile', price: 3000 }
-        ]
-      },
-      {
-        id: 'bk-ins-04',
-        invoiceNumber: 'INV-ASC-8913',
-        bookingCode: 'BK-99104',
-        patientName: 'M. Georges Abena',
-        patientNickname: 'Georges_A',
-        patientPhone: '+237 694 45 67 89',
-        patientPid: 'PID-8824',
-        hasInsurance: true,
-        insuranceProvider: 'ASCOMA CAMEROUN S.A.',
-        insurancePolicyNumber: 'ASC-2026-9042',
-        employerSociete: 'ENEO Cameroon SA',
-        insuranceCoveragePercent: 80,
-        totalAmount: 15000,
-        patientCoPayAmount: 3000,
-        insuranceClaimAmount: 12000,
-        paymentStatus: 'paid',
-        paidAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-        tests: [
-          { testName: 'Ionogramme Sanguin Complet', price: 12000 },
-          { testName: 'Prélèvement Sanguin Standard', price: 3000 }
-        ]
-      },
-      {
-        id: 'bk-ins-05',
-        invoiceNumber: 'INV-SAH-8914',
-        bookingCode: 'BK-99105',
-        patientName: 'Mme. Therese Kenmogne',
-        patientNickname: 'Therese_K',
-        patientPhone: '+237 671 56 78 90',
-        patientPid: 'PID-8825',
-        hasInsurance: true,
-        insuranceProvider: 'SAHAM Assurance Cameroun',
-        insurancePolicyNumber: 'SAH-9921-CM',
-        employerSociete: 'TotalEnergies Marketing Cameroun',
-        insuranceCoveragePercent: 80,
-        totalAmount: 28000,
-        patientCoPayAmount: 5600,
-        insuranceClaimAmount: 22400,
-        paymentStatus: 'paid',
-        paidAt: new Date(Date.now() - 3600000 * 72).toISOString(),
-        tests: [
-          { testName: "Électrophorèse de l'Hémoglobine", price: 15000 },
-          { testName: 'Groupage Sanguin Rhésus', price: 5000 },
-          { testName: 'NFS Automatisée', price: 5000 },
-          { testName: 'Acte de Prélèvement Veineux', price: 3000 }
-        ]
-      }
-    ] as any[];
+    return raw;
   }, [bookings]);
 
   // Extract unique insurance companies and unique societes for dropdown filters
@@ -1308,7 +1185,7 @@ export const CashierView: React.FC<CashierViewProps> = ({
                           {(b.totalAmount || 0).toLocaleString()} XAF
                         </span>
                         <span className="text-[10px] text-slate-500 block">
-                          {isHome ? 'Will route to Mobile Phlebotomist' : 'Will route directly to Analyzer'}
+                          {isHome ? 'Will route to Mobile Phlebotomist' : 'Will route to In-Lab Phlebotomist Bench'}
                         </span>
                       </div>
 
@@ -1527,12 +1404,21 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                       <span className="text-xs text-slate-500">• Invoice: <strong className="font-mono">{booking.invoiceNumber}</strong></span>
                                       {booking.homeCollection && (
                                         <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-50 text-purple-700 border border-purple-200">
-                                          Home Draw: {booking.pickupLocation || 'Douala'}
+                                          Home Draw (Google Maps): {booking.pickupLocation || 'Pinned GPS'}
                                         </span>
                                       )}
-                                      {(booking.isOnlineBooking || (booking as any).registrationType === 'online') && (
+                                      {(booking.isOnlineBooking || (booking as any).registrationType === 'online') ? (
                                         <span className="px-1.5 py-0.2 rounded-md text-[9px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-0.5">
-                                          <Globe className="w-2.5 h-2.5" /> Online
+                                          <Globe className="w-2.5 h-2.5" /> Online Patient Request
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.2 rounded-md text-[9px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
+                                          Walk-In Patient
+                                        </span>
+                                      )}
+                                      {Boolean(booking.hasInsurance || booking.insuranceProvider) && (
+                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-50 text-blue-800 border border-blue-200">
+                                          Insured: {booking.insuranceProvider || 'HMO'} ({booking.insuranceCoveragePercent ?? (100 - (booking.coPayPercent ?? 20))}% Covered)
                                         </span>
                                       )}
                                     </div>
@@ -1557,14 +1443,10 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                         </div>
                                         <button
                                           type="button"
-                                          onClick={() => {
-                                            setSelectedBooking(booking);
-                                            setPaymentMethod('mobile_money');
-                                            setMomoTxId(booking.transactionReference || '');
-                                          }}
+                                          onClick={() => handleApproveOnlinePayment(booking)}
                                           className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] shrink-0 cursor-pointer shadow-xs"
                                         >
-                                          Confirm Proof
+                                          Verify & Release
                                         </button>
                                       </div>
                                     )}
@@ -1577,60 +1459,68 @@ export const CashierView: React.FC<CashierViewProps> = ({
                                     <div className="text-sm sm:text-base font-black text-slate-900 font-mono">
                                       {(booking.totalAmount || 0).toLocaleString()} <span className="text-[11px] font-bold text-slate-500">FCFA</span>
                                     </div>
+                                    {Boolean(booking.hasInsurance && booking.patientCoPayAmount !== undefined) && (
+                                      <div className="text-[10px] font-bold text-blue-700 font-mono">
+                                        Patient Co-Pay: {Number(booking.patientCoPayAmount).toLocaleString()} FCFA
+                                      </div>
+                                    )}
                                   </div>
 
-                                  {!booking.invoiceGenerated ? (
-                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenInvoiceBuilder(booking)}
-                                        className="relative group flex items-center gap-3 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-teal-700 via-teal-800 to-cyan-900 hover:from-teal-600 hover:via-teal-700 hover:to-cyan-800 active:scale-98 text-white rounded-2xl shadow-md hover:shadow-lg hover:shadow-teal-900/30 transition-all cursor-pointer border-2 border-teal-400/60 ring-2 ring-teal-500/20"
-                                        title="Create Official Itemized Laboratory Invoice: Primary Tests + Justifiable Add-ons"
-                                      >
-                                        <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
-                                          <Receipt className="w-4 h-4 text-cyan-200" />
-                                        </div>
-                                        <div className="flex flex-col text-left leading-tight">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-xs font-black tracking-tight text-white">Generate Official Invoice</span>
-                                            <span className="px-1.5 py-0.2 rounded-md text-[8.5px] font-black uppercase bg-amber-400 text-slate-950 tracking-wider">Required</span>
+                                  {(booking.isOnlineBooking || (booking as any).registrationType === 'online') ? (
+                                    !booking.invoiceGenerated ? (
+                                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenInvoiceBuilder(booking)}
+                                          className="relative group flex items-center gap-3 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-teal-700 via-teal-800 to-cyan-900 hover:from-teal-600 hover:via-teal-700 hover:to-cyan-800 active:scale-98 text-white rounded-2xl shadow-md hover:shadow-lg hover:shadow-teal-900/30 transition-all cursor-pointer border-2 border-teal-400/60 ring-2 ring-teal-500/20"
+                                          title="Create Official Itemized Laboratory Invoice for Online Patient: Primary Tests + Justifiable Add-ons"
+                                        >
+                                          <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
+                                            <Receipt className="w-4 h-4 text-cyan-200" />
                                           </div>
-                                          <span className="text-[10px] text-cyan-200/90 font-medium">
-                                            Itemize: Primary Tests + Add-ons
-                                          </span>
-                                        </div>
-                                      </button>
-                                      <span className="text-[9px] text-teal-700 font-semibold flex items-center gap-1 pr-1">
-                                        <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Dispatches instantly to Patient App
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                      <div className="flex flex-col text-left">
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-800 rounded-lg text-[10px] font-black border border-teal-200">
-                                          <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
-                                          <span>Invoice Issued</span>
-                                        </span>
-                                        <span className="text-[9px] font-mono text-slate-400 pl-0.5">
-                                          #{booking.invoiceNumber || 'INV-2026'}
+                                          <div className="flex flex-col text-left leading-tight">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-xs font-black tracking-tight text-white">Generate Official Invoice</span>
+                                              <span className="px-1.5 py-0.2 rounded-md text-[8.5px] font-black uppercase bg-amber-400 text-slate-950 tracking-wider">Online</span>
+                                            </div>
+                                            <span className="text-[10px] text-cyan-200/90 font-medium">
+                                              Primary Tests + Justifiable Fees
+                                            </span>
+                                          </div>
+                                        </button>
+                                        <span className="text-[9px] text-teal-700 font-semibold flex items-center gap-1 pr-1">
+                                          <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Syncs live to Patient App for 3rd-Party Payment
                                         </span>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenInvoiceBuilder(booking)}
-                                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer border border-slate-200"
-                                        title="Review or adjust itemized invoice"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => setSelectedBooking(booking)}
-                                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-                                      >
-                                        <DollarSign className="w-3.5 h-3.5" />
-                                        <span>Pay Order</span>
-                                      </button>
-                                    </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                        <div className="flex flex-col text-left">
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-800 rounded-lg text-[10px] font-black border border-teal-200">
+                                            <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
+                                            <span>Invoice Sent to Patient</span>
+                                          </span>
+                                          <span className="text-[9px] font-mono text-slate-400 pl-0.5">
+                                            #{booking.invoiceNumber || 'INV-2026'}
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenInvoiceBuilder(booking)}
+                                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer border border-slate-200"
+                                          title="Review or adjust itemized invoice"
+                                        >
+                                          Update Invoice
+                                        </button>
+                                      </div>
+                                    )
+                                  ) : (
+                                    <button
+                                      onClick={() => setSelectedBooking(booking)}
+                                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                                    >
+                                      <DollarSign className="w-3.5 h-3.5" />
+                                      <span>Collect Walk-In Payment</span>
+                                    </button>
                                   )}
                                 </div>
                               </div>
@@ -2430,6 +2320,47 @@ export const CashierView: React.FC<CashierViewProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* AUTOMATIC INSURANCE SPLIT BANNER (IF PATIENT CONFIGURED INSURANCE) */}
+              {Boolean(invoiceBuilderBooking.hasInsurance || invoiceBuilderBooking.insuranceProvider) && (() => {
+                const liveGross =
+                  Number(builderTestsAmount) +
+                  (builderIncludeHomePickup ? Number(builderHomePickupFee) || 0 : 0) +
+                  (builderIncludeDelivery ? Number(builderDeliveryFee) || 0 : 0) +
+                  builderAddOns.reduce((s, it) => s + (Number(it.price) || 0), 0);
+                const covPct = Number(
+                  invoiceBuilderBooking.insuranceCoveragePercent ??
+                  (invoiceBuilderBooking.coPayPercent !== undefined ? 100 - Number(invoiceBuilderBooking.coPayPercent) : 80)
+                );
+                const insClaim = Math.round((liveGross * covPct) / 100);
+                const patCopay = Math.max(0, liveGross - insClaim);
+                return (
+                  <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">
+                        Automatic Insurance Split Active • {invoiceBuilderBooking.insuranceProvider || 'Accredited Insurer'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-600 text-white">
+                        {covPct}% Insurer / {100 - covPct}% Patient
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[11px] bg-white p-2.5 rounded-xl border border-blue-100">
+                      <div>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Policy / Matricule</span>
+                        <strong className="font-mono text-slate-900">{invoiceBuilderBooking.insurancePolicyNumber || invoiceBuilderBooking.matricule || 'VERIFIED'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Insurer Claim ({covPct}%)</span>
+                        <strong className="font-mono text-blue-700">{insClaim.toLocaleString()} XAF</strong>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Patient Invoice Due</span>
+                        <strong className="font-mono text-emerald-700">{patCopay.toLocaleString()} XAF</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* CATEGORY 1: Prescribed Laboratory Tests Cost */}
               <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-2.5">

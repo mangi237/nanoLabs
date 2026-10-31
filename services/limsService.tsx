@@ -112,6 +112,11 @@ export interface PatientBooking {
   bookingCode: string;
   labId: string;
   labName?: string;
+  labAddress?: string;
+  labPhone?: string;
+  labLogoUrl?: string;
+  platformFeePercent?: number;
+  platformFeeAmount?: number;
   patientId: string;
   patientName: string;
   patientAge?: number;
@@ -259,6 +264,14 @@ export interface PatientBooking {
   sampleDepositedInLab?: boolean;
   receptionistNotes?: string;
 
+  sampleBarcode?: string;
+  storageLocation?: string;
+  phlebotomistSamplePickedUp?: boolean;
+  phlebotomistSamplePickedUpAt?: string;
+  patientSampleHandoverConfirmed?: boolean;
+  patientSampleHandoverConfirmedAt?: string;
+  releaseChannel?: 'online_and_physical' | 'online_only' | 'physical_pickup';
+
   // Biologist Sign-off & Release
   biologistConfirmed?: boolean;
   biologistSigned?: boolean;
@@ -274,6 +287,17 @@ export interface PatientBooking {
   completedAt?: string;
   verifiedAt?: string;
   resultEnteredAt?: string;
+
+  auditTrail?: Array<{
+    id: string;
+    stage: string;
+    title: string;
+    details: string;
+    actorName: string;
+    actorRole: string;
+    timestamp: string;
+    metadata?: Record<string, any>;
+  }>;
   
   createdAt: string;
   updatedAt: string;
@@ -322,9 +346,7 @@ export const limsService = {
   async createBooking(params: {
     labId: string;
     patientId: string;
-    pickupLocation?: string;
     patientName: string;
-    // homeCollection?: boolean;
     patientAge?: number;
     dateOfBirth?: string;
     patientGender?: 'Male' | 'Female' | 'Child';
@@ -339,7 +361,6 @@ export const limsService = {
     isStaffExemption?: boolean;
     staffMemberName?: string;
     staffDesignation?: string;
-    homeCollection?: boolean;
     sampleCollectedAt?: string;
     selectedMasterTestIds?: string[];
     selectedTests?: Array<{
@@ -380,9 +401,26 @@ export const limsService = {
     prescriptionImageUrl?: string;
     yeboKycVerified?: boolean;
     yeboReferenceId?: string;
+    labName?: string;
+    labAddress?: string;
+    labPhone?: string;
+    labLogoUrl?: string;
+    homeCollection?: boolean;
+    pickupLocation?: string;
+    landmark?: string;
+    userCoords?: { lat: number; lng: number };
+    pickupDistanceMeters?: number;
+    homePickupFee?: number;
+    platformFeePercent?: number;
+    platformFeeAmount?: number;
+    batchId?: string;
   }): Promise<PatientBooking> {
     const {
       labId = 'lab-1',
+      labName,
+      labAddress,
+      labPhone,
+      labLogoUrl,
       patientId,
       patientName,
       patientAge = 30,
@@ -391,14 +429,13 @@ export const limsService = {
       patientPhone = '',
       patientEmail = '',
       patientPid = `PID-${Math.floor(100 + Math.random() * 900)}`,
-      doctorName = 'Dr. Attending Specialist',
+      doctorName = 'Attending Physician',
       referringDoctorId,
       referringDoctor,
       referralHospital,
       referralNotes,
       isStaffExemption = false,
       staffMemberName,
-      // homeCollection = false,
       staffDesignation,
       sampleCollectedAt = 'Central Diagnostic Facility',
       selectedMasterTestIds = [],
@@ -425,53 +462,12 @@ export const limsService = {
       pickupLocation,
       landmark,
       userCoords,
+      pickupDistanceMeters,
+      homePickupFee,
+      platformFeePercent,
+      platformFeeAmount,
       batchId
-    }: {
-      labId: string;
-      patientId: string;
-      patientName: string;
-      patientAge?: number;
-      dateOfBirth?: string;
-      patientGender?: 'Male' | 'Female' | 'Child';
-      patientPhone?: string;
-      patientEmail?: string;
-      patientPid?: string;
-      doctorName?: string;
-      referringDoctorId?: string;
-      referringDoctor?: string;
-      referralHospital?: string;
-      referralNotes?: string;
-      isStaffExemption?: boolean;
-      staffMemberName?: string;
-      staffDesignation?: string;
-      sampleCollectedAt?: string;
-      selectedMasterTestIds?: string[];
-      selectedTests?: Array<any>;
-      creatorName?: string;
-      clinicalNotes?: string;
-      receptionistValidated?: boolean;
-      // homeCollection?: boolean;
-      isOnlineBooking?: boolean;
-      registrationType?: 'online' | 'walk_in';
-      registeredBy?: string;
-      hasInsurance?: boolean;
-      insuranceProvider?: string;
-      insurancePolicyNumber?: string;
-      insuranceCoveragePercent?: number;
-      coPayPercent?: number;
-      insuranceCoveredAmount?: number;
-      insuranceClaimAmount?: number;
-      patientCoPayAmount?: number;
-      prescriptionType?: string;
-      prescriptionImageUrl?: string;
-      yeboKycVerified?: boolean;
-      yeboReferenceId?: string;
-      homeCollection?: boolean;
-      pickupLocation?: string;
-      landmark?: string;
-      userCoords?: { lat: number; lng: number };
-      batchId?: string;
-    } = params;
+    }: any = params;
 
     const safeCreator = (creatorName || '').toLowerCase();
     const isStaffCreator = safeCreator.includes('reception') ||
@@ -519,7 +515,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp : any) => ({
+          subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -577,10 +573,28 @@ export const limsService = {
     const invoiceNumber = this.generateInvoiceCode();
     const timestamp = new Date().toISOString();
 
+    const initialAuditEvent = {
+      id: `aud-${Date.now()}`,
+      stage: isValidated ? 'RECEPTIONIST_CONFIRMED' : 'REQUEST_SUBMITTED',
+      title: isValidated ? 'Walk-In Order Registered & Verified' : 'Online Test Request Submitted',
+      details: isValidated
+        ? `Walk-in test order registered by ${creatorName || 'Reception'} (${testItems.length} test(s)).`
+        : `Patient ${patientName} submitted online diagnostic test request (${testItems.length} test(s)) to ${labName || 'Selected Laboratory'}. Awaiting Receptionist confirmation.`,
+      actorName: creatorName || patientName,
+      actorRole: isStaffCreator ? 'receptionist' : 'patient',
+      timestamp
+    };
+
     const newBooking: PatientBooking = {
       id: `booking-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       bookingCode,
       labId,
+      labName: labName || undefined,
+      labAddress: labAddress || undefined,
+      labPhone: labPhone || undefined,
+      labLogoUrl: labLogoUrl || undefined,
+      platformFeePercent: platformFeePercent !== undefined ? Number(platformFeePercent) : 5,
+      platformFeeAmount: platformFeeAmount !== undefined ? Number(platformFeeAmount) : Math.round(totalAmount * 0.05),
       patientId,
       patientName,
       patientAge,
@@ -601,9 +615,10 @@ export const limsService = {
       actualPaidAmount: isStaffExemption ? 0 : undefined,
       discountType: isStaffExemption ? 'staff_exemption' : undefined,
       discountAmount: isStaffExemption ? standardTotalAmount : 0,
-      sampleCollectedAt,
+      sampleCollectedAt: labName || sampleCollectedAt,
       invoiceNumber,
-      totalAmount,
+      totalAmount: totalAmount + (Number(homePickupFee) || 0),
+      testsAmount: totalAmount,
       clinicalNotes: clinicalNotes || undefined,
       paymentStatus: isStaffExemption ? 'paid' : 'unpaid',
       paidAt: isStaffExemption ? timestamp : undefined,
@@ -628,9 +643,14 @@ export const limsService = {
       yeboKycVerified,
       yeboReferenceId,
       homeCollection: homeCollection || false,
+      homePickupRequested: homeCollection || false,
       pickupLocation: pickupLocation || '',
       landmark: landmark || '',
       userCoords: userCoords || undefined,
+      pickupDistanceMeters: pickupDistanceMeters !== undefined ? Number(pickupDistanceMeters) : undefined,
+      homePickupFee: homePickupFee !== undefined ? Number(homePickupFee) : 0,
+      invoiceGenerated: false,
+      invoiceStatus: 'pending_cashier',
       batchId: batchId || undefined,
       collectedSamples: [],
       tests: testItems.map(t => ({
@@ -640,6 +660,7 @@ export const limsService = {
         status: isStaffExemption ? 'Pending_Collection' : t.status
       })),
       overallStatus: isStaffExemption ? 'Pending_Collection' : (isValidated ? 'Pending_Payment' : 'Pending_Validation'),
+      auditTrail: [initialAuditEvent],
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -659,12 +680,19 @@ export const limsService = {
       console.warn('Could not cache booking to localStorage:', err);
     }
 
-    // Save to Firestore /labs/{labId}/bookings
+    // Save to Firestore /labs/{labId}/bookings (and mirror to lab-1 if online booking to partner lab alias so default Staff workstation receives it live)
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       await addDoc(bookingsCol, cleanFirestoreData(newBooking));
+      if (newBooking.isOnlineBooking && labId !== 'lab-1') {
+        const primaryBookingsCol = collection(db, 'labs', 'lab-1', 'bookings');
+        await addDoc(primaryBookingsCol, cleanFirestoreData(newBooking));
+      }
     } catch (e) {
       console.warn('Firestore booking save bypassed, using local memory state:', e);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('nanolabs_booking_updated', { detail: { bookingId: newBooking.id } }));
     }
 
     // If staff exemption, push instant alert to Admin Notifications collection
@@ -862,8 +890,21 @@ export const limsService = {
           ? paymentDetails.totalAmount
           : (testsAmount + addOnsAmount);
 
+        const paymentAudit = {
+          id: `aud-${Date.now()}`,
+          stage: 'PAYMENT_VERIFIED',
+          title: 'Payment Verified & Certified Receipt Issued',
+          details: `Cashier ${processedByName} verified ${paymentMethod.toUpperCase()} settlement (${calculatedAmount.toLocaleString()} FCFA). ${data.homeCollection ? 'Order routed to Mobile Phlebotomy Dispatch.' : 'Order routed to In-Lab Phlebotomy Bench.'}`,
+          actorName: processedByName,
+          actorRole: 'cashier',
+          timestamp
+        };
+        const nextAuditTrail = [...(data.auditTrail || []), paymentAudit];
+        const nextTransitStatus = data.homeCollection ? (data.transitStatus || 'pending_dispatch') : undefined;
+
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
           paymentStatus: 'paid',
+          invoiceStatus: 'payment_confirmed',
           paymentMethod,
           paymentDate: timestamp,
           paidAt: timestamp,
@@ -881,12 +922,57 @@ export const limsService = {
           insurancePolicyNumber: paymentDetails?.insurancePolicyNumber ?? data.insurancePolicyNumber,
           matricule: paymentDetails?.insurancePolicyNumber ?? (paymentDetails as any)?.matricule ?? data.matricule,
           coPayPercent: paymentDetails?.coPayPercent ?? data.coPayPercent,
-          insuranceCoveredAmount: paymentDetails?.insuranceDetails?.insuranceClaimAmount,
-          patientCoPayAmount: paymentDetails?.insuranceDetails?.patientCoPayAmount,
+          insuranceCoveredAmount: paymentDetails?.insuranceDetails?.insuranceClaimAmount ?? data.insuranceCoveredAmount,
+          patientCoPayAmount: paymentDetails?.insuranceDetails?.patientCoPayAmount ?? data.patientCoPayAmount,
           overallStatus: 'Pending_Collection',
+          transitStatus: nextTransitStatus,
+          auditTrail: nextAuditTrail,
           tests: updatedTests,
           updatedAt: timestamp
         }));
+        if (labId !== 'lab-1' && data.labId && data.labId !== labId) {
+          try {
+            const altCol = collection(db, 'labs', data.labId, 'bookings');
+            const altSnap = await getDocs(altCol);
+            const altDoc = altSnap.docs.find(d => d.data().id === bookingId || d.data().bookingCode === data.bookingCode);
+            if (altDoc) {
+              await updateDoc(doc(db, 'labs', data.labId, 'bookings', altDoc.id), cleanFirestoreData({
+                paymentStatus: 'paid',
+                invoiceStatus: 'payment_confirmed',
+                paymentMethod,
+                paymentDate: timestamp,
+                paidAt: timestamp,
+                paymentProcessedBy: processedByName,
+                totalAmount: calculatedAmount,
+                testsAmount,
+                addOnsAmount,
+                addOns: addOnsList,
+                overallStatus: 'Pending_Collection',
+                transitStatus: nextTransitStatus,
+                auditTrail: nextAuditTrail,
+                tests: updatedTests,
+                updatedAt: timestamp
+              }));
+            }
+          } catch {}
+        }
+        this.syncLocalBookingUpdate(bookingId, {
+          paymentStatus: 'paid',
+          invoiceStatus: 'payment_confirmed',
+          paymentMethod,
+          paymentDate: timestamp,
+          paidAt: timestamp,
+          paymentProcessedBy: processedByName,
+          totalAmount: calculatedAmount,
+          testsAmount,
+          addOnsAmount,
+          addOns: addOnsList,
+          overallStatus: 'Pending_Collection',
+          transitStatus: nextTransitStatus,
+          auditTrail: nextAuditTrail,
+          tests: updatedTests,
+          updatedAt: timestamp
+        } as any);
 
         // Sync to patient's document labTests array
         try {
@@ -1115,6 +1201,211 @@ export const limsService = {
   },
 
   /**
+   * Mobile Phlebotomist clicks "Go Pickup Sample" and enables live GPS location sharing
+   */
+  async startHomePickupTrip(params: {
+    labId: string;
+    bookingId: string;
+    phlebotomistName: string;
+    phlebotomistPhone: string;
+    initialCoords: { lat: number; lng: number };
+    etaText?: string;
+  }): Promise<boolean> {
+    const { labId = 'lab-1', bookingId, phlebotomistName, phlebotomistPhone, initialCoords, etaText } = params;
+    const timestamp = new Date().toISOString();
+    const auditEvent = {
+      id: `aud-${Date.now()}`,
+      stage: 'PHLEBOTOMIST_EN_ROUTE',
+      title: 'Mobile Phlebotomist En Route (Live GPS Active)',
+      details: `${phlebotomistName} (${phlebotomistPhone}) activated live GPS sharing and is heading to patient pickup location.`,
+      actorName: phlebotomistName,
+      actorRole: 'mobile_phlebotomist',
+      timestamp,
+      metadata: { coords: initialCoords, phone: phlebotomistPhone }
+    };
+
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
+      const existingAudit = bookingDoc ? ((bookingDoc.data() as PatientBooking).auditTrail || []) : [];
+      const patch: Partial<PatientBooking> = {
+        phlebotomistAssigned: true,
+        phlebotomistName,
+        phlebotomistPhone,
+        phlebotomistGpsActive: true,
+        locationSharingActive: true,
+        phlebotomistCoords: initialCoords,
+        phlebotomistEta: etaText || '12 mins',
+        transitStatus: 'en_route_to_patient',
+        auditTrail: [...existingAudit, auditEvent],
+        updatedAt: timestamp
+      };
+      if (bookingDoc) {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
+      }
+      this.syncLocalBookingUpdate(bookingId, patch);
+      return true;
+    } catch (e) {
+      this.syncLocalBookingUpdate(bookingId, {
+        phlebotomistAssigned: true,
+        phlebotomistName,
+        phlebotomistPhone,
+        phlebotomistGpsActive: true,
+        locationSharingActive: true,
+        phlebotomistCoords: initialCoords,
+        phlebotomistEta: etaText || '12 mins',
+        transitStatus: 'en_route_to_patient',
+        updatedAt: timestamp
+      });
+      return true;
+    }
+  },
+
+  /**
+   * Streams real-time GPS coordinates of the Mobile Phlebotomist while en route
+   */
+  async updatePhlebotomistLiveLocation(
+    labId: string = 'lab-1',
+    bookingId: string,
+    coords: { lat: number; lng: number },
+    etaText?: string
+  ): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+    const patch: Partial<PatientBooking> = {
+      phlebotomistCoords: coords,
+      phlebotomistGpsActive: true,
+      locationSharingActive: true,
+      ...(etaText ? { phlebotomistEta: etaText } : {}),
+      updatedAt: timestamp
+    };
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
+      if (bookingDoc) {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
+      }
+    } catch {}
+    this.syncLocalBookingUpdate(bookingId, patch);
+    return true;
+  },
+
+  /**
+   * Mobile Phlebotomist confirms "I have picked up the sample" at patient's location
+   */
+  async confirmPhlebotomistSamplePickedUp(
+    labId: string = 'lab-1',
+    bookingId: string,
+    phlebotomistName: string
+  ): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
+      const existingData = bookingDoc ? (bookingDoc.data() as PatientBooking) : undefined;
+      const bothConfirmed = Boolean(existingData?.patientSampleHandoverConfirmed);
+      const auditEvent = {
+        id: `aud-${Date.now()}`,
+        stage: 'PHLEBOTOMIST_PICKUP_CONFIRMED',
+        title: 'Mobile Phlebotomist Confirmed Sample Pickup',
+        details: `${phlebotomistName} confirmed specimen draw at patient's location.${bothConfirmed ? ' Mutual handover complete — live GPS stopped and specimen routed to In-Lab Bench.' : ' Awaiting patient handover confirmation on patient app.'}`,
+        actorName: phlebotomistName,
+        actorRole: 'mobile_phlebotomist',
+        timestamp
+      };
+      const patch: Partial<PatientBooking> = {
+        phlebotomistSamplePickedUp: true,
+        phlebotomistSamplePickedUpAt: timestamp,
+        ...(bothConfirmed
+          ? {
+              sampleHandoverVerified: true,
+              handoverConfirmedAt: timestamp,
+              locationSharingActive: false,
+              phlebotomistGpsActive: false,
+              transitStatus: 'arrived_at_lab',
+              overallStatus: 'Pending_Collection'
+            }
+          : {
+              transitStatus: 'sample_collected_returning_to_lab'
+            }),
+        auditTrail: [...(existingData?.auditTrail || []), auditEvent],
+        updatedAt: timestamp
+      };
+      if (bookingDoc) {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
+      }
+      this.syncLocalBookingUpdate(bookingId, patch);
+      return true;
+    } catch {
+      this.syncLocalBookingUpdate(bookingId, {
+        phlebotomistSamplePickedUp: true,
+        phlebotomistSamplePickedUpAt: timestamp,
+        transitStatus: 'sample_collected_returning_to_lab',
+        updatedAt: timestamp
+      });
+      return true;
+    }
+  },
+
+  /**
+   * Patient confirms "Yes, he has picked up the sample" on the patient app -> stops live GPS tracking & transitions to In-Lab Bench
+   */
+  async confirmPatientSampleHandover(
+    labId: string = 'lab-1',
+    bookingId: string,
+    patientName: string
+  ): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
+      const existingData = bookingDoc ? (bookingDoc.data() as PatientBooking) : undefined;
+      const auditEvent = {
+        id: `aud-${Date.now()}`,
+        stage: 'SAMPLE_HANDOVER_CONFIRMED',
+        title: 'Patient Confirmed Sample Pickup — Routed to In-Lab Phlebotomy',
+        details: `${patientName} confirmed specimen handover to mobile phlebotomist. Live courier GPS tracking terminated; specimen transferred to In-Lab Phlebotomy Bench for barcoding & rack storage.`,
+        actorName: patientName,
+        actorRole: 'patient',
+        timestamp
+      };
+      const patch: Partial<PatientBooking> = {
+        patientSampleHandoverConfirmed: true,
+        patientSampleHandoverConfirmedAt: timestamp,
+        sampleHandoverVerified: true,
+        handoverConfirmedAt: timestamp,
+        locationSharingActive: false,
+        phlebotomistGpsActive: false,
+        transitStatus: 'arrived_at_lab',
+        overallStatus: 'Pending_Collection',
+        auditTrail: [...(existingData?.auditTrail || []), auditEvent],
+        updatedAt: timestamp
+      };
+      if (bookingDoc) {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
+      }
+      this.syncLocalBookingUpdate(bookingId, patch);
+      return true;
+    } catch {
+      this.syncLocalBookingUpdate(bookingId, {
+        patientSampleHandoverConfirmed: true,
+        patientSampleHandoverConfirmedAt: timestamp,
+        sampleHandoverVerified: true,
+        handoverConfirmedAt: timestamp,
+        locationSharingActive: false,
+        phlebotomistGpsActive: false,
+        transitStatus: 'arrived_at_lab',
+        overallStatus: 'Pending_Collection',
+        updatedAt: timestamp
+      });
+      return true;
+    }
+  },
+
+  /**
    * Phlebotomist / Analyzer selects sample matrices physically drawn & completes collection
    * Supports per-test storage location, specimen sample type, barcode label, and analyzer access code tracking
    */
@@ -1125,9 +1416,11 @@ export const limsService = {
     collectedSamples: string[]; // e.g. ['Whole Blood (EDTA Tube)', 'Midstream Urine Container']
     collectorName: string;
     collectorAccessCode?: string;
+    sampleBarcode?: string;
+    storageLocation?: string;
     testStorageMap?: Record<string, { storageLocation: string; sampleType: string; sampleBarcode?: string }>;
   }): Promise<boolean> {
-    const { labId, bookingId, singleTestId, collectedSamples, collectorName, collectorAccessCode, testStorageMap } = params;
+    const { labId, bookingId, singleTestId, collectedSamples, collectorName, collectorAccessCode, sampleBarcode, storageLocation, testStorageMap } = params;
     const timestamp = new Date().toISOString();
 
     try {
@@ -1182,16 +1475,54 @@ export const limsService = {
         );
 
         const newOverallStatus = allCollectedOrDone ? 'In_Lab_Testing' : 'Pending_Collection';
+        const firstMapEntry = testStorageMap ? Object.values(testStorageMap)[0] : undefined;
+        const resolvedBarcode = sampleBarcode || firstMapEntry?.sampleBarcode || updatedTests.find(t => t.sampleBarcode)?.sampleBarcode || `BC-${data.bookingCode || bookingId.slice(-6).toUpperCase()}`;
+        const resolvedStorage = storageLocation || firstMapEntry?.storageLocation || updatedTests.find(t => t.storageLocation)?.storageLocation || 'Cold Rack A-1 (+4°C)';
+
+        const inLabAudit = {
+          id: `aud-${Date.now()}`,
+          stage: 'IN_LAB_BARCODED_STORED',
+          title: 'Specimen Barcoded & Stored in Lab Rack',
+          details: `In-Lab Phlebotomist ${collectorName} logged specimen [${collectedSamples.join(', ')}] with Barcode [${resolvedBarcode}] into Storage [${resolvedStorage}]. Routed to Lab Technician Worklist.`,
+          actorName: collectorName,
+          actorRole: 'phlebotomist',
+          timestamp,
+          metadata: { sampleBarcode: resolvedBarcode, storageLocation: resolvedStorage, collectedSamples }
+        };
+        const nextAuditTrail = [...(data.auditTrail || []), inLabAudit];
 
         await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
+          sampleCollected: true,
           collectedSamples,
           sampleCollectedAtDate: timestamp,
           sampleCollectedBy: collectorName,
           collectorAccessCode: collectorAccessCode || undefined,
+          sampleBarcode: resolvedBarcode,
+          storageLocation: resolvedStorage,
           overallStatus: newOverallStatus,
-          tests: updatedTests,
+          auditTrail: nextAuditTrail,
+          tests: updatedTests.map(t => ({
+            ...t,
+            sampleBarcode: t.sampleBarcode || resolvedBarcode,
+            storageLocation: t.storageLocation || resolvedStorage
+          })),
           updatedAt: timestamp
         }));
+        this.syncLocalBookingUpdate(bookingId, {
+          sampleCollected: true,
+          collectedSamples,
+          sampleCollectedAtDate: timestamp,
+          sampleCollectedBy: collectorName,
+          sampleBarcode: resolvedBarcode,
+          storageLocation: resolvedStorage,
+          overallStatus: newOverallStatus,
+          auditTrail: nextAuditTrail,
+          tests: updatedTests.map(t => ({
+            ...t,
+            sampleBarcode: t.sampleBarcode || resolvedBarcode,
+            storageLocation: t.storageLocation || resolvedStorage
+          }))
+        });
 
         // Sync to patient's document so patient tracker updates dynamically
         if (data.patientId) {
@@ -1474,6 +1805,49 @@ export const limsService = {
     }
 
     return { isAssignedToCurrentUser: true, assignedTechName: techName, canAccess: true };
+  },
+
+  /**
+   * Logs real-time timestamped audit event when Lab Technician opens a patient's test booklet
+   */
+  async logTechBookletOpened(labId: string = 'lab-1', bookingId: string, techName: string): Promise<void> {
+    if (!bookingId || !techName) return;
+    const timestamp = new Date().toISOString();
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
+      const existingData = bookingDoc ? (bookingDoc.data() as PatientBooking) : undefined;
+      const existingAudit = existingData?.auditTrail || [];
+      const recentlyOpened = existingAudit.some(a =>
+        a.stage === 'TECH_BOOKLET_OPENED' &&
+        a.actorName === techName &&
+        (Date.now() - new Date(a.timestamp).getTime()) < 10 * 60 * 1000
+      );
+      if (recentlyOpened) return;
+
+      const openAudit = {
+        id: `aud-${Date.now()}`,
+        stage: 'TECH_BOOKLET_OPENED',
+        title: 'Lab Technician Opened Analytical Worklist',
+        details: `Medical Technologist ${techName} opened specimen worklist (Barcode: ${existingData?.sampleBarcode || 'Verified'}) for analytical assay processing.`,
+        actorName: techName,
+        actorRole: 'lab_tech',
+        timestamp
+      };
+      const nextAudit = [...existingAudit, openAudit];
+      if (bookingDoc) {
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
+          assignedTechName: existingData?.assignedTechName || techName,
+          auditTrail: nextAudit,
+          updatedAt: timestamp
+        }));
+      }
+      this.syncLocalBookingUpdate(bookingId, {
+        assignedTechName: existingData?.assignedTechName || techName,
+        auditTrail: nextAudit
+      });
+    } catch {}
   },
 
   /**
@@ -1930,14 +2304,15 @@ export const limsService = {
     biologistName: string;
     biologistAccessCode: string;
     biologistRemarks?: string;
+    releaseChannel?: 'online_and_physical' | 'online_only' | 'physical_pickup';
   }): Promise<{ success: boolean; error?: string }> {
-    const { labId, bookingId, biologistName, biologistRemarks } = params;
+    const { labId, bookingId, biologistName, biologistRemarks, releaseChannel = 'online_and_physical' } = params;
     const timestamp = new Date().toISOString();
 
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const snap = await getDocs(bookingsCol);
-      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
@@ -1950,18 +2325,45 @@ export const limsService = {
           biologistConfirmedAt: timestamp
         }));
 
-        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
+        const channelLabel =
+          releaseChannel === 'online_only'
+            ? 'Available immediately on Patient Online Portal'
+            : releaseChannel === 'physical_pickup'
+              ? 'Available on Online Portal & Ready for Physical Sealed Pickup at Front Desk'
+              : 'Published to Online Patient Portal & Certified Hardcopy Ready for Lab Pickup';
+
+        const bioAudit = {
+          id: `aud-${Date.now()}`,
+          stage: 'BIOLOGIST_RELEASED',
+          title: 'Clinical Biologist Certified & Released Official Results',
+          details: `${biologistName} signed and certified diagnostic findings. ${channelLabel}.`,
+          actorName: biologistName,
+          actorRole: 'biologist',
+          timestamp,
+          metadata: { releaseChannel, remarks: biologistRemarks }
+        };
+        const nextAudit = [...(data.auditTrail || []), bioAudit];
+
+        const patch: Partial<PatientBooking> = {
           biologistSigned: true,
           biologistConfirmed: true,
           biologistName,
           biologistSignedAt: timestamp,
-          biologistConfirmedAt: timestamp,
+          biologistConfirmedAt: timestamp as any,
           biologistRemarks: biologistRemarks || 'Clinical findings reviewed and authorized for official release.',
           biologistPasscodeVerified: true,
+          resultsReady: true,
+          resultsReleased: true,
+          releaseChannel,
+          physicalPickupAlertSent: releaseChannel === 'online_and_physical' || releaseChannel === 'physical_pickup',
           overallStatus: 'Completed',
+          status: 'Completed',
+          auditTrail: nextAudit,
           tests: updatedTests,
           updatedAt: timestamp
-        }));
+        };
+
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
 
         // Sync to patient record
         if (data.patientId) {
@@ -2000,20 +2402,10 @@ export const limsService = {
           patientName: data.patientName,
           action: 'RELEASE_RESULTS',
           performedBy: { id: 'bio-1', name: biologistName, role: 'biologist' },
-          details: `Clinical Biologist ${biologistName} verified with passcode, reviewed findings, and officially released test results for Booking ${data.bookingCode}.`
+          details: `Clinical Biologist ${biologistName} verified with passcode, reviewed findings, and officially released test results (${releaseChannel}) for Booking ${data.bookingCode}.`
         });
 
-        this.syncLocalBookingUpdate(bookingId, {
-          biologistSigned: true,
-          biologistConfirmed: true,
-          biologistName,
-          biologistSignedAt: timestamp,
-          biologistConfirmedAt: timestamp,
-          biologistRemarks: biologistRemarks || 'Clinical findings reviewed and authorized for official release.',
-          overallStatus: 'Completed',
-          status: 'Completed',
-          tests: updatedTests
-        });
+        this.syncLocalBookingUpdate(bookingId, patch);
 
         return { success: true };
       }
@@ -2039,7 +2431,7 @@ export const limsService = {
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const snap = await getDocs(bookingsCol);
-      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId);
+      const bookingDoc = snap.docs.find(d => d.data().id === bookingId || d.id === bookingId || d.data().bookingCode === bookingId);
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
@@ -2054,16 +2446,32 @@ export const limsService = {
           completedAt: timestamp
         }));
 
-        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData({
+        const techAudit = {
+          id: `aud-${Date.now()}`,
+          stage: 'TECH_SIGNED_TO_BIOLOGIST',
+          title: 'Lab Technician Signed Off Results to Clinical Biologist',
+          details: `Medical Technologist ${techName} finalized analytical biomarker values (${updatedTests.length} test(s)) and forwarded dossier to Clinical Biologist for certification.`,
+          actorName: techName,
+          actorRole: 'lab_tech',
+          timestamp
+        };
+        const nextAudit = [...(data.auditTrail || []), techAudit];
+
+        const patch: any = {
           labTechSigned: true,
           labTechSignedAt: timestamp,
           labTechName: techName,
           labTechCode: techCode,
           reagentsUsed: reagentsUsed || [],
+          resultEnteredAt: timestamp,
           overallStatus: 'In_Lab_Testing',
+          auditTrail: nextAudit,
           tests: updatedTests,
           updatedAt: timestamp
-        }));
+        };
+
+        await updateDoc(doc(db, 'labs', labId, 'bookings', bookingDoc.id), cleanFirestoreData(patch));
+        this.syncLocalBookingUpdate(bookingId, patch);
 
         // Deduct reagents with quantity > 0
         if (Array.isArray(reagentsUsed) && reagentsUsed.length > 0) {
@@ -2241,15 +2649,33 @@ export const limsService = {
   },
 
   /**
-   * Fetch all bookings and requisitions for a lab
+   * Fetch all bookings and requisitions for a lab (merging Firestore + local ledger with newest-wins timestamp resolution)
    */
   async fetchAllBookings(labId: string): Promise<PatientBooking[]> {
-    const list: PatientBooking[] = [];
+    const mapByKey = new Map<string, PatientBooking>();
+    const upsertBooking = (item: PatientBooking) => {
+      const key = item.bookingCode || item.id;
+      if (!key) return;
+      const existing = mapByKey.get(key);
+      if (!existing) {
+        mapByKey.set(key, item);
+        return;
+      }
+      const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const incomingTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
+      if (incomingTime >= existingTime) {
+        mapByKey.set(key, { ...existing, ...item });
+      } else {
+        mapByKey.set(key, { ...item, ...existing });
+      }
+    };
+
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const snap = await getDocs(bookingsCol);
       snap.docs.forEach(d => {
-        list.push({ id: d.id, ...d.data() } as PatientBooking);
+        const data = d.data() as PatientBooking;
+        upsertBooking({ ...data, id: data.id || d.id });
       });
     } catch (e) {
       console.warn('Error fetching bookings from Firestore:', e);
@@ -2261,21 +2687,71 @@ export const limsService = {
       if (raw) {
         const localList: PatientBooking[] = JSON.parse(raw);
         localList.forEach(lb => {
-          const exists = list.some(b => b.id === lb.id || (b.bookingCode && b.bookingCode === lb.bookingCode));
-          if (!exists) {
-            list.unshift(lb);
-          } else {
-            const idx = list.findIndex(b => b.id === lb.id || (b.bookingCode && b.bookingCode === lb.bookingCode));
-            if (idx >= 0) {
-              list[idx] = { ...list[idx], ...lb };
-            }
+          if (!lb.labId || lb.labId === labId || labId === 'lab-1' || lb.isOnlineBooking) {
+            upsertBooking(lb);
           }
         });
       }
     } catch {}
 
-    // Sort newest-first based on creation timestamp
-    return list.sort((a, b) => {
+    return Array.from(mapByKey.values()).sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  },
+
+  /**
+   * Fetch all bookings across partner labs for Patient Portal live views
+   */
+  async fetchPatientBookingsAcrossLabs(extraLabIds: string[] = []): Promise<PatientBooking[]> {
+    const labIds = Array.from(new Set(['lab-1', 'lab-biosante', 'lab-central', 'lab-plus', ...extraLabIds.filter(Boolean)]));
+    try {
+      const labsSnap = await getDocs(collection(db, 'labs'));
+      labsSnap.docs.forEach(d => {
+        if (!labIds.includes(d.id)) labIds.push(d.id);
+      });
+    } catch {}
+
+    const mapByKey = new Map<string, PatientBooking>();
+    const upsertBooking = (item: PatientBooking) => {
+      const key = item.bookingCode || item.id;
+      if (!key) return;
+      const existing = mapByKey.get(key);
+      if (!existing) {
+        mapByKey.set(key, item);
+        return;
+      }
+      const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const incomingTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
+      if (incomingTime >= existingTime) {
+        mapByKey.set(key, { ...existing, ...item });
+      } else {
+        mapByKey.set(key, { ...item, ...existing });
+      }
+    };
+
+    await Promise.all(
+      labIds.map(async (lid) => {
+        try {
+          const snap = await getDocs(collection(db, 'labs', lid, 'bookings'));
+          snap.docs.forEach(d => {
+            const data = d.data() as PatientBooking;
+            upsertBooking({ ...data, id: data.id || d.id });
+          });
+        } catch {}
+      })
+    );
+
+    try {
+      const raw = localStorage.getItem('nanolabs_bookings_ledger');
+      if (raw) {
+        const localList: PatientBooking[] = JSON.parse(raw);
+        localList.forEach(lb => upsertBooking(lb));
+      }
+    } catch {}
+
+    return Array.from(mapByKey.values()).sort((a, b) => {
       const timeA = new Date(a.createdAt || 0).getTime();
       const timeB = new Date(b.createdAt || 0).getTime();
       return timeB - timeA;
@@ -2284,41 +2760,90 @@ export const limsService = {
 
   /**
    * Real-Time Live Subscription to Bookings and Test Statuses
-   * Direct deterministic subscription to Firestore bookings collection.
    */
   subscribeToBookings(
     labId: string = 'lab-1',
     onUpdate: (bookings: PatientBooking[]) => void,
     onError?: (err: any) => void
   ): () => void {
+    let latestFirestoreDocs: PatientBooking[] = [];
+
+    const emitMerged = () => {
+      const mapByKey = new Map<string, PatientBooking>();
+      const upsert = (item: PatientBooking) => {
+        const key = item.bookingCode || item.id;
+        if (!key) return;
+        const existing = mapByKey.get(key);
+        if (!existing) {
+          mapByKey.set(key, item);
+          return;
+        }
+        const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        const incomingTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
+        mapByKey.set(key, incomingTime >= existingTime ? { ...existing, ...item } : { ...item, ...existing });
+      };
+
+      latestFirestoreDocs.forEach(upsert);
+      try {
+        const raw = localStorage.getItem('nanolabs_bookings_ledger');
+        if (raw) {
+          const localList: PatientBooking[] = JSON.parse(raw);
+          localList.forEach(lb => {
+            if (!lb.labId || lb.labId === labId || labId === 'lab-1' || lb.isOnlineBooking) {
+              upsert(lb);
+            }
+          });
+        }
+      } catch {}
+
+      const sorted = Array.from(mapByKey.values()).sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime();
+        const timeB = new Date(b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+      onUpdate(sorted);
+    };
+
+    const handleLocalEvent = () => emitMerged();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('nanolabs_booking_updated', handleLocalEvent);
+    }
+
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const unsubscribe = onSnapshot(
         bookingsCol,
         (snap) => {
           try {
-            const rawDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as PatientBooking[];
-            const sorted = rawDocs.sort((a, b) => {
-              const timeA = new Date(a.createdAt || 0).getTime();
-              const timeB = new Date(b.createdAt || 0).getTime();
-              return timeB - timeA;
+            latestFirestoreDocs = snap.docs.map(d => {
+              const data = d.data() as PatientBooking;
+              return { ...data, id: data.id || d.id };
             });
-            onUpdate(sorted);
+            emitMerged();
           } catch (e) {
             console.warn('[LIMS Real-time Subscription Parse Error]:', e);
           }
         },
         (err) => {
           console.warn('[LIMS Real-time Subscription] Error:', err);
+          emitMerged();
           if (onError) onError(err);
         }
       );
-      return unsubscribe;
+      return () => {
+        unsubscribe();
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('nanolabs_booking_updated', handleLocalEvent);
+        }
+      };
     } catch (err) {
       console.warn('[LIMS Real-time Subscription Init] Error:', err);
-      // Immediate initial load fallback
       this.fetchAllBookings(labId).then(onUpdate).catch(() => onUpdate([]));
-      return () => {};
+      return () => {
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('nanolabs_booking_updated', handleLocalEvent);
+        }
+      };
     }
   },
 
@@ -2654,65 +3179,9 @@ export const limsService = {
   },
 
   /**
-   * Verified Directory of Accredited Partner Medical Practitioners (ONMC Cameroon)
+   * Verified Directory of Accredited Partner Medical Practitioners (Strictly runtime database — zero mock doctors)
    */
-  ACCREDITED_PARTNER_DOCTORS: [
-    {
-      id: 'doc-marc-mbassi',
-      name: 'Dr. Marc Mbassi',
-      specialty: 'Cardiologie & Hypertension',
-      licenseNumber: 'ONMC-CMR-10824',
-      hospital: 'Hôpital Général de Douala',
-      hospitalAffiliation: 'Hôpital Général de Douala',
-      phone: '+237 677 12 34 56',
-      email: 'dr.mbassi@hopitalgeneral-dla.cm',
-      status: 'active'
-    },
-    {
-      id: 'doc-suzanne-mbongo',
-      name: 'Dr. Suzanne Mbongo',
-      specialty: 'Endocrinologie & Diabétologie',
-      licenseNumber: 'ONMC-CMR-09412',
-      hospital: 'Hôpital Central de Yaoundé',
-      hospitalAffiliation: 'Hôpital Central de Yaoundé',
-      phone: '+237 699 23 45 67',
-      email: 'dr.mbongo@hcy-cm.org',
-      status: 'active'
-    },
-    {
-      id: 'doc-alexis-tchouamou',
-      name: 'Dr. Alexis Tchouamou',
-      specialty: 'Médecine Interne & Néphrologie',
-      licenseNumber: 'ONMC-CMR-14205',
-      hospital: 'Centre Médical Saint-Jérôme (Akwa)',
-      hospitalAffiliation: 'Centre Médical Saint-Jérôme (Akwa)',
-      phone: '+237 671 98 76 54',
-      email: 'dr.tchouamou@stjerome-med.cm',
-      status: 'active'
-    },
-    {
-      id: 'doc-eric-kamga',
-      name: 'Dr. Eric Kamga',
-      specialty: 'Pédiatrie & Santé Néonatale',
-      licenseNumber: 'ONMC-CMR-11789',
-      hospital: 'Hôpital Laquintinie de Douala',
-      hospitalAffiliation: 'Hôpital Laquintinie de Douala',
-      phone: '+237 690 45 67 89',
-      email: 'dr.kamga@laquintinie.cm',
-      status: 'active'
-    },
-    {
-      id: 'doc-carine-ebwele',
-      name: 'Dr. Carine Ebwele',
-      specialty: 'Gynécologie Obstétrique',
-      licenseNumber: 'ONMC-CMR-13540',
-      hospital: 'Clinique de la Paix Bonanjo',
-      hospitalAffiliation: 'Clinique de la Paix Bonanjo',
-      phone: '+237 675 88 99 00',
-      email: 'dr.ebwele@cliniquepaix.cm',
-      status: 'active'
-    }
-  ] as Doctor[],
+  ACCREDITED_PARTNER_DOCTORS: [] as Doctor[],
 
   /**
    * Helper to sync updates to local ledger cache
@@ -2753,11 +3222,22 @@ export const limsService = {
     notes?: string
   ): Promise<boolean> {
     const timestamp = new Date().toISOString();
+    const recAudit = {
+      id: `aud-${Date.now()}`,
+      stage: 'RECEPTIONIST_CONFIRMED',
+      title: 'Receptionist Confirmed Online Test Request',
+      details: `Receptionist ${validatorName} validated test request and routed order to Lab Cashier for itemized invoicing.${notes ? ` Note: ${notes}` : ''}`,
+      actorName: validatorName,
+      actorRole: 'receptionist',
+      timestamp
+    };
+
     const patch: Partial<PatientBooking> = {
       receptionistValidated: true,
       receptionistConfirmed: true as any,
       validatedBy: validatorName,
       validatedAt: timestamp,
+      invoiceStatus: 'pending_cashier',
       overallStatus: 'Pending_Payment',
       receptionistNotes: notes || undefined,
       updatedAt: timestamp
@@ -2776,11 +3256,13 @@ export const limsService = {
           validatedAt: timestamp,
           status: (t.status === 'Completed' ? t.status : 'Pending_Payment') as TestStatus
         }));
+        const nextAudit = [...(data.auditTrail || []), recAudit];
         await updateDoc(bookingRef, cleanFirestoreData({
           ...patch,
+          auditTrail: nextAudit,
           tests: updatedTests
         }));
-        this.syncLocalBookingUpdate(bookingId, { ...patch, tests: updatedTests });
+        this.syncLocalBookingUpdate(bookingId, { ...patch, auditTrail: nextAudit, tests: updatedTests });
         return true;
       }
 
@@ -2788,6 +3270,7 @@ export const limsService = {
       const qById = query(collection(db, 'labs', labId, 'bookings'), where('id', '==', bookingId));
       const snapById = await getDocs(qById);
       if (!snapById.empty) {
+        let nextAudit: any[] = [recAudit];
         for (const docMatch of snapById.docs) {
           const data = docMatch.data() as PatientBooking;
           const updatedTests = (data.tests || []).map(t => ({
@@ -2797,12 +3280,14 @@ export const limsService = {
             validatedAt: timestamp,
             status: (t.status === 'Completed' ? t.status : 'Pending_Payment') as TestStatus
           }));
+          nextAudit = [...(data.auditTrail || []), recAudit];
           await updateDoc(docMatch.ref, cleanFirestoreData({
             ...patch,
+            auditTrail: nextAudit,
             tests: updatedTests
           }));
         }
-        this.syncLocalBookingUpdate(bookingId, patch);
+        this.syncLocalBookingUpdate(bookingId, { ...patch, auditTrail: nextAudit });
         return true;
       }
 
@@ -2810,6 +3295,7 @@ export const limsService = {
       const qByCode = query(collection(db, 'labs', labId, 'bookings'), where('bookingCode', '==', bookingId));
       const snapByCode = await getDocs(qByCode);
       if (!snapByCode.empty) {
+        let nextAudit: any[] = [recAudit];
         for (const docMatch of snapByCode.docs) {
           const data = docMatch.data() as PatientBooking;
           const updatedTests = (data.tests || []).map(t => ({
@@ -2819,12 +3305,14 @@ export const limsService = {
             validatedAt: timestamp,
             status: (t.status === 'Completed' ? t.status : 'Pending_Payment') as TestStatus
           }));
+          nextAudit = [...(data.auditTrail || []), recAudit];
           await updateDoc(docMatch.ref, cleanFirestoreData({
             ...patch,
+            auditTrail: nextAudit,
             tests: updatedTests
           }));
         }
-        this.syncLocalBookingUpdate(bookingId, patch);
+        this.syncLocalBookingUpdate(bookingId, { ...patch, auditTrail: nextAudit });
         return true;
       }
     } catch (e) {
@@ -2836,7 +3324,7 @@ export const limsService = {
   },
 
   /**
-   * Cashier generates the official itemized lab invoice with real lab payment channels
+   * Cashier generates the official itemized lab invoice with real lab payment channels (STRICTLY for Online Patients)
    */
   async generateInvoiceByCashier(
     labId: string = 'lab-1',
@@ -2846,12 +3334,35 @@ export const limsService = {
       labPaymentDetails?: any;
       addOns?: any[];
       totalAmount?: number;
+      testsAmount?: number;
+      homePickupFee?: number;
+      homeDeliveryFee?: number;
     }
   ): Promise<{ success: boolean; invoiceNumber: string }> {
     const timestamp = new Date().toISOString();
     const invoiceNumber = this.generateInvoiceCode();
+
+    // Look up existing booking to check insurance split & auditTrail
+    let existingBooking: PatientBooking | undefined;
+    let existingDocRef: any = null;
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const found = snap.docs.find(d => d.id === bookingId || d.data().id === bookingId || d.data().bookingCode === bookingId);
+      if (found) {
+        existingBooking = found.data() as PatientBooking;
+        existingDocRef = found.ref;
+      }
+    } catch {}
+    if (!existingBooking) {
+      try {
+        const raw = localStorage.getItem('nanolabs_bookings_ledger');
+        const list: PatientBooking[] = raw ? JSON.parse(raw) : [];
+        existingBooking = list.find(b => b.id === bookingId || b.bookingCode === bookingId);
+      } catch {}
+    }
     
-    // Default authentic lab payment channels (MTN MoMo, Orange Money, Bank)
+    // Load authentic lab payment channels from Lab Admin configuration
     let labPaymentDetails = options?.labPaymentDetails;
     if (!labPaymentDetails) {
       try {
@@ -2860,40 +3371,48 @@ export const limsService = {
           const lData = labDoc.data();
           labPaymentDetails = {
             mtnMomoNumber: lData.mtnMomoNumber || lData.paymentAccounts?.mtnMomoNumber || '+237 670 123 456',
-            mtnMomoName: lData.mtnMomoName || lData.paymentAccounts?.mtnMomoName || lData.name || 'nanoLabs Central Diagnostics',
+            mtnMomoName: lData.mtnMomoName || lData.paymentAccounts?.mtnMomoName || lData.name || existingBooking?.labName || 'Accredited Diagnostic Laboratory',
             orangeMoneyNumber: lData.orangeMoneyNumber || lData.paymentAccounts?.orangeMoneyNumber || '+237 690 123 456',
-            orangeMoneyName: lData.orangeMoneyName || lData.paymentAccounts?.orangeMoneyName || lData.name || 'nanoLabs Central Diagnostics',
-            bankName: lData.bankName || 'Afriland First Bank Cameroon',
-            bankAccountName: lData.bankAccountName || lData.name || 'nanoLabs Diagnostics SARL',
-            bankAccountNumber: lData.bankAccountNumber || '10005 00012 34567890123 45'
+            orangeMoneyName: lData.orangeMoneyName || lData.paymentAccounts?.orangeMoneyName || lData.name || existingBooking?.labName || 'Accredited Diagnostic Laboratory',
+            bankName: lData.bankName || lData.paymentAccounts?.bankName || 'Afriland First Bank Cameroon',
+            bankAccountName: lData.bankAccountName || lData.paymentAccounts?.bankAccountName || lData.name || existingBooking?.labName || 'Accredited Diagnostic Laboratory SARL',
+            bankAccountNumber: lData.bankAccountNumber || lData.paymentAccounts?.bankAccountNumber || '10005 00012 34567890123 45'
           };
         }
       } catch {}
     }
 
     if (!labPaymentDetails) {
+      const fallbackLabName = existingBooking?.labName || 'Accredited Diagnostic Laboratory';
       labPaymentDetails = {
         mtnMomoNumber: '+237 670 123 456',
-        mtnMomoName: 'nanoLabs Central Diagnostics (MoMo Merchant)',
+        mtnMomoName: `${fallbackLabName} (MoMo Merchant)`,
         orangeMoneyNumber: '+237 690 123 456',
-        orangeMoneyName: 'nanoLabs Central Diagnostics (OM Merchant)',
+        orangeMoneyName: `${fallbackLabName} (OM Merchant)`,
         bankName: 'Afriland First Bank Cameroon',
-        bankAccountName: 'nanoLabs Diagnostics SARL',
+        bankAccountName: `${fallbackLabName} SARL`,
         bankAccountNumber: '10005 00012 34567890123 45'
       };
     }
 
     // Dynamic Billing Engine Formula:
     // Total Invoice Amount = Primary Lab Test Cost + Justifiable Additional Costs
-    const primaryLabTestCost = Number((options as any)?.testsAmount) || 0;
+    const primaryLabTestCost = Number(options?.testsAmount ?? existingBooking?.testsAmount ?? existingBooking?.tests?.reduce((s, t) => s + (t.price || 0), 0)) || 0;
     const addOnsItems = options?.addOns || [];
-    const addOnsTotal = addOnsItems.reduce((sum: number, it: any) => sum + (Number(it.price) || 0), 0);
-    const pickupFee = Number((options as any)?.homePickupFee) || 0;
-    const deliveryFee = Number((options as any)?.homeDeliveryFee) || 0;
+    const addOnsTotal = addOnsItems.reduce((sum: number, it: any) => sum + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0);
+    const pickupFee = Number(options?.homePickupFee ?? existingBooking?.homePickupFee) || 0;
+    const deliveryFee = Number(options?.homeDeliveryFee ?? existingBooking?.homeDeliveryFee) || 0;
     const justifiableAdditionalCosts = pickupFee + deliveryFee + addOnsTotal;
     const computedTotalAmount = options?.totalAmount !== undefined 
       ? options.totalAmount 
       : (primaryLabTestCost + justifiableAdditionalCosts);
+
+    // Automatic Insurance Split if patient configured insurance on this booking
+    const isInsured = Boolean(existingBooking?.hasInsurance && existingBooking?.insuranceProvider);
+    const coveragePct = isInsured ? Number(existingBooking?.insuranceCoveragePercent ?? 80) : 0;
+    const coPayPct = isInsured ? (100 - coveragePct) : 100;
+    const insuranceCoveredAmount = isInsured ? Math.round(computedTotalAmount * (coveragePct / 100)) : 0;
+    const patientCoPayAmount = computedTotalAmount - insuranceCoveredAmount;
 
     // Call server-side dynamic billing engine for official audit & consistency
     let serverGeneratedInvoiceNumber = invoiceNumber;
@@ -2923,6 +3442,17 @@ export const limsService = {
 
     const effectiveInvoiceNumber = serverGeneratedInvoiceNumber || invoiceNumber;
 
+    const invAudit = {
+      id: `aud-${Date.now()}`,
+      stage: 'INVOICE_ISSUED',
+      title: `Official Cashier Invoice Issued (${effectiveInvoiceNumber})`,
+      details: `Cashier ${cashierName} generated itemized invoice: Primary Tests ${primaryLabTestCost.toLocaleString()} FCFA + Justifiable Fees ${justifiableAdditionalCosts.toLocaleString()} FCFA = ${computedTotalAmount.toLocaleString()} FCFA.${isInsured ? ` Automatic Insurance Split (${existingBooking?.insuranceProvider} ${coveragePct}%): Insurer ${insuranceCoveredAmount.toLocaleString()} FCFA / Patient Net Payable ${patientCoPayAmount.toLocaleString()} FCFA.` : ''}`,
+      actorName: cashierName,
+      actorRole: 'cashier',
+      timestamp,
+      metadata: { invoiceNumber: effectiveInvoiceNumber, totalAmount: computedTotalAmount, patientCoPayAmount }
+    };
+
     const patch: Partial<PatientBooking> = {
       invoiceNumber: effectiveInvoiceNumber,
       invoiceGenerated: true,
@@ -2936,32 +3466,26 @@ export const limsService = {
       homeDeliveryFee: deliveryFee,
       addOns: addOnsItems,
       addOnsAmount: addOnsTotal,
+      ...(isInsured ? {
+        insuranceCoveragePercent: coveragePct,
+        coPayPercent: coPayPct,
+        insuranceCoveredAmount,
+        insuranceClaimAmount: insuranceCoveredAmount,
+        patientCoPayAmount
+      } : {}),
+      auditTrail: [...(existingBooking?.auditTrail || []), invAudit],
       updatedAt: timestamp
     };
 
     try {
-      const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
-      await updateDoc(bookingRef, cleanFirestoreData(patch));
-    } catch (e) {
-      try {
-        const qById = query(collection(db, 'labs', labId, 'bookings'), where('id', '==', bookingId));
-        const snapById = await getDocs(qById);
-        if (!snapById.empty) {
-          for (const d of snapById.docs) {
-            await updateDoc(d.ref, cleanFirestoreData(patch));
-          }
-        } else {
-          const qByCode = query(collection(db, 'labs', labId, 'bookings'), where('bookingCode', '==', bookingId));
-          const snapByCode = await getDocs(qByCode);
-          if (!snapByCode.empty) {
-            for (const d of snapByCode.docs) {
-              await updateDoc(d.ref, cleanFirestoreData(patch));
-            }
-          }
-        }
-      } catch (err2) {
-        console.warn('Firestore update in generateInvoiceByCashier bypassed:', err2);
+      if (existingDocRef) {
+        await updateDoc(existingDocRef, cleanFirestoreData(patch));
+      } else {
+        const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
+        await updateDoc(bookingRef, cleanFirestoreData(patch));
       }
+    } catch (err2) {
+      console.warn('Firestore update in generateInvoiceByCashier bypassed:', err2);
     }
 
     this.syncLocalBookingUpdate(bookingId, patch);
@@ -2969,7 +3493,8 @@ export const limsService = {
   },
 
   /**
-   * Patient submits third-party transaction reference / receipt for verification
+   * Patient submits third-party transaction reference / payment ID for Cashier verification
+   * CRITICAL: Does NOT mark paymentStatus = 'paid' — sends to Cashier's Pending Confirmation queue!
    */
   async submitPatientPaymentProof(
     labId: string = 'lab-1',
@@ -2978,18 +3503,48 @@ export const limsService = {
     paymentMethod: string = 'mobile_money'
   ): Promise<boolean> {
     const timestamp = new Date().toISOString();
+    let existingBooking: PatientBooking | undefined;
+    let existingDocRef: any = null;
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const found = snap.docs.find(d => d.id === bookingId || d.data().id === bookingId || d.data().bookingCode === bookingId);
+      if (found) {
+        existingBooking = found.data() as PatientBooking;
+        existingDocRef = found.ref;
+      }
+    } catch {}
+
+    const submitAudit = {
+      id: `aud-${Date.now()}`,
+      stage: 'PAYMENT_SUBMITTED',
+      title: 'Patient Submitted Third-Party Payment Reference',
+      details: `Patient submitted ${paymentMethod.toUpperCase()} Transaction ID [${txReference.trim()}]. Routed to Lab Cashier Pending Confirmation queue for verification.`,
+      actorName: existingBooking?.patientName || 'Online Patient',
+      actorRole: 'patient',
+      timestamp,
+      metadata: { txReference: txReference.trim(), paymentMethod }
+    };
+
     const patch: Partial<PatientBooking> = {
       transactionReference: txReference.trim(),
       paymentProofSubmitted: true,
       paymentProofSubmittedAt: timestamp,
+      invoiceStatus: 'payment_submitted',
+      paymentStatus: 'unpaid',
       paymentMethod,
       overallStatus: 'Pending_Payment',
+      auditTrail: [...(existingBooking?.auditTrail || []), submitAudit],
       updatedAt: timestamp
     };
 
     try {
-      const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
-      await updateDoc(bookingRef, cleanFirestoreData(patch));
+      if (existingDocRef) {
+        await updateDoc(existingDocRef, cleanFirestoreData(patch));
+      } else {
+        const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
+        await updateDoc(bookingRef, cleanFirestoreData(patch));
+      }
     } catch (e) {
       console.warn('Firestore payment proof update bypassed:', e);
     }
@@ -3009,19 +3564,48 @@ export const limsService = {
     txRef?: string
   ): Promise<boolean> {
     const timestamp = new Date().toISOString();
+    let existingBooking: PatientBooking | undefined;
+    let existingDocRef: any = null;
+    try {
+      const bookingsCol = collection(db, 'labs', labId, 'bookings');
+      const snap = await getDocs(bookingsCol);
+      const found = snap.docs.find(d => d.id === bookingId || d.data().id === bookingId || d.data().bookingCode === bookingId);
+      if (found) {
+        existingBooking = found.data() as PatientBooking;
+        existingDocRef = found.ref;
+      }
+    } catch {}
+
+    const verifyAudit = {
+      id: `aud-${Date.now()}`,
+      stage: 'PAYMENT_VERIFIED',
+      title: 'Cashier Verified Payment & Issued Certified Lab Receipt',
+      details: `Cashier ${cashierName} verified transaction [${txRef || existingBooking?.transactionReference || method}] and issued Certified Lab Receipt. ${existingBooking?.homeCollection ? 'Dispatched to Mobile Phlebotomist.' : 'Ready at In-Lab Phlebotomy Bench.'}`,
+      actorName: cashierName,
+      actorRole: 'cashier',
+      timestamp
+    };
+
     const patch: Partial<PatientBooking> = {
       paymentStatus: 'paid',
+      invoiceStatus: 'payment_confirmed',
       paidAt: timestamp,
       paymentMethod: method,
       paymentProcessedBy: cashierName,
-      transactionReference: txRef || undefined,
+      transactionReference: txRef || existingBooking?.transactionReference || undefined,
       overallStatus: 'Pending_Collection',
+      ...(existingBooking?.homeCollection ? { transitStatus: 'pending_dispatch' } : {}),
+      auditTrail: [...(existingBooking?.auditTrail || []), verifyAudit],
       updatedAt: timestamp
     };
 
     try {
-      const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
-      await updateDoc(bookingRef, cleanFirestoreData(patch));
+      if (existingDocRef) {
+        await updateDoc(existingDocRef, cleanFirestoreData(patch));
+      } else {
+        const bookingRef = doc(db, 'labs', labId, 'bookings', bookingId);
+        await updateDoc(bookingRef, cleanFirestoreData(patch));
+      }
     } catch (e) {}
 
     this.syncLocalBookingUpdate(bookingId, patch);
@@ -3103,7 +3687,6 @@ export const limsService = {
       hospital: d.hospital,
       phone: d.phone,
       email: d.email,
- 
       status: 'active',
       invitationStatus: 'accepted'
     }));
@@ -3118,11 +3701,18 @@ export const limsService = {
     const cleanQuery = query.trim().toLowerCase();
     const map = new Map<string, Doctor>();
 
-    // Seed with official accredited partner doctors
-    this.ACCREDITED_PARTNER_DOCTORS.forEach(docObj => {
-      const key = (docObj.phone || docObj.licenseNumber || docObj.id || docObj.name).trim().toLowerCase();
-      map.set(key, docObj);
-    });
+    // Include real registered doctors from localStorage if present (zero mock data)
+    try {
+      const localRaw = localStorage.getItem('nanolabs_registered_doctors');
+      if (localRaw) {
+        const parsedLocal: Doctor[] = JSON.parse(localRaw);
+        parsedLocal.forEach(docObj => {
+          if (!docObj || !docObj.name) return;
+          const key = (docObj.phone || docObj.licenseNumber || docObj.email || docObj.id || docObj.name).trim().toLowerCase();
+          if (key) map.set(key, docObj);
+        });
+      }
+    } catch {}
 
     try {
       // 1. Fetch from global accredited doctors collection
@@ -3475,7 +4065,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData, id: d.id, };
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -3747,7 +4337,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -3820,7 +4410,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
@@ -3841,7 +4431,7 @@ export const limsService = {
   },
 
   /**
-   * Share Diagnostic Results Directly to Doctor Portal (Patient-Driven, Zero-Fee)
+   * Share Diagnostic Results Directly to Connected Doctor Portal (Patient-Driven, Configurable Visibility Duration)
    */
   async shareResultsWithDoctorPortal(params: {
     patientId: string;
@@ -3854,33 +4444,52 @@ export const limsService = {
     tests?: any[];
     personalNotes?: string;
     labName?: string;
-  }): Promise<{ success: boolean; shareId: string }> {
+    visibilityDuration?: '24h' | '7d' | '30d' | 'permanent';
+    shareScope?: 'single' | 'batch';
+  }): Promise<{ success: boolean; shareId: string; expiresAt: string | null }> {
     const timestamp = new Date().toISOString();
     const shareId = `share-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const duration = params.visibilityDuration || '7d';
+    let expiresAt: string | null = null;
+    if (duration === '24h') {
+      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    } else if (duration === '7d') {
+      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (duration === '30d') {
+      expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    const shareRecord = {
+      id: shareId,
+      patientId: params.patientId,
+      patientName: params.patientName,
+      doctorId: params.doctorId,
+      doctorName: params.doctorName,
+      doctorEmail: params.doctorEmail || '',
+      testBatchName: params.testBatchName || 'Clinical Diagnostic Report',
+      testIds: params.testIds || [],
+      tests: params.tests || [],
+      personalNotes: params.personalNotes || '',
+      labName: params.labName || 'Accredited Diagnostic Laboratory',
+      visibilityDuration: duration,
+      shareScope: params.shareScope || 'batch',
+      expiresAt,
+      sharedAt: timestamp,
+      status: 'pending_review'
+    };
 
     try {
-      const shareRecord = {
-        id: shareId,
-        patientId: params.patientId,
-        patientName: params.patientName,
-        doctorId: params.doctorId,
-        doctorName: params.doctorName,
-        doctorEmail: params.doctorEmail || '',
-        testBatchName: params.testBatchName || 'Clinical Diagnostic Report',
-        testIds: params.testIds || [],
-        tests: params.tests || [],
-        personalNotes: params.personalNotes || '',
-        labName: params.labName || 'Central Diagnostic Laboratory',
-        sharedAt: timestamp,
-        status: 'pending_review'
-      };
+      const existingRaw = localStorage.getItem('nanolabs_doctor_shared_results');
+      const existingList = existingRaw ? JSON.parse(existingRaw) : [];
+      localStorage.setItem('nanolabs_doctor_shared_results', JSON.stringify([shareRecord, ...existingList].slice(0, 100)));
+    } catch {}
 
-      // Save into global shared results for doctor portal retrieval
+    try {
       await addDoc(collection(db, 'doctor_shared_results'), cleanFirestoreData(shareRecord));
-      return { success: true, shareId };
+      return { success: true, shareId, expiresAt };
     } catch (e) {
       console.warn('Error saving doctor shared result in Firestore:', e);
-      return { success: true, shareId };
+      return { success: true, shareId, expiresAt };
     }
   },
 

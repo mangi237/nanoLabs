@@ -36,16 +36,32 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const [selectedTests, setSelectedTests] = useState<MatchedPrescriptionTest[]>([]);
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [showManualPicker, setShowManualPicker] = useState(false);
+  const [detectedDoctor, setDetectedDoctor] = useState<string | undefined>();
+  const [detectedHospital, setDetectedHospital] = useState<string | undefined>();
+  const [scanCompletedOnce, setScanCompletedOnce] = useState(false);
 
   const handleRunScan = async (sourceTextOrFile: string | File) => {
     setIsScanning(true);
+    setScanCompletedOnce(false);
     try {
       const result = await scanPrescriptionDocument(sourceTextOrFile);
       setMatchedTests(result.matchedTests);
       setUnmatchedLines(result.unmatchedLines);
-      setSelectedTests(result.matchedTests); // default select all matched
+      setSelectedTests(result.matchedTests);
+      setDetectedDoctor(result.detectedDoctorName);
+      setDetectedHospital(result.detectedHospital);
+      if (result.detectedDoctorName) {
+        try {
+          sessionStorage.setItem('nanolabs_scanned_doctor', result.detectedDoctorName);
+          if (result.detectedHospital) {
+            sessionStorage.setItem('nanolabs_scanned_hospital', result.detectedHospital);
+          }
+        } catch {}
+      }
+      setScanCompletedOnce(true);
     } catch (e) {
       console.error(e);
+      setScanCompletedOnce(true);
     } finally {
       setIsScanning(false);
     }
@@ -95,7 +111,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const filteredManualTests = MASTER_TEST_DICTIONARY.filter(
     (t) =>
       t.name.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
-      t.frenchName?.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
+      t.frenchName.toLowerCase().includes(manualSearchQuery.toLowerCase()) ||
       t.code.toLowerCase().includes(manualSearchQuery.toLowerCase())
   );
 
@@ -177,6 +193,38 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
           <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-[#0F766E] animate-pulse">
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span>Scanning prescription lines & cross-referencing CEMAC test catalog...</span>
+          </div>
+        )}
+
+        {!isScanning && scanCompletedOnce && matchedTests.length === 0 && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>No standard catalog tests automatically matched from this image</span>
+            </div>
+            <p className="text-xs text-amber-800">
+              {unmatchedLines.length > 0
+                ? `Detected text: "${unmatchedLines.join(', ')}". You can pick the exact tests from the Master Catalog below.`
+                : 'Please ensure the prescription is well-lit and in focus, or pick your requested tests directly from the Master Catalog.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowManualPicker(true)}
+              className="px-4 py-2 bg-[#0F766E] text-white rounded-xl text-xs font-bold cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Pick Tests from Master Catalog</span>
+            </button>
+          </div>
+        )}
+
+        {detectedDoctor && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 flex items-center justify-between">
+            <div>
+              <span className="font-bold">Prescribing Doctor Detected:</span> {detectedDoctor}
+              {detectedHospital ? ` (${detectedHospital})` : ''}
+            </div>
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
           </div>
         )}
       </div>
