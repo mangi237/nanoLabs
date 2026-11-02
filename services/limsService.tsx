@@ -3,6 +3,7 @@ import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
 import { ReferringDoctor, Doctor } from '../types';
+import { checkLabMonthlyTestQuota, isLabMobilePhlebotomyEnabled } from '../utils/labPackages';
 
 export type { MasterTestItem, ReferringDoctor, Doctor };
 
@@ -477,8 +478,9 @@ export const limsService = {
 
     const isValidated = receptionistValidated !== undefined ? receptionistValidated : isStaffCreator;
 
-    // Determine lab pricing model (platform subscription or per-test system fee)
+    // Determine lab pricing model AND strictly enforce package monthly test quota & mobile phlebotomist opt-in
     let feePerTest = 0;
+    let quotaErrorToThrow: string | null = null;
     try {
       const labDocRef = doc(db, 'labs', labId);
       const labDocSnap = await getDoc(labDocRef);
@@ -487,15 +489,41 @@ export const limsService = {
         if (labData.pricingModel === 'pay_per_test') {
           feePerTest = labData.feePerTest !== undefined ? Number(labData.feePerTest) : 500;
         }
+
+        const labWithId = { id: labId, ...labData };
+        if (homeCollection && !isLabMobilePhlebotomyEnabled(labWithId)) {
+          quotaErrorToThrow = `${labData.name || 'This laboratory'} operates Walk-In sample collection only and does not dispatch Mobile Phlebotomists.`;
+        } else {
+          const requestedCount = Math.max(1, (selectedTests?.length || 0) + (selectedMasterTestIds?.length || 0));
+          const nowMonthPrefix = new Date().toISOString().slice(0, 7); // YYYY-MM
+          const existingSnap = await getDocs(collection(db, 'labs', labId, 'bookings'));
+          const monthTestsUsed = existingSnap.docs.reduce((acc, d) => {
+            const bData = d.data();
+            const createdStr = String(bData.createdAt || '');
+            if (!createdStr || createdStr.startsWith(nowMonthPrefix)) {
+              return acc + Math.max(1, Array.isArray(bData.tests) ? bData.tests.length : 1);
+            }
+            return acc;
+          }, 0);
+
+          const quota = checkLabMonthlyTestQuota(labWithId, monthTestsUsed, requestedCount);
+          if (!quota.allowed && quota.errorMessage) {
+            quotaErrorToThrow = quota.errorMessage;
+          }
+        }
       }
     } catch (labErr) {
       console.warn('Could not read lab pricing model for fee check:', labErr);
     }
 
+    if (quotaErrorToThrow) {
+      throw new Error(quotaErrorToThrow);
+    }
+
     let testItems: BookingTestItem[] = [];
 
     if (selectedTests && selectedTests.length > 0) {
-      testItems = selectedTests.map((t: any, idx: any ) => {
+      testItems = selectedTests.map((t, idx) => {
         const base = t.basePrice || t.price || 5000;
         const sFee = t.systemFee !== undefined ? t.systemFee : feePerTest;
         const tot = t.totalPrice || (base + sFee);
@@ -515,7 +543,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp:any) => ({
+          subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -524,7 +552,7 @@ export const limsService = {
       });
     } else {
       const catalog = await this.getMasterTestCatalog(labId);
-      testItems = (selectedMasterTestIds || []).map((masterId : any, idx : any) => {
+      testItems = (selectedMasterTestIds || []).map((masterId, idx) => {
         const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       {
@@ -4065,7 +4093,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {  ...existingData , id: d.id,};
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -4337,7 +4365,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -4410,7 +4438,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {

@@ -16,6 +16,7 @@ import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { limsService } from '../../services/limsService';
 import { DoctorOption } from '../../components/common/DoctorCardSelect';
+import { canLabUseFeature } from '../../utils/labPackages';
 
 interface BookingSummaryScreenProps {
   lab: PartnerLabItem;
@@ -52,7 +53,10 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
     activeProfile?.insurancePolicyNumber || (user as any)?.insurancePolicyNumber || '';
   const hasConfiguredInsurance = Boolean(configuredInsuranceProvider && configuredPolicyNumber);
 
-  const [useInsurance, setUseInsurance] = useState<boolean>(hasConfiguredInsurance);
+  const labSupportsInsurance = canLabUseFeature(lab, 'insurance');
+  const [useInsurance, setUseInsurance] = useState<boolean>(
+    hasConfiguredInsurance && labSupportsInsurance
+  );
   const [insuranceProviderInput, setInsuranceProviderInput] = useState<string>(
     configuredInsuranceProvider || 'ASCOMA Cameroun'
   );
@@ -61,6 +65,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
     initialPickupAddress || 'Boulevard de la Liberté, Akwa, Douala'
   );
   const [submitting, setSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState<string>('');
 
   // Real platform doctors directory (zero mock doctors)
   const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
@@ -140,6 +145,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
 
   const handleRequestBooking = async () => {
     try {
+      setBookingError('');
       setSubmitting(true);
       const patientPid =
         activeProfile.id || user?.patientId || user?.id || `PT-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -211,8 +217,11 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       sessionStorage.removeItem('nanolabs_scanned_doctor');
       sessionStorage.removeItem('nanolabs_scanned_hospital');
       onBookingRequested(created);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to submit online test request:', err);
+      setBookingError(
+        err?.message || 'Could not submit test request. Please try again or choose another laboratory.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -264,7 +273,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         )}
       </div>
 
-      {/* Insurance Toggle & Details (Sent to Receptionist & Cashier for Automatic Split) */}
+      {/* Insurance Toggle & Details (Gated by Laboratory Package) */}
       <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -272,23 +281,31 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
             <div>
               <h4 className="text-xs font-extrabold text-slate-900">Apply Health Insurance (Tiers-Payant)</h4>
               <p className="text-[11px] text-slate-500">
-                Lab Cashier sees your insurance details and automatically splits your invoice ({coveragePercent}% insurer / {100 - coveragePercent}% patient)
+                {labSupportsInsurance
+                  ? `Lab Cashier sees your insurance details and automatically splits your invoice (${coveragePercent}% insurer / ${100 - coveragePercent}% patient)`
+                  : `${lab.name} accepts direct Mobile Money / Cash billing only on its current subscription package.`}
               </p>
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer shrink-0">
-            <input
-              type="checkbox"
-              checked={useInsurance}
-              onChange={(e) => setUseInsurance(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#006978]"></div>
-          </label>
+          {labSupportsInsurance ? (
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={useInsurance}
+                onChange={(e) => setUseInsurance(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#006978]"></div>
+            </label>
+          ) : (
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 shrink-0">
+              Direct Pay Only
+            </span>
+          )}
         </div>
 
-        {useInsurance && (
+        {labSupportsInsurance && useInsurance && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
             <div>
               <label className="text-[11px] font-bold text-slate-600 block mb-1">Insurance Provider (Caisse):</label>
@@ -496,6 +513,12 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         </div>
         <CheckCircle2 className="w-7 h-7 text-[#006978] shrink-0" />
       </div>
+
+      {bookingError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold">
+          {bookingError}
+        </div>
+      )}
 
       {/* Submit Test Request Button (No Pre-Payment) */}
       <div className="pt-1">

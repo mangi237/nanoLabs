@@ -14,11 +14,13 @@ import {
   Check,
   FlaskConical,
   X,
-  Crosshair
+  Crosshair,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { limsService, PatientBooking } from '../../services/limsService';
 import { LiveCourierTrackingMap } from '../../components/maps/GoogleMapsWidgets';
+import { isLabMobilePhlebotomyEnabled } from '../../utils/labPackages';
 
 interface SpecimenModalData {
   booking: PatientBooking;
@@ -30,6 +32,10 @@ const DEFAULT_LAB_COORDS = { lat: 4.0511, lng: 9.7679 };
 export const PhlebotomyDispatchScreen: React.FC = () => {
   const { user, lab } = useAuth();
   const targetLabId = lab?.id || user?.labId || 'lab-1';
+  const mobilePhlebEnabled = isLabMobilePhlebotomyEnabled(lab);
+  const isAdmin =
+    ['admin', 'superadmin', 'administrator', 'lab_admin', 'manager'].includes(String(user?.role || '').toLowerCase()) ||
+    (Array.isArray(user?.roles) && user.roles.includes('admin'));
 
   const [activeTab, setActiveTab] = useState<'home_requests' | 'active_transits'>('home_requests');
   const [bookings, setBookings] = useState<PatientBooking[]>([]);
@@ -94,16 +100,25 @@ export const PhlebotomyDispatchScreen: React.FC = () => {
     setWatchingBookingId(null);
   };
 
-  // Pending Home Collection Requests: strictly PAID home-collection bookings not yet handed over to In-Lab bench
+  // Pending Home Collection Requests: strictly PAID home-collection bookings for THIS lab & courier
   const homeRequests = bookings.filter((b) => {
+    const belongsToLab = !b.labId || b.labId === targetLabId;
     const isHome = Boolean(b.homeCollection || (b as any).collectionType === 'home' || b.pickupLocation);
     const isPaid = b.paymentStatus === 'paid';
     const handedOverToLab = Boolean(b.sampleHandoverVerified || b.transitStatus === 'arrived_at_lab' || b.sampleCollected);
+
+    // If a non-admin mobile phlebotomist is logged in, show unassigned pickups for their lab OR pickups assigned to them
+    const assignedCourier = String(b.phlebotomistName || '').trim().toLowerCase();
+    const currentCourier = String(dutyPhlebotomistName || '').trim().toLowerCase();
+    const belongsToCourier =
+      isAdmin || !assignedCourier || assignedCourier === currentCourier || assignedCourier.includes(String(user?.name || '').trim().toLowerCase());
+
     const matchesSearch =
-      b.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (b.pickupLocation || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return isHome && isPaid && !handedOverToLab && b.overallStatus !== 'Completed' && matchesSearch;
+      String(b.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(b.bookingCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(b.pickupLocation || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+    return belongsToLab && belongsToCourier && isHome && isPaid && !handedOverToLab && b.overallStatus !== 'Completed' && matchesSearch;
   });
 
   // Active live GPS transits
@@ -223,6 +238,23 @@ export const PhlebotomyDispatchScreen: React.FC = () => {
       setIsSubmittingCollection(false);
     }
   };
+
+  if (!mobilePhlebEnabled) {
+    return (
+      <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-sm text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center mx-auto">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-black text-slate-900">Mobile Phlebotomist Not Enabled for This Lab</h2>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          <strong>{lab?.name || 'This laboratory'}</strong> is configured for <strong>Walk-In Sample Collection Only</strong> and did not opt into Mobile Phlebotomist (Home Sample Pickup) during account setup.
+        </p>
+        <p className="text-xs text-slate-400">
+          Lab Administrators can enable Mobile Phlebotomist Home Sample Pickup anytime from <strong>Overview &rarr; Recharge / Subscription Settings</strong>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6 animate-in fade-in duration-300">
@@ -379,7 +411,7 @@ export const PhlebotomyDispatchScreen: React.FC = () => {
                           </div>
                         </div>
                         <div className="text-[11px] text-slate-500 font-mono pl-6">
-                          Google Maps Pin: {patientPin.lat.toFixed(5)}, {patientPin.lng.toFixed(5)}
+                          Google Maps Pin: {Number(patientPin?.lat || 4.0565).toFixed(5)}, {Number(patientPin?.lng || 9.7582).toFixed(5)}
                         </div>
                       </div>
 

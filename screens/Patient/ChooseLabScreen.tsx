@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Star, Clock, Truck, ShieldCheck, MapPin, ChevronRight, Building2, Phone, Navigation, Map as MapIcon } from 'lucide-react';
 import { formatXAF } from '../../shared/money';
 import { db, getDocs, collection } from '../../services/firebase';
-import { LabComparisonMap, calculateHaversineKm } from '../../components/maps/GoogleMapsWidgets';
+import { LabComparisonMap, calculateHaversineKm, toSafeLatLng } from '../../components/maps/GoogleMapsWidgets';
+import { isLabMobilePhlebotomyEnabled, getLabPackageConfig } from '../../utils/labPackages';
 
 export interface PartnerLabItem {
   id: string;
@@ -22,6 +23,11 @@ export interface PartnerLabItem {
   ratePer100m: number;
   baseDeliveryFeePerKm: number;
   testPricingMultiplier: number;
+  supportsHomePickup?: boolean;
+  needsMobilePhlebotomist?: boolean;
+  plan?: string;
+  subscriptionTier?: string;
+  maxTestsPerMonth?: number;
 }
 
 export const DEFAULT_PARTNER_LABS: PartnerLabItem[] = [
@@ -80,7 +86,9 @@ export const DEFAULT_PARTNER_LABS: PartnerLabItem[] = [
     accredited: true,
     ratePer100m: 75,
     baseDeliveryFeePerKm: 750,
-    testPricingMultiplier: 1.05
+    testPricingMultiplier: 1.05,
+    supportsHomePickup: false,
+    needsMobilePhlebotomist: false
   }
 ];
 
@@ -110,32 +118,55 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
       try {
         const snap = await getDocs(collection(db, 'labs'));
         if (!snap.empty) {
-          const liveList: PartnerLabItem[] = snap.docs.map((docSnap, idx) => {
-            const data = docSnap.data();
-            const fallbackLab = DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length];
-            const lat = Number(data.lat || data.coords?.lat || (4.0511 + idx * 0.012));
-            const lng = Number(data.lng || data.coords?.lng || (9.7042 + idx * 0.011));
-            return {
-              id: docSnap.id,
-              name: data.name || fallbackLab.name,
-              rating: Number(data.rating) || 4.8,
-              reviewsCount: Number(data.reviewsCount) || 95,
-              turnaroundTime: data.turnaroundTime || '3–4 hrs',
-              features: Array.isArray(data.features) && data.features.length > 0 ? data.features : ['Home pickup', 'Delivery', 'Accredited'],
-              distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
-              city: data.city || 'Douala',
-              address: data.address || data.location || fallbackLab.address,
-              phone: data.phone || data.contactPhone || fallbackLab.phone,
-              coords: { lat, lng },
-              imageUrl: data.imageUrl || fallbackLab.imageUrl,
-              logoUrl: data.logoUrl || data.logo || fallbackLab.logoUrl,
-              accredited: true,
-              ratePer100m: Number(data.ratePer100m) || 60,
-              baseDeliveryFeePerKm: Number(data.baseDeliveryFeePerKm) || 650,
-              testPricingMultiplier: Number(data.pricingMultiplier) || 1.0
-            };
-          });
-          setLabs(liveList);
+          const liveList: PartnerLabItem[] = snap.docs
+            .filter((docSnap) => {
+              const d = docSnap.data();
+              return d.status !== 'suspended' && d.status !== 'rejected';
+            })
+            .map((docSnap, idx) => {
+              const data = docSnap.data();
+              const fallbackLab = DEFAULT_PARTNER_LABS[idx % DEFAULT_PARTNER_LABS.length];
+              const safeCoords = toSafeLatLng(
+                {
+                  lat: data.lat ?? data.coords?.lat ?? 4.0511 + idx * 0.012,
+                  lng: data.lng ?? data.coords?.lng ?? 9.7042 + idx * 0.011,
+                },
+                { lat: 4.0511 + idx * 0.012, lng: 9.7042 + idx * 0.011 }
+              );
+              const homeEnabled = isLabMobilePhlebotomyEnabled({ id: docSnap.id, ...data });
+              const pkg = getLabPackageConfig({ id: docSnap.id, ...data });
+              const computedFeatures = homeEnabled
+                ? ['Home pickup', 'Walk-in', 'Accredited']
+                : ['Walk-in only', 'Accredited'];
+
+              return {
+                id: docSnap.id,
+                name: String(data.name || fallbackLab.name || 'Diagnostic Laboratory'),
+                rating: Number(data.rating) || 4.8,
+                reviewsCount: Number(data.reviewsCount) || 95,
+                turnaroundTime: String(data.turnaroundTime || '3–4 hrs'),
+                features: computedFeatures,
+                distanceKm: Number((2.0 + idx * 0.8).toFixed(1)),
+                city: String(data.city || data.location || 'Douala'),
+                address: String(data.address || data.location || data.city || fallbackLab.address),
+                phone: data.phone || data.contactPhone || fallbackLab.phone,
+                coords: safeCoords,
+                imageUrl: String(data.imageUrl || fallbackLab.imageUrl),
+                logoUrl: String(data.logoUrl || data.logo || fallbackLab.logoUrl),
+                accredited: true,
+                ratePer100m: Number(data.ratePer100m || data.phlebPickupRatePer100m) || 60,
+                baseDeliveryFeePerKm: Number(data.baseDeliveryFeePerKm) || 650,
+                testPricingMultiplier: Number(data.pricingMultiplier) || 1.0,
+                supportsHomePickup: homeEnabled,
+                needsMobilePhlebotomist: homeEnabled,
+                plan: data.plan || pkg.id,
+                subscriptionTier: data.subscriptionTier || pkg.legacyTier,
+                maxTestsPerMonth: Number(data.maxTestsPerMonth) || pkg.maxTestsPerMonth,
+              };
+            });
+          if (liveList.length > 0) {
+            setLabs(liveList);
+          }
         }
       } catch (e) {
         console.warn('Using partner labs directory:', e);
@@ -181,13 +212,13 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
 
   const filteredLabs = labs
     .filter((lab) => {
-      const q = search.toLowerCase();
+      const q = String(search || '').toLowerCase();
       const matchesSearch =
-        lab.name.toLowerCase().includes(q) ||
-        lab.address.toLowerCase().includes(q) ||
-        lab.city.toLowerCase().includes(q);
+        String(lab.name || '').toLowerCase().includes(q) ||
+        String(lab.address || '').toLowerCase().includes(q) ||
+        String(lab.city || '').toLowerCase().includes(q);
       if (filterMode === 'home') {
-        return matchesSearch && lab.features.some((f) => f.toLowerCase().includes('home'));
+        return matchesSearch && isLabMobilePhlebotomyEnabled(lab);
       }
       return matchesSearch;
     })
@@ -196,9 +227,9 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
         return calculateLabTestPrice(a) - calculateLabTestPrice(b);
       }
       if (filterMode === 'tat') {
-        return parseFloat(a.turnaroundTime) - parseFloat(b.turnaroundTime);
+        return (parseFloat(String(a.turnaroundTime || '4')) || 4) - (parseFloat(String(b.turnaroundTime || '4')) || 4);
       }
-      return a.distanceKm - b.distanceKm;
+      return (Number(a.distanceKm) || 0) - (Number(b.distanceKm) || 0);
     });
 
   return (
@@ -389,7 +420,9 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
                       {formatXAF(labTestPrice)}
                     </span>
                     <span className="text-[10px] text-slate-500 block font-mono tabular-nums">
-                      Home pickup: +{formatXAF(deliveryFee)}
+                      {isLabMobilePhlebotomyEnabled(lab)
+                        ? `Home pickup: +${formatXAF(deliveryFee)}`
+                        : 'Walk-in collection only'}
                     </span>
                   </div>
 

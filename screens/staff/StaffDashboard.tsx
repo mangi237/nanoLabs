@@ -19,6 +19,7 @@ import { LabTechView } from './LabTechView';
 import { BiologistView } from './BiologistView';
 import { PhlebotomyDispatchScreen } from '../Lab/PhlebotomyDispatchScreen';
 import InventoryManagement from '../admin/InventoryManagement';
+import { canLabUseFeature, isLabMobilePhlebotomyEnabled } from '../../utils/labPackages';
 
 interface StaffDashboardProps {
   onNavigate?: (screen: string, params?: any) => void;
@@ -27,6 +28,8 @@ interface StaffDashboardProps {
   onProfilePress?: () => void;
 }
 
+const MOBILE_PHLEB_ROLES = ['mobile_phlebotomist', 'phlebotomist', 'phlebotomy', 'dispatch'];
+
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   onNavigate,
   onOpenRoleSwitcher,
@@ -34,12 +37,24 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   onProfilePress
 }) => {
   const { user, lab } = useAuth();
-  const activeRole = user?.role || 'receptionist';
+  const activeRole = String(user?.role || 'receptionist');
+  const isAdmin =
+    activeRole === 'admin' ||
+    activeRole === 'superadmin' ||
+    (Array.isArray(user?.roles) && user.roles.includes('admin'));
+
+  const mobilePhlebEnabled = isLabMobilePhlebotomyEnabled(lab);
+  const inventoryEnabled = canLabUseFeature(lab, 'inventory');
 
   // Sub-tab selection when viewing overall staff dashboard
   const [selectedWorkstation, setSelectedWorkstation] = useState<string>(
     activeRole === 'inventory_manager' ? 'inventory' : activeRole
   );
+
+  // Strict Mobile Phlebotomist Isolation: show ONLY their own dispatch workspace
+  if (!isAdmin && MOBILE_PHLEB_ROLES.includes(activeRole.toLowerCase())) {
+    return <PhlebotomyDispatchScreen />;
+  }
 
   const rolesConfig = [
     { 
@@ -58,14 +73,18 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
       badge: 'Step 2: Invoice & Verify',
       desc: 'Issue online invoices, verify 3rd-party payments & issue certified receipts.'
     },
-    { 
-      id: 'mobile_phlebotomist', 
-      label: 'Mobile Phlebotomist', 
-      icon: Truck, 
-      color: 'text-cyan-700 bg-cyan-50 border-cyan-200',
-      badge: 'Step 3A: Home Pickup GPS',
-      desc: 'Go pickup home samples with live Google Maps GPS & two-way handover.'
-    },
+    ...(mobilePhlebEnabled
+      ? [
+          { 
+            id: 'mobile_phlebotomist', 
+            label: 'Mobile Phlebotomist', 
+            icon: Truck, 
+            color: 'text-cyan-700 bg-cyan-50 border-cyan-200',
+            badge: 'Step 3A: Home Pickup GPS',
+            desc: 'Go pickup home samples with live Google Maps GPS & two-way handover.'
+          }
+        ]
+      : []),
     { 
       id: 'analyzer', 
       label: 'In-Lab Phlebotomist', 
@@ -90,14 +109,18 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
       badge: 'Step 5: Certify & Release',
       desc: 'Review findings, sign off with lab header & release to Patient Portal.'
     },
-    { 
-      id: 'inventory', 
-      label: 'Inventory Manager', 
-      icon: Package, 
-      color: 'text-amber-600 bg-amber-50 border-amber-200',
-      badge: 'Stock & Reagents',
-      desc: 'Monitor chemical stock, measuring units, expiration alerts & bulk imports.'
-    },
+    ...(inventoryEnabled
+      ? [
+          { 
+            id: 'inventory', 
+            label: 'Inventory Manager', 
+            icon: Package, 
+            color: 'text-amber-600 bg-amber-50 border-amber-200',
+            badge: 'Stock & Reagents',
+            desc: 'Monitor chemical stock, measuring units, expiration alerts & bulk imports.'
+          }
+        ]
+      : []),
   ];
 
   return (

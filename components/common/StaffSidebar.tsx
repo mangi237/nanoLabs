@@ -1,33 +1,33 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/authContext';
-import { 
-  Building2, 
-  MapPin, 
-  User, 
-  Shield, 
-  DollarSign, 
-  Microscope, 
-  TestTube, 
-  ShieldCheck, 
-  Package, 
-  LogOut, 
-  ChevronRight, 
-  Check, 
-  Bell, 
-  Settings, 
-  Activity, 
-  Layers, 
-  Menu, 
+import {
+  MapPin,
+  User,
+  Shield,
+  DollarSign,
+  Microscope,
+  TestTube,
+  ShieldCheck,
+  Package,
+  LogOut,
+  ChevronRight,
+  Check,
+  Bell,
+  Activity,
+  Menu,
   X,
-  FileSpreadsheet,
-  BarChart3,
   Truck,
   BookOpen,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import StaffProfileModal from './StaffProfileModal';
-import { HowToUseGuideModal } from '../../components/help/HowToUseGuideModal';
-import { getActiveLabLogo, useLabBranding } from '../../utils/labBranding';
+import { HowToUseGuideModal } from '../help/HowToUseGuideModal';
+import { useLabBranding } from '../../utils/labBranding';
+import {
+  canLabUseFeature,
+  getLabPackageConfig,
+  isLabMobilePhlebotomyEnabled,
+} from '../../utils/labPackages';
 
 interface StaffSidebarProps {
   currentTab?: string;
@@ -35,63 +35,102 @@ interface StaffSidebarProps {
   onNotificationPress?: () => void;
 }
 
+const MOBILE_PHLEB_ROLES = ['mobile_phlebotomist', 'phlebotomist', 'phlebotomy', 'dispatch'];
+
 export const StaffSidebar: React.FC<StaffSidebarProps> = ({
-  currentTab,
   onNavigateTab,
-  onNotificationPress
+  onNotificationPress,
 }) => {
   const { user, lab, logout, setUser } = useAuth();
   const { logoUrl: brandLogo } = useLabBranding(lab);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const currentRole = user?.role || 'staff';
+  const currentRole = String(user?.role || 'staff');
+  const activePkg = getLabPackageConfig(lab);
+  const mobilePhlebEnabled = isLabMobilePhlebotomyEnabled(lab);
+  const inventoryEnabled = canLabUseFeature(lab, 'inventory');
 
-  // Role metadata definitions
+  // Role metadata definitions filtered strictly by lab opt-in & package features
   const ALL_ROLE_DEFS = [
     { id: 'admin', label: 'Lab Administrator', icon: Shield, color: 'text-purple-600 bg-purple-50' },
     { id: 'receptionist', label: 'Reception Desk', icon: User, color: 'text-teal-600 bg-teal-50' },
     { id: 'cashier', label: 'Cashier & Billing', icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
-    { id: 'phlebotomist', label: 'Phlebotomy & Dispatch', icon: Truck, color: 'text-indigo-600 bg-indigo-50' },
-    { id: 'analyzer', label: 'Sample Analyzer', icon: Microscope, color: 'text-amber-600 bg-amber-50' },
+    ...(mobilePhlebEnabled
+      ? [{ id: 'mobile_phlebotomist', label: 'Mobile Phlebotomist (GPS)', icon: Truck, color: 'text-indigo-600 bg-indigo-50' }]
+      : []),
+    { id: 'analyzer', label: 'In-Lab Sample Collector', icon: Microscope, color: 'text-amber-600 bg-amber-50' },
     { id: 'lab_tech', label: 'Lab Technologist', icon: TestTube, color: 'text-cyan-600 bg-cyan-50' },
     { id: 'biologist', label: 'Biologist Validation', icon: ShieldCheck, color: 'text-emerald-600 bg-emerald-50' },
-    { id: 'inventory_manager', label: 'Inventory Desk', icon: Package, color: 'text-rose-600 bg-rose-50' },
-    { id: 'training_manual', label: 'Staff Training Booklet & SOPs', icon: BookOpen, color: 'text-teal-800 bg-teal-50' }
+    ...(inventoryEnabled
+      ? [{ id: 'inventory_manager', label: 'Inventory Desk', icon: Package, color: 'text-rose-600 bg-rose-50' }]
+      : []),
+    { id: 'training_manual', label: 'Staff Training Booklet & SOPs', icon: BookOpen, color: 'text-teal-800 bg-teal-50' },
   ];
 
-  // Determine accessible roles:
-  // If admin or superadmin: all staff roles are accessible
-  // If user has roles array: filter to assigned roles (Training Booklet is ALWAYS available to all)
-  const isAdmin = currentRole === 'admin' || currentRole === 'superadmin' || (Array.isArray(user?.roles) && user.roles.includes('admin'));
-  
-  const accessibleRoles = isAdmin
+  const isAdmin =
+    currentRole === 'admin' ||
+    currentRole === 'superadmin' ||
+    currentRole === 'administrator' ||
+    currentRole === 'lab_admin' ||
+    currentRole === 'manager' ||
+    (Array.isArray(user?.roles) && user.roles.includes('admin'));
+
+  const userAssignedRoles: string[] =
+    Array.isArray(user?.roles) && user.roles.length > 0
+      ? user.roles.map((r: string) => String(r).toLowerCase())
+      : [currentRole.toLowerCase()];
+
+  // Strict Mobile Phlebotomist Isolation: when a staff member is strictly a Mobile Phlebotomist,
+  // they ONLY see their own Mobile Phlebotomist Dispatch section and never other desks.
+  const isDedicatedMobilePhlebotomist =
+    !isAdmin &&
+    userAssignedRoles.length > 0 &&
+    userAssignedRoles.every((r) => MOBILE_PHLEB_ROLES.includes(r));
+
+  const isRoleMatchingDef = (defId: string, roleName: string) => {
+    const norm = roleName.toLowerCase();
+    if (defId === norm) return true;
+    if (defId === 'mobile_phlebotomist' && MOBILE_PHLEB_ROLES.includes(norm)) return true;
+    if (defId === 'lab_tech' && norm === 'labtech') return true;
+    if (defId === 'inventory_manager' && norm === 'inventory') return true;
+    return false;
+  };
+
+  const accessibleRoles = isDedicatedMobilePhlebotomist
+    ? [
+        {
+          id: 'mobile_phlebotomist',
+          label: 'Mobile Phlebotomist (GPS)',
+          icon: Truck,
+          color: 'text-indigo-600 bg-indigo-50',
+        },
+      ]
+    : isAdmin
     ? ALL_ROLE_DEFS
-    : ALL_ROLE_DEFS.filter(r => {
+    : ALL_ROLE_DEFS.filter((r) => {
         if (r.id === 'training_manual') return true;
-        if (r.id === currentRole) return true;
-        if (Array.isArray(user?.roles)) {
-          return user.roles.includes(r.id) || (r.id === 'lab_tech' && user.roles.includes('labtech'));
-        }
-        return false;
+        if (isRoleMatchingDef(r.id, currentRole)) return true;
+        return userAssignedRoles.some((assigned) => isRoleMatchingDef(r.id, assigned));
       });
 
   const handleSwitchRole = (newRole: string) => {
-    if (newRole === currentRole) return;
+    if (isRoleMatchingDef(newRole, currentRole)) return;
     const updatedUser = {
       ...user,
-      role: newRole
+      role: newRole,
     };
     setUser(updatedUser);
-    try {
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    } catch {}
     setMobileOpen(false);
   };
 
   const getRoleLabel = (role: string) => {
-    const found = ALL_ROLE_DEFS.find(r => r.id === role);
+    if (MOBILE_PHLEB_ROLES.includes(role.toLowerCase())) {
+      return 'Mobile Phlebotomist (GPS)';
+    }
+    const found = ALL_ROLE_DEFS.find((r) => isRoleMatchingDef(r.id, role));
     return found ? found.label : role.replace('_', ' ');
   };
 
@@ -143,7 +182,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
 
       {/* Mobile Drawer Backdrop */}
       {mobileOpen && (
-        <div 
+        <div
           onClick={() => setMobileOpen(false)}
           className="md:hidden fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs animate-in fade-in"
         />
@@ -156,7 +195,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
         }`}
       >
         {/* Top Section: Lab Logo, Name, Location */}
-        <div className="p-4 border-b border-slate-100 space-y-3">
+        <div className="p-4 border-b border-slate-100 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {brandLogo ? (
@@ -194,20 +233,28 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
             </button>
           </div>
 
-          {/* Location Badge */}
-          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-[11px] text-slate-600 font-medium">
-            <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-            <span className="truncate">
-              {lab?.city ? `${lab.city} • ` : ''}
-              {lab?.address || lab?.location || 'Clinical Facility'}
-            </span>
+          {/* Location & Package Badge */}
+          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1 text-[11px] text-slate-600 font-medium">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span className="truncate">
+                {lab?.city ? `${lab.city} • ` : ''}
+                {lab?.address || lab?.location || 'Clinical Facility'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-200/60">
+              <span className="font-bold text-teal-800 truncate">{activePkg.name}</span>
+              <span className="font-mono text-slate-500 shrink-0">
+                {mobilePhlebEnabled ? 'GPS Pickup On' : 'Walk-In Only'}
+              </span>
+            </div>
           </div>
 
           {/* Staff Member Card */}
           <div className="p-3 bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl shadow-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
-                Staff Identity
+                {isDedicatedMobilePhlebotomist ? 'Mobile Courier Identity' : 'Staff Identity'}
               </span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
@@ -222,12 +269,12 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
           </div>
         </div>
 
-        {/* Middle Section: Accessible Roles List (Switchable via click) */}
+        {/* Middle Section: Accessible Roles List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5">
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                Accessible Roles
+                {isDedicatedMobilePhlebotomist ? 'Assigned Section' : 'Accessible Roles'}
               </span>
               <span className="text-[10px] text-teal-700 font-bold">
                 {accessibleRoles.length} Active
@@ -235,8 +282,8 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
             </div>
 
             <div className="space-y-1">
-              {accessibleRoles.map(r => {
-                const isActive = r.id === currentRole;
+              {accessibleRoles.map((r) => {
+                const isActive = isRoleMatchingDef(r.id, currentRole);
                 const IconComponent = r.icon;
                 return (
                   <button
@@ -250,9 +297,11 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 group-hover:text-teal-700'
-                      }`}>
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 group-hover:text-teal-700'
+                        }`}
+                      >
                         <IconComponent className="w-3.5 h-3.5 stroke-[2.5]" />
                       </div>
                       <span className="truncate">{r.label}</span>
@@ -275,26 +324,26 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
               Operations
             </span>
 
-            {/* Staff Operating Manual & Training Booklet (Full Document Page) */}
-            <button
-              type="button"
-              onClick={() => {
-                handleSwitchRole('training_manual');
-                onNavigateTab?.('staff-training');
-                setMobileOpen(false);
-              }}
-              className="w-full p-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 border border-teal-700 transition-all flex items-center justify-between cursor-pointer shadow-xs group"
-            >
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-teal-300" />
-                <span className="truncate">Staff Training Booklet</span>
-              </div>
-              <span className="text-[10px] bg-teal-500 text-teal-950 font-black px-2 py-0.5 rounded-full uppercase">
-                Full Page
-              </span>
-            </button>
+            {!isDedicatedMobilePhlebotomist && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleSwitchRole('training_manual');
+                  onNavigateTab?.('staff-training');
+                  setMobileOpen(false);
+                }}
+                className="w-full p-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 border border-teal-700 transition-all flex items-center justify-between cursor-pointer shadow-xs group"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-teal-300" />
+                  <span className="truncate">Staff Training Booklet</span>
+                </div>
+                <span className="text-[10px] bg-teal-500 text-teal-950 font-black px-2 py-0.5 rounded-full uppercase">
+                  Full Page
+                </span>
+              </button>
+            )}
 
-            {/* Quick Interactive Guide Modal Button */}
             <button
               type="button"
               onClick={() => {
@@ -329,9 +378,8 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
           </div>
         </div>
 
-        {/* Bottom Section: Profile Button (Basic Info Only) & Sign Out */}
+        {/* Bottom Section: Profile Button & Sign Out */}
         <div className="p-4 border-t border-slate-100 space-y-2 bg-slate-50/70">
-          {/* Profile Button: Basic info modal only, no role switching */}
           <button
             type="button"
             onClick={() => setShowProfileModal(true)}
@@ -348,19 +396,36 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
             </span>
           </button>
 
-          {/* Logout Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('Sign out from laboratory session?')) {
-                logout();
-              }
-            }}
-            className="w-full py-2 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
-          </button>
+          {confirmSignOut ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSignOut(false)}
+                className="flex-1 py-2 px-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmSignOut(false);
+                  logout();
+                }}
+                className="flex-1 py-2 px-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmSignOut(true)}
+              className="w-full py-2 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </aside>
 

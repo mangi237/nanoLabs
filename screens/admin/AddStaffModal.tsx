@@ -20,17 +20,42 @@ import {
   CheckCircle2,
   Sparkles,
   ArrowRight,
-  Phone
+  Phone,
+  Truck,
+  Lock
 } from 'lucide-react';
+import {
+  canLabUseFeature,
+  getLabPackageConfig,
+  isLabMobilePhlebotomyEnabled,
+} from '../../utils/labPackages';
 
 interface AddStaffModalProps {
   visible: boolean;
   onClose: () => void;
   onStaffAdded: () => void;
+  currentStaffCount?: number;
+  onRequestUpgrade?: () => void;
 }
 
-export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, onStaffAdded }) => {
+export const AddStaffModal: React.FC<AddStaffModalProps> = ({
+  visible,
+  onClose,
+  onStaffAdded,
+  currentStaffCount = 0,
+  onRequestUpgrade,
+}) => {
   const { lab, user: adminUser } = useAuth();
+  const activePkg = getLabPackageConfig(lab);
+  const mobilePhlebEnabled = isLabMobilePhlebotomyEnabled(lab);
+  const inventoryEnabled = canLabUseFeature(lab, 'inventory');
+  const maxStaffLimit =
+    lab?.pricingModel === 'pay_per_test'
+      ? 999
+      : Number(lab?.maxStaff) > 0
+      ? Number(lab.maxStaff)
+      : activePkg.maxStaff;
+  const isAtStaffLimit = maxStaffLimit < 999 && currentStaffCount >= maxStaffLimit;
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [createdStaffResult, setCreatedStaffResult] = useState<{
@@ -45,6 +70,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
     const prefixes: Record<string, string> = {
       receptionist: 'REC',
       cashier: 'CSH',
+      mobile_phlebotomist: 'MPHL',
       analyzer: 'LAB',
       labtech: 'TECH',
       biologist: 'BIO',
@@ -87,11 +113,16 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
   const roleOptions = [
     { value: 'receptionist', label: 'Receptionist', icon: User, codePrefix: 'REC' },
     { value: 'cashier', label: 'Cashier', icon: DollarSign, codePrefix: 'CSH' },
-    { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope, codePrefix: 'LAB' },
+    ...(mobilePhlebEnabled
+      ? [{ value: 'mobile_phlebotomist', label: 'Mobile Phlebotomist (GPS)', icon: Truck, codePrefix: 'MPHL' }]
+      : []),
+    { value: 'analyzer', label: 'In-Lab Sample Collector', icon: Microscope, codePrefix: 'LAB' },
     { value: 'labtech', label: 'Lab Technologist', icon: TestTube, codePrefix: 'TECH' },
     { value: 'biologist', label: 'Biologist / Pathologist', icon: ShieldCheck, codePrefix: 'BIO' },
     { value: 'admin', label: 'Lab Administrator', icon: Shield, codePrefix: 'ADM' },
-    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package, codePrefix: 'INV' }
+    ...(inventoryEnabled
+      ? [{ value: 'inventory_manager', label: 'Inventory Manager', icon: Package, codePrefix: 'INV' }]
+      : []),
   ];
 
   const toggleRole = (role: string) => {
@@ -127,6 +158,13 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (isAtStaffLimit) {
+      setErrorMessage(
+        `Staff account limit reached (${currentStaffCount}/${maxStaffLimit} seats on ${activePkg.name}). Upgrade your laboratory package to add more staff accounts.`
+      );
+      return;
+    }
 
     if (!formData.name.trim()) {
       setErrorMessage('Full name is required to create a staff member.');
@@ -327,6 +365,30 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, 
         ) : (
           /* Form Body */
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            {isAtStaffLimit && (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-2.5 text-xs text-amber-950">
+                <div className="flex items-center gap-2 font-bold">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Package Staff Limit Reached ({currentStaffCount} / {maxStaffLimit} Accounts on {activePkg.name})
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Your current subscription package allows up to {maxStaffLimit} staff accounts. Upgrade your package to unlock additional staff seats.
+                </p>
+                {onRequestUpgrade && (
+                  <button
+                    type="button"
+                    onClick={onRequestUpgrade}
+                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Upgrade Subscription Package</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Explanatory Info Card */}
             <div className="p-3.5 bg-teal-50 border border-teal-200/80 rounded-2xl flex items-start gap-3 text-xs text-teal-900">
               <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />

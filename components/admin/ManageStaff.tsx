@@ -27,11 +27,21 @@ import {
   History, 
   Loader2,
   KeyRound,
-  Copy
+  Copy,
+  Sparkles
 } from 'lucide-react';
+import { getLabPackageConfig } from '../../utils/labPackages';
+import SubscriptionRechargeModal from './SubscriptionRechargeModal';
 
 export const ManageStaff: React.FC = () => {
   const { lab, user: adminUser } = useAuth();
+  const activePkg = getLabPackageConfig(lab);
+  const maxStaffLimit =
+    lab?.pricingModel === 'pay_per_test'
+      ? 999
+      : Number(lab?.maxStaff) > 0
+      ? Number(lab.maxStaff)
+      : activePkg.maxStaff;
   const [staffList, setStaffList] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +56,7 @@ export const ManageStaff: React.FC = () => {
   const [benefitStaffSearch, setBenefitStaffSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -192,10 +203,15 @@ export const ManageStaff: React.FC = () => {
       {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-bold text-slate-900">Staff Personnel Directory</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200/60">
               Admin-Managed Access Codes
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-mono font-bold border border-slate-200">
+              {maxStaffLimit >= 999
+                ? `${staffList.length} Staff (Unlimited)`
+                : `${staffList.length} / ${maxStaffLimit} Seats (${activePkg.name})`}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -658,6 +674,11 @@ export const ManageStaff: React.FC = () => {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onStaffAdded={fetchStaff}
+        currentStaffCount={staffList.length}
+        onRequestUpgrade={() => {
+          setShowAddModal(false);
+          setShowRechargeModal(true);
+        }}
       />
 
       {/* Edit Staff Modal */}
@@ -669,6 +690,12 @@ export const ManageStaff: React.FC = () => {
         }}
         staff={selectedStaff}
         onStaffUpdated={fetchStaff}
+      />
+
+      {/* Subscription Upgrade Modal */}
+      <SubscriptionRechargeModal
+        isOpen={showRechargeModal}
+        onClose={() => setShowRechargeModal(false)}
       />
     </div>
   );

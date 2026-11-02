@@ -8,7 +8,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DoctorCardSelect, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { 
@@ -251,7 +251,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt:any) => {
+    directLabTests.forEach(dt => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -584,9 +584,9 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
       setTestOrderNotes('');
       setOrderCustomDoctorName('');
       await fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating test order:', err);
-      alert('Failed to generate test order.');
+      alert(err?.message || 'Failed to generate test order.');
     } finally {
       setIsOrderingTest(false);
     }

@@ -25,10 +25,14 @@ export class ErrorBoundary extends Component<Props, State> {
       msg.includes('not a child') ||
       msg.includes('node') ||
       msg.includes('not found') ||
-      msg.includes('domexception');
+      msg.includes('domexception') ||
+      msg.includes('failed to execute');
     
-    // If it's a transient DOM translate error, do not block the UI
-    return { hasError: !isDOMTranslateError, error };
+    // Never trigger error state for DOM translation or mutation errors
+    if (isDOMTranslateError) {
+      return { hasError: false, error: null };
+    }
+    return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -40,14 +44,11 @@ export class ErrorBoundary extends Component<Props, State> {
       msg.includes('not a child') ||
       msg.includes('node') ||
       msg.includes('not found') ||
-      msg.includes('domexception');
+      msg.includes('domexception') ||
+      msg.includes('failed to execute');
 
     if (isDOMTranslateError) {
-      console.warn('[ErrorBoundary] Auto-recovered from Google Translate DOM sync event:', error);
-      // Quickly reset state on the next tick so React renders the component tree
-      setTimeout(() => {
-        this.setState({ hasError: false, error: null });
-      }, 50);
+      this.setState({ hasError: false, error: null });
       return;
     }
 
@@ -56,38 +57,25 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleReset = () => {
     this.setState({ hasError: false, error: null });
-    window.location.reload();
   };
 
   public render() {
-    if (this.state.hasError) {
+    if (this.state.hasError && this.state.error) {
       return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-8 max-w-lg w-full text-center space-y-5 shadow-2xl">
-            <div className="w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center mx-auto">
-              <RefreshCw className="w-7 h-7 animate-spin" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white">Reconnecting Interface...</h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Syncing views with clinical database.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => this.setState({ hasError: false, error: null })}
-                className="w-1/2 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-              >
-                Continue Session
-              </button>
-              <button
-                onClick={this.handleReset}
-                className="w-1/2 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition shadow-lg cursor-pointer"
-              >
-                Reload
-              </button>
-            </div>
+        <div className="p-6 max-w-xl mx-auto my-8 bg-white border border-teal-200 rounded-2xl shadow-sm text-slate-800 space-y-3">
+          <div className="flex items-center gap-3 text-teal-700">
+            <RefreshCw className="w-5 h-5 shrink-0" />
+            <h3 className="text-sm font-bold">Ready to Continue</h3>
           </div>
+          <p className="text-xs text-slate-600">
+            This view needed a quick refresh. Your account and test booking remain active.
+          </p>
+          <button
+            onClick={this.handleReset}
+            className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
+          >
+            Continue Booking
+          </button>
         </div>
       );
     }

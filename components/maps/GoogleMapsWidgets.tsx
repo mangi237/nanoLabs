@@ -5,6 +5,47 @@ import { MapPin, Navigation, Search, Truck, Building2, Home, Crosshair, Loader2 
 const GMP_ATTRIBUTION_IDS = ['gmp_mcp_codeassist_v1_aistudio'];
 const DEFAULT_DOUALA_CENTER = { lat: 4.0511, lng: 9.7679 };
 
+export function toSafeLatLng(
+  coords: any,
+  fallback: { lat: number; lng: number } = DEFAULT_DOUALA_CENTER
+): { lat: number; lng: number } {
+  const lat = Number(coords?.lat);
+  const lng = Number(coords?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    return { lat, lng };
+  }
+  return fallback;
+}
+
+class MapSafeBoundary extends React.Component<
+  { fallback?: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.warn('Google Map widget fallback engaged:', err);
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        this.props.fallback || (
+          <div className="w-full h-full min-h-[180px] flex flex-col items-center justify-center p-4 text-center bg-slate-100 text-slate-600 text-xs rounded-2xl border border-slate-200">
+            <MapPin className="w-5 h-5 text-teal-700 mb-1.5" />
+            <span className="font-semibold text-slate-800">Interactive Map Ready</span>
+            <span className="text-[11px] text-slate-500 mt-0.5">
+              Select a laboratory card or use live GPS coordinates below.
+            </span>
+          </div>
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function checkAndReportQuotaError(err: unknown) {
   const msg = String((err as any)?.message || err || '');
   const code = String((err as any)?.code || (err as any)?.status || '');
@@ -22,11 +63,13 @@ function checkAndReportQuotaError(err: unknown) {
 }
 
 export function calculateHaversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const safeA = toSafeLatLng(a);
+  const safeB = toSafeLatLng(b);
   const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
+  const dLat = ((safeB.lat - safeA.lat) * Math.PI) / 180;
+  const dLng = ((safeB.lng - safeA.lng) * Math.PI) / 180;
+  const lat1 = (safeA.lat * Math.PI) / 180;
+  const lat2 = (safeB.lat * Math.PI) / 180;
   const sinDLat = Math.sin(dLat / 2);
   const sinDLng = Math.sin(dLng / 2);
   const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
@@ -59,56 +102,63 @@ export const LabComparisonMap: React.FC<LabComparisonMapProps> = ({
   selectedLabId,
   onSelectLab,
 }) => {
-  const center = userCoords || labs[0]?.coords || DEFAULT_DOUALA_CENTER;
+  const safeUserCoords = userCoords ? toSafeLatLng(userCoords) : null;
+  const center = safeUserCoords || toSafeLatLng(labs[0]?.coords, DEFAULT_DOUALA_CENTER);
 
   return (
     <div className="w-full h-[260px] rounded-3xl overflow-hidden border border-slate-200 shadow-xs relative bg-slate-100">
-      <Map
-        defaultCenter={center}
-        defaultZoom={13}
-        mapId="DEMO_MAP_ID"
-        gestureHandling="greedy"
-        disableDefaultUI={false}
-        internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
-        className="w-full h-full"
-      >
-        {userCoords && (
-          <AdvancedMarker position={userCoords} title="Your Current Location">
-            <div className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[10px] font-black shadow-lg border-2 border-white flex items-center gap-1">
-              <Crosshair className="w-3 h-3" />
-              <span>You</span>
-            </div>
-          </AdvancedMarker>
-        )}
-
-        {labs.map((lab) => {
-          const isSelected = lab.id === selectedLabId;
-          return (
-            <AdvancedMarker
-              key={lab.id}
-              position={lab.coords}
-              title={lab.name}
-              onClick={() => onSelectLab?.(lab.id)}
-            >
-              <div
-                className={`px-2.5 py-1 rounded-2xl text-[10px] font-extrabold shadow-md border transition-transform cursor-pointer flex items-center gap-1 ${
-                  isSelected
-                    ? 'bg-[#006978] text-white border-white scale-110'
-                    : 'bg-white text-slate-900 border-teal-500 hover:scale-105'
-                }`}
-              >
-                <Building2 className={`w-3 h-3 ${isSelected ? 'text-cyan-200' : 'text-[#006978]'}`} />
-                <span className="max-w-[120px] truncate">{lab.name}</span>
-                {lab.tariffXaf ? (
-                  <span className={`font-mono ${isSelected ? 'text-amber-200' : 'text-teal-700'}`}>
-                    {(lab.tariffXaf / 1000).toFixed(1)}k
-                  </span>
-                ) : null}
+      <MapSafeBoundary>
+        <Map
+          defaultCenter={center}
+          defaultZoom={13}
+          mapId="DEMO_MAP_ID"
+          gestureHandling="greedy"
+          disableDefaultUI={false}
+          internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
+          className="w-full h-full"
+        >
+          {safeUserCoords && (
+            <AdvancedMarker position={safeUserCoords} title="Your Current Location">
+              <div className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[10px] font-black shadow-lg border-2 border-white flex items-center gap-1">
+                <Crosshair className="w-3 h-3" />
+                <span>You</span>
               </div>
             </AdvancedMarker>
-          );
-        })}
-      </Map>
+          )}
+
+          {labs.map((lab, idx) => {
+            const isSelected = lab.id === selectedLabId;
+            const safePos = toSafeLatLng(lab.coords, {
+              lat: 4.0511 + idx * 0.01,
+              lng: 9.7042 + idx * 0.01,
+            });
+            return (
+              <AdvancedMarker
+                key={lab.id || `lab-pin-${idx}`}
+                position={safePos}
+                title={String(lab.name || 'Laboratory')}
+                onClick={() => onSelectLab?.(lab.id)}
+              >
+                <div
+                  className={`px-2.5 py-1 rounded-2xl text-[10px] font-extrabold shadow-md border transition-transform cursor-pointer flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-[#006978] text-white border-white scale-110'
+                      : 'bg-white text-slate-900 border-teal-500 hover:scale-105'
+                  }`}
+                >
+                  <Building2 className={`w-3 h-3 ${isSelected ? 'text-cyan-200' : 'text-[#006978]'}`} />
+                  <span className="max-w-[120px] truncate">{lab.name || 'Laboratory'}</span>
+                  {lab.tariffXaf ? (
+                    <span className={`font-mono ${isSelected ? 'text-amber-200' : 'text-teal-700'}`}>
+                      {(lab.tariffXaf / 1000).toFixed(1)}k
+                    </span>
+                  ) : null}
+                </div>
+              </AdvancedMarker>
+            );
+          })}
+        </Map>
+      </MapSafeBoundary>
     </div>
   );
 };
@@ -303,40 +353,42 @@ export const HomePickupLocationPicker: React.FC<HomePickupLocationPickerProps> =
 
       {/* Interactive Google Map (Click to drop pin) */}
       <div className="w-full h-[250px] rounded-2xl overflow-hidden border border-slate-200 shadow-xs relative bg-slate-100">
-        <Map
-          center={selectedCoords}
-          defaultZoom={14}
-          mapId="DEMO_MAP_ID"
-          gestureHandling="greedy"
-          internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
-          onClick={(ev : any  ) => {
-            const ll = ev.detail?.latLng;
-            if (ll) {
-              const next = { lat: ll.lat, lng: ll.lng };
-              const label =
-                searchInput && !searchInput.startsWith('Pinned') && !searchInput.startsWith('Live GPS')
-                  ? searchInput
-                  : `Pinned Home Pickup (${next.lat.toFixed(5)}, ${next.lng.toFixed(5)})`;
-              setSelectedCoords(next);
-              setSearchInput(label);
-              emitLocation(next, label);
-            }
-          }}
-          className="w-full h-full"
-        >
-          {/* Selected Lab Marker */}
-          <AdvancedMarker position={labCoords} title={labName}>
-            <Pin background="#0F766E" glyphColor="#FFFFFF" borderColor="#FFFFFF" />
-          </AdvancedMarker>
+        <MapSafeBoundary>
+          <Map
+            center={toSafeLatLng(selectedCoords)}
+            defaultZoom={14}
+            mapId="DEMO_MAP_ID"
+            gestureHandling="greedy"
+            internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
+            onClick={(ev) => {
+              const ll = ev.detail?.latLng;
+              if (ll) {
+                const next = toSafeLatLng({ lat: ll.lat, lng: ll.lng });
+                const label =
+                  searchInput && !searchInput.startsWith('Pinned') && !searchInput.startsWith('Live GPS')
+                    ? searchInput
+                    : `Pinned Home Pickup (${next.lat.toFixed(5)}, ${next.lng.toFixed(5)})`;
+                setSelectedCoords(next);
+                setSearchInput(label);
+                emitLocation(next, label);
+              }
+            }}
+            className="w-full h-full"
+          >
+            {/* Selected Lab Marker */}
+            <AdvancedMarker position={toSafeLatLng(labCoords)} title={labName}>
+              <Pin background="#0F766E" glyphColor="#FFFFFF" borderColor="#FFFFFF" />
+            </AdvancedMarker>
 
-          {/* Patient Home Pickup Marker */}
-          <AdvancedMarker position={selectedCoords} title="Home Sample Pickup Point">
-            <div className="px-2.5 py-1 rounded-full bg-rose-600 text-white text-[10px] font-black shadow-lg border-2 border-white flex items-center gap-1">
-              <Home className="w-3 h-3" />
-              <span>Pickup Here</span>
-            </div>
-          </AdvancedMarker>
-        </Map>
+            {/* Patient Home Pickup Marker */}
+            <AdvancedMarker position={toSafeLatLng(selectedCoords)} title="Home Sample Pickup Point">
+              <div className="px-2.5 py-1 rounded-full bg-rose-600 text-white text-[10px] font-black shadow-lg border-2 border-white flex items-center gap-1">
+                <Home className="w-3 h-3" />
+                <span>Pickup Here</span>
+              </div>
+            </AdvancedMarker>
+          </Map>
+        </MapSafeBoundary>
       </div>
 
       <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
@@ -439,48 +491,52 @@ export const LiveCourierTrackingMap: React.FC<LiveCourierTrackingMapProps> = ({
   phlebotomistName = 'Mobile Phlebotomist',
   trackingActive = true,
 }) => {
-  const activeCourierPos = phlebotomistCoords || labCoords;
+  const safeLabCoords = toSafeLatLng(labCoords);
+  const safePatientCoords = toSafeLatLng(patientCoords, { lat: 4.0565, lng: 9.7582 });
+  const activeCourierPos = phlebotomistCoords ? toSafeLatLng(phlebotomistCoords, safeLabCoords) : safeLabCoords;
 
   return (
     <div className="w-full h-[300px] rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative bg-slate-100">
-      <Map
-        defaultCenter={activeCourierPos}
-        defaultZoom={14}
-        mapId="DEMO_MAP_ID"
-        gestureHandling="greedy"
-        internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
-        className="w-full h-full"
-      >
-        {trackingActive && (
-          <RoutePolylineRenderer origin={activeCourierPos} destination={patientCoords} />
-        )}
+      <MapSafeBoundary>
+        <Map
+          defaultCenter={activeCourierPos}
+          defaultZoom={14}
+          mapId="DEMO_MAP_ID"
+          gestureHandling="greedy"
+          internalUsageAttributionIds={GMP_ATTRIBUTION_IDS}
+          className="w-full h-full"
+        >
+          {trackingActive && (
+            <RoutePolylineRenderer origin={activeCourierPos} destination={safePatientCoords} />
+          )}
 
-        {/* Laboratory Origin Pin */}
-        <AdvancedMarker position={labCoords} title={labName}>
-          <div className="px-2.5 py-1 rounded-xl bg-slate-900 text-white text-[10px] font-bold shadow-md border border-white flex items-center gap-1">
-            <Building2 className="w-3 h-3 text-teal-400" />
-            <span className="max-w-[110px] truncate">{labName}</span>
-          </div>
-        </AdvancedMarker>
-
-        {/* Patient Home Destination Pin */}
-        <AdvancedMarker position={patientCoords} title="Patient Home Collection Address">
-          <div className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[10px] font-bold shadow-md border-2 border-white flex items-center gap-1">
-            <Home className="w-3 h-3" />
-            <span>Patient Home</span>
-          </div>
-        </AdvancedMarker>
-
-        {/* Live Moving Mobile Phlebotomist Marker */}
-        {trackingActive && (
-          <AdvancedMarker position={activeCourierPos} title={phlebotomistName}>
-            <div className="px-3 py-1.5 rounded-full bg-[#006978] text-white text-[10px] font-black shadow-xl border-2 border-cyan-200 flex items-center gap-1.5 animate-bounce">
-              <Truck className="w-3.5 h-3.5 text-amber-300" />
-              <span>{phlebotomistName.split(' ')[0]} • LIVE</span>
+          {/* Laboratory Origin Pin */}
+          <AdvancedMarker position={safeLabCoords} title={labName}>
+            <div className="px-2.5 py-1 rounded-xl bg-slate-900 text-white text-[10px] font-bold shadow-md border border-white flex items-center gap-1">
+              <Building2 className="w-3 h-3 text-teal-400" />
+              <span className="max-w-[110px] truncate">{labName}</span>
             </div>
           </AdvancedMarker>
-        )}
-      </Map>
+
+          {/* Patient Home Destination Pin */}
+          <AdvancedMarker position={safePatientCoords} title="Patient Home Collection Address">
+            <div className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[10px] font-bold shadow-md border-2 border-white flex items-center gap-1">
+              <Home className="w-3 h-3" />
+              <span>Patient Home</span>
+            </div>
+          </AdvancedMarker>
+
+          {/* Live Moving Mobile Phlebotomist Marker */}
+          {trackingActive && (
+            <AdvancedMarker position={activeCourierPos} title={phlebotomistName}>
+              <div className="px-3 py-1.5 rounded-full bg-[#006978] text-white text-[10px] font-black shadow-xl border-2 border-cyan-200 flex items-center gap-1.5 animate-bounce">
+                <Truck className="w-3.5 h-3.5 text-amber-300" />
+                <span>{String(phlebotomistName || 'Courier').split(' ')[0]} • LIVE</span>
+              </div>
+            </AdvancedMarker>
+          )}
+        </Map>
+      </MapSafeBoundary>
     </div>
   );
 };

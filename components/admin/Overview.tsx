@@ -26,10 +26,12 @@ import {
   Clock,
   Zap,
   Stethoscope,
-  BookOpen
+  BookOpen,
+  Truck
 } from 'lucide-react';
 import LabProfileModal from './LabProfileModal';
 import SubscriptionRechargeModal from './SubscriptionRechargeModal';
+import { getLabPackageConfig, isLabMobilePhlebotomyEnabled } from '../../utils/labPackages';
 
 interface OverviewProps {
   onPatientSelect?: (patient: any) => void;
@@ -60,6 +62,7 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
     patients: 0,
     staff: 0,
     tests: 0,
+    monthTests: 0,
     revenue: 0
   });
   const [recentPatients, setRecentPatients] = useState<any[]>([]);
@@ -93,11 +96,20 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
       const confirmedRevenue = paidBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
       const totalTestsCount = bookings.reduce((sum, b) => sum + (b.tests?.length || 1), 0);
+      const now = new Date();
+      const monthTestsCount = bookings.reduce((sum, b) => {
+        const dt = parseLabDate(b.createdAt);
+        if (dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear()) {
+          return sum + (b.tests?.length || 1);
+        }
+        return sum;
+      }, 0);
 
       setStats({
         patients: patientList.length,
-        staff: staffSnap.size || 3,
+        staff: staffSnap.size || 1,
         tests: totalTestsCount,
+        monthTests: monthTestsCount,
         revenue: confirmedRevenue
       });
       setRecentPatients(patientList.slice(0, 5));
@@ -224,111 +236,125 @@ export const Overview: React.FC<OverviewProps> = ({ onPatientSelect, onNavigateT
           </button>
         </div>
       ) : (
-        /* Model B: Dynamic 30-Day Tier Subscription Banner */
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-teal-500/10 text-teal-400 rounded-2xl border border-teal-500/20 shrink-0">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-mono font-extrabold uppercase bg-teal-700 text-white px-2.5 py-0.5 rounded">
-                    {`${(liveLab?.subscriptionTier || lab?.subscriptionTier || 'small').toUpperCase()} TIER`}
-                  </span>
+        /* Model B: Dynamic 30-Day Package Subscription Banner */
+        (() => {
+          const currentTargetLab = liveLab || lab;
+          const activePkg = getLabPackageConfig(currentTargetLab);
+          const mobilePhlebActive = isLabMobilePhlebotomyEnabled(currentTargetLab);
+          const maxStaffCap = Number(currentTargetLab?.maxStaff) > 0 ? Number(currentTargetLab.maxStaff) : activePkg.maxStaff;
+          const maxTestCap = Number(currentTargetLab?.maxTestsPerMonth) > 0 ? Number(currentTargetLab.maxTestsPerMonth) : activePkg.maxTestsPerMonth;
 
-                  {(() => {
-                    const currentTargetLab = liveLab || lab;
-                    const startDate = parseLabDate(currentTargetLab?.subscriptionStartDate || currentTargetLab?.createdAt);
-                    const now = new Date();
-                    const diffTime = Math.max(0, now.getTime() - startDate.getTime());
-                    const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const totalDaysInCycle = 30;
-                    const daysRemaining = Math.max(0, totalDaysInCycle - daysPassed);
-                    const isExpired = daysRemaining === 0;
+          const startDate = parseLabDate(currentTargetLab?.subscriptionStartDate || currentTargetLab?.createdAt);
+          const now = new Date();
+          const diffTime = Math.max(0, now.getTime() - startDate.getTime());
+          const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          const totalDaysInCycle = 30;
+          const daysRemaining = Math.max(0, totalDaysInCycle - daysPassed);
+          const isExpired = daysRemaining === 0;
 
-                    return (
-                      <span className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded border ${
-                        isExpired
-                          ? 'bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
-                          : daysRemaining <= 5 
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
-                          : 'bg-teal-500/10 text-teal-300 border-teal-500/20'
-                      }`}>
-                        {isExpired 
+          return (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 bg-teal-500/10 text-teal-400 rounded-2xl border border-teal-500/20 shrink-0">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[10px] font-mono font-extrabold uppercase px-2.5 py-0.5 rounded ${
+                          activePkg.isPromo
+                            ? 'bg-amber-500 text-slate-950'
+                            : 'bg-teal-700 text-white'
+                        }`}
+                      >
+                        {activePkg.name} • {activePkg.priceLabel}
+                      </span>
+
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded border inline-flex items-center gap-1 ${
+                          mobilePhlebActive
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        <Truck className="w-3 h-3" />
+                        {mobilePhlebActive ? 'Mobile Phlebotomist Enabled' : 'Walk-In Collection Only'}
+                      </span>
+
+                      <span
+                        className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded border ${
+                          isExpired
+                            ? 'bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
+                            : daysRemaining <= 5
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                            : 'bg-teal-500/10 text-teal-300 border-teal-500/20'
+                        }`}
+                      >
+                        {isExpired
                           ? `Subscription Expired (${daysPassed} days elapsed) • Recharge Required`
                           : `${daysRemaining} Days Remaining (Day ${daysPassed + 1} of 30)`}
                       </span>
-                    );
-                  })()}
-
-                  {(liveLab?.planMutationStatus || lab?.planMutationStatus) === 'PENDING_PLAN_MUTATION' && (
-                    <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 animate-pulse">
-                      Plan Mutation Pending Superadmin Approval
-                    </span>
-                  )}
+                    </div>
+                    <h4 className="font-extrabold text-sm text-white mt-1">
+                      Active SaaS Subscription Package &amp; Enforced Quotas
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {activePkg.detail} — {activePkg.summary}
+                    </p>
+                  </div>
                 </div>
-                <h4 className="font-extrabold text-sm text-white mt-1">
-                  Monthly SaaS Subscription License
-                </h4>
-                <p className="text-xs text-slate-400">
-                  {(liveLab?.subscriptionTier || lab?.subscriptionTier) === 'small' 
-                    ? 'Small Hospital Tier: Max 5 Staff Users • Max 250 Patients / Month' 
-                    : (liveLab?.subscriptionTier || lab?.subscriptionTier) === 'medium'
-                    ? 'Medium Enterprise Tier: Max 15 Staff Users • Max 1,000 Patients / Month'
-                    : 'Large Enterprise Tier: Unlimited Staff Users • Unlimited Patients'}
-                </p>
+
+                <button
+                  onClick={() => setShowRechargeModal(true)}
+                  className="px-5 py-2.5 bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs rounded-2xl shadow-xs flex items-center gap-2 shrink-0 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Change Package / Settings</span>
+                </button>
+              </div>
+
+              {/* Hard-Cap Volume Meter */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800 text-xs">
+                {/* Staff Volume */}
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <div className="flex justify-between font-medium">
+                    <span className="text-slate-400">Staff Account Seats:</span>
+                    <span className="font-mono font-bold text-teal-400">
+                      {stats.staff} / {maxStaffCap >= 999 ? 'Unlimited' : `${maxStaffCap} Staff`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-teal-500 h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, (stats.staff / (maxStaffCap >= 999 ? 100 : maxStaffCap)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Monthly Test Quota */}
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <div className="flex justify-between font-medium">
+                    <span className="text-slate-400">Monthly Diagnostic Test Quota:</span>
+                    <span className="font-mono font-bold text-teal-400">
+                      {stats.monthTests} / {maxTestCap >= 999999 ? 'Unlimited' : `${maxTestCap.toLocaleString()} Tests`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-teal-500 h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, (stats.monthTests / (maxTestCap >= 999999 ? 5000 : maxTestCap)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-
-            <button
-              onClick={() => setShowRechargeModal(true)}
-              className="px-5 py-2.5 bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs rounded-2xl shadow-xs flex items-center gap-2 shrink-0 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Recharge / Upgrade Tier</span>
-            </button>
-          </div>
-
-          {/* Hard-Cap Volume Meter */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800 text-xs">
-            {/* Staff Volume */}
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
-              <div className="flex justify-between font-medium">
-                <span className="text-slate-400">Staff License Capacity:</span>
-                <span className="font-mono font-bold text-teal-400">
-                  {stats.staff} / {lab?.subscriptionTier === 'small' ? '5 Users' : lab?.subscriptionTier === 'medium' ? '15 Users' : 'Unlimited'}
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-teal-500 h-full rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, (stats.staff / (lab?.subscriptionTier === 'small' ? 5 : lab?.subscriptionTier === 'medium' ? 15 : 100)) * 100)}%`
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Patient Volume */}
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
-              <div className="flex justify-between font-medium">
-                <span className="text-slate-400">Monthly Patient Volume Cap:</span>
-                <span className="font-mono font-bold text-teal-400">
-                  {stats.patients} / {lab?.subscriptionTier === 'small' ? '250 Patients' : lab?.subscriptionTier === 'medium' ? '1,000 Patients' : 'Unlimited'}
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-teal-500 h-full rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, (stats.patients / (lab?.subscriptionTier === 'small' ? 250 : lab?.subscriptionTier === 'medium' ? 1000 : 10000)) * 100)}%`
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+          );
+        })()
       )}
 
       {/* Stats Grid */}

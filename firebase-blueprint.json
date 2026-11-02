@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "Lab": {
+      "title": "Laboratory Facility",
+      "description": "Laboratory profile, settings, and regional configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "defaultDoctorCommissionRate": { "type": "number" }
+      }
+    },
+    "ReferringDoctor": {
+      "title": "Referring Doctor",
+      "description": "Accredited partner physician or clinic profile for referral tracking & commissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "labId": { "type": "string" },
+        "name": { "type": "string" },
+        "specialty": { "type": "string" },
+        "hospital": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "commissionRate": { "type": "number" },
+        "notes": { "type": "string" },
+        "totalReferrals": { "type": "number" },
+        "totalRevenueGenerated": { "type": "number" },
+        "totalCommissionEarned": { "type": "number" },
+        "totalCommissionPaid": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      }
+    },
+    "Booking": {
+      "title": "Patient Booking / Lab Order",
+      "description": "Laboratory test orders, billing, and specimen workflow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "referringDoctor": { "type": "string" },
+        "referringDoctorId": { "type": "string" },
+        "status": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "referralCommissionRate": { "type": "number" },
+        "referralCommissionAmount": { "type": "number" },
+        "referralCommissionStatus": { "type": "string" }
+      }
+    },
+    "Patient": {
+      "title": "Patient Account",
+      "description": "Global patient identity with hashed password and PID",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "phoneDigits": { "type": "string" },
+        "email": { "type": "string" },
+        "gender": { "type": "string" },
+        "city": { "type": "string" },
+        "passwordSalt": { "type": "string" },
+        "passwordHash": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Global patient accounts directory"
+    },
+    "/labs/{labId}": {
+      "schema": "Lab",
+      "description": "Laboratory documents"
+    },
+    "/labs/{labId}/referring_doctors/{doctorId}": {
+      "schema": "ReferringDoctor",
+      "description": "Registered referring and partner doctors"
+    },
+    "/labs/{labId}/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Patient test orders and referral commissions"
+    }
+  }
+}

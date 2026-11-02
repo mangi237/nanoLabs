@@ -7,6 +7,8 @@ interface AddStaffModalProps {
   visible: boolean;
   onClose: () => void;
   onStaffAdded: () => void;
+  currentStaffCount?: number;
+  onRequestUpgrade?: () => void;
 }
 
 export const AddStaffModal: React.FC<AddStaffModalProps> = ({ visible, onClose, onStaffAdded }) => {

@@ -20,8 +20,10 @@ import {
   ShieldCheck,
   Copy,
   RefreshCw,
-  Key
+  Key,
+  Truck
 } from 'lucide-react';
+import { canLabUseFeature, isLabMobilePhlebotomyEnabled } from '../../utils/labPackages';
 
 interface EditStaffModalProps {
   visible: boolean;
@@ -49,6 +51,7 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({ visible, onClose
     const prefixes: Record<string, string> = {
       receptionist: 'REC',
       cashier: 'CSH',
+      mobile_phlebotomist: 'MPHL',
       analyzer: 'LAB',
       labtech: 'TECH',
       biologist: 'BIO',
@@ -77,14 +80,22 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({ visible, onClose
 
   if (!visible || !staff) return null;
 
+  const mobilePhlebEnabled = isLabMobilePhlebotomyEnabled(lab);
+  const inventoryEnabled = canLabUseFeature(lab, 'inventory');
+
   const roleOptions = [
     { value: 'receptionist', label: 'Receptionist', icon: User },
     { value: 'cashier', label: 'Cashier', icon: DollarSign },
-    { value: 'analyzer', label: 'Analyzer / Phlebotomist', icon: Microscope },
+    ...(mobilePhlebEnabled
+      ? [{ value: 'mobile_phlebotomist', label: 'Mobile Phlebotomist (GPS)', icon: Truck }]
+      : []),
+    { value: 'analyzer', label: 'In-Lab Sample Collector', icon: Microscope },
     { value: 'labtech', label: 'Lab Technologist', icon: TestTube },
     { value: 'biologist', label: 'Biologist / Pathologist', icon: ShieldCheck },
     { value: 'admin', label: 'Lab Administrator', icon: Shield },
-    { value: 'inventory_manager', label: 'Inventory Manager', icon: Package }
+    ...(inventoryEnabled
+      ? [{ value: 'inventory_manager', label: 'Inventory Manager', icon: Package }]
+      : []),
   ];
 
   const toggleRole = (role: string) => {
