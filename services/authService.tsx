@@ -43,7 +43,7 @@ export const authService = {
   /**
    * Verifies access codes for both staff (OTP / permanent hashed password) and patients in a lab.
    */
-  async verifyAccessCode(code: string, labId: string): Promise<AuthResult> {
+  async verifyAccessCode(code: string = '', labId: string = ''): Promise<AuthResult> {
     try {
       const cleanCode = (code || '').trim();
 
