@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { PatientBooking, BookingTestItem } from '../../services/limsService';
 import { DEFAULT_HEADER_FOOTER_TEMPLATES, HeaderFooterTemplateConfig } from '../admin/HeaderFooterTemplateManager';
-import useAuth  from '../../context/authContext';
+import { useAuth } from '../../context/authContext';
 import { useLabBranding, setActiveLabHeader } from '../../utils/labBranding';
 //interfaceSS
 interface LabReportPdfViewModalProps {

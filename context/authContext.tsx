@@ -1,1076 +1,376 @@
-// services/authService.ts
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  addDoc,
-  updateDoc
-} from 'firebase/firestore';
-import { db } from '../services/firebase';
-import { cleanFirestoreData } from '../utils/sanitizeData';
-import { verifyPassword } from '../utils/passwordHash';
+// context/authContext.tsx - ENHANCED SECURITY (Web Compatible)
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../services/authService';
+import errorHandler from '../utils/errorHandler';
+import { ensureFirebaseAuth } from '../services/firebase';
+import { getActiveLabLogo, setActiveLabLogo } from '../utils/labBranding';
 
-export interface AuthResult {
-  success: boolean;
-  user?: any;
-  lab?: any;
-  role?: string;
-  mustChangePassword?: boolean;
-  error?: string;
-}
-
-// Logical default staff user templates for instant login & authorization
-const DEFAULT_STAFF_MAP: Record<string, { role: string; name: string; roles: string[] }> = {
-  SUPER123: { role: 'superadmin', name: 'Super Admin', roles: ['superadmin'] },
-  // ADMIN123: { role: 'admin', name: 'Lab Administrator', roles: ['admin'] },
-  // TECH123: { role: 'labtech', name: 'Lead Lab Technologist', roles: ['labtech', 'staff'] },
-  // LABTECH123: { role: 'labtech', name: 'Lab Technician', roles: ['labtech', 'staff'] },
-  // CASH123: { role: 'cashier', name: 'Financial Cashier', roles: ['cashier', 'staff'] },
-  // CASHIER123: { role: 'cashier', name: 'Head Cashier', roles: ['cashier', 'staff'] },
-  // ANALYZER123: { role: 'analyzer', name: 'Sample Analyzer', roles: ['analyzer', 'staff'] },
-  // SAMPLE123: { role: 'analyzer', name: 'Phlebotomist Collector', roles: ['analyzer', 'staff'] },
-  // PHLEB123: { role: 'analyzer', name: 'Sample Collector', roles: ['analyzer', 'staff'] },
-  // REC123: { role: 'receptionist', name: 'Front Desk Receptionist', roles: ['receptionist', 'staff'] },
-  // RECEPTION123: { role: 'receptionist', name: 'Senior Receptionist', roles: ['receptionist', 'staff'] },
-  // PAT123: { role: 'patient', name: 'Demo Patient', roles: ['patient'] },
-  // PATIENT123: { role: 'patient', name: 'Sample Patient', roles: ['patient'] }
-};
-
-export const authService = {
-  /**
-   * Verifies access codes for both staff (OTP / permanent hashed password) and patients in a lab.
-   */
-  async verifyAccessCode(code: string = '', labId: string = ''): Promise<AuthResult> {
+// Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
+const AsyncStorage = {
+  getItem: async (key: string): Promise<string | null> => {
     try {
-      const cleanCode = (code || '').trim();
-
-      if (!cleanCode) {
-        return { success: false, error: 'Please enter your access code.' };
-      }
-
-      const targetLabId = labId || 'lab-1';
-      let fullLabRecord: any = null;
-      try {
-        const labSnap = await getDoc(doc(db, 'labs', targetLabId));
-        if (labSnap.exists()) {
-          fullLabRecord = { id: labSnap.id, ...labSnap.data() };
-        }
-      } catch {}
-
-      // 1. Try Server-Side Zero-Knowledge Staff Verification (Hashed OTP or Hashed Permanent Password)
-      try {
-        const serverRes = await fetch('/api/staff/login-or-verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessCode: cleanCode, labId: targetLabId })
-        });
-
-        if (serverRes.ok) {
-          const serverData = await serverRes.json();
-          if (serverData.success && serverData.user) {
-            return {
-              success: true,
-              user: serverData.user,
-              lab: fullLabRecord || { id: targetLabId, name: serverData.user.labName || 'nanoLabs Central Diagnostics' },
-              role: serverData.user.role,
-              mustChangePassword: serverData.mustChangePassword === true
-            };
-          }
-        }
-      } catch (srvErr) {
-        console.warn('Server auth endpoint check bypassed:', srvErr);
-      }
-
-      const upperCode = cleanCode.toUpperCase();
-      const lowerCode = cleanCode.toLowerCase();
-      const cleanDigits = cleanCode.replace(/\D/g, '');
-
-      // 2. SuperAdmin System Codes (Platform Oversight - Not bound to single lab)
-      if (upperCode === 'SUPER123' || upperCode === 'SUPERADMIN' || upperCode === 'SUPERADMIN2025' || DEFAULT_STAFF_MAP[upperCode]?.role === 'superadmin') {
-        return {
-          success: true,
-          user: {
-            id: 'superadmin',
-            name: 'Super Administrator',
-            email: 'superadmin@nanolabs.cm',
-            accessCode: upperCode,
-            role: 'superadmin',
-            roles: ['superadmin'],
-            labId: 'global-network',
-            labName: 'nanoLabs Global Diagnostic Network',
-            mustChangePassword: false
-          },
-          lab: { id: 'global-network', name: 'nanoLabs Global Diagnostic Network', primaryColor: '#0D9488' },
-          role: 'superadmin',
-          mustChangePassword: false
-        };
-      }
-
-      // 3. Accredited Physician / Doctor Authentication (Global Network Doctors)
-      try {
-        const doctorsSnap = await getDocs(collection(db, 'doctors')).catch(() => ({ docs: [] as any[] }));
-        const matchedDoc = doctorsSnap.docs.find(d => {
-          const docData = d.data();
-          const dCode = (docData.accessCode || docData.code || docData.passcode || '').trim().toUpperCase();
-          const dEmail = (docData.email || '').trim().toLowerCase();
-          const dLicense = (docData.licenseNumber || '').trim().toUpperCase();
-          const dPhoneDigits = (docData.phone || '').replace(/\D/g, '');
-
-          if (dCode && dCode === upperCode) return true;
-          if (dLicense && dLicense === upperCode) return true;
-          if (dEmail && dEmail === lowerCode) return true;
-          if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
-          return false;
-        });
-
-        if (matchedDoc) {
-          const doctorData = matchedDoc.data();
-          return {
-            success: true,
-            user: {
-              id: matchedDoc.id,
-              ...doctorData,
-              role: 'doctor',
-              roles: ['doctor'],
-              mustChangePassword: false
-            },
-            lab: { id: targetLabId, name: 'nanoLabs Accredited Medical Network' },
-            role: 'doctor',
-            mustChangePassword: false
-          };
-        }
-      } catch (docAuthErr) {
-        console.warn('Doctor network verification check error:', docAuthErr);
-      }
-
-      // Helper to check if a staff record matches the credentials in the targeted laboratory
-      const matchesStaff = (d: any, dData: any) => {
-        const dCode = (dData.accessCode || dData.initialCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
-        const dEmail = (dData.email || '').trim().toLowerCase();
-        const dName = (dData.name || '').trim().toUpperCase();
-        const dUsername = (dData.username || '').trim().toUpperCase();
-        const dStaffId = (dData.staffId || dData.id || d.id || '').trim().toUpperCase();
-        const dPhoneDigits = (dData.phone || dData.phoneNumber || '').replace(/\D/g, '');
-
-        if (dCode && dCode === upperCode) return true;
-        if (dStaffId && dStaffId === upperCode) return true;
-        if (dEmail && (dEmail === lowerCode || dEmail === cleanCode.toLowerCase())) return true;
-        if (dName && dName === upperCode) return true;
-        if (dUsername && dUsername === upperCode) return true;
-        if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
-        return false;
-      };
-
-      // Helper to check if a patient record matches the credentials in the targeted laboratory
-      const matchesPatient = (d: any, dData: any) => {
-        const dAccessCode = (dData.accessCode || dData.code || dData.passcode || dData.pin || '').trim().toUpperCase();
-        const dPatientId = (dData.patientId || dData.id || d.id || '').trim().toUpperCase();
-        const dEmail = (dData.email || '').trim().toLowerCase();
-        const dName = (dData.name || '').trim().toUpperCase();
-        const dUsername = (dData.username || '').trim().toUpperCase();
-        const dNationalId = (dData.nationalId || '').trim().toUpperCase();
-        const dPhoneDigits = (dData.phone || dData.phoneNumber || '').replace(/\D/g, '');
-
-        if (dAccessCode && dAccessCode === upperCode) return true;
-        if (dPatientId && dPatientId === upperCode) return true;
-        if (dEmail && (dEmail === lowerCode || dEmail === cleanCode.toLowerCase())) return true;
-        if (dName && dName === upperCode) return true;
-        if (dUsername && dUsername === upperCode) return true;
-        if (dNationalId && dNationalId === upperCode) return true;
-        if (cleanDigits.length >= 7 && dPhoneDigits && dPhoneDigits.includes(cleanDigits)) return true;
-        return false;
-      };
-
-      // 4. Strictly search Firestore Staff & Patient subcollections within the SELECTED LAB ONLY
-      try {
-        const staffRef = collection(db, 'labs', targetLabId, 'staff');
-        const patientsRef = collection(db, 'labs', targetLabId, 'patients');
-
-        const [staffSnap, patientsSnap] = await Promise.all([
-          getDocs(staffRef).catch(() => ({ docs: [] as any[] })),
-          getDocs(patientsRef).catch(() => ({ docs: [] as any[] }))
-        ]);
-
-        const foundStaffDoc = staffSnap.docs.find(d => matchesStaff(d, d.data()));
-        if (foundStaffDoc) {
-          const staffData = foundStaffDoc.data();
-          const role = staffData.role || staffData.primaryRole || staffData.roles?.[0] || 'staff';
-          const mustChange = staffData.mustChangePassword === true || staffData.isTemporaryPassword === true || staffData.status === 'pending_setup';
-
-          return {
-            success: true,
-            user: {
-              id: foundStaffDoc.id,
-              ...staffData,
-              role,
-              roles: staffData.roles || [role],
-              mustChangePassword: mustChange,
-              isTemporaryPassword: mustChange
-            },
-            lab: fullLabRecord || { id: targetLabId, name: staffData.labName || 'Laboratory Center' },
-            role,
-            mustChangePassword: mustChange
-          };
-        }
-
-        // STRICT ROLE CHECK: If code matches a patient record, explicitly reject staff login!
-        const foundPatientDoc = patientsSnap.docs.find(d => matchesPatient(d, d.data()));
-        if (foundPatientDoc) {
-          return {
-            success: false,
-            error: 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.'
-          };
-        }
-      } catch (authErr) {
-        console.warn('Error during laboratory credential verification:', authErr);
-      }
-
-      // Check local patient cache - reject with patient error if it matches
-      try {
-        const localPatientRaw = localStorage.getItem('last_registered_patient');
-        if (localPatientRaw) {
-          const localPatient = JSON.parse(localPatientRaw);
-          if ((!localPatient.labId || localPatient.labId === targetLabId) && matchesPatient({ id: localPatient.id }, localPatient)) {
-            return {
-              success: false,
-              error: 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.'
-            };
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      return {
-        success: false,
-        error: 'Invalid access code for the selected laboratory. The code entered does not match any registered staff record at this facility.'
-      };
-    } catch (error: any) {
-      console.error('❌ Error in verifyAccessCode:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Authentication error' 
-      };
-    }
-  },
-
-  /**
-   * Helper to verify staff authorization code during actions (cashier payment, sample collection, lab result upload, receptionist check-in).
-   */
-  async verifyStaffActionCode(
-    inputCode: string, 
-    allowedRoles: string[], 
-    currentUserCode?: string,
-    labId?: string
-  ): Promise<{ authorized: boolean; staffName?: string; error?: string }> {
-    const cleanCode = (inputCode || '').trim();
-    if (!cleanCode) {
-      return { authorized: false, error: 'Please enter your staff access code / PIN.' };
-    }
-
-    const upperCode = cleanCode.toUpperCase();
-
-    // 1. Direct match with user's active session code
-    if (currentUserCode && (cleanCode === currentUserCode.trim() || upperCode === currentUserCode.trim().toUpperCase())) {
-      return { authorized: true, staffName: 'Authorized Staff' };
-    }
-
-    // 2. Check default staff map (e.g. REC123, CASH123, TECH123, ADMIN123)
-    if (DEFAULT_STAFF_MAP[upperCode]) {
-      const staffInfo = DEFAULT_STAFF_MAP[upperCode];
-      const roleMatches = allowedRoles.includes('all') || 
-                          allowedRoles.includes(staffInfo.role) || 
-                          (staffInfo.roles && staffInfo.roles.some((r: string) => allowedRoles.includes(r)));
-      if (roleMatches) {
-        return { authorized: true, staffName: staffInfo.name };
-      }
-    }
-
-    // 3. Check hardcoded standard admin passcodes
-    if (upperCode === 'SUPER123' || upperCode === 'ADMIN123' || upperCode === 'SUPERADMIN123') {
-      return { authorized: true, staffName: 'Administrator' };
-    }
-
-    // 4. Role-specific standard passcodes
-    if (
-      (allowedRoles.includes('receptionist') && (upperCode === 'REC123' || upperCode === 'RECEPTION123' || upperCode === 'STAFF123' || upperCode === '1234')) ||
-      (allowedRoles.includes('cashier') && (upperCode === 'CASH123' || upperCode === 'CASHIER123' || upperCode === 'STAFF123' || upperCode === '1234')) ||
-      (allowedRoles.includes('analyzer') && (upperCode === 'SAMPLE123' || upperCode === 'PHLEB123' || upperCode === 'ANALYZER123' || upperCode === '1234')) ||
-      (allowedRoles.includes('labtech') && (upperCode === 'TECH123' || upperCode === 'LABTECH123' || upperCode === '1234'))
-    ) {
-      return { authorized: true, staffName: 'Authorized Staff' };
-    }
-
-    // 5. Query Firestore staff collection in target lab for registered staff accounts
-    try {
-      const targetLabId = labId || 'lab-1';
-      const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
-      const found = staffSnap.docs.find(d => {
-        const data = d.data();
-        const sc = (data.accessCode || data.initialCode || '').trim();
-        return sc === cleanCode || sc.toUpperCase() === upperCode;
-      });
-
-      if (found) {
-        const staffData = found.data();
-        const role = staffData.role || staffData.primaryRole || 'staff';
-        const roles = staffData.roles || [role];
-        const roleMatches = allowedRoles.includes('all') || 
-                            allowedRoles.includes(role) || 
-                            roles.some((r: string) => allowedRoles.includes(r));
-        if (roleMatches) {
-          return { authorized: true, staffName: staffData.name || 'Authorized Staff' };
-        } else {
-          return { authorized: false, error: `Access Denied: Your staff account role (${role}) is not authorized for this action.` };
-        }
-      }
-    } catch (fsErr) {
-      console.warn('Staff verification Firestore lookup error:', fsErr);
-    }
-
-    return { 
-      authorized: false, 
-      error: 'Access Denied: Invalid Access Code / PIN. Please enter your valid staff passcode (e.g. REC123, 1234, or your assigned staff code).' 
-    };
-  },
-
-  /**
-   * Directly creates a new staff member with an initial access code generated or chosen by the Admin.
-   * On first login with this code, the staff member is required to set their own private permanent access code.
-   */
-  async createStaffWithCode(staffData: {
-    name: string;
-    email?: string;
-    phone?: string;
-    roles: string[];
-    primaryRole?: string;
-    accessCode: string;
-    labId?: string;
-    labName?: string;
-  }, adminUser?: { id: string; name: string; role: string }) {
-    try {
-      const cleanCode = staffData.accessCode.trim().toUpperCase();
-      const targetLabId = staffData.labId || 'lab-1';
-
-      // 1. Call Server-Side API endpoint to register in memory registry
-      try {
-        await fetch('/api/staff/create-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...staffData,
-            accessCode: cleanCode,
-            createdBy: adminUser || { id: 'admin', name: 'Lab Administrator', role: 'admin' }
-          })
-        });
-      } catch (srvErr) {
-        console.warn('Server registration notice:', srvErr);
-      }
-
-      // 2. Persist to Firestore with initial code and mustChangePassword flag
-      let staffDocId = `staff_${Date.now()}`;
-      try {
-        const docRef = await addDoc(collection(db, 'labs', targetLabId, 'staff'), {
-          name: staffData.name.trim(),
-          email: (staffData.email || '').trim().toLowerCase(),
-          phone: staffData.phone || '',
-          roles: staffData.roles,
-          primaryRole: staffData.primaryRole || staffData.roles[0],
-          accessCode: cleanCode,
-          initialCode: cleanCode,
-          status: 'pending_setup',
-          mustChangePassword: true,
-          isTemporaryPassword: true,
-          createdAt: new Date().toISOString(),
-          createdBy: adminUser?.name || 'Lab Administrator',
-          labId: targetLabId,
-          labName: staffData.labName || 'nanoLabs Central Diagnostics'
-        });
-        if (docRef?.id) {
-          staffDocId = docRef.id;
-        }
-      } catch (fsErr) {
-        console.warn('Firestore staff record save warning (falling back to local cache):', fsErr);
-      }
-
-      // Also cache in local staff storage
-      try {
-        const raw = localStorage.getItem(`nanolabs_local_staff_${targetLabId}`);
-        const localList = raw ? JSON.parse(raw) : [];
-        localList.push({
-          id: staffDocId,
-          name: staffData.name.trim(),
-          email: (staffData.email || '').trim().toLowerCase(),
-          phone: staffData.phone || '',
-          roles: staffData.roles,
-          primaryRole: staffData.primaryRole || staffData.roles[0],
-          accessCode: cleanCode,
-          status: 'pending_setup',
-          mustChangePassword: true,
-          createdAt: new Date().toISOString()
-        });
-        localStorage.setItem(`nanolabs_local_staff_${targetLabId}`, JSON.stringify(localList));
-      } catch {}
-
-      return {
-        success: true,
-        staffId: staffDocId,
-        accessCode: cleanCode,
-        name: staffData.name.trim(),
-        roles: staffData.roles
-      };
-    } catch (err: any) {
-      console.error('Error creating staff with code:', err);
-      // Return safe fallback instead of throwing uncaught fatal crash
-      return {
-        success: true,
-        staffId: `staff_${Date.now()}`,
-        accessCode: staffData.accessCode.trim().toUpperCase(),
-        name: staffData.name.trim(),
-        roles: staffData.roles
-      };
-    }
-  },
-
-  /**
-   * Resets a staff member's access code directly from the Admin panel.
-   */
-  async resetStaffAccessCode(staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) {
-    try {
-      const cleanCode = newAccessCode.trim().toUpperCase();
-      const targetLabId = labId || 'lab-1';
-
-      // Server-side reset
-      try {
-        await fetch('/api/staff/reset-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffId, email, newAccessCode: cleanCode, adminUser })
-        });
-      } catch (srvErr) {
-        console.warn('Server reset notice:', srvErr);
-      }
-
-      // Firestore reset
-      const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
-      const staffDoc = staffSnap.docs.find(d => {
-        const dData = d.data();
-        return d.id === staffId || dData.id === staffId || (dData.email && dData.email.toLowerCase() === (email || '').toLowerCase());
-      });
-
-      if (staffDoc) {
-        await updateDoc(doc(db, 'labs', targetLabId, 'staff', staffDoc.id), {
-          accessCode: cleanCode,
-          initialCode: cleanCode,
-          mustChangePassword: true,
-          isTemporaryPassword: true,
-          status: 'pending_setup',
-          resetAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-      }
-
-      return {
-        success: true,
-        accessCode: cleanCode,
-        message: 'Access code reset successfully.'
-      };
-    } catch (err: any) {
-      console.error('Error resetting staff access code:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Invites a new staff member using Zero-Knowledge Server-Side OTP Generation.
-   * Admin sets account details and roles only; server generates, hashes and emails OTP.
-   */
-  async inviteStaff(staffData: {
-    name: string;
-    email: string;
-    phone?: string;
-    roles: string[];
-    primaryRole?: string;
-    labId?: string;
-    labName?: string;
-  }, adminUser?: { id: string; name: string; role: string }) {
-    try {
-      // 1. Call Server-Side API endpoint
-      const res = await fetch('/api/staff/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...staffData,
-          invitedBy: adminUser || { id: 'admin', name: 'Lab Administrator', role: 'admin' }
-        })
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to dispatch staff invitation.');
-      }
-
-      // 2. Sync to Firestore (Store only metadata and status; NEVER plain-text OTP code)
-      try {
-        const targetLabId = staffData.labId || 'lab-1';
-        await addDoc(collection(db, 'labs', targetLabId, 'staff'), {
-          id: data.staffId,
-          name: staffData.name.trim(),
-          email: staffData.email.trim().toLowerCase(),
-          phone: staffData.phone || '',
-          roles: staffData.roles,
-          primaryRole: staffData.primaryRole || staffData.roles[0],
-          status: 'pending_setup',
-          mustChangePassword: true,
-          invitedAt: new Date().toISOString(),
-          labId: targetLabId,
-          labName: staffData.labName || 'nanoLabs Central Diagnostics'
-        });
-      } catch (fsErr) {
-        console.warn('Firestore staff sync warning:', fsErr);
-      }
-
-      return {
-        success: true,
-        staffId: data.staffId,
-        email: data.email,
-        emailProvider: data.emailProvider,
-        deliveryReceipt: data.deliveryReceipt,
-        devOtpHint: data.devOtpHint
-      };
-    } catch (err: any) {
-      console.error('Error inviting staff:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Sets the staff member's private permanent password or new secret access code.
-   * Updates Firestore access code and server hash so the staff can sign in immediately.
-   */
-  async setPermanentPassword(staffId: string, email: string, newPassword: string, labId?: string) {
-    try {
-      const cleanNewCode = newPassword.trim();
-      const targetLabId = labId || 'lab-1';
-
-      // 1. Call Server-side API endpoint
-      try {
-        await fetch('/api/staff/set-permanent-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffId, email, newPassword: cleanNewCode })
-        });
-      } catch (srvErr) {
-        console.warn('Server password update note:', srvErr);
-      }
-
-      // 2. Sync Firestore staff document status & update accessCode to the new permanent private code
-      try {
-        const staffSnap = await getDocs(collection(db, 'labs', targetLabId, 'staff'));
-        const staffDoc = staffSnap.docs.find(d => {
-          const dData = d.data();
-          return d.id === staffId || dData.id === staffId || (dData.email && dData.email.toLowerCase() === (email || '').toLowerCase());
-        });
-
-        if (staffDoc) {
-          await updateDoc(doc(db, 'labs', targetLabId, 'staff', staffDoc.id), {
-            accessCode: cleanNewCode,
-            mustChangePassword: false,
-            status: 'active',
-            isTemporaryPassword: false,
-            passwordConfiguredAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-        }
-      } catch (fsErr) {
-        console.warn('Firestore password status sync note:', fsErr);
-      }
-
-      return { success: true, message: 'Private access code successfully established.' };
-    } catch (err: any) {
-      console.error('Error setting permanent password:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Resends invitation OTP to a staff member.
-   */
-  async resendStaffInvite(staffId: string, email: string, adminUser?: any) {
-    try {
-      const res = await fetch('/api/staff/resend-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId, email, adminUser })
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to resend invite.');
-      }
-
-      return data;
-    } catch (err: any) {
-      console.error('Error resending staff invite:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Updates staff member roles with audit logging.
-   */
-  async updateStaffRoles(staffId: string, email: string, roles: string[], primaryRole?: string, adminUser?: any) {
-    try {
-      const res = await fetch('/api/staff/update-roles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId, email, roles, primaryRole, adminUser })
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to update roles.');
-      }
-
-      return data;
-    } catch (err: any) {
-      console.error('Error updating staff roles:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Fetches the immutable security audit logs for administrators.
-   */
-  async getAuditLogs() {
-    try {
-      const res = await fetch('/api/staff/audit-logs');
-      const data = await res.json();
-      return data.logs || [];
-    } catch (err) {
-      console.warn('Failed to fetch audit logs from server:', err);
-      return [];
-    }
-  },
-
-  /**
-   * Fetches the server staff registry.
-   */
-  async getServerStaffList() {
-    try {
-      const res = await fetch('/api/staff/list');
-      const data = await res.json();
-      return data.staff || [];
-    } catch (err) {
-      console.warn('Failed to fetch server staff list:', err);
-      return [];
-    }
-  },
-
-  async getAllLabs(options?: { includePending?: boolean }) {
-    try {
-      const labsRef = collection(db, 'labs');
-      const snapshot = await getDocs(labsRef);
-      let labs = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          logoUrl: data.logoUrl || data.logo || null
-        };
-      });
-
-      if (!options?.includePending) {
-        labs = labs.filter(l => (l as any).status !== 'suspended' && (l as any).status !== 'rejected');
-      }
-
-      // Also check local cache for registered laboratory
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id && !labs.some(l => l.id === cLab.id)) {
-            labs.unshift(cLab);
-          }
-        }
-      } catch {}
-
-      return labs;
-    } catch (error) {
-      console.error('Error fetching labs:', error);
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id) return [cLab];
-        }
-      } catch {}
-      return [];
-    }
-  },
-
-  async getLabDetails(labId: string) {
-    try {
-      if (!labId) return null;
-      const labRef = doc(db, 'labs', labId);
-      const labDoc = await getDoc(labRef);
-      if (labDoc.exists()) {
-        return { id: labDoc.id, ...labDoc.data() };
-      }
-      return { id: labId, name: 'nanoLabs Diagnostic Center' };
-    } catch (error) {
-      console.error('Error fetching lab details:', error);
+      return localStorage.getItem(key);
+    } catch {
       return null;
     }
   },
-
-  async registerPatient(labId: string, patientData: any) {
+  setItem: async (key: string, value: string): Promise<void> => {
     try {
-      const targetLabId = labId || 'lab-1';
-      const patientsRef = collection(db, 'labs', targetLabId, 'patients');
-      
-      const newPatient = cleanFirestoreData({
-        ...patientData,
-        status: patientData.status || 'registered',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-
-      let patientDocId = `pat_${Date.now()}`;
-      try {
-        const docRef = await addDoc(patientsRef, newPatient);
-        if (docRef?.id) {
-          patientDocId = docRef.id;
-        }
-      } catch (fsErr) {
-        console.warn('Firestore patient write notice, falling back to local storage:', fsErr);
-      }
-
-      // Persist in local storage for instant offline/portal access
-      try {
-        const record = { id: patientDocId, ...newPatient };
-        localStorage.setItem('last_registered_patient', JSON.stringify(record));
-        const rawList = localStorage.getItem(`nanolabs_local_patients_${targetLabId}`);
-        const pList = rawList ? JSON.parse(rawList) : [];
-        pList.push(record);
-        localStorage.setItem(`nanolabs_local_patients_${targetLabId}`, JSON.stringify(pList));
-      } catch {}
-
-      return {
-        success: true,
-        patientId: patientDocId,
-        accessCode: patientData.accessCode
-      };
-    } catch (error: any) {
-      console.error('Error registering patient:', error);
-      const fallbackId = `pat_${Date.now()}`;
-      return { 
-        success: true, 
-        patientId: fallbackId, 
-        accessCode: patientData?.accessCode || 'PAT123' 
-      };
-    }
+      localStorage.setItem(key, value);
+    } catch {}
   },
-
-  /**
-   * Dedicated Patient Portal Authentication
-   * Validates phone number or Patient ID (PID) and access code / passcode.
-   */
-  async loginPatient(phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string): Promise<AuthResult> {
+  multiRemove: async (keys: string[]): Promise<void> => {
     try {
-      const cleanIdentifier = (phoneOrIdentifier || '').trim();
-      const cleanPassword = (passwordOrCode || '').trim();
-
-      if (!cleanIdentifier) {
-        return { success: false, error: 'Please enter your registered phone number or Patient ID (PID).' };
-      }
-      if (!cleanPassword) {
-        return { success: false, error: 'Please enter your patient access code or PIN.' };
-      }
-
-      const upperId = cleanIdentifier.toUpperCase();
-      const lowerId = cleanIdentifier.toLowerCase();
-      const cleanIdDigits = cleanIdentifier.replace(/\D/g, '');
-      const upperPass = cleanPassword.toUpperCase();
-
-      // STRICT ROLE CHECK: Reject staff credentials on Patient Portal login
-      if (DEFAULT_STAFF_MAP[upperPass] && DEFAULT_STAFF_MAP[upperPass].role !== 'patient') {
-        return {
-          success: false,
-          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
-        };
-      }
-      if (['SUPER123', 'ADMIN123', 'TECH123', 'LABTECH123', 'CASH123', 'CASHIER123', 'REC123', 'RECEPTION123', 'ANALYZER123', 'PHLEB123', 'SAMPLE123'].includes(upperPass)) {
-        return {
-          success: false,
-          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
-        };
-      }
-
-      // 1. Check local storage cache for recently registered patients
-      try {
-        const localPatientRaw = localStorage.getItem('last_registered_patient');
-        if (localPatientRaw) {
-          const lp = JSON.parse(localPatientRaw);
-          const lpPhone = (lp.phone || '').replace(/\D/g, '');
-          const lpPid = (lp.patientId || lp.id || '').toUpperCase();
-          const lpCode = (lp.accessCode || lp.code || lp.passcode || '').toUpperCase();
-          
-          const idMatches = (cleanIdDigits.length >= 7 && lpPhone.includes(cleanIdDigits)) || lpPid === upperId;
-          const passMatches = lpCode === upperPass || upperPass === '1234' || upperPass === 'PAT123';
-
-          if (idMatches && passMatches) {
-            return {
-              success: true,
-              user: {
-                id: lp.id || lp.patientId,
-                ...lp,
-                role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false
-              },
-              lab: { id: lp.labId || 'lab-1', name: lp.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false
-            };
-          }
-        }
-      } catch (locErr) {}
-
-      // 1B. Query Global Top-Level 'patients' Collection (PBKDF2 Hashed Password Accounts)
-      try {
-        const globalPatientsSnap = await getDocs(collection(db, 'patients')).catch(() => ({ docs: [] as any[] }));
-        for (const pDoc of globalPatientsSnap.docs) {
-          const pData = pDoc.data();
-          const dPhone = String(pData.phoneDigits || pData.phone || '').replace(/\D/g, '');
-          const dPid = String(pData.patientId || pDoc.id || '').toUpperCase();
-          const dEmail = String(pData.email || '').toLowerCase();
-
-          const isIdMatch =
-            (cleanIdDigits.length >= 7 &&
-              dPhone.length >= 7 &&
-              (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
-            dPid === upperId ||
-            (Boolean(dEmail) && dEmail === lowerId);
-
-          if (!isIdMatch) continue;
-
-          let isPassValid = false;
-          if (pData.passwordSalt && pData.passwordHash) {
-            isPassValid = await verifyPassword(cleanPassword, pData.passwordSalt, pData.passwordHash);
-          }
-          if (!isPassValid) {
-            const rawPass = String(pData.passcode || pData.accessCode || '').trim();
-            if (rawPass && (rawPass === cleanPassword || rawPass.toUpperCase() === upperPass)) {
-              isPassValid = true;
-            }
-          }
-
-          if (isPassValid) {
-            return {
-              success: true,
-              user: {
-                id: pDoc.id,
-                ...pData,
-                role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false,
-              },
-              lab: { id: pData.labId || targetLabId || 'lab-1', name: pData.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false,
-            };
-          } else {
-            return {
-              success: false,
-              error: 'Incorrect password for this patient account. Please verify your password and try again.',
-            };
-          }
-        }
-      } catch (gpErr) {
-        console.warn('Global patients lookup note:', gpErr);
-      }
-
-      // 2. Query Firestore patients across target lab or labs
-      const labIdsToSearch = targetLabId ? [targetLabId] : ['lab-1', 'lab-2', 'lab-3'];
-      
-      for (const lId of labIdsToSearch) {
-        try {
-          const pSnap = await getDocs(collection(db, 'labs', lId, 'patients')).catch(() => ({ docs: [] as any[] }));
-          const matchedDoc = pSnap.docs.find(d => {
-            const data = d.data();
-            const dPhone = (data.phone || data.phoneNumber || '').replace(/\D/g, '');
-            const dPid = (data.patientId || data.pid || d.id || '').toUpperCase();
-            const dEmail = (data.email || '').toLowerCase();
-            const rawPass = (data.passcode || data.accessCode || data.pin || data.code || '').trim();
-            const dAccess = rawPass.toUpperCase();
-
-            const isId = (cleanIdDigits.length >= 7 && (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
-                         dPid === upperId ||
-                         (dEmail && dEmail === lowerId);
-
-            const isPass = rawPass === cleanPassword ||
-                           dAccess === upperPass ||
-                           upperPass === '1234' ||
-                           upperPass === 'PAT123' ||
-                           upperPass === 'PATIENT123';
-
-            return isId && isPass;
-          });
-
-          if (matchedDoc) {
-            const patientData = matchedDoc.data();
-            return {
-              success: true,
-              user: {
-                id: matchedDoc.id,
-                ...patientData,
-                role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false
-              },
-              lab: { id: lId, name: patientData.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false
-            };
-          }
-        } catch (fErr) {}
-      }
-
-      // 3. Fallback demo patient for instant onboarding if standard demo code is provided
-      if (cleanPassword === '1234' || upperPass === 'PAT123' || upperPass === 'PATIENT123') {
-        // Determine dynamic display name from identifier or stored session
-        let patientDisplayName = 'Valued Patient';
-        if (cleanIdentifier.includes('@')) {
-          patientDisplayName = cleanIdentifier.split('@')[0];
-        } else if (cleanIdentifier.length > 2 && !cleanIdentifier.startsWith('+') && !/^\d+$/.test(cleanIdentifier)) {
-          patientDisplayName = cleanIdentifier;
-        }
-
-        const demoPatient = {
-          id: 'demo-pat-1',
-          patientId: cleanIdentifier.startsWith('PAT-') ? cleanIdentifier : 'PAT-2026-0891',
-          name: patientDisplayName,
-          phone: cleanIdDigits.length >= 7 ? cleanIdentifier : '+237 670 11 22 33',
-          gender: 'Male',
-          dateOfBirth: '1988-04-12',
-          role: 'patient',
-          roles: ['patient'],
-          labId: targetLabId || 'lab-1',
-          labName: 'nanoLabs Central Diagnostics',
-          mustChangePassword: false
-        };
-
-        return {
-          success: true,
-          user: demoPatient,
-          lab: { id: targetLabId || 'lab-1', name: 'nanoLabs Central Diagnostics' },
-          role: 'patient',
-          mustChangePassword: false
-        };
-      }
-
-      return {
-        success: false,
-        error: 'No patient record found matching this Phone Number / PID and Access Code. Please verify or click "Create Patient Account" below.'
-      };
-    } catch (err: any) {
-      console.error('Patient login error:', err);
-      return { success: false, error: err?.message || 'Patient authentication failed. Please try again.' };
-    }
-  },
-
-  /**
-   * Dedicated Doctor & Physician Network Authentication
-   * Validates phone number and password / passcode / access code across accredited doctors.
-   */
-  async loginDoctor(phoneOrIdentifier: string, passwordOrCode: string): Promise<AuthResult> {
-    try {
-      const cleanIdentifier = (phoneOrIdentifier || '').trim();
-      const cleanPassword = (passwordOrCode || '').trim();
-
-      if (!cleanIdentifier) {
-        return { success: false, error: 'Please enter your registered phone number or doctor ID.' };
-      }
-      if (!cleanPassword) {
-        return { success: false, error: 'Please enter your password or access passcode.' };
-      }
-
-      const upperId = cleanIdentifier.toUpperCase();
-      const lowerId = cleanIdentifier.toLowerCase();
-      const cleanIdDigits = cleanIdentifier.replace(/\D/g, '');
-      const upperPass = cleanPassword.toUpperCase();
-
-      const doctorsSnap = await getDocs(collection(db, 'doctors')).catch(() => ({ docs: [] as any[] }));
-      
-      // Find doctor by phone, email, license number, or access code
-      const foundDoctorDoc = doctorsSnap.docs.find(d => {
-        const docData = d.data();
-        const dPhoneDigits = (docData.phone || '').replace(/\D/g, '');
-        const dEmail = (docData.email || '').trim().toLowerCase();
-        const dLicense = (docData.licenseNumber || '').trim().toUpperCase();
-        const dAccessCode = (docData.accessCode || docData.code || '').trim().toUpperCase();
-
-        if (cleanIdDigits.length >= 7 && dPhoneDigits && (dPhoneDigits === cleanIdDigits || dPhoneDigits.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhoneDigits))) {
-          return true;
-        }
-        if (dEmail && dEmail === lowerId) return true;
-        if (dLicense && dLicense === upperId) return true;
-        if (dAccessCode && dAccessCode === upperId) return true;
-        return false;
-      });
-
-      if (!foundDoctorDoc) {
-        return {
-          success: false,
-          error: 'No registered doctor account found for this phone number. Please check your phone number or create an account.'
-        };
-      }
-
-      const doctorData = foundDoctorDoc.data();
-      const storedPassword = (doctorData.password || '').trim();
-      const storedPasscode = (doctorData.passcode || '').trim();
-      const storedAccessCode = (doctorData.accessCode || doctorData.code || '').trim().toUpperCase();
-
-      // Check if password or passcode matches
-      const isPasswordMatch = 
-        (storedPassword && (storedPassword === cleanPassword || storedPassword.toUpperCase() === upperPass)) ||
-        (storedPasscode && (storedPasscode === cleanPassword || storedPasscode.toUpperCase() === upperPass)) ||
-        (storedAccessCode && storedAccessCode === upperPass) ||
-        cleanPassword === 'DOC123' ||
-        cleanPassword === 'SUPER123';
-
-      if (!isPasswordMatch) {
-        return {
-          success: false,
-          error: 'Incorrect password for this phone number. Please check your password and try again.'
-        };
-      }
-
-      const doctorUser = {
-        id: foundDoctorDoc.id,
-        ...doctorData,
-        role: 'doctor',
-        roles: ['doctor'],
-        mustChangePassword: false
-      };
-
-      return {
-        success: true,
-        user: doctorUser,
-        lab: { id: 'network-doctors', name: 'nanoLabs Accredited Medical Network', primaryColor: '#0D9488' },
-        role: 'doctor',
-        mustChangePassword: false
-      };
-    } catch (err: any) {
-      console.error('Doctor login error:', err);
-      return { success: false, error: err?.message || 'Doctor authentication failed. Please try again.' };
-    }
+      keys.forEach(k => localStorage.removeItem(k));
+    } catch {}
   }
 };
 
-export default authService;
+interface AuthContextType {
+  user: any;
+  currentUser: any;
+  lab: any;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (accessCode: string, labId: string) => Promise<any>;
+  loginDoctor: (phoneOrIdentifier: string, passwordOrCode: string) => Promise<any>;
+  loginPatient: (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => Promise<any>;
+  logout: () => void;
+  hasRole: (roleOrRoles: string | string[]) => boolean;
+  refresh: () => Promise<void>;
+  registerPatient: (labId: string, data: any) => Promise<any>;
+  getAllLabs: () => Promise<any[]>;
+  getLabDetails: (labId: string) => Promise<any>;
+  refreshToken: () => Promise<void>;
+  clearSession: () => Promise<void>;
+  setUser: (user: any) => void;
+  setLab: (lab: any) => void;
+  createStaffWithCode: (staffData: any, adminUser?: any) => Promise<any>;
+  resetStaffAccessCode: (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => Promise<any>;
+  verifyAccessCode: (code: string, labId: string) => Promise<any>;
+  verifyStaffActionCode: (inputCode: string, allowedRoles: string[], currentUserCode?: string) => Promise<any>;
+}
 
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const SESSION_TIMEOUT = 30 * 24 * 60 * 60 * 1000; // 30 days persistent clinical session
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<any>(null);
+  const [lab, setLab] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    checkAuthStatus();
+
+    // Refresh lastLogin timestamp when user interacts with the app (throttled to every 5 minutes)
+    let lastTouch = 0;
+    const touchSession = () => {
+      const now = Date.now();
+      if (now - lastTouch > 5 * 60 * 1000) {
+        lastTouch = now;
+        try {
+          if (localStorage.getItem('user')) {
+            localStorage.setItem('lastLogin', String(now));
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('pointerdown', touchSession, { passive: true });
+    window.addEventListener('keydown', touchSession, { passive: true });
+
+    // Auto logout only after full 30-day inactivity window
+    const interval = setInterval(async () => {
+      const storedUser = await AsyncStorage.getItem('user');
+      if (!storedUser) return;
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      if (lastLogin) {
+        const parsedTs = parseInt(lastLogin, 10);
+        if (Number.isFinite(parsedTs)) {
+          const elapsed = Date.now() - parsedTs;
+          if (elapsed > SESSION_TIMEOUT) {
+            await clearSession();
+          }
+        } else {
+          await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        }
+      } else {
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('pointerdown', touchSession);
+      window.removeEventListener('keydown', touchSession);
+    };
+  }, []);
+
+  const setUserWithPersistence = (newUser: any) => {
+    setUser(newUser);
+    if (newUser) {
+      setIsAuthenticated(true);
+      AsyncStorage.setItem('user', JSON.stringify(newUser));
+      AsyncStorage.setItem('lastLogin', String(Date.now()));
+    } else {
+      setIsAuthenticated(false);
+      localStorage.removeItem('user');
+    }
+  };
+
+  const setLabWithPersistence = (newLab: any) => {
+    let labToSave = newLab;
+    if (newLab) {
+      const activeLogo = getActiveLabLogo(newLab) || newLab.logoUrl;
+      if (newLab.logoUrl) {
+        setActiveLabLogo(newLab.logoUrl, newLab.id);
+      } else if (activeLogo) {
+        labToSave = { ...newLab, logoUrl: activeLogo };
+      }
+      setLab(labToSave);
+      AsyncStorage.setItem('lab', JSON.stringify(labToSave));
+      try {
+        localStorage.setItem('lab', JSON.stringify(labToSave));
+      } catch {}
+    } else {
+      setLab(null);
+      localStorage.removeItem('lab');
+    }
+  };
+
+  const checkAuthStatus = async () => {
+    try {
+      await ensureFirebaseAuth();
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedLab = await AsyncStorage.getItem('lab');
+      const lastLogin = await AsyncStorage.getItem('lastLogin');
+      
+      // Check session timeout safely
+      if (lastLogin) {
+        const parsedTs = parseInt(lastLogin, 10);
+        if (Number.isFinite(parsedTs)) {
+          const elapsed = Date.now() - parsedTs;
+          if (elapsed > SESSION_TIMEOUT) {
+            await clearSession();
+            return;
+          }
+        }
+      }
+      
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        let parsedLab = storedLab ? JSON.parse(storedLab) : null;
+        
+        if (!parsedLab && parsedUser?.labId) {
+          parsedLab = { id: parsedUser.labId, name: parsedUser.labName || 'Laboratory Center' };
+        }
+
+        // Refresh live lab metadata (package, mobile phlebotomist opt-in, limits) in background
+        if (parsedLab?.id && parsedLab.id !== 'global-network' && parsedLab.id !== 'network-doctors') {
+          authService.getLabDetails(parsedLab.id).then((freshLab) => {
+            if (freshLab && freshLab.name) {
+              setLabWithPersistence({ ...parsedLab, ...freshLab });
+            }
+          }).catch(() => {});
+        }
+
+        if (parsedLab) {
+          const cachedLogo = getActiveLabLogo(parsedLab);
+          if (cachedLogo) {
+            parsedLab.logoUrl = cachedLogo;
+          }
+          setLab(parsedLab);
+        }
+
+        setUser(parsedUser);
+        setIsAuthenticated(true);
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (accessCode: string, labId: string) => {
+    try {
+      const result = await authService.verifyAccessCode(accessCode, labId);
+      
+      if (result.success && result.user) {
+        if (result.user.role === 'patient') {
+          throw new Error('Invalid Staff Access Code. Patient codes cannot authenticate on the Laboratory Staff portal.');
+        }
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
+        
+        // Store session data
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', accessCode);
+        await AsyncStorage.setItem('labId', labId || '');
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Invalid credentials');
+      }
+    } catch (error: any) {
+      errorHandler.handleError(error);
+      throw error;
+    }
+  };
+
+  const loginDoctor = async (phoneOrIdentifier: string, passwordOrCode: string) => {
+    try {
+      const result = await authService.loginDoctor(phoneOrIdentifier, passwordOrCode);
+      
+      if (result.success && result.user) {
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
+        
+        // Store session data
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', passwordOrCode);
+        await AsyncStorage.setItem('labId', 'network-doctors');
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Doctor authentication failed');
+      }
+    } catch (error: any) {
+      errorHandler.handleError(error);
+      throw error;
+    }
+  };
+
+  const loginPatient = async (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => {
+    try {
+      const result = await authService.loginPatient(phoneOrIdentifier, passwordOrCode, targetLabId);
+      
+      if (result.success && result.user) {
+        setUser(result.user);
+        setLab(result.lab);
+        setIsAuthenticated(true);
+        
+        // Store session data
+        await AsyncStorage.setItem('user', JSON.stringify(result.user));
+        if (result.lab) {
+          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
+        }
+        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+        await AsyncStorage.setItem('accessCode', passwordOrCode);
+        await AsyncStorage.setItem('labId', result.lab?.id || targetLabId || 'lab-1');
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Patient authentication failed');
+      }
+    } catch (error: any) {
+      errorHandler.handleError(error);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    await clearSession();
+  };
+
+  const clearSession = async () => {
+    setUser(null);
+    setLab(null);
+    setIsAuthenticated(false);
+    await AsyncStorage.multiRemove(['user', 'lab', 'lastLogin', 'accessCode', 'labId']);
+  };
+
+  const refreshToken = async () => {
+    const accessCode = await AsyncStorage.getItem('accessCode');
+    const labId = await AsyncStorage.getItem('labId');
+    if (accessCode && labId) {
+      await login(accessCode, labId);
+    }
+  };
+
+  const registerPatient = async (labId: string, data: any) => {
+    return await authService.registerPatient(labId, data);
+  };
+
+  const getAllLabs = async () => {
+    return await authService.getAllLabs();
+  };
+
+  const getLabDetails = async (labId: string) => {
+    return await authService.getLabDetails(labId);
+  };
+
+  const createStaffWithCode = async (staffData: any, adminUser?: any) => {
+    return await authService.createStaffWithCode(staffData, adminUser);
+  };
+
+  const resetStaffAccessCode = async (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => {
+    return await authService.resetStaffAccessCode(staffId, email, newAccessCode, labId, adminUser);
+  };
+
+  const verifyAccessCode = async (code: string, labId: string) => {
+    return await authService.verifyAccessCode(code, labId);
+  };
+
+  const verifyStaffActionCode = async (inputCode: string, allowedRoles: string[], currentUserCode?: string) => {
+    return await authService.verifyStaffActionCode(inputCode, allowedRoles, currentUserCode);
+  };
+
+  const hasRole = (roleOrRoles: string | string[]): boolean => {
+    if (!user) return false;
+    const currentRoles: string[] = user.roles || (user.role ? [user.role] : []);
+    if (Array.isArray(roleOrRoles)) {
+      return roleOrRoles.some((r) => currentRoles.includes(r));
+    }
+    return currentRoles.includes(roleOrRoles);
+  };
+
+  return (
+    <AuthContext.Provider value={{
+      user,
+      currentUser: user,
+      lab,
+      isAuthenticated,
+      isLoading,
+      login,
+      loginDoctor,
+      loginPatient,
+      logout,
+      hasRole,
+      refresh: refreshToken,
+      registerPatient,
+      getAllLabs,
+      getLabDetails,
+      refreshToken,
+      clearSession,
+      setUser: setUserWithPersistence,
+      setLab: setLabWithPersistence,
+      createStaffWithCode,
+      resetStaffAccessCode,
+      verifyAccessCode,
+      verifyStaffActionCode
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
