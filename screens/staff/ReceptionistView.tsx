@@ -8,7 +8,7 @@ import { limsService, PatientBooking } from '../../services/limsService';
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG, OFFICIAL_CATEGORIES } from '../../data/officialTestCatalog';
 import { validatePhoneNumber, cleanFirestoreData } from '../../utils/sanitizeData';
-import { uploadService } from '../../services/uploadService';
+import { uploadService } from '../../api/upload';
 import { CAMEROON_INSURANCE_COMPANIES, calculateAgeFromDOB, formatDOBDisplay } from '../../data/cameroonInsurances';
 import { DoctorCardSelect, DoctorOption } from '../../components/common/DoctorCardSelect';
 import { 

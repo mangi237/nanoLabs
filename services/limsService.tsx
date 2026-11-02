@@ -523,7 +523,7 @@ export const limsService = {
     let testItems: BookingTestItem[] = [];
 
     if (selectedTests && selectedTests.length > 0) {
-      testItems = selectedTests.map((t, idx) => {
+      testItems = selectedTests.map((t : any, idx : any ) => {
         const base = t.basePrice || t.price || 5000;
         const sFee = t.systemFee !== undefined ? t.systemFee : feePerTest;
         const tot = t.totalPrice || (base + sFee);
@@ -543,7 +543,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map(sp => ({
+          subParameters: t.subParameters ? t.subParameters.map((sp : any ) => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -552,7 +552,7 @@ export const limsService = {
       });
     } else {
       const catalog = await this.getMasterTestCatalog(labId);
-      testItems = (selectedMasterTestIds || []).map((masterId, idx) => {
+      testItems = (selectedMasterTestIds || []).map((masterId : any , idx : any ) => {
         const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       {
@@ -4093,7 +4093,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { id: d.id, ...existingData };
+            return { ...existingData,  id: d.id,};
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -4365,7 +4365,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -4438,7 +4438,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {
@@ -4515,7 +4515,7 @@ export const limsService = {
     try {
       await addDoc(collection(db, 'doctor_shared_results'), cleanFirestoreData(shareRecord));
       return { success: true, shareId, expiresAt };
-    } catch (e) {
+    } catch (e) { 
       console.warn('Error saving doctor shared result in Firestore:', e);
       return { success: true, shareId, expiresAt };
     }

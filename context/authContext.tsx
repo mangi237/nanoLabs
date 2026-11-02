@@ -51,7 +51,7 @@ interface AuthContextType {
   verifyStaffActionCode: (inputCode: string, allowedRoles: string[], currentUserCode?: string) => Promise<any>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined );
 
 const SESSION_TIMEOUT = 30 * 24 * 60 * 60 * 1000; // 30 days persistent clinical session
 
