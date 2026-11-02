@@ -1,7 +1,11 @@
 import React from 'react';
+import { Lock } from 'lucide-react';
 import { useAuth } from '../context/authContext';
+import { canLabUseFeature, getLabPackageConfig, getRequiredPackageNameForFeature } from '../utils/labPackages';
 import AdminDashboard from './admin/adminDashboard';
-import PatientDashboard from './Patient/PatientDashboard';
+// import PatientDashboard from './patient/PatientDashboard';
+import { PatientApp } from './Patient/PatientApp';
+import  DoctorApp from './doctor/DoctorApp'
 import ReceptionistView from './staff/ReceptionistView';
 import { LabTechView } from './staff/LabTechView';
 import { CashierView } from './staff/CashierView';
@@ -11,7 +15,9 @@ import { BiologistView } from './staff/BiologistView';
 import { SuperAdminDashboard } from './superAdmin/SuperAdminDashboard';
 import InventoryManagement from './admin/InventoryManagement';
 import { DoctorPortal } from './doctor/DoctorPortal';
+import { PhlebotomyDispatchScreen } from './Lab/PhlebotomyDispatchScreen';
 import StaffSidebar from '../components/common/StaffSidebar';
+import { StaffTrainingBookletPage } from './staff/StaffTrainingBookletPage';
 
 interface UnifiedDashboardProps {
   onNavigateTab: (tab: string) => void;
@@ -28,16 +34,11 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
   onSelectPatient,
   onSelectTest
 }) => {
-  const { user } = useAuth();
+  const { user, lab, setUser } = useAuth();
   const currentRole = user?.role || 'patient';
 
   if (currentRole === 'doctor' || currentRole === 'referring_doctor' || currentRole === 'physician') {
-    return (
-      <DoctorPortal
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-      />
-    );
+    return <DoctorApp />;
   }
 
   if (currentRole === 'superadmin') {
@@ -50,14 +51,7 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
   }
 
   if (currentRole === 'patient') {
-    return (
-      <PatientDashboard
-        onNavigateTab={onNavigateTab}
-        onNotificationPress={onNotificationPress}
-        onProfilePress={onProfilePress}
-        onSelectTest={onSelectTest}
-      />
-    );
+    return <PatientApp />;
   }
 
   // Render Staff View Content
@@ -65,6 +59,20 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
     switch (currentRole) {
       case 'inventory_manager':
       case 'inventory':
+        if (!canLabUseFeature(lab, 'inventory')) {
+          const pkg = getLabPackageConfig(lab);
+          return (
+            <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-sm text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Inventory Module Not in Current Package</h2>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                <strong>{lab?.name || 'This laboratory'}</strong> is currently on the <strong>{pkg.name}</strong> ({pkg.priceLabel}) plan. Reagent &amp; Consumables Inventory Management requires <strong>{getRequiredPackageNameForFeature('inventory')}</strong> or higher.
+              </p>
+            </div>
+          );
+        }
         return (
           <InventoryManagement
             embedded={false}
@@ -89,6 +97,14 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
             onNotificationPress={onNotificationPress}
             onProfilePress={onProfilePress}
           />
+        );
+
+      case 'mobile_phlebotomist':
+      case 'phlebotomist':
+      case 'phlebotomy':
+      case 'dispatch':
+        return (
+          <PhlebotomyDispatchScreen />
         );
 
       case 'analyzer':
@@ -126,6 +142,25 @@ export const UnifiedDashboard: React.FC<UnifiedDashboardProps> = ({
             onNotificationPress={onNotificationPress}
             onProfilePress={onProfilePress}
             onSelectPatient={onSelectPatient}
+          />
+        );
+
+      case 'training_manual':
+      case 'manual':
+      case 'staff_training':
+      case 'handbook':
+      case 'booklet':
+        return (
+          <StaffTrainingBookletPage
+            onBack={() => {
+              const fallback = user?.roles?.[0] || 'receptionist';
+              const updated = { ...user, role: fallback };
+              setUser(updated);
+            }}
+            onNavigateDesk={(deskRole) => {
+              const updated = { ...user, role: deskRole };
+              setUser(updated);
+            }}
           />
         );
 
