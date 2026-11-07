@@ -701,24 +701,60 @@ export const authService = {
 },
 
 
-async registerPatient(labId: string, patientData: any, ) {
-  await ensureFirebaseAuth();
-  const now = new Date().toISOString();
-  const aliasClean = String(patientData.alias || patientData.nickname || patientData.name || '')
-    .trim()
-    .replace(/^@+/, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9_.\-]/g, '');
-
-  let resolvedLabName = patientData.labName || '';
-  if (labId && !resolvedLabName) {
-    // FIX: Passed the optional 'patientData.name' instead of an undefined 'name' variable
-    const labRec = await this.getLabDetails(labId, patientData.name);
-    
-    // FIX: TypeScript now safely recognizes 'name' and 'id' on labRec
-    if (labRec?.name) {
-      resolvedLabName = labRec.id; // Or labRec.name, depending on your business logic
+async registerPatient(
+  labId: string,
+  data: any
+): Promise<{ success: boolean; id?: string; error?: string; patient?: any }> {
+  try {
+    if (!labId) {
+      return { success: false, error: 'Lab ID is required to register a patient.' };
     }
+    if (!data?.name || !data?.phone) {
+      return { success: false, error: 'Patient name and phone are required.' };
+    }
+
+    // Prevent duplicate PID / access code
+    const patientsRef = collection(db, 'labs', labId, 'patients');
+    const pidCheck = await getDocs(
+      query(patientsRef, where('patientId', '==', data.patientId))
+    );
+    if (!pidCheck.empty) {
+      return {
+        success: false,
+        error: `Patient ID ${data.patientId} already exists. Please retry registration.`,
+      };
+    }
+
+    const accessCodeCheck = await getDocs(
+      query(patientsRef, where('accessCode', '==', data.accessCode))
+    );
+    if (!accessCodeCheck.empty) {
+      return {
+        success: false,
+        error: `Access code ${data.accessCode} already in use. Please retry registration.`,
+      };
+    }
+
+    const payload = cleanFirestoreData({
+      ...data,
+      labId,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const docRef = await addDoc(patientsRef, payload);
+
+    return {
+      success: true,
+      id: docRef.id,
+      patient: { id: docRef.id, ...payload },
+    };
+  } catch (err: any) {
+    console.error('registerPatient error:', err);
+    return {
+      success: false,
+      error: err?.message || 'Failed to register patient. Please try again.',
+    };
   }
 },
 

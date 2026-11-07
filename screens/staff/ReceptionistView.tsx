@@ -251,9 +251,9 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach(dt => {
-      const alreadyIn = combined.some(ct => 
-        (ct.id && ct.id === dt.id) || 
+    directLabTests.forEach((dt: any) => {
+      const alreadyIn = combined.some(ct =>
+        (ct.id && ct.id === dt.id) ||
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
       );
       if (!alreadyIn) {
@@ -414,124 +414,150 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }
   };
 
-  const handleRegisterPatient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !phone.trim()) {
-      alert('Please provide patient name and phone number.');
+const handleRegisterPatient = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!fullName.trim() || !phone.trim()) {
+    alert('Please provide patient name and phone number.');
+    return;
+  }
+
+  const phoneValidation = validatePhoneNumber(phone);
+  if (!phoneValidation.isValid) {
+    alert(
+      phoneValidation.errorMessage ||
+        'Please provide a valid 9-digit phone number (e.g., 671234567).'
+    );
+    return;
+  }
+
+  if (emergencyContactPhone.trim()) {
+    const emergencyValidation = validatePhoneNumber(emergencyContactPhone);
+    if (!emergencyValidation.isValid) {
+      alert(
+        'Emergency contact: ' +
+          (emergencyValidation.errorMessage ||
+            'Please enter a valid 9-digit phone number.')
+      );
+      return;
+    }
+  }
+
+  setIsSubmitting(true);
+  try {
+    const generatedPid = 'PT-' + Math.floor(10000 + Math.random() * 90000);
+    const generatedAccessCode = 'PAT-' + Math.floor(1000 + Math.random() * 9000);
+
+    const chosenInsurance = hasInsurance
+      ? insuranceProvider
+      : 'Out-of-Pocket / Self';
+    const chosenPolicy = hasInsurance
+      ? insurancePolicyNumber.trim() || 'N/A'
+      : 'N/A';
+
+    const rawPayload = {
+      name: fullName.trim(),
+      phone: phoneValidation.formatted || phone.trim(),
+      email:
+        email.trim().toLowerCase() ||
+        `${generatedPid.toLowerCase()}@nanolabs.cm`,
+      dob: dob || null,
+      dateOfBirth: dob || null,
+      age: parseInt(age) || 28,
+      gender,
+      city: city || 'Douala',
+      address: city || 'Douala',
+      nationalId: nationalId.trim() || 'N/A',
+      bloodType: bloodType || 'O+',
+      bloodGroup: bloodType || 'O+',
+      hasInsurance,
+      insuranceProvider: chosenInsurance,
+      insurancePolicyNumber: chosenPolicy,
+      insuranceCoveragePercent: hasInsurance ? insuranceCoveragePercent : 0,
+      insuranceCardUrl:
+        hasInsurance && insuranceCardUrl ? insuranceCardUrl : null,
+      employer: employer.trim() || 'N/A',
+      society: employer.trim() || 'N/A',
+      referringDoctor:
+        (referringDoctorSelect === 'CUSTOM_ENTRY'
+          ? customDoctorName.trim()
+          : referringDoctorSelect.trim()) || 'None / Self-Referred',
+      referralHospital: referralHospital.trim() || 'N/A',
+      referralNotes: referralNotes.trim() || '',
+      isStaffMember,
+      staffDesignation: isStaffMember
+        ? staffDesignation.trim() || 'Staff Personnel'
+        : undefined,
+      allergies: allergies.trim() || 'None reported',
+      emergencyContactName: emergencyContactName.trim() || 'N/A',
+      emergencyContactPhone: emergencyContactPhone.trim() || 'N/A',
+      patientId: generatedPid,
+      accessCode: generatedAccessCode,
+      labId: targetLabId,
+      labName: lab?.name || 'nanoLabs Central Diagnostics',
+      registeredBy: user?.name || 'Front Desk Receptionist',
+      registrationType: 'walk_in',
+      status: 'Checked-In',
+      checkedInAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const patientPayload = cleanFirestoreData(rawPayload);
+
+    const res = await authService.registerPatient(targetLabId, patientPayload);
+
+    if (!res?.success) {
+      alert(res?.error || 'Registration failed. Please check the inputs.');
       return;
     }
 
-    const phoneValidation = validatePhoneNumber(phone);
-    if (!phoneValidation.isValid) {
-      alert(phoneValidation.errorMessage || 'Please provide a valid 9-digit phone number (e.g., 671234567).');
-      return;
-    }
+    // Success — show credentials modal
+    setCreatedPatientCredentials({
+      name: fullName.trim(),
+      patientId: generatedPid,
+      accessCode: generatedAccessCode,
+      phone: phoneValidation.formatted || phone.trim(),
+      bloodType,
+      insuranceProvider: chosenInsurance,
+      rawPatient: res.patient || { ...patientPayload, id: res.id },
+    });
 
-    if (emergencyContactPhone.trim()) {
-      const emergencyValidation = validatePhoneNumber(emergencyContactPhone);
-      if (!emergencyValidation.isValid) {
-        alert('Emergency contact: ' + (emergencyValidation.errorMessage || 'Please enter a valid 9-digit phone number.'));
-        return;
-      }
-    }
+    // Reset all form fields
+    setFullName('');
+    setPhone('');
+    setEmail('');
+    setDob('1996-05-15');
+    setAge('28');
+    setGender('Male');
+    setCity('Douala');
+    setNationalId('');
+    setBloodType('O+');
+    setHasInsurance(false);
+    setInsuranceProvider('Ascoma Health');
+    setInsurancePolicyNumber('');
+    setInsuranceCardUrl('');
+    setReferringDoctorSelect('');
+    setCustomDoctorName('');
+    setReferralHospital('');
+    setReferralNotes('');
+    setEmployer('');
+    setIsStaffMember(false);
+    setStaffDesignation('');
+    setSelectedRegisteredStaffMember(null);
+    setAllergies('');
+    setEmergencyContactName('');
+    setEmergencyContactPhone('');
 
-    setIsSubmitting(true);
-    try {
-      const generatedPid = 'PT-' + Math.floor(10000 + Math.random() * 90000);
-      const generatedAccessCode = 'PAT-' + Math.floor(1000 + Math.random() * 9000);
-
-      const chosenInsurance = hasInsurance ? insuranceProvider : 'Out-of-Pocket / Self';
-      const chosenPolicy = hasInsurance ? (insurancePolicyNumber.trim() || 'N/A') : 'N/A';
-
-      const rawPayload = {
-        name: fullName.trim(),
-        phone: phoneValidation.formatted || phone.trim(),
-        email: email.trim().toLowerCase() || `${generatedPid.toLowerCase()}@nanolabs.cm`,
-        dob: dob || null,
-        dateOfBirth: dob || null,
-        age: parseInt(age) || 28,
-        gender,
-        city: city || 'Douala',
-        address: city || 'Douala',
-        nationalId: nationalId.trim() || 'N/A',
-        bloodType: bloodType || 'O+',
-        bloodGroup: bloodType || 'O+',
-        hasInsurance,
-        insuranceProvider: chosenInsurance,
-        insurancePolicyNumber: chosenPolicy,
-        insuranceCoveragePercent: hasInsurance ? insuranceCoveragePercent : 0,
-        insuranceCardUrl: hasInsurance && insuranceCardUrl ? insuranceCardUrl : null,
-        employer: employer.trim() || 'N/A',
-        society: employer.trim() || 'N/A',
-        referringDoctor: (referringDoctorSelect === 'CUSTOM_ENTRY' ? customDoctorName.trim() : referringDoctorSelect.trim()) || 'None / Self-Referred',
-        referralHospital: referralHospital.trim() || 'N/A',
-        referralNotes: referralNotes.trim() || '',
-        isStaffMember,
-        staffDesignation: isStaffMember ? (staffDesignation.trim() || 'Staff Personnel') : undefined,
-        allergies: allergies.trim() || 'None reported',
-        emergencyContactName: emergencyContactName.trim() || 'N/A',
-        emergencyContactPhone: emergencyContactPhone.trim() || 'N/A',
-        patientId: generatedPid,
-        accessCode: generatedAccessCode,
-        labId: targetLabId,
-        labName: lab?.name || 'nanoLabs Central Diagnostics',
-        registeredBy: user?.name || 'Front Desk Receptionist',
-        registrationType: 'walk_in',
-        status: 'Checked-In',
-        checkedInAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      };
-
-      const patientPayload = cleanFirestoreData(rawPayload);
-
-      const res = await authService.registerPatient(targetLabId, patientPayload);
-
-      if (res.success) {
-        setCreatedPatientCredentials({
-          name: fullName.trim(),
-          patientId: generatedPid,
-          accessCode: generatedAccessCode,
-          phone: phoneValidation.formatted || phone.trim(),
-          bloodType,
-          insuranceProvider: chosenInsurance,
-          rawPatient: patientPayload
-        });
-
-        setFullName('');
-        setPhone('');
-        setEmail('');
-        setDob('1996-05-15');
-        setAge('28');
-        setGender('Male');
-        setCity('Douala');
-        setNationalId('');
-        setBloodType('O+');
-        setHasInsurance(false);
-        setInsuranceProvider('Ascoma Health');
-        setInsurancePolicyNumber('');
-        setInsuranceCardUrl('');
-        setReferringDoctorSelect('');
-        setCustomDoctorName('');
-        setReferralHospital('');
-        setReferralNotes('');
-        setEmployer('');
-        setIsStaffMember(false);
-        setStaffDesignation('');
-        setAllergies('');
-        setEmergencyContactName('');
-        setEmergencyContactPhone('');
-        
-        await fetchData();
-      } else {
-        alert((res as any).error || 'Registration failed. Please check the inputs.');
-      }
-    } catch (err: any) {
-      console.error('Patient registration error:', err);
-      alert('An error occurred during patient registration.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    await fetchData();
+  } catch (err: any) {
+    console.error('Patient registration error:', err);
+    alert(
+      err?.message ||
+        'An error occurred during patient registration. Please try again.'
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleCreateTestOrderForPatient = async (e: React.FormEvent) => {
     e.preventDefault();
