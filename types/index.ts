@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -344,11 +344,12 @@ export interface User {
 
 export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
 export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
-
 export interface Lab {
   id: string;
   name: string;
   location: string;
+  lat?: string;
+  lng?: string;
   city?: string;
   slogan?: string;
   tagline?: string;
@@ -409,8 +410,12 @@ export interface Lab {
   orangeNumber?: string;
   bankRib?: string;
   createdAt?: string;
-}
 
+  // ✅ ADDED to satisfy TestBookingScreen.tsx
+  tier?: string;
+  averageTurnaroundHours?: number;
+  tatHours?: number;
+}
 export interface Hospital {
   id: string;
   name: string;
