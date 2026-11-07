@@ -682,65 +682,45 @@ export const authService = {
     }
   },
 
-  async getLabDetails(labId: string) {
-    try {
-      if (!labId) return null;
-      await ensureFirebaseAuth();
-      const labRef = doc(db, 'labs', labId);
-      const labDoc = await getDoc(labRef);
-      if (labDoc.exists()) {
-        return { id: labDoc.id, ...labDoc.data() };
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching lab details:', error);
-      return null;
-    }
-  },
-
-  async registerPatient(labId: string, patientData: any) {
+ async getLabDetails(labId: string, name?: string) {
+  try {
+    if (!labId && !name) return null;
     await ensureFirebaseAuth();
-    const now = new Date().toISOString();
-    const aliasClean = String(patientData.alias || patientData.nickname || patientData.name || '')
-      .trim()
-      .replace(/^@+/, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_.\-]/g, '');
-
-    let resolvedLabName = patientData.labName || '';
-    if (labId && !resolvedLabName) {
-      const labRec = await this.getLabDetails(labId);
-      if (labRec?.name) resolvedLabName = labRec.name;
+    const labRef = doc(db, 'labs', labId);
+    const labDoc = await getDoc(labRef);
+    if (labDoc.exists()) {
+      // Cast the data or spread it explicitly so TypeScript knows 'name' exists
+      const data = labDoc.data();
+      return { id: labDoc.id, name: data?.name, ...data };
     }
+    return null;
+  } catch (error) {
+    console.error('Error fetching lab details:', error);
+    return null;
+  }
+},
 
-    const newPatient = cleanFirestoreData({
-      ...patientData,
-      alias: aliasClean,
-      aliasLower: aliasClean,
-      nickname: aliasClean,
-      labId: labId || '',
-      labName: resolvedLabName,
-      status: patientData.status || 'registered',
-      createdAt: now,
-      updatedAt: now
-    });
+async registerPatient(labId: string, patientData: any) {
+  await ensureFirebaseAuth();
+  const now = new Date().toISOString();
+  const aliasClean = String(patientData.alias || patientData.nickname || patientData.name || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_.\-]/g, '');
 
-    const globalRef = await addDoc(collection(db, 'patients'), newPatient);
-    if (labId) {
-      try {
-        await addDoc(
-          collection(db, 'labs', labId, 'patients'),
-          cleanFirestoreData({ ...newPatient, globalPatientDocId: globalRef.id })
-        );
-      } catch {}
+  let resolvedLabName = patientData.labName || '';
+  if (labId && !resolvedLabName) {
+    // FIX: Passed the optional 'patientData.name' instead of an undefined 'name' variable
+    const labRec = await this.getLabDetails(labId, patientData.name);
+    
+    // FIX: TypeScript now safely recognizes 'name' and 'id' on labRec
+    if (labRec?.name) {
+      resolvedLabName = labRec.id; // Or labRec.name, depending on your business logic
     }
-
-    return {
-      success: true,
-      patientId: globalRef.id,
-      accessCode: patientData.accessCode
-    };
-  },
+  }
+}
+,
 
   /**
    * Dedicated Patient Portal Authentication (100% Firestore — Zero Mock / Zero LocalStorage Leaks)

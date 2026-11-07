@@ -1,18 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import { AuthProvider, useAuth } from './context/authContext';
 import { ThemeProvider } from './context/themeContext';
 import { LanguageProvider } from './context/languageContext';
-import { LandingPage } from './components/website/LandingPage';
-import DoctorApp from './screens/doctor/DoctorApp';
-// Auth screens
+
+// Import Screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
+import LabSelectionScreen from './screens/auth/LabSelectionScreen';
 import SetPermanentPasswordScreen from './screens/auth/SetPermanentPasswordScreen';
 
-// Shared components
-import OfflineStatusIndicator from './components/common/OfflineStatusIndicator';
-
-// Staff and admin screens
 import UnifiedDashboard from './screens/UnifiedDashboard';
 import AdminDashboard from './screens/admin/adminDashboard';
 import AnalyticsDashboard from './screens/admin/AnalyticsDashboard';
@@ -21,12 +18,10 @@ import PatientManagement from './screens/admin/PatientManagement';
 import ReportsScreen from './screens/admin/ReportsScreen';
 import StaffManagement from './screens/admin/StaffManagement';
 import TestCatalogManagement from './screens/admin/TestCatalogManagement';
-import ReceptionistView from './screens/staff/ReceptionistView';
-import RoleSwitcher from './screens/staff/RoleSwitcher';
-import StaffTrainingBookletPage from './screens/staff/StaffTrainingBookletPage';
 
-// Patient screens
-import PatientApp from './screens/Patient/PatientApp';
+import { PatientApp } from './screens/Patient/PatientApp';
+import DoctorApp from './screens/doctor/DoctorApp';
+import PatientDashboard from './screens/Patient/PatientDashboard';
 import AppointmentScreen from './screens/Patient/AppointmentScreen';
 import BookAppointmentScreen from './screens/Patient/BookAppointmentScreen';
 import TestHistoryScreen from './screens/Patient/TestHistoryScreen';
@@ -35,177 +30,257 @@ import ShareResultsScreen from './screens/Patient/ShareResultsScreen';
 import ResultViewScreen from './screens/Patient/ResultViewScreen';
 import RegistrationCompleteScreen from './screens/Patient/RegistrationCompleteScreen';
 
-// Other screens
-import SharedReportViewerScreen from './screens/Public/SharedReportViewerScreen';
+import ReceptionistView from './screens/staff/ReceptionistView';
+import RoleSwitcher from './screens/staff/RoleSwitcher';
 import NotificationsScreen from './screens/NotificationScreen';
 import PatientDetailsScreen from './screens/PatientDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+// import { CommercialBrochureScreen } from './screens/admin/Commerciaa';
+import OfflineStatusIndicator from './components/common/OfflineStatusIndicator';
+// import { DatabaseErrorToast } from './components/common/databa';
 
-import { Activity, RefreshCw } from 'lucide-react';
+import { Activity, Shield, User, Users, RefreshCw, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
+
+import SharedReportViewerScreen from './screens/Public/SharedReportViewerScreen';
+import PartnerOrderActionScreen from './screens/Public/PartnerOrderActionScreen';
+import LandingPage from './components/website/LandingPage';
+import { StaffTrainingBookletPage } from './screens/staff/StaffTrainingBookletPage';
 
 type ScreenType =
   | 'website'
   | 'login'
   | 'register'
+  | 'staff-training'
   | 'registration-complete'
+  | 'select-lab'
+  | 'verify-report'
   | 'dashboard'
   | 'admin-dashboard'
-  | 'staff-training'
+  | 'commercial-brochure'
   | 'staff'
   | 'analytics'
   | 'inventory'
   | 'catalog'
   | 'patient-list'
   | 'reports'
+  | 'patient-dashboard'
   | 'book-appointment'
   | 'appointment'
   | 'test-history'
   | 'transfer'
   | 'share'
   | 'result-view'
-  | 'receptionist'
   | 'notifications'
   | 'patient-details'
   | 'profile'
-  | 'role-switcher';
-
-const isPublicReportUrl = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const params = new URLSearchParams(window.location.search);
-  return (
-    params.get('view') === 'verify-report' ||
-    !!params.get('code') ||
-    !!params.get('shared') ||
-    !!params.get('verify')
-  );
-};
+  | 'role-switcher'
+  | 'receptionist';
 
 const MainAppContent: React.FC = () => {
   const { user, setUser, lab, isLoading, logout } = useAuth();
-
   const [screen, setScreen] = useState<ScreenType>(() => {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('screen') === 'login' || params.get('portal') === 'login') return 'login';
-      if (params.get('screen') === 'register') return 'register';
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('portal') === 'login' || urlParams.get('screen') === 'login') return 'login';
+      if (urlParams.get('screen') === 'register') return 'register';
+      if (urlParams.get('screen') === 'website') return 'website';
+      if (urlParams.get('screen') === 'dashboard' && user) return 'dashboard';
     }
-    return user ? 'dashboard' : 'website';
+    // High-security healthcare entry: always present Login screen on entry
+    return 'login';
   });
-
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [selectedTest, setSelectedTest] = useState<any>(null);
   const [registeredPatient, setRegisteredPatient] = useState<any>(null);
-  const [preselectedBookingTests] = useState<any[]>([]);
-  const [bookingInitialStep] = useState<1 | 2 | 3>(1);
+  const [loginPortal, setLoginPortal] = useState<'lab' | 'patient' | 'doctor'>('lab');
+  const [preselectedBookingTests, setPreselectedBookingTests] = useState<any[]>([]);
+  const [bookingInitialStep, setBookingInitialStep] = useState<1 | 2 | 3>(1);
 
-  // Shortcuts used by most screens
-  const goDashboard = () => setScreen('dashboard');
-  const goNotifications = () => setScreen('notifications');
-  const goProfile = () => setScreen('profile');
-
-  const openPatient = (patient: any) => {
-    setSelectedPatient(patient);
-    setScreen('patient-details');
-  };
-
-  const openResult = (test: any) => {
-    setSelectedTest(test);
-    setScreen('result-view');
-  };
-
-  const handleSignOut = () => {
-    logout();
-    setSelectedPatient(null);
-    setSelectedTest(null);
-    setScreen('website');
-  };
-
-  // Sidebar and tab navigation used by the dashboards
-  const handleNavigateTab = (tab: string) => {
-    const map: Record<string, ScreenType> = {
-      overview: 'dashboard',
-      admin: 'admin-dashboard',
-      'admin-dashboard': 'admin-dashboard',
-      'patient-dashboard': 'dashboard',
-      staff: 'staff',
-      analytics: 'analytics',
-      inventory: 'inventory',
-      catalog: 'catalog',
-      reports: 'reports',
-      patients: 'patient-list',
-      book: 'book-appointment',
-      history: 'test-history',
-      share: 'share',
-      transfer: 'transfer',
-      register: 'register',
-      'role-switcher': 'role-switcher',
-      receptionist: 'receptionist',
-      'staff-training': 'staff-training',
-      'training-booklet': 'staff-training',
-      'staff-manual': 'staff-training',
-    };
-    setScreen(map[tab] ?? 'dashboard');
-  };
-
-  // 1. Waiting for the saved session to load
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center p-6 text-white select-none">
-        <div className="flex flex-col items-center space-y-6 max-w-sm text-center">
-          <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400 shadow-2xl">
-            <Activity className="w-10 h-10 stroke-[2.5]" />
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white select-none">
+        <div className="flex flex-col items-center space-y-6 max-w-sm text-center animate-in fade-in duration-300">
+          {/* Branded Logo Container - Stagnant and Rock-Solid */}
+          <div className="relative">
+            {(lab?.logoUrl || (typeof window !== 'undefined' && localStorage.getItem('nanolabs_active_lab_logo'))) ? (
+              <img
+                src={lab?.logoUrl || (typeof window !== 'undefined' ? localStorage.getItem('nanolabs_active_lab_logo') || '' : '')}
+                alt="Lab Logo"
+                className="w-20 h-20 rounded-3xl object-contain border border-teal-400/30 bg-white/10 p-2 shadow-2xl shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400 shadow-2xl shrink-0">
+                <Activity className="w-10 h-10 stroke-[2.5]" />
+              </div>
+            )}
           </div>
+
           <div className="space-y-2">
-            <h1 className="text-2xl font-black tracking-tight text-white">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center gap-2">
               nano<span className="text-teal-400">Labs</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30 tracking-wider uppercase">LIMS</span>
             </h1>
             <p className="text-xs text-slate-400 font-medium">
               Clinical Diagnostic & Laboratory Intelligence System
             </p>
           </div>
+
+          {/* Loading Indicator */}
           <div className="flex items-center gap-2 text-xs text-teal-300/80 font-mono pt-2">
             <RefreshCw className="w-4 h-4 animate-spin text-teal-400" />
-            <span>Loading...</span>
+            <span>Establishing Secure Session...</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. Public shared report links (from WhatsApp or SMS)
-  if (isPublicReportUrl()) {
-    return (
-      <SharedReportViewerScreen
-        onGoToLogin={() => {
-          if (typeof window !== 'undefined') {
-            window.history.pushState({}, document.title, window.location.pathname);
-          }
-          setScreen('login');
-        }}
-        onGoToWebsite={() => {
-          if (typeof window !== 'undefined') {
-            window.history.pushState({}, document.title, window.location.pathname);
-          }
-          setScreen('website');
-        }}
-      />
-    );
-  }
+  const handleNavigateTab = (tab: string) => {
+    switch (tab) {
+      case 'overview': setScreen('dashboard'); break;
+      case 'admin':
+      case 'admin-dashboard': setScreen('admin-dashboard'); break;
+      case 'patient-dashboard': setScreen('patient-dashboard'); break;
+      case 'staff': setScreen('staff'); break;
+      case 'analytics': setScreen('analytics'); break;
+      case 'inventory': setScreen('inventory'); break;
+      case 'catalog': setScreen('catalog'); break;
+      case 'reports': setScreen('reports'); break;
+      case 'patients': setScreen('patient-list'); break;
+      case 'book': setScreen('book-appointment'); break;
+      case 'history': setScreen('test-history'); break;
+      case 'share': setScreen('share'); break;
+      case 'transfer': setScreen('transfer'); break;
+      case 'register': setScreen('register'); break;
+      case 'brochure':
+      case 'commercial-brochure': setScreen('commercial-brochure'); break;
+      case 'role-switcher': setScreen('role-switcher'); break;
+      case 'receptionist': setScreen('receptionist'); break;
+      case 'staff-training':
+      case 'training-booklet':
+      case 'staff-manual':
+        setScreen('staff-training');
+        break;
+      default: setScreen('dashboard'); break;
+    }
+  };
 
-  // 3. Not signed in
-  if (!user) {
-    if (screen === 'website') {
+  // Render Screen Switcher
+  const renderScreen = () => {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+
+    // 0. Check for Partner Order Action Link (WhatsApp / SMS bridge for labs without LIMS installation)
+    const partnerOrderCode = urlParams?.get('partnerOrder') || urlParams?.get('order') || urlParams?.get('labOrder');
+    if (partnerOrderCode) {
       return (
-        <div className="min-h-[100dvh] bg-slate-50 font-sans antialiased">
-          <LandingPage onGoToPortal={() => setScreen('login')} />
-        </div>
+        <PartnerOrderActionScreen
+          orderCode={partnerOrderCode}
+          orderKey={urlParams?.get('key') || undefined}
+          onGoToLogin={() => {
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('login');
+          }}
+          onGoToWebsite={() => {
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('website');
+          }}
+        />
       );
     }
 
-    if (screen === 'register') {
+    // Check for Public Shared Report Verification URL (e.g. from WhatsApp/SMS share link)
+    const isPublicVerifyUrl = urlParams && (
+      urlParams.get('view') === 'verify-report' ||
+      urlParams.get('code') ||
+      urlParams.get('shared') ||
+      urlParams.get('verify')
+    );
+
+    if (screen === 'verify-report' || isPublicVerifyUrl) {
       return (
-        <div className="min-h-[100dvh] bg-slate-50 font-sans antialiased">
-          <OfflineStatusIndicator />
+        <SharedReportViewerScreen
+          onGoToLogin={() => {
+            // Clean URL and go to login
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('login');
+          }}
+          onGoToWebsite={() => {
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, document.title, window.location.pathname);
+            }
+            setScreen('website');
+          }}
+        />
+      );
+    }
+
+    // Public Global Website
+    if (screen === 'website') {
+      return (
+        <LandingPage
+          onGoToPortal={(roleHint) => {
+            if (roleHint === 'patient') {
+              setLoginPortal('patient');
+            } else if (roleHint === 'doctor') {
+              setLoginPortal('doctor');
+            } else {
+              setLoginPortal('lab');
+            }
+            setScreen('login');
+          }}
+        />
+      );
+    }
+
+    // If user is authenticated via one-time OTP and must set their permanent password
+    if (user && user.mustChangePassword) {
+      return (
+        <SetPermanentPasswordScreen
+          onSuccess={(updatedUser) => {
+            setUser(updatedUser);
+            setScreen('dashboard');
+          }}
+        />
+      );
+    }
+
+    const getDefaultDashboard = () => {
+      if (user?.role === 'patient') return 'patient-dashboard';
+      return 'dashboard';
+    };
+
+    if (!user && screen !== 'register' && screen !== 'registration-complete' && screen !== 'select-lab') {
+      return (
+        <LoginScreen
+          initialPortal={loginPortal}
+          onLoginSuccess={() => setScreen(getDefaultDashboard())}
+          onNavigateRegister={() => setScreen('register')}
+          onNavigateSelectLab={() => setScreen('select-lab')}
+          onNavigateWebsite={() => setScreen('website')}
+        />
+      );
+    }
+
+    switch (screen) {
+      case 'login':
+        return (
+          <LoginScreen
+            initialPortal={loginPortal}
+            onLoginSuccess={() => setScreen(getDefaultDashboard())}
+            onNavigateRegister={() => setScreen('register')}
+            onNavigateSelectLab={() => setScreen('select-lab')}
+            onNavigateWebsite={() => setScreen('website')}
+          />
+        );
+
+      case 'register':
+        return (
           <RegisterScreen
             onBackToLogin={() => setScreen('login')}
             onRegisterSuccess={(patientData) => {
@@ -213,13 +288,10 @@ const MainAppContent: React.FC = () => {
               setScreen('registration-complete');
             }}
           />
-        </div>
-      );
-    }
+        );
 
-    if (screen === 'registration-complete') {
-      return (
-        <div className="min-h-[100dvh] bg-slate-50 font-sans antialiased">
+      case 'registration-complete':
+        return (
           <RegistrationCompleteScreen
             patientData={registeredPatient}
             onGoToLogin={() => setScreen('login')}
@@ -233,62 +305,47 @@ const MainAppContent: React.FC = () => {
                   labId: registeredPatient.labId,
                   labName: registeredPatient.labName,
                   role: 'patient',
-                  roles: ['patient'],
+                  roles: ['patient']
                 });
               }
-              setScreen('dashboard');
+              setScreen('patient-dashboard');
             }}
           />
-        </div>
-      );
-    }
+        );
 
-    // Default: login screen
-    return (
-      <div className="min-h-[100dvh] bg-slate-50 font-sans antialiased">
-        <OfflineStatusIndicator />
-        <LoginScreen
-          onLoginSuccess={() => setScreen('dashboard')}
-          onNavigateWebsite={() => setScreen('website')}
-        />
-      </div>
-    );
-  }
+      case 'select-lab':
+        return (
+          <LabSelectionScreen
+            onBack={() => setScreen('login')}
+            onSelectLab={() => setScreen('login')}
+          />
+        );
 
-  // 4. Signed in, but must set a permanent password first
-  if (user.mustChangePassword) {
-    return (
-      <SetPermanentPasswordScreen
-        onSuccess={(updatedUser: any) => {
-          setUser(updatedUser);
-          setScreen('dashboard');
-        }}
-      />
-    );
-  }
-  // Doctors use the new doctor app
-  if (user.role === 'doctor') {
-    return (
-      <div className="min-h-[100dvh] bg-[#F4F6F6]">
-        <OfflineStatusIndicator />
-        <DoctorApp />
-      </div>
-    );
-  }
-  // 5. Signed in: route to the right screen
-  const renderScreen = () => {
-    switch (screen) {
       case 'dashboard':
-        if (user.role === 'patient') {
+      case 'patient-dashboard':
+        if (user?.role === 'patient') {
           return <PatientApp />;
+        }
+        if (
+          user?.role === 'doctor' ||
+          user?.role === 'referring_doctor' ||
+          user?.role === 'physician'
+        ) {
+          return <DoctorApp />;
         }
         return (
           <UnifiedDashboard
             onNavigateTab={handleNavigateTab}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
-            onSelectPatient={openPatient}
-            onSelectTest={openResult}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
           />
         );
 
@@ -296,19 +353,25 @@ const MainAppContent: React.FC = () => {
         return (
           <AdminDashboard
             onNavigateTab={handleNavigateTab}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
-            onSelectPatient={openPatient}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
           />
         );
 
       case 'staff-training':
         return (
           <StaffTrainingBookletPage
-            onBack={goDashboard}
-            onNavigateDesk={(deskRole: string) => {
-              setUser({ ...user, role: deskRole });
-              goDashboard();
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNavigateDesk={(deskRole) => {
+              if (user) {
+                const updated = { ...user, role: deskRole };
+                setUser(updated);
+              }
+              setScreen('dashboard');
             }}
           />
         );
@@ -316,65 +379,75 @@ const MainAppContent: React.FC = () => {
       case 'staff':
         return (
           <StaffManagement
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'analytics':
         return (
           <AnalyticsDashboard
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'inventory':
         return (
           <InventoryManagement
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'catalog':
         return (
           <TestCatalogManagement
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'patient-list':
         return (
           <PatientManagement
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
-            onSelectPatient={openPatient}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
           />
         );
 
       case 'reports':
         return (
           <ReportsScreen
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
+
+      // case 'commercial-brochure':
+      //   return (
+      //     <CommercialBrochureScreen
+      //       onBack={() => setScreen(getDefaultDashboard())}
+      //     />
+      //   );
 
       case 'book-appointment':
         return (
           <BookAppointmentScreen
-            onBack={goDashboard}
-            onSuccess={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSuccess={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
             initialSelectedTests={preselectedBookingTests}
             initialStep={bookingInitialStep}
           />
@@ -383,38 +456,41 @@ const MainAppContent: React.FC = () => {
       case 'appointment':
         return (
           <AppointmentScreen
-            onBack={goDashboard}
+            onBack={() => setScreen(getDefaultDashboard())}
             onNavigateBook={() => setScreen('book-appointment')}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'test-history':
         return (
           <TestHistoryScreen
-            onBack={goDashboard}
-            onSelectTest={openResult}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'transfer':
         return (
           <TransferScreen
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'share':
         return (
           <ShareResultsScreen
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
@@ -422,54 +498,69 @@ const MainAppContent: React.FC = () => {
         return (
           <ResultViewScreen
             test={selectedTest}
-            onBack={goDashboard}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'receptionist':
         return (
           <ReceptionistView
-            onBack={goDashboard}
+            onBack={() => setScreen(getDefaultDashboard())}
             onNavigateRegister={() => setScreen('register')}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
-            onNavigatePatientDetails={(patientId: string) => openPatient({ id: patientId })}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onNavigatePatientDetails={(patientId: string) => {
+              setSelectedPatient({ id: patientId });
+              setScreen('patient-details');
+            }}
           />
         );
 
       case 'notifications':
-        return <NotificationsScreen onBack={goDashboard} onProfilePress={goProfile} />;
+        return (
+          <NotificationsScreen
+            onBack={() => setScreen(getDefaultDashboard())}
+            onProfilePress={() => setScreen('profile')}
+          />
+        );
 
       case 'patient-details':
         return (
           <PatientDetailsScreen
             patient={selectedPatient}
-            onBack={goDashboard}
-            onSelectTest={openResult}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
       case 'profile':
         return (
           <ProfileScreen
-            onBack={goDashboard}
+            onBack={() => setScreen(getDefaultDashboard())}
             onNavigateRoleSwitcher={() => setScreen('role-switcher')}
-            onNotificationPress={goNotifications}
-            onLogout={handleSignOut}
+            onNotificationPress={() => setScreen('notifications')}
+            onLogout={() => {
+              setScreen('login');
+            }}
           />
         );
 
       case 'role-switcher':
         return (
           <RoleSwitcher
-            onBack={goDashboard}
-            onRoleSwitched={() => goDashboard()}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
+            onBack={() => setScreen(getDefaultDashboard())}
+            onRoleSwitched={(newRole) => {
+              setScreen(newRole === 'patient' ? 'patient-dashboard' : 'dashboard');
+            }}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
           />
         );
 
@@ -477,31 +568,70 @@ const MainAppContent: React.FC = () => {
         return (
           <UnifiedDashboard
             onNavigateTab={handleNavigateTab}
-            onNotificationPress={goNotifications}
-            onProfilePress={goProfile}
-            onSelectPatient={openPatient}
-            onSelectTest={openResult}
+            onNotificationPress={() => setScreen('notifications')}
+            onProfilePress={() => setScreen('profile')}
+            onSelectPatient={(patient) => {
+              setSelectedPatient(patient);
+              setScreen('patient-details');
+            }}
+            onSelectTest={(test) => {
+              setSelectedTest(test);
+              setScreen('result-view');
+            }}
           />
         );
     }
   };
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 text-slate-900 font-sans antialiased">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+      {/* Offline and Network Sync Status Indicator */}
       <OfflineStatusIndicator />
+
+      {/* Global Database Error Toast (Zero Mock Data Enforcement) */}
+      {/* <DatabaseErrorToast /> */}
+
       {renderScreen()}
     </div>
   );
 };
 
 export default function App() {
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const handleQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+  }, []);
+
+  const gmpApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <LanguageProvider>
-          <MainAppContent />
-        </LanguageProvider>
-      </ThemeProvider>
-    </AuthProvider>
+    <APIProvider apiKey={gmpApiKey} language="en" region="CM">
+      {gmpQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
+      <AuthProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <MainAppContent />
+          </LanguageProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </APIProvider>
   );
 }
