@@ -1,14 +1,14 @@
 import React from 'react';
-import { ShieldCheck, X, FileText, CheckCircle2, Printer, HeartHandshake } from 'lucide-react';
+import { ShieldCheck, X, FileText, CheckCircle2, Printer } from 'lucide-react';
 
-interface PatientTermsModalProps {
+interface LabTermsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAccept?: () => void;
   accepted?: boolean;
 }
 
-export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
+export const LabTermsModal: React.FC<LabTermsModalProps> = ({
   isOpen,
   onClose,
   onAccept,
@@ -24,11 +24,11 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
         <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-400">
-              <HeartHandshake className="w-6 h-6" />
+              <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold">Patient Terms & Conditions</h2>
-              <p className="text-xs text-slate-400">NanoLabs Patient Account Creation & Health Data Consent</p>
+              <h2 className="text-lg sm:text-xl font-bold">Laboratory Registration Terms & Conditions</h2>
+              <p className="text-xs text-slate-400">NanoLabs Facility Service Agreement • Cameroon</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -53,15 +53,15 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           
           <div className="border-b border-slate-200 pb-4">
             <h1 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
-              NANOLABS — TERMS AND CONDITIONS FOR PATIENT ACCOUNT CREATION
+              NANOLABS — TERMS AND CONDITIONS FOR LABORATORY REGISTRATION
             </h1>
             <div className="mt-2 space-y-0.5 text-xs text-slate-500">
               <p><strong className="text-slate-700">Effective Date:</strong> August 2026</p>
               <p><strong className="text-slate-700">Operated by:</strong> NanoLabs, Bonapriso, Douala, Cameroon</p>
-              <p><strong className="text-slate-700">Contact:</strong> support@nanolabs.cm | +237 670 000 000 / WhatsApp</p>
+              <p><strong className="text-slate-700">Contact:</strong> legal@nanolabs.cm | +237 670 000 000 / WhatsApp</p>
             </div>
-            <div className="mt-3 p-3 bg-teal-50 rounded-xl border border-teal-200/80 text-[11px] text-teal-900">
-              Welcome to NanoLabs. Before creating your patient account, please read the following Terms and Conditions carefully.
+            <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 italic">
+              By registering your laboratory, hospital, or clinic (&quot;the Facility&quot;) on the NanoLabs platform, you agree to be bound by the following Terms and Conditions. Please read them carefully before proceeding.
             </div>
           </div>
 
@@ -72,12 +72,12 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
               Acceptance of Terms
             </h3>
             <p className="pl-7">
-              By creating a patient account on NanoLabs, you confirm that you:
+              By creating a Facility account on NanoLabs, the individual completing registration confirms that they:
             </p>
             <ul className="list-disc pl-12 space-y-1">
-              <li>Are at least 18 years old, or are creating this account with the consent of a parent/legal guardian if you are a minor;</li>
-              <li>Are providing accurate personal information;</li>
-              <li>Agree to be bound by these Terms and Conditions and our Privacy Policy.</li>
+              <li>Are duly authorized to register the Facility and bind it to this agreement;</li>
+              <li>Have the legal right to operate a medical laboratory, hospital, or clinic in Cameroon;</li>
+              <li>Agree to comply with all applicable Cameroonian healthcare and data protection laws in their use of the platform.</li>
             </ul>
           </section>
 
@@ -85,33 +85,36 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">2</span>
-              What NanoLabs Does for You
+              Description of Service
             </h3>
             <p className="pl-7">
-              Through your NanoLabs account, you can:
+              NanoLabs is a laboratory management platform that enables the Facility to:
             </p>
             <ul className="list-disc pl-12 space-y-1">
-              <li>Request laboratory tests at any Facility using NanoLabs;</li>
-              <li>Track the status of your sample collection and test progress;</li>
-              <li>Receive an estimated time to collect your physical results, or request a <strong>virtual result</strong>, which your lab technician uploads securely as a PDF;</li>
-              <li>Access your results from anywhere, on any device, once released by the Facility;</li>
-              <li>View and confirm your payment history and the payment method used;</li>
-              <li>Communicate directly with the Facility handling your test, where enabled.</li>
+              <li>Digitize patient test requests and eliminate paper-based workflows;</li>
+              <li>Track sample collection with accountability logging (who collected, when, from whom);</li>
+              <li>Allow patients to create accounts, request tests, and track result status;</li>
+              <li>Enable authorized lab staff to upload results (including PDF format) for secure remote access by patients;</li>
+              <li>Manage inventory of laboratory supplies and reagents, including low-stock alerts;</li>
+              <li>Validate and record patient payments and the payment method used;</li>
+              <li>Generate reports and statistics on patient volume, turnaround times, and operational data;</li>
+              <li>Apply role-based access so staff only see the information relevant to their function.</li>
             </ul>
+            <p className="pl-7 font-semibold text-teal-800 bg-teal-50 p-2.5 rounded-xl border border-teal-200">
+              The platform operates on a transparent 5% nanoLabs record management fee added strictly to the patient's portion upon cashier verification. All test payments go directly to the laboratory (Cash, MTN MoMo, Orange Money, Insurance). Monthly settlement statements are verified via super admin.
+            </p>
           </section>
 
           {/* Section 3 */}
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">3</span>
-              Your Data and Your Privacy
+              Zero-Fee Clinical Network & Prohibition of Referral Commissions (Cameroon Medical Ethics Compliance)
             </h3>
             <div className="pl-7 space-y-2">
-              <p>• Your health information is sensitive and personal. NanoLabs and the Facility treat it with strict confidentiality.</p>
-              <p>• <strong>Only you and authorized staff who need it to do their specific job can view your information.</strong> For example, front-desk staff may see your appointment details but not your clinical test results; a lab technician sees the test they are performing but not unrelated medical history; billing staff see payment status only. This is strictly enforced through role-based access controls on the platform.</p>
-              <p>• Your test results are only released to your account once uploaded and authorized by the Facility. NanoLabs does not alter, interpret, or share your results with anyone else without your authorization or a valid legal basis.</p>
-              <p>• Every access to your record is logged, including who viewed it and when, to support accountability.</p>
-              <p>• You may request a copy of your data, or request corrections to inaccurate personal information, by contacting the Facility or NanoLabs directly.</p>
+              <p>• In strict compliance with Cameroonian medical legislation, the National Order of Medical Doctors (ONMC) Code of Medical Ethics, and international healthcare compliance standards, <strong>fee-splitting, physician referral commissions, percentage kickbacks, and financial incentives for patient diagnostic referrals are strictly prohibited</strong> on the NanoLabs platform.</p>
+              <p>• NanoLabs operates as a <strong>purely clinical workflow, communication, and secure diagnostic data routing utility</strong> between Patients, Accredited Prescribing Physicians, and Diagnostic Laboratories.</p>
+              <p>• The platform maintains no financial ledger, wallet balance, payout mechanism, or commission tracking for medical practitioners. Laboratories and doctors are legally barred from using the platform for fee-sharing arrangements.</p>
             </div>
           </section>
 
@@ -119,12 +122,38 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">4</span>
-              Data Integrity
+              Direct Laboratory Collections, Mediation Increment &amp; Remittance Terms
             </h3>
             <div className="pl-7 space-y-2">
-              <p>• NanoLabs is committed to maintaining accurate, unaltered records of your test requests, sample collection, and results.</p>
-              <p>• Once a result is uploaded by a lab technician, it is recorded with a timestamp and cannot be silently changed; any correction is logged and traceable.</p>
-              <p>• If you believe there is an error in your record, you may raise this with the Facility, who can review and correct it through a logged process.</p>
+              <p>Under the nanoLabs Diagnostic Marketplace &amp; Partner Network Operating System:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Direct Laboratory Payment Collection:</strong> 100% of diagnostic fees are received directly by the executing laboratory via Cash, MTN MoMo, Orange Money, or Corporate Insurance Third-Party Payers (Ascoma, Gras Savoye, Activa, etc.). nanoLabs does NOT process patient funds or escrow cash.</li>
+                <li><strong>Transparent Platform Mediation Percentage (5% per Test Batch):</strong> A transparent platform mediation increment of 5% per test batch (calculated strictly on the batch total) is monitored on the system and added to the official booking voucher, ensuring complete fairness without penalizing low-cost routine tests.</li>
+                <li><strong>Monthly Super Admin Settlement &amp; Remittance:</strong> The Facility agrees to remit accrued platform mediation increments to nanoLabs at the close of each 30-day billing cycle via official Mobile Money (MTN MoMo / Orange Money) or verified bank transfer.</li>
+                <li><strong>Prescriber &amp; Referral Partner Distribution:</strong> nanoLabs allocates a portion of platform increments to authorized referring medical practitioners and clinical ambassadors via certified referral codes, encouraging compliant patient referrals without software friction.</li>
+                <li><strong>Non-Remittance &amp; Suspension:</strong> In the event of unremitted mediation fees exceeding 30 calendar days, nanoLabs reserves the right to suspend partner status on the patient marketplace and redirect patient test requests to other accredited partner facilities in the city.</li>
+              </ul>
+              <div className="mt-3 p-3 bg-teal-50 border border-teal-200 rounded-xl text-teal-950 font-medium">
+                <p className="font-bold text-teal-900">Partner Bench Flexibility (Zero Software Installation Required):</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Partner laboratories operating on external benches (Excel, physical ledgers, or existing LIMS) are fully integrated via our automated <strong>WhatsApp Dispatch Gateway</strong>. They retain their autonomous tariff grids, inspect patient insurance credentials, and upload certified reports via instant camera photo or PDF export with zero IT setup cost.
+                </p>
+              </div>
+              <p className="text-xs text-slate-500">NanoLabs provides the Facility and SuperAdmin with auditable digital ledgers of all test dispatches and payments.</p>
+            </div>
+          </section>
+
+          {/* Section 4 */}
+          <section className="space-y-2">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">4</span>
+              Data Integrity and Accuracy
+            </h3>
+            <div className="pl-7 space-y-2">
+              <p>• NanoLabs is committed to maintaining the <strong>integrity, accuracy, and completeness</strong> of all data recorded on the platform, including patient records, test results, sample chain-of-custody logs, and inventory records.</p>
+              <p>• The Facility is responsible for ensuring that data entered by its staff (test results, patient information, inventory counts) is accurate at the point of entry. NanoLabs cannot verify the clinical accuracy of results uploaded by lab technicians — that responsibility remains with the Facility and its licensed personnel.</p>
+              <p>• All record modifications are logged with a timestamp and the identity of the staff member who made the change. Records are not silently overwritten; correction history is preserved for audit purposes.</p>
+              <p>• The Facility agrees not to falsify, alter, or misrepresent test results, sample collection times, or patient data on the platform.</p>
             </div>
           </section>
 
@@ -132,12 +161,14 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">5</span>
-              Payments and Fees
+              Data Protection and Confidentiality
             </h3>
             <div className="pl-7 space-y-2">
-              <p>• You will be charged for the laboratory services rendered by the Facility, at the price set by the Facility.</p>
-              <p>• In addition, for facilities operating on standard per-test processing, a <strong>System Fee of 500 XAF</strong> applies per diagnostic test processed through NanoLabs to support secure infrastructure, sample tracking, and encrypted digital result delivery. For facilities operating on flat subscription or dedicated cloud plans, zero system fees are billed to patients. Any applicable fee will always be displayed clearly before you confirm payment.</p>
-              <p>• NanoLabs will validate your payment and payment method and provide you with a record of the transaction within your account.</p>
+              <p>• Patient data accessed through NanoLabs is confidential medical information. The Facility agrees to access, use, and disclose such data strictly in accordance with applicable law and only for legitimate healthcare purposes.</p>
+              <p>• NanoLabs applies <strong>role-based access control</strong>: Facility staff accounts are limited to the information necessary for their specific function (e.g., front desk, sample collection, lab technician, billing). No staff role has default access to full patient records beyond what their function requires.</p>
+              <p>• The Facility is responsible for the conduct of its own staff who are granted platform access, including ensuring staff do not share login credentials or access patient data outside the scope of their duties.</p>
+              <p>• NanoLabs maintains audit logs of data access and will make these available to the Facility upon reasonable request for compliance or investigation purposes.</p>
+              <p>• In the event of a data breach affecting the Facility&apos;s patient data, NanoLabs will notify the Facility without undue delay.</p>
             </div>
           </section>
 
@@ -145,14 +176,15 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">6</span>
-              Your Responsibilities
+              Facility Responsibilities
             </h3>
-            <p className="pl-7">You agree to:</p>
+            <p className="pl-7">The Facility agrees to:</p>
             <ul className="list-disc pl-12 space-y-1">
-              <li>Provide accurate personal and contact information;</li>
-              <li>Keep your login credentials confidential and not share your account with others;</li>
-              <li>Notify the Facility or NanoLabs promptly if you believe your account has been accessed without your permission;</li>
-              <li>Use the platform only to request and receive your own laboratory services (or those of a dependent you are legally responsible for).</li>
+              <li>Provide accurate business and licensing information at registration;</li>
+              <li>Ensure only authorized, appropriately trained staff are granted platform accounts;</li>
+              <li>Promptly remove platform access for staff who leave the Facility&apos;s employment;</li>
+              <li>Use the platform solely for legitimate laboratory and clinical operations;</li>
+              <li>Cooperate with NanoLabs on any data integrity or security investigation involving the Facility&apos;s account.</li>
             </ul>
           </section>
 
@@ -160,10 +192,10 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">7</span>
-              Virtual Results
+              Sample Collection Accountability
             </h3>
             <p className="pl-7">
-              If you request a virtual result, you consent to your test result being uploaded in PDF format for secure remote viewing. You are responsible for keeping the device and account you use to view results secure. NanoLabs is not responsible for unauthorized access resulting from a compromised personal device, shared login, or a password you have disclosed to someone else.
+              The platform records sample collection events, including the identity of the staff member who collected the sample, timestamp, and patient identifier, to support chain-of-custody accountability. The Facility agrees to ensure staff use this feature accurately and in real time.
             </p>
           </section>
 
@@ -171,22 +203,21 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">8</span>
-              Limitations
+              Service Availability
             </h3>
-            <div className="pl-7 space-y-2">
-              <p>• NanoLabs is a platform that facilitates communication and record-keeping between you and the Facility. NanoLabs is not the laboratory, does not perform tests, and is not responsible for the clinical accuracy of results — that responsibility belongs to the Facility and its licensed staff.</p>
-              <p>• Estimated result times are provided by the Facility and may vary depending on test type and circumstances beyond the Facility&apos;s or NanoLabs&apos; control.</p>
-            </div>
+            <p className="pl-7">
+              NanoLabs will make reasonable efforts to keep the platform available and performant but does not guarantee uninterrupted access. NanoLabs is not liable for delays or data unavailability caused by internet connectivity issues, power outages, or other circumstances outside its reasonable control. The Facility should maintain appropriate offline/backup procedures for critical operations.
+            </p>
           </section>
 
           {/* Section 9 */}
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">9</span>
-              Account Suspension or Termination
+              Limitation of Liability
             </h3>
             <p className="pl-7">
-              NanoLabs or the Facility may suspend or close an account that is used fraudulently, to access another person&apos;s data without authorization, or in violation of these Terms. You may also request closure of your own account at any time.
+              NanoLabs provides the platform as a management and reporting tool. NanoLabs is not a healthcare provider and is not responsible for clinical decisions, diagnoses, or treatment made using data from the platform. The Facility remains solely responsible for the clinical accuracy and appropriate use of test results.
             </p>
           </section>
 
@@ -194,10 +225,10 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">10</span>
-              Changes to These Terms
+              Termination
             </h3>
             <p className="pl-7">
-              These Terms may be updated from time to time. You will be notified of material changes, and continued use of your account after such notice constitutes acceptance.
+              Either party may terminate this agreement with written notice. Upon termination, the Facility&apos;s data will be made available for export for a reasonable period before archival or deletion, in accordance with applicable record-retention requirements.
             </p>
           </section>
 
@@ -205,10 +236,10 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">11</span>
-              Governing Law
+              Amendments
             </h3>
             <p className="pl-7">
-              These Terms are governed by the laws of the Republic of Cameroon.
+              NanoLabs may update these Terms from time to time. Facilities will be notified of material changes and continued use of the platform constitutes acceptance of the updated Terms.
             </p>
           </section>
 
@@ -216,17 +247,28 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
           <section className="space-y-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">12</span>
+              Governing Law
+            </h3>
+            <p className="pl-7">
+              These Terms are governed by the laws of the Republic of Cameroon.
+            </p>
+          </section>
+
+          {/* Section 13 */}
+          <section className="space-y-2">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs flex items-center justify-center font-bold">13</span>
               Acknowledgement
             </h3>
             <p className="pl-7">
-              By clicking &quot;I Agree&quot; and completing account creation, you confirm that you have read, understood, and agree to these Terms and Conditions and consent to the processing of your health information as described above.
+              By clicking &quot;I Agree&quot; and completing registration, the authorized representative confirms they have read, understood, and agree to be bound by these Terms and Conditions on behalf of the Facility.
             </p>
           </section>
 
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
             <p className="font-bold text-slate-900">NanoLabs Medical Systems</p>
             <p className="text-slate-600">Bonapriso, Douala, Republic of Cameroon</p>
-            <p className="text-slate-500">Contact: support@nanolabs.cm | +237 670 000 000 / WhatsApp</p>
+            <p className="text-slate-500">Contact: legal@nanolabs.cm | +237 670 000 000 / WhatsApp</p>
           </div>
         </div>
 
@@ -234,7 +276,7 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
         <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500 flex items-center gap-1.5">
             <FileText className="w-4 h-4 text-teal-600" />
-            <span>Official Patient Agreement Document</span>
+            <span>Official Facility Agreement Document</span>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <button
@@ -263,4 +305,4 @@ export const PatientTermsModal: React.FC<PatientTermsModalProps> = ({
   );
 };
 
-export default PatientTermsModal;
+export default LabTermsModal;

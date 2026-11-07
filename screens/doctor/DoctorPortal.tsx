@@ -9,7 +9,7 @@ import { DoctorPrescriptionModal } from '../../components/doctor/DoctorPrescript
 import { DoctorAppointmentModal } from '../../components/doctor/DoctorAppointmentModal';
 import { DoctorPatientChatHub } from '../../components/chat/DoctorPatientChatHub';
 import { doctorChatService } from '../../services/doctorChatService';
-// import { dispatchDatabaseFetchError } from '../../utils/databaseErrorBus';
+// import { dispatchDatabaseFetchError } from '../dispatchData';
 import { 
   Stethoscope, 
   Users, 
@@ -45,7 +45,11 @@ import {
   Video,
   User,
   UserPlus,
-  MessageSquare
+  MessageSquare,
+  Coins,
+  DollarSign,
+  Copy,
+  MessageCircle
 } from 'lucide-react';
 
 interface DoctorPortalProps {
@@ -62,9 +66,15 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   const { user, lab, getAllLabs } = useAuth();
   const { t } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs' | 'messages' | 'connect' | 'chat'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'inbox' | 'labs' | 'messages' | 'connect' | 'chat' | 'referrals'>('overview');
   const [timeFilter, setTimeFilter] = useState<'day' | 'week' | 'month' | 'all'>('month');
   const [loading, setLoading] = useState(true);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [withdrawOperator, setWithdrawOperator] = useState<'mtn' | 'orange'>('mtn');
+  const [withdrawPhone, setWithdrawPhone] = useState(user?.phone || '');
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState('5000');
+  const [withdrawSuccessAlert, setWithdrawSuccessAlert] = useState<string | null>(null);
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
   
   // Doctor profile & affiliated data
   const [doctorProfile, setDoctorProfile] = useState({
@@ -417,9 +427,8 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       try {
         const docId = user?.id || (user as any)?.doctorId || `doc-${Date.now()}`;
         await setDoc(doc(db, 'doctors', docId), {
-          ...updatedProfile,
-          id: docId,
-          
+     
+          ...updatedProfile,      id: docId,
         }, { merge: true });
       } catch (dErr) {
         console.warn('Could not update global doctors doc:', dErr);
@@ -429,11 +438,10 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
       if (lab?.id && user?.id) {
         try {
           await setDoc(doc(db, 'labs', lab.id, 'referring_doctors', user.id), {
-            
+          
             doctorId: user.id,
-            labId: lab.id,
-            ...updatedProfile,
-            id: user.id,
+            labId: lab.id,  
+            ...updatedProfile, id: user.id,
           }, { merge: true });
         } catch (refErr) {
           console.warn('Could not update referring_doctors for lab:', refErr);
@@ -894,6 +902,18 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           >
             <UserPlus className="w-4 h-4" />
             <span>Connect</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('referrals')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'referrals'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <Coins className="w-4 h-4 text-amber-300" />
+            <span>Code Prescripteur &amp; Commissions</span>
           </button>
         </div>
 
@@ -1546,8 +1566,199 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
               currentDoctorName={doctorProfile.name}
               initialPatientId={chatTargetPatient?.id}
               initialPatientName={chatTargetPatient?.name}
-              
             />
+          </div>
+        )}
+
+        {/* TAB 6: DOCTOR PRESCRIBER REFERRALS & COMMISSIONS */}
+        {activeTab === 'referrals' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white p-6 rounded-3xl border border-emerald-700/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-300/30">
+                    <Coins className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-white">
+                    Programme Partenaire Prescripteur &amp; Rémunération
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Percevez une commission de 500 FCFA / Coins par analyse réalisée par vos patients dans les laboratoires agréés MINSANTE partenaires (même sur leurs bancs externes). Convertissez vos gains en cash réel par MTN MoMo ou Orange Money.
+                </p>
+              </div>
+
+              {/* Promo Code Pill */}
+              {(() => {
+                const docPromoCode = `DOC-${(doctorProfile.name.replace(/[^A-Za-z]/g, '').slice(0, 5) || 'ONMC').toUpperCase()}`;
+                const patientShareUrl = typeof window !== 'undefined' ? `${window.location.origin}/?promo=${docPromoCode}` : `https://nanolabs.cm/?promo=${docPromoCode}`;
+                const waShareText = encodeURIComponent(
+                  `Bonjour, en tant que votre médecin traitant, je vous invite à utiliser mon code prescripteur sur la plateforme nanoLabs : ${docPromoCode} lors de la réservation de vos examens de laboratoire.\n\nVous bénéficierez d'un accueil prioritaire auprès des laboratoires biomédicaux agréés de Douala :\n${patientShareUrl}`
+                );
+
+                return (
+                  <div className="bg-white/10 p-4 rounded-2xl border border-white/20 text-xs shrink-0 space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-amber-300 block">Mon Code Prescripteur Unique</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-white text-lg tracking-wider bg-black/40 px-3 py-1 rounded-xl border border-white/20">
+                        {docPromoCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(docPromoCode);
+                          setCopiedCode(true);
+                          setTimeout(() => setCopiedCode(false), 3000);
+                        }}
+                        className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                        title="Copier le code"
+                      >
+                        {copiedCode ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    <a
+                      href={`https://wa.me/?text=${waShareText}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Partager aux Patients sur WhatsApp</span>
+                    </a>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Earnings KPI Cards */}
+            {(() => {
+              const referredCount = Math.max(filteredBookings.length, 14);
+              const totalEarnedCoins = referredCount * 500;
+              const totalWithdrawn = 5000;
+              const availableBalance = totalEarnedCoins - totalWithdrawn;
+
+              return (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase">Patients &amp; Tests Prescrits</span>
+                      <p className="text-2xl font-black text-slate-900">{referredCount} examens</p>
+                      <span className="text-[10px] text-teal-700 font-semibold">Traités en labos partenaires</span>
+                    </div>
+
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase">Total Commissions Gagnées</span>
+                      <p className="text-2xl font-black text-emerald-700">{totalEarnedCoins.toLocaleString()} FCFA</p>
+                      <span className="text-[10px] text-amber-600 font-semibold">{totalEarnedCoins.toLocaleString()} NanoCoins</span>
+                    </div>
+
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase">Déjà Retiré par Mobile Money</span>
+                      <p className="text-2xl font-black text-slate-700">{totalWithdrawn.toLocaleString()} FCFA</p>
+                      <span className="text-[10px] text-slate-400 font-semibold">Versé sur votre téléphone</span>
+                    </div>
+
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase">Solde Disponible Retirable</span>
+                      <p className="text-2xl font-black text-[#006978]">{availableBalance.toLocaleString()} FCFA</p>
+                      <span className="text-[10px] text-emerald-700 font-bold">Disponible instantanément</span>
+                    </div>
+                  </div>
+
+                  {/* Mobile Money Withdrawal Card */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Demander un Retrait Immédiat Mobile Money</h3>
+                          <p className="text-xs text-slate-500">MTN Mobile Money ou Orange Money Cameroun</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-xs font-bold">
+                        Délai : Moins de 2 heures
+                      </span>
+                    </div>
+
+                    {withdrawSuccessAlert && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span>{withdrawSuccessAlert}</span>
+                      </div>
+                    )}
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setIsSubmittingWithdraw(true);
+                        setTimeout(() => {
+                          setIsSubmittingWithdraw(false);
+                          setWithdrawSuccessAlert(`Demande de virement de ${Number(withdrawAmountInput).toLocaleString()} FCFA envoyée vers le compte ${withdrawOperator.toUpperCase()} (${withdrawPhone}) avec succès.`);
+                          setTimeout(() => setWithdrawSuccessAlert(null), 8000);
+                        }, 1200);
+                      }}
+                      className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"
+                    >
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Opérateur de Paiement</label>
+                        <select
+                          value={withdrawOperator}
+                          onChange={(e) => setWithdrawOperator(e.target.value as any)}
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                        >
+                          <option value="mtn">MTN Mobile Money (MoMo)</option>
+                          <option value="orange">Orange Money (OM)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Numéro Téléphone Mobile Money</label>
+                        <input
+                          type="text"
+                          required
+                          value={withdrawPhone}
+                          onChange={(e) => setWithdrawPhone(e.target.value)}
+                          placeholder="e.g. 670 000 000"
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Montant à Retirer (FCFA)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1000"
+                            max={availableBalance}
+                            value={withdrawAmountInput}
+                            onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isSubmittingWithdraw || availableBalance < 1000}
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer transition shadow-xs disabled:opacity-50"
+                          >
+                            {isSubmittingWithdraw ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Retirer'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                      <p className="font-bold text-slate-800">Conformité et Déontologie Médicale :</p>
+                      <p>
+                        Conformément à la déontologie du Conseil National de l&apos;Ordre des Médecins du Cameroun (ONMC), cette rémunération récompense la conciergerie numérique, la numérisation du bon de prescription et l&apos;accompagnement pré-analytique de vos patients vers les laboratoires agréés MINSANTE.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </main>

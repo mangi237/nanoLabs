@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { LiveCourierTrackingMap } from '../../components/maps/GoogleMapsWidgets';
+import { doesBookingBelongToPatient } from '../../utils/patientOwnership';
 
 interface LiveTrackingScreenProps {
   booking?: any;
@@ -47,13 +48,12 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
       const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
         propBooking?.labId ? [propBooking.labId] : []
       );
-      const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
-      const activeId = activeProfile?.id || '';
-      const userId = user?.id || '';
-      const userName = (user?.name || '').toLowerCase().trim();
+      const ownedBookings = allBookings.filter((b) =>
+        doesBookingBelongToPatient(b, user, activeProfile, isDependentActive)
+      );
 
       if (propBooking?.id || propBooking?.bookingCode) {
-        const exact = allBookings.find(
+        const exact = ownedBookings.find(
           (b) =>
             (propBooking.id && b.id === propBooking.id) ||
             (propBooking.bookingCode && b.bookingCode === propBooking.bookingCode)
@@ -65,22 +65,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
         }
       }
 
-      const matching = allBookings.filter((b) => {
-        const bPid = (b.patientPid || b.patientId || '').trim();
-        const bName = (b.patientName || '').toLowerCase().trim();
-        if (isDependentActive) {
-          return (activeId && bPid === activeId) || (activeName && bName === activeName);
-        }
-        return (
-          (activeId && bPid === activeId) ||
-          (userId && bPid === userId) ||
-          (activeName && bName === activeName) ||
-          (userName && bName === userName)
-        );
-      });
-
       const current =
-        matching.find((b) => b.overallStatus !== 'Completed') || matching[0] || null;
+        ownedBookings.find((b) => b.overallStatus !== 'Completed') || ownedBookings[0] || null;
       setActiveBooking(current);
     } catch (err) {
       console.warn('Error loading tracking booking:', err);

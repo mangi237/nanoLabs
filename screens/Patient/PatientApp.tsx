@@ -7,7 +7,7 @@ import { SearchTestsScreen, TestCatalogItem, POPULAR_CATALOG_TESTS } from './Sea
 import { TestDetailScreen } from './TestDetailScreen';
 import { HealthPackageScreen } from './HealthPackageScreen';
 import { MyInsuranceScreen } from './MyInsuranceScreen';
-import { ChooseLabScreen, PartnerLabItem, DEFAULT_PARTNER_LABS } from './ChooseLabScreen';
+import { ChooseLabScreen, PartnerLabItem } from './ChooseLabScreen';
 import { LabProfileScreen } from './LabProfileScreen';
 import { CollectionMethodScreen } from './CollectionMethodScreen';
 import { BookingSummaryScreen } from './BookingSummaryScreen';
@@ -59,29 +59,68 @@ export type PatientScreenView =
   | 'booklet'
   | 'nanolabs_ai';
 
+import {
+  doctorPatientFirestoreService,
+  DoctorPatientConnectionRecord,
+  formatPatientAlias,
+} from '../../services/doctorPatientFirestoreService';
+
 const PatientAppInner: React.FC = () => {
-  const { logout } = useAuth();
-  const { activeProfile } = useFamilyProfile();
+  const { user, lab: authLab, logout } = useAuth();
+  const { activeProfile, isDependentActive } = useFamilyProfile();
 
   const [currentTab, setCurrentTab] = useState<PatientNavTab>('home');
   const [currentView, setCurrentView] = useState<PatientScreenView>('home');
 
-  // Flow State
+  // Flow State (Zero hardcoded fake laboratory names)
   const [selectedTest, setSelectedTest] = useState<TestCatalogItem>(POPULAR_CATALOG_TESTS[0]);
-  const [selectedLab, setSelectedLab] = useState<PartnerLabItem>(DEFAULT_PARTNER_LABS[0]);
+  const [selectedLab, setSelectedLab] = useState<PartnerLabItem>(() => ({
+    id: authLab?.id || '',
+    name: authLab?.name || 'Select a Partner Laboratory',
+    rating: 4.8,
+    reviewsCount: 0,
+    turnaroundTime: '3–4 hrs',
+    features: ['Walk-in'],
+    distanceKm: 2.0,
+    city: authLab?.city || 'Cameroon',
+    address: authLab?.address || authLab?.city || 'Cameroon',
+    phone: authLab?.phone || '',
+    imageUrl: '',
+    logoUrl: authLab?.logoUrl || '',
+    accredited: true,
+    ratePer100m: 60,
+    baseDeliveryFeePerKm: 600,
+    testPricingMultiplier: 1.0,
+  }));
   const [selectedTestsList, setSelectedTestsList] = useState<{ name: string; price: number }[]>([
     { name: 'Complete Blood Count (CBC)', price: 4500 },
     { name: 'Malaria Test (Thick smear)', price: 3500 }
   ]);
-  const [collectionMethod, setCollectionMethod] = useState<'home' | 'lab'>('home');
-  const [collectionFee, setCollectionFee] = useState<number>(2000);
-  const [pickupAddress, setPickupAddress] = useState<string>('Boulevard de la Liberté, Akwa, Douala');
+  const [collectionMethod, setCollectionMethod] = useState<'home' | 'lab'>('lab');
+  const [collectionFee, setCollectionFee] = useState<number>(0);
+  const [pickupAddress, setPickupAddress] = useState<string>('');
   const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
-  const [pickupDistanceKm, setPickupDistanceKm] = useState<number>(2.3);
+  const [pickupDistanceKm, setPickupDistanceKm] = useState<number>(2.0);
   const [calculatedLabTariff, setCalculatedLabTariff] = useState<number>(8000);
   const [currentBooking, setCurrentBooking] = useState<any | null>(null);
   const [selectedResult, setSelectedResult] = useState<PatientResultItem>(DEFAULT_RESULT_TEMPLATE);
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorDirectoryItem | null>(null);
+  const [patientConnections, setPatientConnections] = useState<DoctorPatientConnectionRecord[]>([]);
+
+  React.useEffect(() => {
+    const patId = isDependentActive
+      ? activeProfile.id
+      : user?.id || user?.patientId || activeProfile.id;
+    const patPid = isDependentActive
+      ? activeProfile.id
+      : user?.patientId || user?.id || activeProfile.id;
+    const unsub = doctorPatientFirestoreService.subscribePatientConnections(
+      patId,
+      patPid,
+      (list) => setPatientConnections(list)
+    );
+    return () => unsub();
+  }, [user?.id, user?.patientId, activeProfile.id, isDependentActive]);
 
   const handleTabChange = (tab: PatientNavTab) => {
     setCurrentTab(tab);
@@ -406,7 +445,7 @@ const PatientAppInner: React.FC = () => {
       //     <CBCResultDetailScreen
       //       result={selectedResult}
       //       onBack={() => setCurrentView('results')}
-      //       onAskAI={(res) => {
+      //       onAskAI={(res : any) => {
       //         setSelectedResult(res);
       //         setCurrentView('nanolabs_ai');
       //       }}
@@ -420,9 +459,13 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onSelectDoctor={(doc) => {
+            onSelectDoctor={(doc : any) => {
               setSelectedDoctor(doc);
               setCurrentView('doctor_profile');
+            }}
+            onOpenChatWithDoctor={(doc : any) => {
+              setSelectedDoctor(doc);
+              setCurrentView('doctor_chat');
             }}
             onViewAppointments={() => setCurrentView('appointments')}
           />
@@ -433,26 +476,21 @@ const PatientAppInner: React.FC = () => {
           return (
             <MyDoctorsScreen
               onBack={() => setCurrentView('home')}
-              onSelectDoctor={(doc) => {
+              onSelectDoctor={(doc : any) => {
                 setSelectedDoctor(doc);
                 setCurrentView('doctor_profile');
+              }}
+              onOpenChatWithDoctor={(doc: any) => {
+                setSelectedDoctor(doc);
+                setCurrentView('doctor_chat');
               }}
               onViewAppointments={() => setCurrentView('appointments')}
             />
           );
         }
-        let isDocConnected = false;
-        let isDocPending = false;
-        try {
-          const profileId = activeProfile?.id || 'self';
-          const connRaw = localStorage.getItem(`nanolabs_connected_doctors_${profileId}`);
-          const connList: string[] = connRaw ? JSON.parse(connRaw) : [];
-          isDocConnected = connList.includes(selectedDoctor.id);
-
-          const pendRaw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${profileId}`);
-          const pendList: string[] = pendRaw ? JSON.parse(pendRaw) : [];
-          isDocPending = pendList.includes(selectedDoctor.id);
-        } catch {}
+        const matchedConn = patientConnections.find((c) => c.doctorId === selectedDoctor.id);
+        const isDocConnected = matchedConn?.status === 'accepted';
+        const isDocPending = matchedConn?.status === 'pending';
 
         return (
           <DoctorProfileScreen
@@ -462,19 +500,34 @@ const PatientAppInner: React.FC = () => {
             onOpenChat={() => setCurrentView('doctor_chat')}
             isConnected={isDocConnected}
             isRequestPending={isDocPending}
-            onSendRequest={(doc) => {
-              try {
-                const profileId = activeProfile?.id || 'self';
-                const key = `nanolabs_outgoing_doc_reqs_${profileId}`;
-                const raw = localStorage.getItem(key);
-                const list: string[] = raw ? JSON.parse(raw) : [];
-                if (!list.includes(doc.id)) {
-                  list.push(doc.id);
-                  localStorage.setItem(key, JSON.stringify(list));
-                }
-              } catch (e) {
-                console.warn(e);
-              }
+            onSendRequest={async (doc) => {
+              const patId = isDependentActive
+                ? activeProfile.id
+                : user?.id || user?.patientId || activeProfile.id;
+              const patPid = isDependentActive
+                ? activeProfile.id
+                : user?.patientId || user?.id || activeProfile.id;
+              const patName = isDependentActive
+                ? activeProfile.fullName
+                : user?.name || activeProfile.fullName || 'Patient';
+              await doctorPatientFirestoreService.requestConnection({
+                doctorId: doc.id,
+                doctorName: doc.name,
+                doctorSpecialty: doc.specialty,
+                doctorHospital: doc.hospital,
+                doctorPhone: doc.phone,
+                doctorAvatar: doc.avatarUrl,
+                patientId: patId,
+                patientPid: patPid,
+                patientName: patName,
+                patientAlias: formatPatientAlias(
+                  (user as any)?.alias || activeProfile.nickname,
+                  patName
+                ),
+                patientPhone: activeProfile.phone || user?.phone || '',
+                requestedBy: 'patient',
+                note: `Connection request from ${patName}`,
+              });
             }}
           />
         );
@@ -485,7 +538,7 @@ const PatientAppInner: React.FC = () => {
           return (
             <MyDoctorsScreen
               onBack={() => setCurrentView('home')}
-              onSelectDoctor={(doc) => {
+              onSelectDoctor={(doc :any) => {
                 setSelectedDoctor(doc);
                 setCurrentView('doctor_profile');
               }}
@@ -496,6 +549,12 @@ const PatientAppInner: React.FC = () => {
           <DoctorChatScreen
             doctor={selectedDoctor}
             onBack={() => setCurrentView('doctor_profile')}
+            onBookPrescribedTests={({ tests }) => {
+              setSelectedTestsList(tests);
+              const totalBase = tests.reduce((s, t) => s + (t.price || 4500), 0);
+              setCalculatedLabTariff(totalBase);
+              setCurrentView('choose_lab');
+            }}
           />
         );
 

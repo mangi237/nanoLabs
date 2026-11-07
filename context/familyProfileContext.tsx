@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { FamilyMemberProfile } from '../types';
-import { 
-  getStoredFamilyMembers, 
-  getActiveFamilyProfile, 
+import {
+  fetchFirestoreFamilyMembers,
+  getStoredFamilyMembers,
+  getActiveFamilyProfile,
   setActiveFamilyProfile as persistActiveProfile,
   addFamilyMember as serviceAddFamilyMember,
   updateFamilyMember as serviceUpdateFamilyMember,
   deleteFamilyMember as serviceDeleteFamilyMember,
-  syncPrimaryProfileWithUser
+  syncPrimaryProfileWithUser,
 } from '../services/familyProfileServices';
 import { useAuth } from './authContext';
 
@@ -26,25 +27,27 @@ const FamilyProfileContext = createContext<FamilyProfileContextType | undefined>
 
 export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [familyMembers, setFamilyMembers] = useState<FamilyMemberProfile[]>([]);
-  const [activeProfile, setActiveProfileState] = useState<FamilyMemberProfile>(() => getActiveFamilyProfile());
+  const [familyMembers, setFamilyMembers] = useState<FamilyMemberProfile[]>(() =>
+    getStoredFamilyMembers(user?.id, user)
+  );
+  const [activeProfile, setActiveProfileState] = useState<FamilyMemberProfile>(() =>
+    getActiveFamilyProfile(user)
+  );
 
-  const refreshFamilyMembers = () => {
+  const refreshFamilyMembers = async () => {
     try {
-      if (user) {
-        syncPrimaryProfileWithUser({
-          id: user.id,
-          name: user.name || user.fullName,
-          phone: user.phone,
-          profilePicture: user.profilePicture || user.avatarUrl
-        });
+      if (!user) {
+        const fallback = getStoredFamilyMembers('', null);
+        setFamilyMembers(fallback);
+        setActiveProfileState(fallback[0]);
+        return;
       }
-      const list = getStoredFamilyMembers();
-      setFamilyMembers(list);
-      const active = getActiveFamilyProfile();
-      if (active) {
-        setActiveProfileState(active);
-      }
+      syncPrimaryProfileWithUser(user);
+      const liveList = await fetchFirestoreFamilyMembers(user);
+      setFamilyMembers(liveList);
+      const currentActive = getActiveFamilyProfile(user);
+      const matched = liveList.find((m) => m.id === currentActive.id) || liveList[0];
+      setActiveProfileState(matched);
     } catch (e) {
       console.warn('Error refreshing family members:', e);
     }
@@ -52,17 +55,19 @@ export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     refreshFamilyMembers();
-  }, [user?.name, user?.profilePicture, user?.id]);
+  }, [user?.id, user?.patientId, user?.name, user?.alias, user?.nickname, user?.profilePicture]);
 
   const switchActiveProfile = (profileId: string) => {
     try {
-      // Broadcast immediate overlay-dismiss event so all open contextual modals,
-      // payment popups, and report drawers close completely before new profile state is active
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('nanolabs_close_all_overlays', { detail: { profileId } }));
-        window.dispatchEvent(new CustomEvent('nanolabs_profile_switched', { detail: { profileId } }));
+        window.dispatchEvent(
+          new CustomEvent('nanolabs_close_all_overlays', { detail: { profileId } })
+        );
+        window.dispatchEvent(
+          new CustomEvent('nanolabs_profile_switched', { detail: { profileId } })
+        );
       }
-      const selected = persistActiveProfile(profileId);
+      const selected = persistActiveProfile(profileId, user);
       if (selected) {
         setActiveProfileState(selected);
       }
@@ -72,26 +77,34 @@ export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const createFamilyMember = (data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>) => {
-    const created = serviceAddFamilyMember(data);
-    const list = getStoredFamilyMembers();
+    const created = serviceAddFamilyMember(data, user);
+    const list = getStoredFamilyMembers(user?.id, user);
     setFamilyMembers(list);
     return created;
   };
 
   const editFamilyMember = (profileId: string, updates: Partial<FamilyMemberProfile>) => {
-    serviceUpdateFamilyMember(profileId, updates);
-    refreshFamilyMembers();
+    const updated = serviceUpdateFamilyMember(profileId, updates, user);
+    const list = getStoredFamilyMembers(user?.id, user);
+    setFamilyMembers(list);
+    if (updated && activeProfile.id === profileId) {
+      setActiveProfileState(updated);
+    }
   };
 
   const removeFamilyMember = (profileId: string) => {
-    const success = serviceDeleteFamilyMember(profileId);
+    const success = serviceDeleteFamilyMember(profileId, user);
     if (success) {
-      refreshFamilyMembers();
+      const list = getStoredFamilyMembers(user?.id, user);
+      setFamilyMembers(list);
+      setActiveProfileState(getActiveFamilyProfile(user));
     }
     return success;
   };
 
-  const isDependentActive = Boolean(activeProfile && activeProfile.relationship && activeProfile.relationship !== 'self');
+  const isDependentActive = Boolean(
+    activeProfile && activeProfile.relationship && activeProfile.relationship !== 'self'
+  );
 
   return (
     <FamilyProfileContext.Provider
@@ -103,7 +116,7 @@ export const FamilyProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         createFamilyMember,
         editFamilyMember,
         removeFamilyMember,
-        refreshFamilyMembers
+        refreshFamilyMembers,
       }}
     >
       {children}

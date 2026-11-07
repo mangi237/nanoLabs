@@ -40,7 +40,7 @@ type Mode = 'person' | 'staff';
 type PersonRole = 'patient' | 'doctor';
 
 const inputCls =
-  'w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:bg-white transition';
+  'w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:bg-white transition';
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
@@ -198,7 +198,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     if (!trimmedCode) return setError('Enter your staff access code.');
     setBusy(true);
     try {
-      const res = await login(trimmedCode, labId || 'lab-1');
+      const res = await login(trimmedCode, labId || '');
       if (res?.success && res.user) {
         onLoginSuccess?.(res.user);
       } else {
@@ -453,7 +453,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                      {role === 'patient' ? 'Phone number or Patient ID' : 'Phone number or ONMC license'}
+                      {role === 'patient'
+                        ? 'Phone number, Patient ID, or @alias'
+                        : 'Phone number or ONMC license'}
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-4 top-4 pointer-events-none" />
@@ -463,7 +465,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                         autoComplete="username"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder={role === 'patient' ? '670 00 00 00 or PAT-123456' : '699 00 00 00 or ONMC-4829'}
+                        placeholder={
+                          role === 'patient'
+                            ? '670 00 00 00, PAT-123456, or @alias'
+                            : '699 00 00 00 or ONMC-4829'
+                        }
                         className={`${inputCls} pl-11`}
                       />
                     </div>

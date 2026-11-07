@@ -8,15 +8,22 @@ import {
   Stethoscope,
   Phone,
   Info,
-  Send
+  Send,
+  Gift,
+  Tag
 } from 'lucide-react';
 import { PartnerLabItem } from './ChooseLabScreen';
 import { formatXAF } from '../../shared/money';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { limsService } from '../../services/limsService';
+import {
+  doctorPatientFirestoreService,
+  formatPatientAlias,
+} from '../../services/doctorPatientFirestoreService';
 import { DoctorOption } from '../../components/common/DoctorCardSelect';
 import { canLabUseFeature } from '../../utils/labPackages';
+import { buildLabWhatsAppOrderUrl } from '../../utils/whatsappGateway';
 
 interface BookingSummaryScreenProps {
   lab: PartnerLabItem;
@@ -44,7 +51,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
   onBookingRequested
 }) => {
   const { user } = useAuth();
-  const { activeProfile } = useFamilyProfile();
+  const { activeProfile, isDependentActive } = useFamilyProfile();
 
   // Check real configured insurance on profile/user (never force mock insurance if unconfigured)
   const configuredInsuranceProvider =
@@ -61,18 +68,19 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
     configuredInsuranceProvider || 'ASCOMA Cameroun'
   );
   const [policyNumberInput, setPolicyNumberInput] = useState<string>(configuredPolicyNumber);
-  const [pickupAddress, setPickupAddress] = useState<string>(
-    initialPickupAddress || 'Boulevard de la Liberté, Akwa, Douala'
-  );
+  const [pickupAddress, setPickupAddress] = useState<string>(initialPickupAddress || '');
   const [submitting, setSubmitting] = useState(false);
   const [bookingError, setBookingError] = useState<string>('');
 
-  // Real platform doctors directory (zero mock doctors)
+  // Real platform doctors directory from Firestore (zero mock doctors, zero localStorage)
   const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
   const [referringDoctorType, setReferringDoctorType] = useState<'accredited' | 'self' | 'other'>('self');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [manualDoctorName, setManualDoctorName] = useState<string>('');
   const [manualHospitalName, setManualHospitalName] = useState<string>('');
+  const [prescriberPromoCode, setPrescriberPromoCode] = useState<string>(() => {
+    return (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('nanolabs_prescriber_code') : '') || '';
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -80,44 +88,27 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       try {
         const scannedDoc = sessionStorage.getItem('nanolabs_scanned_doctor') || '';
         const scannedHosp = sessionStorage.getItem('nanolabs_scanned_hospital') || '';
-        if (scannedDoc) {
-          setReferringDoctorType('other');
-          setManualDoctorName(scannedDoc);
-          if (scannedHosp) setManualHospitalName(scannedHosp);
-        }
+        const rxDocId = sessionStorage.getItem('nanolabs_rx_doctor_id') || '';
 
-        const liveDocs = await limsService.searchAllAccreditedDoctors('');
-        const mapped: DoctorOption[] = (liveDocs || []).map((d: any, i: number) => ({
+        const liveDocs = await doctorPatientFirestoreService.listDoctors('');
+        const mapped: DoctorOption[] = (liveDocs || []).map((d, i) => ({
           id: d.id || `doc-${i}`,
-          name: d.name?.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
+          name: d.name?.startsWith('Dr') ? d.name : `Dr. ${d.name}`,
           specialty: d.specialty || 'General Medicine',
-          hospital: d.hospitalAffiliation || d.hospital || 'Accredited Medical Center',
+          hospital: d.hospital || 'Accredited Medical Center',
           verified: true
         }));
 
-        try {
-          const rawLocal = localStorage.getItem('nanolabs_registered_doctors');
-          if (rawLocal) {
-            const parsed = JSON.parse(rawLocal);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((ld: any, idx: number) => {
-                if (!mapped.some((m) => m.id === ld.id || m.name === ld.name)) {
-                  mapped.push({
-                    id: ld.id || `doc-local-${idx}`,
-                    name: ld.name?.startsWith('Dr.') ? ld.name : `Dr. ${ld.name}`,
-                    specialty: ld.specialty || 'General Medicine',
-                    hospital: ld.hospital || 'Medical Center',
-                    verified: true
-                  });
-                }
-              });
-            }
-          }
-        } catch {}
-
         if (mounted) {
           setPlatformDoctors(mapped);
-          if (mapped.length > 0) {
+          if (rxDocId && mapped.some((m) => m.id === rxDocId)) {
+            setReferringDoctorType('accredited');
+            setSelectedDoctorId(rxDocId);
+          } else if (scannedDoc) {
+            setReferringDoctorType('other');
+            setManualDoctorName(scannedDoc);
+            if (scannedHosp) setManualHospitalName(scannedHosp);
+          } else if (mapped.length > 0) {
             setSelectedDoctorId(mapped[0].id);
           }
         }
@@ -146,9 +137,23 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
   const handleRequestBooking = async () => {
     try {
       setBookingError('');
+      if (!lab?.id) {
+        setBookingError('Please select a registered laboratory before sending your test request.');
+        return;
+      }
       setSubmitting(true);
-      const patientPid =
-        activeProfile.id || user?.patientId || user?.id || `PT-${Math.floor(10000 + Math.random() * 90000)}`;
+      const uniqueAccountId = user?.id || user?.patientId || `PAT-${Date.now()}`;
+      const uniquePid = isDependentActive
+        ? activeProfile.id
+        : user?.patientId || user?.id || uniqueAccountId;
+      const resolvedPatientName = isDependentActive
+        ? activeProfile.fullName
+        : user?.name || activeProfile.fullName || 'Patient';
+      const resolvedAlias = formatPatientAlias(
+        (user as any)?.alias || activeProfile?.nickname,
+        resolvedPatientName
+      );
+
       const resolvedReferringDoc =
         referringDoctorType === 'accredited'
           ? selectedPlatformDoc?.name || undefined
@@ -166,25 +171,29 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       const perTestBasePrice = Math.round(labTestTariff / Math.max(1, tests.length));
 
       const created = await limsService.createBooking({
-        labId: lab.id || 'lab-1',
+        labId: lab.id,
         labName: lab.name,
         labAddress: lab.address,
         labPhone: lab.phone,
         labLogoUrl: lab.logoUrl,
-        patientId: patientPid,
-        patientPid,
-        patientName: activeProfile.fullName || user?.name || 'Patient',
+        patientAccountId: uniqueAccountId,
+        dependentProfileId: isDependentActive ? activeProfile.id : undefined,
+        patientId: uniquePid,
+        patientPid: uniquePid,
+        patientName: resolvedPatientName,
+        patientAlias: resolvedAlias,
         patientAge: activeProfile.age || 30,
-        patientGender: (activeProfile.gender as any) || 'Female',
-        patientPhone: activeProfile.phone || user?.phone || '+237 670 00 00 00',
+        patientGender: (activeProfile.gender as any) || (user as any)?.gender || 'Female',
+        patientPhone: activeProfile.phone || user?.phone || '',
         patientEmail: user?.email || '',
-        creatorName: activeProfile.fullName || user?.name || 'Online Patient',
+        creatorName: resolvedPatientName,
         isOnlineBooking: true,
         registrationType: 'online',
         registeredBy: 'Online Patient App',
         receptionistValidated: false,
         referringDoctorId: referringDoctorType === 'accredited' ? selectedDoctorId : undefined,
         referringDoctor: resolvedReferringDoc,
+        referringDoctorPromoCode: prescriberPromoCode.trim() ? prescriberPromoCode.trim().toUpperCase() : undefined,
         referralHospital: resolvedHospital,
         hasInsurance: insuranceActive,
         insuranceProvider: insuranceActive ? insuranceProviderInput.trim() : undefined,
@@ -195,7 +204,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         insuranceClaimAmount: insuranceActive ? insuranceCovered : 0,
         patientCoPayAmount: insuranceActive ? estimatedPatientShare : grossEstimate,
         homeCollection: collectionMethod === 'home',
-        pickupLocation: collectionMethod === 'home' ? pickupAddress : lab.address,
+        pickupLocation: collectionMethod === 'home' ? pickupAddress || 'Pinned GPS Residence' : lab.address,
         userCoords: collectionMethod === 'home' ? pickupCoords : undefined,
         pickupDistanceMeters:
           collectionMethod === 'home' && pickupDistanceKm
@@ -216,6 +225,34 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
 
       sessionStorage.removeItem('nanolabs_scanned_doctor');
       sessionStorage.removeItem('nanolabs_scanned_hospital');
+      sessionStorage.removeItem('nanolabs_rx_doctor_id');
+
+      // Proactively open WhatsApp dispatch link to laboratory in new tab if lab has a registered phone
+      if (lab.phone) {
+        try {
+          const { waUrl } = buildLabWhatsAppOrderUrl({
+            bookingCode: created.bookingCode || created.id,
+            patientName: resolvedPatientName,
+            patientPhone: activeProfile.phone || user?.phone,
+            patientAlias: resolvedAlias,
+            tests,
+            totalAmount: labTestTariff,
+            homeCollection: collectionMethod === 'home',
+            pickupLocation: collectionMethod === 'home' ? pickupAddress : lab.address,
+            userCoords: pickupCoords,
+            labName: lab.name,
+            labPhone: lab.phone,
+            insuranceProvider: insuranceActive ? insuranceProviderInput.trim() : undefined,
+            insurancePolicyNumber: insuranceActive ? policyNumberInput.trim() : undefined,
+            insuranceCoveragePercent: insuranceActive ? coveragePercent : undefined,
+            patientCoPayPercent: insuranceActive ? (100 - coveragePercent) : 100,
+            referringDoctor: resolvedReferringDoc,
+            prescriberPromoCode: prescriberPromoCode.trim() ? prescriberPromoCode.trim().toUpperCase() : undefined,
+          });
+          window.open(waUrl, '_blank', 'noopener,noreferrer');
+        } catch {}
+      }
+
       onBookingRequested(created);
     } catch (err: any) {
       console.error('Failed to submit online test request:', err);
@@ -416,6 +453,72 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
               />
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Doctor Prescriber & Clinic Referral Code */}
+      <div className="p-4 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+              <Gift className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-extrabold text-slate-900">
+                Code Prescripteur Médecin / Promo (Optionnel)
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Votre médecin ou clinique vous a remis un code de recommandation ?
+              </p>
+            </div>
+          </div>
+          {prescriberPromoCode.trim() && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+              Code Appliqué
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={prescriberPromoCode}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                setPrescriberPromoCode(val);
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.setItem('nanolabs_prescriber_code', val);
+                }
+              }}
+              placeholder="Ex: DOC-9482, CLN-DOUALA..."
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 uppercase placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 focus:outline-hidden focus:border-[#006978]"
+            />
+          </div>
+          {prescriberPromoCode && (
+            <button
+              type="button"
+              onClick={() => {
+                setPrescriberPromoCode('');
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.removeItem('nanolabs_prescriber_code');
+                }
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Effacer
+            </button>
+          )}
+        </div>
+
+        {prescriberPromoCode.trim() && (
+          <p className="text-[11px] text-emerald-700 bg-emerald-50/70 border border-emerald-200/80 p-2 rounded-xl flex items-center gap-1.5 font-medium">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>
+              Prescripteur lié (<strong>{prescriberPromoCode.trim().toUpperCase()}</strong>) : Gratification partenaire de 500 FCFA créditée au prescripteur dès validation par le laboratoire.
+            </span>
+          </p>
         )}
       </div>
 

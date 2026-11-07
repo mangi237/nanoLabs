@@ -2,87 +2,126 @@
   "entities": {
     "Lab": {
       "title": "Laboratory Facility",
-      "description": "Laboratory profile, settings, and regional configuration",
+      "description": "Laboratory profile, settings, subscription package, and regional configuration",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
         "phone": { "type": "string" },
+        "city": { "type": "string" },
         "address": { "type": "string" },
-        "defaultDoctorCommissionRate": { "type": "number" }
+        "needsMobilePhlebotomist": { "type": "boolean" }
       }
     },
-    "ReferringDoctor": {
-      "title": "Referring Doctor",
-      "description": "Accredited partner physician or clinic profile for referral tracking & commissions",
+    "Doctor": {
+      "title": "Accredited Physician",
+      "description": "Doctor account profile, credentials, availability, and clinic settings",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "labId": { "type": "string" },
         "name": { "type": "string" },
         "specialty": { "type": "string" },
         "hospital": { "type": "string" },
         "phone": { "type": "string" },
         "email": { "type": "string" },
-        "commissionRate": { "type": "number" },
-        "notes": { "type": "string" },
-        "totalReferrals": { "type": "number" },
-        "totalRevenueGenerated": { "type": "number" },
-        "totalCommissionEarned": { "type": "number" },
-        "totalCommissionPaid": { "type": "number" },
-        "status": { "type": "string", "enum": ["active", "inactive"] }
-      }
-    },
-    "Booking": {
-      "title": "Patient Booking / Lab Order",
-      "description": "Laboratory test orders, billing, and specimen workflow",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "patientId": { "type": "string" },
-        "referringDoctor": { "type": "string" },
-        "referringDoctorId": { "type": "string" },
-        "status": { "type": "string" },
-        "totalAmount": { "type": "number" },
-        "referralCommissionRate": { "type": "number" },
-        "referralCommissionAmount": { "type": "number" },
-        "referralCommissionStatus": { "type": "string" }
+        "licenseNumber": { "type": "string" },
+        "status": { "type": "string" }
       }
     },
     "Patient": {
       "title": "Patient Account",
-      "description": "Global patient identity with hashed password and PID",
+      "description": "Global patient identity with unique searchable alias, PID, and PBKDF2 password hash",
       "type": "object",
       "properties": {
         "patientId": { "type": "string" },
+        "alias": { "type": "string" },
+        "aliasLower": { "type": "string" },
+        "nickname": { "type": "string" },
         "name": { "type": "string" },
         "phone": { "type": "string" },
         "phoneDigits": { "type": "string" },
         "email": { "type": "string" },
         "gender": { "type": "string" },
         "city": { "type": "string" },
+        "labId": { "type": "string" },
+        "labName": { "type": "string" },
         "passwordSalt": { "type": "string" },
         "passwordHash": { "type": "string" }
+      }
+    },
+    "DoctorPatientConnection": {
+      "title": "Doctor-Patient Connection & Follow Request",
+      "description": "Mutual consent connection and follow state between a patient and an accredited doctor",
+      "type": "object",
+      "properties": {
+        "doctorId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientPid": { "type": "string" },
+        "patientName": { "type": "string" },
+        "patientAlias": { "type": "string" },
+        "requestedBy": { "type": "string", "enum": ["patient", "doctor"] },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "EncryptedMessage": {
+      "title": "End-to-End Encrypted Clinical Message",
+      "description": "AES-256-GCM encrypted message, lab request prescription, or shared lab report",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["doctor", "patient"] },
+        "recipientId": { "type": "string" },
+        "ciphertext": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Booking": {
+      "title": "Patient Booking / Lab Order",
+      "description": "Laboratory test orders, billing, specimen tracking, and certified results",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientAccountId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientPid": { "type": "string" },
+        "patientAlias": { "type": "string" },
+        "referringDoctor": { "type": "string" },
+        "referringDoctorId": { "type": "string" },
+        "status": { "type": "string" },
+        "totalAmount": { "type": "number" }
       }
     }
   },
   "firestore": {
     "/patients/{patientId}": {
       "schema": "Patient",
-      "description": "Global patient accounts directory"
+      "description": "Global patient accounts directory with unique searchable alias"
+    },
+    "/doctors/{doctorId}": {
+      "schema": "Doctor",
+      "description": "Global accredited doctors directory"
+    },
+    "/doctor_patient_connections/{connectionId}": {
+      "schema": "DoctorPatientConnection",
+      "description": "Follow and care connections between patients and doctors"
+    },
+    "/encrypted_conversations/{conversationId}/messages/{messageId}": {
+      "schema": "EncryptedMessage",
+      "description": "AES-256-GCM end-to-end encrypted doctor-patient messages"
     },
     "/labs/{labId}": {
       "schema": "Lab",
-      "description": "Laboratory documents"
-    },
-    "/labs/{labId}/referring_doctors/{doctorId}": {
-      "schema": "ReferringDoctor",
-      "description": "Registered referring and partner doctors"
+      "description": "Registered laboratory facilities"
     },
     "/labs/{labId}/bookings/{bookingId}": {
       "schema": "Booking",
-      "description": "Patient test orders and referral commissions"
+      "description": "Laboratory test requests and diagnostic dossiers"
     }
   }
 }

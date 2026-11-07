@@ -1,67 +1,154 @@
 import React, { useState } from 'react';
-import { deleteField, doc, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import { CheckCircle2, AlertCircle, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '../../../context/authContext';
-// import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { Card, Button, PageHeader, Skeleton } from '../../../components/doctor/ui';
-import { Field } from './ProfileEdit';
+import { useNav } from '../../../components/doctor/nav';
+import { SubScreenHeader, SectionCard } from '../../../components/doctor/ui';
+import { db, ensureFirebaseAuth, doc, getDoc, setDoc } from '../../../services/firebase';
+import { cleanFirestoreData } from '../../../utils/sanitizeData';
 import { hashPassword, verifyPassword } from '../../../utils/passwordHash';
 
-const input = 'h-12 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-4 text-[15px] outline-none focus:border-[#006978]';
-
-export default function SecurityScreen() {
+export const SecurityScreen: React.FC = () => {
   const { user } = useAuth();
-  const { data, loading } = useLiveDocument<any>(user?.id ? `doctors/${user.id}` : null);
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const { pop } = useNav();
 
-  const update = async () => {
-    setError('');
-    setDone(false);
-    if (!user?.id || !data) return;
-    if (next.length < 8) return setError('Your new password needs at least 8 characters.');
-    if (next !== confirm) return setError('The two new passwords do not match.');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [saved, setSaved] = useState(false);
 
-    const ok = data.passwordHash && data.passwordSalt
-      ? await verifyPassword(current, data.passwordSalt, data.passwordHash)
-      : current === data.password;
-    if (!ok) return setError('Your current password is incorrect.');
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSaved(false);
 
-    const { salt, hash } = await hashPassword(next);
-    await setDoc(
-      doc(db, 'doctors', user.id),
-      {
-        passwordSalt: salt,
-        passwordHash: hash,
-        password: deleteField(),
-        passcode: deleteField(),
-        updatedAt: new Date().toISOString()
-      },
-      { merge: true }
-    );
-    setCurrent('');
-    setNext('');
-    setConfirm('');
-    setDone(true);
+    if (!user?.id) return;
+    if (newPassword.trim().length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('New password and confirmation do not match.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await ensureFirebaseAuth();
+      const docRef = doc(db, 'doctors', user.id);
+      const snap = await getDoc(docRef);
+
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.passwordSalt && data.passwordHash && currentPassword) {
+          const valid = await verifyPassword(
+            currentPassword,
+            data.passwordSalt,
+            data.passwordHash
+          );
+          if (!valid) {
+            setErrorMsg('Current password is incorrect.');
+            setSaving(false);
+            return;
+          }
+        }
+      }
+
+      const { salt, hash } = await hashPassword(newPassword.trim());
+      await setDoc(
+        docRef,
+        cleanFirestoreData({
+          passwordSalt: salt,
+          passwordHash: hash,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSaved(true);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not update password.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <Skeleton className="h-64 w-full" />;
-
   return (
-    <>
-      <PageHeader title="Password & security" subtitle="Keep your account protected" />
-      <Card className="max-w-xl space-y-5 p-6">
-        <Field label="Current password"><input type="password" className={input} value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>
-        <Field label="New password"><input type="password" className={input} value={next} onChange={(e) => setNext(e.target.value)} placeholder="At least 8 characters" /></Field>
-        <Field label="Confirm new password"><input type="password" className={input} value={confirm} onChange={(e) => setConfirm(e.target.value)} /></Field>
-        {error && <p className="text-[14px] text-[#B91C1C]">{error}</p>}
-        {done && <p className="text-[14px] text-[#15803D]">Password updated</p>}
-        <Button onClick={update} disabled={!current || !next}>Update password</Button>
-      </Card>
-    </>
+    <div className="min-h-[100dvh] bg-slate-50">
+      <SubScreenHeader title="Password & Account Security" onBack={pop} />
+      <form onSubmit={handleUpdatePassword} className="max-w-xl mx-auto p-4 sm:p-6 space-y-5">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {errorMsg}
+          </div>
+        )}
+
+        <SectionCard
+          title="Update Physician Password"
+          subtitle="Hashed locally with 100,000-iteration PBKDF2-SHA256 before saving to Firestore"
+        >
+          <div className="space-y-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Current Password
+              </label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+          </div>
+        </SectionCard>
+
+        {saved && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            Password hash updated in Firestore.
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+          Update Password
+        </button>
+      </form>
+    </div>
   );
-}
+};
+
+export default SecurityScreen;

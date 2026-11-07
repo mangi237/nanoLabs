@@ -186,20 +186,20 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex min-h-full items-start sm:items-center justify-center p-2.5 sm:p-4">
+      <div className="my-auto bg-white rounded-3xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-[#0F766E]/10 via-teal-50 to-transparent border-b border-slate-100 flex items-center justify-between">
+        {/* Header - Fixed & Pinned */}
+        <div className="px-5 sm:px-6 py-4 bg-gradient-to-r from-[#0F766E]/10 via-teal-50 to-transparent border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0F766E] to-[#14B8A6] flex items-center justify-center text-white shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0F766E] to-[#14B8A6] flex items-center justify-center text-white shadow-xs shrink-0">
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#0D3B38]">
+              <h2 className="text-sm sm:text-base font-bold text-[#0D3B38]">
                 {initialData ? 'Edit Family Account Profile' : 'Add Family Member Account'}
               </h2>
-              <p className="text-xs text-[#6B7F7D]">
+              <p className="text-[11px] sm:text-xs text-[#6B7F7D]">
                 Independent medical record for your child, elderly parent, or spouse
               </p>
             </div>
@@ -212,14 +212,15 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        {/* Form with scrollable body and pinned footer */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+            {error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
           {/* Photo Uploader */}
           <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -625,20 +626,21 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[#0B1F1D] focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20 focus:border-[#0F766E]"
               />
             </div>
+            </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+          {/* Pinned Sticky Footer Actions */}
+          <div className="shrink-0 px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[44px] px-5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="min-h-[44px] px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="min-h-[44px] px-6 py-2 bg-gradient-to-r from-[#0F766E] to-[#14B8A6] text-white text-xs font-bold rounded-xl shadow-md hover:from-[#0D3B38] hover:to-[#0F766E] transition-all cursor-pointer flex items-center gap-2"
+              className="min-h-[44px] px-5 sm:px-6 py-2 bg-gradient-to-r from-[#0F766E] to-[#14B8A6] text-white text-xs font-bold rounded-xl shadow-md hover:from-[#0D3B38] hover:to-[#0F766E] transition-all cursor-pointer flex items-center gap-2"
             >
               <Check className="w-4 h-4" />
               <span>{initialData ? 'Save Changes' : 'Create Dependent Account'}</span>

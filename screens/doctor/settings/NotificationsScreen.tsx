@@ -1,76 +1,130 @@
-import React, { useEffect, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../context/authContext';
-// import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { Card, Button, PageHeader, Toggle, Skeleton } from '../../../components/doctor/ui';
+import { useNav } from '../../../components/doctor/nav';
+import { SubScreenHeader, SectionCard } from '../../../components/doctor/ui';
+import { db, ensureFirebaseAuth, doc, getDoc, setDoc } from '../../../services/firebase';
+import { cleanFirestoreData } from '../../../utils/sanitizeData';
 
-type Prefs = Record<string, boolean>;
-const ACTIVITY: [string, string][] = [
-  ['requests', 'Connection requests'],
-  ['results', 'Lab results'],
-  ['messages', 'Messages'],
-  ['appointments', 'Appointment changes']
-];
-const CHANNELS: [string, string][] = [
-  ['push', 'Push notifications'],
-  ['sms', 'SMS'],
-  ['whatsapp', 'WhatsApp']
-];
-
-function Rows({ items, prefs, setPrefs }: { items: [string, string][]; prefs: Prefs; setPrefs: (p: Prefs) => void }) {
-  return (
-    <Card>
-      {items.map(([k, label], i) => (
-        <div key={k} className={`flex items-center justify-between p-4 ${i ? 'border-t border-[#E5E7EB]' : ''}`}>
-          <span className="text-[15px]">{label}</span>
-          <Toggle label={label} checked={!!prefs[k]} onChange={(v) => setPrefs({ ...prefs, [k]: v })} />
-        </div>
-      ))}
-    </Card>
-  );
-}
-
-export default function NotificationsScreen() {
+export const NotificationsScreen: React.FC = () => {
   const { user } = useAuth();
-  const { data, loading } = useLiveDocument<any>(user?.id ? `doctors/${user.id}` : null);
-  const [activity, setActivity] = useState<Prefs>({ requests: true, results: true, messages: true, appointments: true });
-  const [channels, setChannels] = useState<Prefs>({ push: true, sms: false, whatsapp: false });
+  const { pop } = useNav();
+
+  const [prefs, setPrefs] = useState({
+    criticalLabResults: true,
+    patientFollowRequests: true,
+    encryptedChatMessages: true,
+    appointmentUpdates: true,
+  });
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (data?.preferences?.notifications) {
-      const n = data.preferences.notifications;
-      setActivity({ ...activity, ...(n.activity || {}) });
-      setChannels({ ...channels, ...(n.channels || {}) });
-    }
-  }, [data?.id]);
-
-  const save = async () => {
     if (!user?.id) return;
-    await setDoc(
-      doc(db, 'doctors', user.id),
-      { preferences: { notifications: { activity, channels } }, updatedAt: new Date().toISOString() },
-      { merge: true }
-    );
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    let active = true;
+    (async () => {
+      await ensureFirebaseAuth();
+      const snap = await getDoc(doc(db, 'doctors', user.id)).catch(() => null);
+      if (active && snap?.exists()) {
+        const d = snap.data();
+        if (d.notificationPrefs) {
+          setPrefs((prev) => ({ ...prev, ...d.notificationPrefs }));
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await ensureFirebaseAuth();
+      await setDoc(
+        doc(db, 'doctors', user.id),
+        cleanFirestoreData({
+          notificationPrefs: prefs,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <Skeleton className="h-64 w-full" />;
-
   return (
-    <>
-      <PageHeader title="Notifications" subtitle="Choose what you hear about and how" />
-      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">New activity</p>
-      <Rows items={ACTIVITY} prefs={activity} setPrefs={setActivity} />
-      <p className="mb-2 mt-6 text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Send alerts by</p>
-      <Rows items={CHANNELS} prefs={channels} setPrefs={setChannels} />
-      <div className="mt-6 flex items-center gap-3">
-        <Button onClick={save}>Save preferences</Button>
-        {saved && <span className="text-[14px] font-medium text-[#15803D]">Saved</span>}
-      </div>
-    </>
+    <div className="min-h-[100dvh] bg-slate-50">
+      <SubScreenHeader title="Clinical Alert Preferences" onBack={pop} />
+      <form onSubmit={handleSave} className="max-w-xl mx-auto p-4 sm:p-6 space-y-5">
+        <SectionCard>
+          <div className="divide-y divide-slate-100">
+            {[
+              {
+                key: 'criticalLabResults',
+                label: 'Certified & Critical Laboratory Results',
+                desc: 'Alert immediately when a partner laboratory biologist releases signed results',
+              },
+              {
+                key: 'patientFollowRequests',
+                label: 'Incoming Patient Follow Requests',
+                desc: 'Notify when a patient requests clinical follow-up with you',
+              },
+              {
+                key: 'encryptedChatMessages',
+                label: 'Encrypted Patient Messages',
+                desc: 'Badge indicator for unread AES-256-GCM clinical messages',
+              },
+              {
+                key: 'appointmentUpdates',
+                label: 'Consultation Requests & Changes',
+                desc: 'Alerts for newly requested in-clinic or teleconsultation visits',
+              },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="py-3.5 first:pt-0 last:pb-0 flex items-start justify-between gap-4 cursor-pointer"
+              >
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{item.label}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={(prefs as any)[item.key]}
+                  onChange={(e) =>
+                    setPrefs((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                  }
+                  className="mt-1 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                />
+              </label>
+            ))}
+          </div>
+        </SectionCard>
+
+        {saved && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            Preferences saved to Firestore.
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save Alert Preferences
+        </button>
+      </form>
+    </div>
   );
-}
+};
+
+export default NotificationsScreen;

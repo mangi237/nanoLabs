@@ -26,21 +26,37 @@ interface CollectionMethodScreenProps {
 }
 
 export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
-  lab = DEFAULT_PARTNER_LABS[0],
+  lab,
   onBack,
   onContinue,
   initialMethod = 'home'
 }) => {
-  const supportsHomePickup = isLabMobilePhlebotomyEnabled(lab);
+  const safeLab: PartnerLabItem = lab || {
+    id: '',
+    name: 'Selected Laboratory',
+    rating: 4.8,
+    reviewsCount: 0,
+    turnaroundTime: '3–4 hrs',
+    features: ['Walk-in'],
+    distanceKm: 2.0,
+    city: 'Cameroon',
+    address: 'Laboratory Facility',
+    imageUrl: '',
+    logoUrl: '',
+    accredited: true,
+    ratePer100m: 60,
+    baseDeliveryFeePerKm: 600,
+    testPricingMultiplier: 1.0,
+  };
+  const supportsHomePickup = isLabMobilePhlebotomyEnabled(safeLab);
   const [selectedMethod, setSelectedMethod] = useState<'home' | 'lab'>(
     supportsHomePickup ? initialMethod : 'lab'
   );
-  const [pickupAddress, setPickupAddress] = useState<string>('Boulevard de la Liberté, Akwa, Douala');
-  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number }>({
-    lat: 4.0565,
-    lng: 9.7582
-  });
-  const [distanceKm, setDistanceKm] = useState<number>(lab.distanceKm || 2.4);
+  const [pickupAddress, setPickupAddress] = useState<string>('');
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number }>(
+    safeLab.coords || { lat: 4.0511, lng: 9.7042 }
+  );
+  const [distanceKm, setDistanceKm] = useState<number>(safeLab.distanceKm || 2.0);
 
   useEffect(() => {
     if (!supportsHomePickup && selectedMethod === 'home') {
@@ -48,7 +64,7 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
     }
   }, [supportsHomePickup, selectedMethod]);
 
-  const ratePer100m = lab.ratePer100m || 60;
+  const ratePer100m = safeLab.ratePer100m || 60;
   const distanceMeters = Math.round(distanceKm * 1000);
   const calculatedPickupFee = Math.max(1200, Math.round((distanceMeters / 100) * ratePer100m));
 
@@ -67,8 +83,8 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
       finalMethod,
       finalMethod === 'home' ? calculatedPickupFee : 0,
       finalMethod === 'home' ? distanceKm : 0,
-      finalMethod === 'home' ? pickupAddress : lab.address,
-      finalMethod === 'home' ? pickupCoords : lab.coords
+      finalMethod === 'home' ? pickupAddress || 'Pinned GPS Residence' : safeLab.address,
+      finalMethod === 'home' ? pickupCoords : safeLab.coords
     );
   };
 
@@ -87,7 +103,7 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
             Sample Collection Method & Location
           </h1>
           <p className="text-[11px] text-slate-500">
-            Laboratory: <strong className="text-slate-800">{lab.name}</strong> ({lab.address})
+            Laboratory: <strong className="text-slate-800">{safeLab.name}</strong> ({safeLab.address})
           </p>
         </div>
       </div>
@@ -122,7 +138,7 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
                 <span className="text-xs font-bold text-emerald-700">0 FCFA Pickup Fee</span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Visit the in-lab phlebotomy bench directly after payment verification: {lab.address}
+                Visit the in-lab phlebotomy bench directly after payment verification: {safeLab.address}
               </p>
             </div>
           </div>
@@ -188,8 +204,8 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
                 </div>
 
                 <HomePickupLocationPicker
-                  labCoords={lab.coords || { lat: 4.0511, lng: 9.7042 }}
-                  labName={lab.name}
+                  labCoords={safeLab.coords || { lat: 4.0511, lng: 9.7042 }}
+                  labName={safeLab.name}
                   initialCoords={pickupCoords}
                   initialAddress={pickupAddress}
                   onLocationChange={handleMapLocationChange}
@@ -212,7 +228,7 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
                 {/* Distance & Courier Pricing Breakdown Box */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-slate-600">
-                    <span>Calculated Distance from {lab.name}:</span>
+                    <span>Calculated Distance from {safeLab.name}:</span>
                     <span className="font-bold text-slate-900 font-mono tabular-nums">
                       {distanceKm} km ({distanceMeters.toLocaleString()} m)
                     </span>
@@ -243,7 +259,7 @@ export const CollectionMethodScreen: React.FC<CollectionMethodScreenProps> = ({
             <div>
               <p className="font-bold text-slate-800">Walk-In Sample Collection Only</p>
               <p className="mt-0.5">
-                {lab.name} has not enabled Mobile Phlebotomist home sample pickup. Please continue with Walk-In collection at {lab.address}, or go back to select another laboratory that offers home pickup.
+                {safeLab.name} has not enabled Mobile Phlebotomist home sample pickup. Please continue with Walk-In collection at {safeLab.address}, or go back to select another laboratory that offers home pickup.
               </p>
             </div>
           </div>

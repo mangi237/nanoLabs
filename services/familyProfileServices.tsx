@@ -1,18 +1,26 @@
 /**
- * Family & Dependent Account Profile Service
- * Enables one primary account (e.g., a mother, father, or caregiver)
- * to manage independent sub-accounts for their elderly parents, newborn/young children,
- * or spouse. Each dependent account has its own:
- * - Demographics & identity (name, date of birth, age, blood group)
- * - Clinical profile (allergies, chronic illnesses, notes)
- * - Insurance coverage (own policy or inherited "ayant-droit" coverage)
- * - Independent lab test bookings, batches, and diagnostic reports
+ * Family & Dependent Account Profile Service (Firestore-Backed, User-Isolated)
+ *
+ * CRITICAL SECURITY INVARIANT:
+ * - Never uses a global shared localStorage key or generic 'profile_self' ID.
+ * - Primary ('self') profile ALWAYS inherits the authenticated patient's unique
+ *   `user.patientId || user.id` so bookings can NEVER collide across accounts.
+ * - Dependent family members are stored in Firestore under:
+ *   `patients/{primaryUserId}/family_members/{memberId}`
  */
 
 import { FamilyMemberProfile, FamilyRelationship } from '../types';
-
-const FAMILY_PROFILES_STORAGE_KEY = 'nanolabs_family_profiles_ledger';
-const ACTIVE_PROFILE_ID_STORAGE_KEY = 'nanolabs_active_family_profile_id';
+import {
+  db,
+  ensureFirebaseAuth,
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+} from './firebase';
+import { cleanFirestoreData } from '../utils/sanitizeData';
 
 export const RELATIONSHIP_LABELS: Record<FamilyRelationship, string> = {
   self: 'Primary Account (Self)',
@@ -24,184 +32,188 @@ export const RELATIONSHIP_LABELS: Record<FamilyRelationship, string> = {
   spouse: 'Spouse (Époux / Épouse)',
   sibling: 'Sibling (Frère / Sœur)',
   grandparent: 'Grandparent (Grand-parent)',
-  other: 'Dependent (Autre Dépendant)'
+  other: 'Dependent (Autre Dépendant)',
 };
 
-export const DEFAULT_FAMILY_MEMBERS: FamilyMemberProfile[] = [
-  {
-    id: 'profile_self',
-    primaryAccountId: 'patient_primary',
-    fullName: 'Patient',
-    nickname: 'Patient',
+// Per-user in-memory cache keyed strictly by authenticated user.id
+const memoryStoreByUser = new Map<string, FamilyMemberProfile[]>();
+const activeProfileIdByUser = new Map<string, string>();
+
+export function buildPrimarySelfProfile(user?: any): FamilyMemberProfile {
+  const uniqueId = String(user?.patientId || user?.id || '').trim();
+  const realName = String(user?.name || user?.fullName || '').trim() || 'Account Holder';
+  const alias =
+    String(user?.alias || user?.nickname || realName.split(' ')[0] || '').trim() || realName;
+
+  return {
+    id: uniqueId,
+    primaryAccountId: String(user?.id || uniqueId),
+    fullName: realName,
+    nickname: alias,
     relationship: 'self',
     relationshipLabel: 'Primary Account (Self)',
-    dateOfBirth: '1995-06-15',
-    age: 31,
-    gender: 'female',
-    bloodGroup: 'Unknown',
-    allergies: [],
-    chronicConditions: [],
-    notes: 'Primary account.',
-    createdAt: new Date().toISOString(),
-    avatarColor: 'teal'
-  }
-];
+    dateOfBirth: user?.dateOfBirth || '1995-01-01',
+    age: Number(user?.age) || 30,
+    gender: (String(user?.gender || 'female').toLowerCase() === 'male' ? 'male' : 'female') as any,
+    bloodGroup: user?.bloodGroup || 'Unknown',
+    phone: user?.phone || '',
+    city: user?.city || '',
+    nationalId: user?.nationalId || '',
+    insuranceProvider: user?.insuranceProvider || '',
+    insurancePolicyNumber: user?.insurancePolicyNumber || '',
+    employerSociete: user?.employerSociete || '',
+    photoUrl: user?.profilePicture || user?.avatarUrl || undefined,
+    allergies: Array.isArray(user?.allergies) ? user.allergies : [],
+    chronicConditions: Array.isArray(user?.chronicConditions) ? user.chronicConditions : [],
+    notes: '',
+    createdAt: user?.createdAt || new Date().toISOString(),
+    avatarColor: 'teal',
+  };
+}
 
-export function getStoredFamilyMembers(primaryAccountId: string = 'patient_primary'): FamilyMemberProfile[] {
+export async function fetchFirestoreFamilyMembers(user: any): Promise<FamilyMemberProfile[]> {
+  const selfProfile = buildPrimarySelfProfile(user);
+  const userDocId = String(user?.id || '').trim();
+  if (!userDocId) return [selfProfile];
+
+  await ensureFirebaseAuth();
   try {
-    const raw = localStorage.getItem(FAMILY_PROFILES_STORAGE_KEY);
-    if (!raw) {
-      saveFamilyMembers(DEFAULT_FAMILY_MEMBERS);
-      return DEFAULT_FAMILY_MEMBERS;
+    const snap = await getDocs(collection(db, 'patients', userDocId, 'family_members'));
+    const dependents: FamilyMemberProfile[] = snap.docs
+      .map((d) => ({ ...(d.data() as FamilyMemberProfile), id: d.id }))
+      .filter((m) => m.relationship !== 'self');
+    const combined = [selfProfile, ...dependents];
+    memoryStoreByUser.set(userDocId, combined);
+    return combined;
+  } catch (err) {
+    console.warn('Error loading Firestore family members:', err);
+    const cached = memoryStoreByUser.get(userDocId);
+    if (cached && cached.length > 0) {
+      return [selfProfile, ...cached.filter((c) => c.relationship !== 'self')];
     }
-    const parsed: FamilyMemberProfile[] = JSON.parse(raw);
-    // Filter out old legacy mock profiles
-    const filtered = parsed.filter(p => 
-      p.id !== 'profile_mother_madeleine' && 
-      p.id !== 'profile_child_junior' && 
-      p.id !== 'profile_child_chloe' &&
-      !p.fullName?.toLowerCase().includes('madeleine') &&
-      !p.fullName?.toLowerCase().includes('junior kamdem') &&
-      !p.fullName?.toLowerCase().includes('chloé kamdem') &&
-      !p.fullName?.toLowerCase().includes('claire ngo') &&
-      !p.fullName?.toLowerCase().includes('claire_')
-    );
-
-    if (filtered.length === 0) {
-      saveFamilyMembers(DEFAULT_FAMILY_MEMBERS);
-      return DEFAULT_FAMILY_MEMBERS;
-    }
-    return filtered;
-  } catch (e) {
-    console.error('Error reading family profiles ledger', e);
-    return DEFAULT_FAMILY_MEMBERS;
+    memoryStoreByUser.set(userDocId, [selfProfile]);
+    return [selfProfile];
   }
 }
 
-export function saveFamilyMembers(members: FamilyMemberProfile[]): void {
-  try {
-    localStorage.setItem(FAMILY_PROFILES_STORAGE_KEY, JSON.stringify(members));
-  } catch (e) {
-    console.error('Error saving family profiles ledger', e);
+export function getStoredFamilyMembers(primaryAccountId?: string, user?: any): FamilyMemberProfile[] {
+  const key = String(user?.id || primaryAccountId || '').trim();
+  const selfProfile = buildPrimarySelfProfile(user);
+  if (!key) return [selfProfile];
+  const existing = memoryStoreByUser.get(key);
+  if (!existing || existing.length === 0) {
+    memoryStoreByUser.set(key, [selfProfile]);
+    return [selfProfile];
   }
+  return [selfProfile, ...existing.filter((m) => m.relationship !== 'self')];
 }
 
-export function getActiveFamilyProfile(): FamilyMemberProfile {
-  const members = getStoredFamilyMembers();
-  try {
-    const activeId = localStorage.getItem(ACTIVE_PROFILE_ID_STORAGE_KEY);
-    if (activeId) {
-      const found = members.find((m) => m.id === activeId);
-      if (found) return found;
-    }
-  } catch (e) {
-    // fallback
+export function getActiveFamilyProfile(user?: any): FamilyMemberProfile {
+  const key = String(user?.id || '').trim();
+  const members = getStoredFamilyMembers(key, user);
+  const activeId = key ? activeProfileIdByUser.get(key) : undefined;
+  if (activeId) {
+    const found = members.find((m) => m.id === activeId);
+    if (found) return found;
   }
-  // Safe default to self/first profile
-  return members[0] || DEFAULT_FAMILY_MEMBERS[0];
+  return members[0];
 }
 
-export function setActiveFamilyProfile(profileId: string): FamilyMemberProfile {
-  const members = getStoredFamilyMembers();
-  let profile = members.find((m) => m.id === profileId);
-  if (!profile) {
-    profile = members[0] || DEFAULT_FAMILY_MEMBERS[0];
+export function setActiveFamilyProfile(profileId: string, user?: any): FamilyMemberProfile {
+  const key = String(user?.id || '').trim();
+  const members = getStoredFamilyMembers(key, user);
+  const found = members.find((m) => m.id === profileId) || members[0];
+  if (key && found?.id) {
+    activeProfileIdByUser.set(key, found.id);
   }
-  try {
-    if (profile && profile.id) {
-      localStorage.setItem(ACTIVE_PROFILE_ID_STORAGE_KEY, profile.id);
-    }
-  } catch (e) {
-    console.error('Error setting active family profile', e);
-  }
-  return profile || DEFAULT_FAMILY_MEMBERS[0];
+  return found;
 }
 
-/**
- * Synchronize primary 'self' family member profile with logged in patient
- */
-export function syncPrimaryProfileWithUser(userInfo: { id?: string; name?: string; phone?: string; gender?: string; profilePicture?: string }): FamilyMemberProfile {
-  const members = getStoredFamilyMembers();
-  const primaryIndex = members.findIndex(m => m.relationship === 'self');
-  const realName = userInfo?.name?.trim() || 'Patient';
-  
-  if (primaryIndex >= 0) {
-    const existing = members[primaryIndex];
-    const isMockName = existing.fullName.toLowerCase().includes('claire');
-    const finalName = realName !== 'Patient' ? realName : (isMockName ? 'Valued Patient' : existing.fullName);
-    
-    if (existing.fullName !== finalName || (userInfo.profilePicture && existing.photoUrl !== userInfo.profilePicture)) {
-      members[primaryIndex] = {
-        ...existing,
-        fullName: finalName,
-        nickname: finalName.split(' ')[0],
-        phone: userInfo.phone || existing.phone,
-        photoUrl: userInfo.profilePicture || existing.photoUrl
-      };
-      saveFamilyMembers(members);
-    }
-    return members[primaryIndex];
-  } else {
-    const newSelf: FamilyMemberProfile = {
-      ...DEFAULT_FAMILY_MEMBERS[0],
-      fullName: realName,
-      nickname: realName.split(' ')[0],
-      phone: userInfo.phone,
-      photoUrl: userInfo.profilePicture
-    };
-    members.unshift(newSelf);
-    saveFamilyMembers(members);
-    return newSelf;
+export function syncPrimaryProfileWithUser(userInfo: any): FamilyMemberProfile {
+  const selfProfile = buildPrimarySelfProfile(userInfo);
+  const key = String(userInfo?.id || '').trim();
+  if (key) {
+    const existing = memoryStoreByUser.get(key) || [];
+    const dependents = existing.filter((m) => m.relationship !== 'self');
+    memoryStoreByUser.set(key, [selfProfile, ...dependents]);
   }
+  return selfProfile;
 }
 
-export function addFamilyMember(data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>): FamilyMemberProfile {
-  const members = getStoredFamilyMembers();
-  const newId = `profile_dep_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  
+export function addFamilyMember(
+  data: Omit<FamilyMemberProfile, 'id' | 'createdAt'>,
+  user?: any
+): FamilyMemberProfile {
+  const userDocId = String(user?.id || data.primaryAccountId || '').trim();
+  const newId = `DEP-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
   const newProfile: FamilyMemberProfile = {
     ...data,
     id: newId,
+    primaryAccountId: userDocId,
     createdAt: new Date().toISOString(),
-    avatarColor: data.avatarColor || (data.gender === 'female' ? 'teal' : 'amber')
+    avatarColor: data.avatarColor || (data.gender === 'female' ? 'teal' : 'amber'),
   };
 
-  members.push(newProfile);
-  saveFamilyMembers(members);
+  if (userDocId) {
+    const current = getStoredFamilyMembers(userDocId, user);
+    memoryStoreByUser.set(userDocId, [...current, newProfile]);
+    ensureFirebaseAuth().then(() => {
+      setDoc(
+        doc(db, 'patients', userDocId, 'family_members', newId),
+        cleanFirestoreData(newProfile)
+      ).catch((err) => console.warn('Could not save dependent to Firestore:', err));
+    });
+  }
+
   return newProfile;
 }
 
-export function updateFamilyMember(profileId: string, updates: Partial<FamilyMemberProfile>): FamilyMemberProfile | null {
-  const members = getStoredFamilyMembers();
-  const index = members.findIndex((m) => m.id === profileId);
-  if (index === -1) return null;
+export function updateFamilyMember(
+  profileId: string,
+  updates: Partial<FamilyMemberProfile>,
+  user?: any
+): FamilyMemberProfile | null {
+  const userDocId = String(user?.id || '').trim();
+  const members = getStoredFamilyMembers(userDocId, user);
+  const idx = members.findIndex((m) => m.id === profileId);
+  if (idx === -1) return null;
 
-  const updated = {
-    ...members[index],
-    ...updates
-  };
-  members[index] = updated;
-  saveFamilyMembers(members);
+  const updated: FamilyMemberProfile = { ...members[idx], ...updates };
+  members[idx] = updated;
+  if (userDocId) {
+    memoryStoreByUser.set(userDocId, members);
+    if (updated.relationship !== 'self') {
+      ensureFirebaseAuth().then(() => {
+        updateDoc(
+          doc(db, 'patients', userDocId, 'family_members', profileId),
+          cleanFirestoreData(updates)
+        ).catch(() => {});
+      });
+    } else {
+      ensureFirebaseAuth().then(() => {
+        updateDoc(doc(db, 'patients', userDocId), cleanFirestoreData(updates)).catch(() => {});
+      });
+    }
+  }
   return updated;
 }
 
-export function deleteFamilyMember(profileId: string): boolean {
-  const members = getStoredFamilyMembers();
-  // Never allow deleting the primary 'self' profile
+export function deleteFamilyMember(profileId: string, user?: any): boolean {
+  const userDocId = String(user?.id || '').trim();
+  const members = getStoredFamilyMembers(userDocId, user);
   const target = members.find((m) => m.id === profileId);
   if (!target || target.relationship === 'self') return false;
 
   const filtered = members.filter((m) => m.id !== profileId);
-  saveFamilyMembers(filtered);
-
-  // If deleted profile was currently active, switch back to primary self
-  const currentActiveId = localStorage.getItem(ACTIVE_PROFILE_ID_STORAGE_KEY);
-  if (currentActiveId === profileId) {
-    const primary = filtered.find((m) => m.relationship === 'self') || filtered[0];
-    if (primary) {
-      setActiveFamilyProfile(primary.id);
+  if (userDocId) {
+    memoryStoreByUser.set(userDocId, filtered);
+    if (activeProfileIdByUser.get(userDocId) === profileId) {
+      activeProfileIdByUser.set(userDocId, filtered[0]?.id || '');
     }
+    ensureFirebaseAuth().then(() => {
+      deleteDoc(doc(db, 'patients', userDocId, 'family_members', profileId)).catch(() => {});
+    });
   }
-
   return true;
 }

@@ -1,95 +1,155 @@
-import React, { useEffect, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../context/authContext';
-// import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { Card, Button, Avatar, PageHeader, Skeleton } from '../../../components/doctor/ui';
+import { useNav } from '../../../components/doctor/nav';
+import { SubScreenHeader, SectionCard } from '../../../components/doctor/ui';
+import { db, ensureFirebaseAuth, doc, getDoc, setDoc } from '../../../services/firebase';
+import { cleanFirestoreData } from '../../../utils/sanitizeData';
 
-const input = 'h-12 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-4 text-[15px] outline-none focus:border-[#006978]';
+export const ProfileEdit: React.FC = () => {
+  const { user, setUser } = useAuth();
+  const { pop } = useNav();
 
-export default function ProfileEdit() {
-  const { user } = useAuth();
-  const { data, loading } = useLiveDocument<any>(user?.id ? `doctors/${user.id}` : null);
-  const [form, setForm] = useState({ name: '', specialty: '', phone: '', city: '', bio: '', photoUrl: '' });
-  const [saved, setSaved] = useState(false);
+  const [name, setName] = useState(user?.name || '');
+  const [specialty, setSpecialty] = useState((user as any)?.specialty || 'General Medicine');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [bio, setBio] = useState((user as any)?.bio || '');
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (data) {
-      setForm({
-        name: data.name || '',
-        specialty: data.specialty || '',
-        phone: data.phone || '',
-        city: data.city || '',
-        bio: data.bio || '',
-        photoUrl: data.photoUrl || ''
-      });
-    }
-  }, [data?.id]);
+    if (!user?.id) return;
+    let active = true;
+    (async () => {
+      await ensureFirebaseAuth();
+      const snap = await getDoc(doc(db, 'doctors', user.id)).catch(() => null);
+      if (active && snap?.exists()) {
+        const d = snap.data();
+        if (d.name) setName(d.name);
+        if (d.specialty) setSpecialty(d.specialty);
+        if (d.phone) setPhone(d.phone);
+        if (d.email) setEmail(d.email);
+        if (d.bio || d.notes) setBio(d.bio || d.notes);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm({ ...form, [k]: e.target.value });
-
-  const pickPhoto = (file?: File) => {
-    if (!file) return;
-    if (file.size > 2.5 * 1024 * 1024) return alert('Please choose a photo under 2.5 MB.');
-    const r = new FileReader();
-    r.onload = () => setForm((f) => ({ ...f, photoUrl: String(r.result) }));
-    r.readAsDataURL(file);
-  };
-
-  const save = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user?.id) return;
     setSaving(true);
+    setSaved(false);
     try {
-      await setDoc(doc(db, 'doctors', user.id), { ...form, updatedAt: new Date().toISOString() }, { merge: true });
+      await ensureFirebaseAuth();
+      const formattedName = name.trim().toLowerCase().startsWith('dr')
+        ? name.trim()
+        : `Dr. ${name.trim()}`;
+      const payload = cleanFirestoreData({
+        name: formattedName,
+        specialty: specialty.trim(),
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        bio: bio.trim(),
+        updatedAt: new Date().toISOString(),
+      });
+      await setDoc(doc(db, 'doctors', user.id), payload, { merge: true });
+      setUser({
+        ...user,
+        name: formattedName,
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        ...(payload as any),
+      });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <Skeleton className="h-64 w-full" />;
-
   return (
-    <>
-      <PageHeader title="Your profile" subtitle="Shown to patients and labs" />
-      <Card className="mb-6 flex items-center gap-4 p-5">
-        {form.photoUrl ? (
-          <img src={form.photoUrl} alt="" className="h-16 w-16 rounded-[16px] object-cover" />
-        ) : (
-          <Avatar name={form.name} size={64} />
+    <div className="min-h-[100dvh] bg-slate-50">
+      <SubScreenHeader title="Physician Identity & Bio" onBack={pop} />
+      <form onSubmit={handleSave} className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+        <SectionCard>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Medical Specialty
+              </label>
+              <input
+                type="text"
+                value={specialty}
+                onChange={(e) => setSpecialty(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Clinical Biography (visible to patients in directory)
+              </label>
+              <textarea
+                rows={4}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-base sm:text-sm"
+              />
+            </div>
+          </div>
+        </SectionCard>
+
+        {saved && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            Profile saved to Firestore.
+          </div>
         )}
-        <label className="cursor-pointer text-[14px] font-semibold text-[#006978]">
-          Change photo
-          <input type="file" accept="image/*" hidden onChange={(e) => pickPhoto(e.target.files?.[0])} />
-        </label>
-      </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Full name"><input className={input} value={form.name} onChange={set('name')} placeholder="As on your ONMC card" /></Field>
-        <Field label="Specialty"><input className={input} value={form.specialty} onChange={set('specialty')} placeholder="e.g. Internal medicine" /></Field>
-        <Field label="Phone"><input className={input} value={form.phone} onChange={set('phone')} placeholder="+237" /></Field>
-        <Field label="City"><input className={input} value={form.city} onChange={set('city')} placeholder="Douala" /></Field>
-      </div>
-      <div className="mt-4">
-        <Field label="Short bio (shown to patients)">
-          <textarea className="min-h-[96px] w-full rounded-[14px] border border-[#E5E7EB] bg-white p-4 text-[15px] outline-none focus:border-[#006978]" value={form.bio} onChange={set('bio')} />
-        </Field>
-      </div>
-      <div className="mt-6 flex items-center gap-3">
-        <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</Button>
-        {saved && <span className="text-[14px] font-medium text-[#15803D]">Saved</span>}
-      </div>
-    </>
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save Profile
+        </button>
+      </form>
+    </div>
   );
-}
+};
 
-export const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <label className="flex flex-col gap-2">
-    <span className="text-[13px] font-medium text-[#374151]">{label}</span>
-    {children}
-  </label>
-);
+export default ProfileEdit;

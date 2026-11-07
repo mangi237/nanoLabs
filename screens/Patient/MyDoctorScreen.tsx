@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  Search, 
-  Star, 
-  ChevronRight, 
-  Stethoscope, 
-  Video, 
-  MessageCircle, 
-  Clock, 
-  ShieldCheck, 
+import {
+  ArrowLeft,
+  Search,
+  Star,
+  Stethoscope,
+  Video,
+  MessageCircle,
+  Clock,
+  ShieldCheck,
   Inbox,
   UserPlus,
   Check,
   Building2,
-  Send,
-  AlertCircle,
-  X,
-  Phone,
-  Calendar
+  Calendar,
+  Lock,
 } from 'lucide-react';
-import { db, getDocs, collection } from '../../services/firebase';
-import { ACCREDITED_DOCTORS, DoctorOption } from '../../components/common/DoctorCardSelect';
+import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
-import { clinicalAppointmentService } from '../../services/clinalAppointmentService';
+import {
+  doctorPatientFirestoreService,
+  DoctorPatientConnectionRecord,
+  formatPatientAlias,
+} from '../../services/doctorPatientFirestoreService';
 
 export interface DoctorDirectoryItem {
   id: string;
@@ -38,6 +37,7 @@ export interface DoctorDirectoryItem {
   about: string;
   services: string[];
   phone?: string;
+  licenseNumber?: string;
 }
 
 export const PLATFORM_DOCTORS_DIRECTORY: DoctorDirectoryItem[] = [];
@@ -50,83 +50,59 @@ interface MyDoctorsScreenProps {
   onOpenChatWithDoctor?: (doctor: DoctorDirectoryItem) => void;
 }
 
+const FALLBACK_DOC_AVATAR =
+  'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80';
+
 export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
   onBack,
   onSelectDoctor,
   onViewAppointments,
-  onOpenChatWithDoctor
+  onOpenChatWithDoctor,
 }) => {
-  const { activeProfile } = useFamilyProfile();
+  const { user } = useAuth();
+  const { activeProfile, isDependentActive } = useFamilyProfile();
 
   const [topTab, setTopTab] = useState<'directory' | 'messages' | 'requests'>('directory');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'All' | 'General' | 'Specialist'>('All');
   const [doctorsList, setDoctorsList] = useState<DoctorDirectoryItem[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
-  const [showDoctorRegisterModal, setShowDoctorRegisterModal] = useState(false);
+  const [connections, setConnections] = useState<DoctorPatientConnectionRecord[]>([]);
 
-  // Fetch strictly real platform registered doctors from Firestore and local store
+  const activePatientId = isDependentActive
+    ? activeProfile.id
+    : user?.id || user?.patientId || activeProfile.id;
+  const activePatientPid = isDependentActive
+    ? activeProfile.id
+    : user?.patientId || user?.id || activeProfile.id;
+  const activePatientName = isDependentActive
+    ? activeProfile.fullName
+    : user?.name || activeProfile.fullName || 'Patient';
+  const activePatientAlias = formatPatientAlias(
+    (user as any)?.alias || activeProfile?.nickname,
+    activePatientName
+  );
+
   const fetchLiveDoctors = async () => {
     try {
       setLoadingDoctors(true);
-      const formatted: DoctorDirectoryItem[] = [];
-
-      // 1. Fetch from limsService / Firestore
-      try {
-        const { limsService } = await import('../../services/limsService');
-        const live = await limsService.searchAllAccreditedDoctors('');
-        if (live && live.length > 0) {
-          live.forEach((doc, idx) => {
-            formatted.push({
-              id: doc.id || `doc-live-${idx}`,
-              name: doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`,
-              specialty: doc.specialty || 'General Medicine',
-              category: (doc.specialty && doc.specialty.toLowerCase().includes('general')) ? 'General' : 'Specialist',
-              hospital: doc.hospitalAffiliation || doc.hospital || 'Accredited Medical Center',
-              rating: 4.9,
-              reviewsCount: 12,
-              city: 'Douala / Yaoundé',
-              online: doc.status === 'active',
-              avatarUrl: doc.avatarUrl || doc.profilePicture || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80',
-              about: `Official ONMC-registered medical practitioner at ${doc.hospitalAffiliation || doc.hospital || 'Clinical Diagnostic Center'}.`,
-              services: ['Consultation', 'Diagnostic Review', 'Digital Prescription'],
-              phone: doc.phone || '+237 670 00 00 00'
-            });
-          });
-        }
-      } catch (err) {
-        console.warn('Could not query firestore doctors:', err);
-      }
-
-      // 2. Load from locally registered doctors
-      try {
-        const raw = localStorage.getItem('nanolabs_registered_doctors');
-        if (raw) {
-          const localDocs = JSON.parse(raw);
-          if (Array.isArray(localDocs)) {
-            localDocs.forEach((d: any, idx: number) => {
-              if (!formatted.some(f => f.phone === d.phone || f.id === d.id)) {
-                formatted.push({
-                  id: d.id || `doc-local-${idx}`,
-                  name: d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`,
-                  specialty: d.specialty || 'General Medicine',
-                  category: (d.specialty && d.specialty.toLowerCase().includes('general')) ? 'General' : 'Specialist',
-                  hospital: d.hospital || 'Private Clinic / Medical Center',
-                  rating: 5.0,
-                  reviewsCount: 1,
-                  city: 'Douala',
-                  online: true,
-                  avatarUrl: d.avatarUrl || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop&q=80',
-                  about: `Accredited ONMC physician #${d.licenseNumber || 'ONMC-REG'}.`,
-                  services: ['Consultation', 'Lab Review', 'Prescription'],
-                  phone: d.phone
-                });
-              }
-            });
-          }
-        }
-      } catch {}
-
+      const live = await doctorPatientFirestoreService.listDoctors('');
+      const formatted: DoctorDirectoryItem[] = live.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        specialty: doc.specialty,
+        category: doc.specialty.toLowerCase().includes('general') ? 'General' : 'Specialist',
+        hospital: doc.hospital,
+        rating: 4.9,
+        reviewsCount: 14,
+        city: doc.city || 'Cameroon',
+        online: doc.status === 'active',
+        avatarUrl: doc.avatarUrl || FALLBACK_DOC_AVATAR,
+        about: doc.bio,
+        services: ['Consultation', 'Lab Request & Review', 'Encrypted Chat'],
+        phone: doc.phone,
+        licenseNumber: doc.licenseNumber,
+      }));
       setDoctorsList(formatted);
     } catch (err) {
       console.warn('Could not load live platform doctors:', err);
@@ -141,50 +117,63 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
     return () => window.removeEventListener('nanolabs_doctors_updated', fetchLiveDoctors);
   }, []);
 
-  // Real connection requests state stored per patient
-  const requestsStorageKey = `nanolabs_doctor_requests_${activeProfile.id}`;
-  const [connectedDoctorIds, setConnectedDoctorIds] = useState<string[]>(() => {
-    const raw = localStorage.getItem(`nanolabs_connected_doctors_${activeProfile.id}`);
-    return raw ? JSON.parse(raw) : [];
-  });
+  useEffect(() => {
+    const unsub = doctorPatientFirestoreService.subscribePatientConnections(
+      activePatientId,
+      activePatientPid,
+      (list) => setConnections(list)
+    );
+    return () => unsub();
+  }, [activePatientId, activePatientPid]);
 
-  const [outgoingRequests, setOutgoingRequests] = useState<string[]>(() => {
-    const raw = localStorage.getItem(`nanolabs_outgoing_doc_reqs_${activeProfile.id}`);
-    return raw ? JSON.parse(raw) : [];
-  });
+  const acceptedConnections = connections.filter((c) => c.status === 'accepted');
+  const incomingRequests = connections.filter(
+    (c) => c.status === 'pending' && c.requestedBy === 'doctor'
+  );
+  const outgoingRequests = connections.filter(
+    (c) => c.status === 'pending' && c.requestedBy === 'patient'
+  );
 
-  // Real incoming requests from doctors (default empty, loaded from doctorChatService)
-  const [incomingRequests, setIncomingRequests] = useState<any[]>(() => {
-    try {
-      const { doctorChatService } = require('../../services/doctorChatService');
-      const reqs = doctorChatService.getIncomingRequests ? doctorChatService.getIncomingRequests(activeProfile.id) : [];
-      return reqs || [];
-    } catch {
-      return [];
-    }
-  });
+  const connectedDoctorIds = new Set(acceptedConnections.map((c) => c.doctorId));
+  const outgoingDoctorIds = new Set(outgoingRequests.map((c) => c.doctorId));
 
-  const handleSendRequest = (docId: string, e: React.MouseEvent) => {
+  const handleSendRequest = async (doctor: DoctorDirectoryItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (outgoingRequests.includes(docId) || connectedDoctorIds.includes(docId)) return;
-    const updated = [...outgoingRequests, docId];
-    setOutgoingRequests(updated);
-    localStorage.setItem(`nanolabs_outgoing_doc_reqs_${activeProfile.id}`, JSON.stringify(updated));
+    if (!activePatientId) return;
+    try {
+      await doctorPatientFirestoreService.requestConnection({
+        doctorId: doctor.id,
+        doctorName: doctor.name,
+        doctorSpecialty: doctor.specialty,
+        doctorHospital: doctor.hospital,
+        doctorPhone: doctor.phone,
+        doctorAvatar: doctor.avatarUrl,
+        patientId: activePatientId,
+        patientPid: activePatientPid,
+        patientName: activePatientName,
+        patientAlias: activePatientAlias,
+        patientPhone: activeProfile.phone || user?.phone || '',
+        patientCity: activeProfile.city || (user as any)?.city || '',
+        requestedBy: 'patient',
+        note: `Follow & diagnostic consultation request from ${activePatientName} (@${activePatientAlias})`,
+      });
+      setPatientBookingNotice(`Connection request sent to ${doctor.name}.`);
+      setTimeout(() => setPatientBookingNotice(null), 4000);
+    } catch (err) {
+      console.warn('Failed to send doctor connection request:', err);
+    }
   };
 
-  const handleAcceptIncoming = (reqId: string, docId: string) => {
-    const updatedConnected = [...connectedDoctorIds, docId];
-    setConnectedDoctorIds(updatedConnected);
-    localStorage.setItem(`nanolabs_connected_doctors_${activeProfile.id}`, JSON.stringify(updatedConnected));
-    setIncomingRequests(incomingRequests.filter(r => r.id !== reqId));
+  const handleAcceptIncoming = async (conn: DoctorPatientConnectionRecord) => {
+    await doctorPatientFirestoreService.respondToConnection(conn.id, 'accepted');
   };
 
-  const handleDeclineIncoming = (reqId: string) => {
-    setIncomingRequests(incomingRequests.filter(r => r.id !== reqId));
+  const handleDeclineIncoming = async (conn: DoctorPatientConnectionRecord) => {
+    await doctorPatientFirestoreService.respondToConnection(conn.id, 'declined');
   };
 
-  const filteredDoctors = doctorsList.filter(d => {
-    const matchesSearch = 
+  const filteredDoctors = doctorsList.filter((d) => {
+    const matchesSearch =
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.specialty.toLowerCase().includes(search.toLowerCase()) ||
       d.hospital.toLowerCase().includes(search.toLowerCase());
@@ -192,7 +181,26 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  const connectedDoctors = doctorsList.filter(d => connectedDoctorIds.includes(d.id));
+  // Merge connected doctors from directory + connection metadata
+  const connectedDoctors: DoctorDirectoryItem[] = acceptedConnections.map((conn) => {
+    const found = doctorsList.find((d) => d.id === conn.doctorId);
+    if (found) return found;
+    return {
+      id: conn.doctorId,
+      name: conn.doctorName || 'Connected Doctor',
+      specialty: conn.doctorSpecialty || 'General Medicine',
+      category: 'Specialist',
+      hospital: conn.doctorHospital || 'Clinical Practice',
+      rating: 4.9,
+      reviewsCount: 10,
+      city: 'Cameroon',
+      online: true,
+      avatarUrl: conn.doctorAvatar || FALLBACK_DOC_AVATAR,
+      about: `${conn.doctorSpecialty || 'Medical Practitioner'} at ${conn.doctorHospital || 'Clinical Practice'}.`,
+      services: ['Consultation', 'Lab Review', 'Encrypted Chat'],
+      phone: conn.doctorPhone,
+    };
+  });
 
   // Appointment Booking State
   const [bookingDoctor, setBookingDoctor] = useState<DoctorDirectoryItem | null>(null);
@@ -206,61 +214,57 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
   const [appReason, setAppReason] = useState('Consultation & Diagnostic Results Interpretation');
   const [patientBookingNotice, setPatientBookingNotice] = useState<string | null>(null);
 
-  const handleSubmitPatientBooking = (e: React.FormEvent) => {
+  const handleSubmitPatientBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bookingDoctor) return;
+    if (!bookingDoctor || !activePatientId) return;
 
-    clinicalAppointmentService.createAndSendAppointment({
+    await doctorPatientFirestoreService.createAppointment({
       doctorId: bookingDoctor.id,
       doctorName: bookingDoctor.name,
       doctorSpecialty: bookingDoctor.specialty,
       doctorHospital: bookingDoctor.hospital,
-      patientId: activeProfile.id,
-      patientName: activeProfile.fullName,
-      patientNickname: activeProfile.fullName.split(' ')[0],
-      patientPhone: '+237 671 22 33 44',
+      patientId: activePatientId,
+      patientPid: activePatientPid,
+      patientName: activePatientName,
+      patientAlias: activePatientAlias,
+      patientPhone: activeProfile.phone || user?.phone || '',
       date: appDate,
       time: appTime,
       type: appType,
-      status: 'requested',
-      location: appType === 'teleconsultation' ? 'Secure Encrypted Video Room (Telehealth)' : `${bookingDoctor.hospital}, Douala`,
+      location:
+        appType === 'teleconsultation'
+          ? 'Encrypted Video Teleconsultation'
+          : bookingDoctor.hospital,
       reason: appReason,
-      prepInstructions: 'Please have previous lab carnet or test codes ready.'
+      initiatedBy: 'patient',
     });
-
-    // Automatically ensure connected
-    if (!connectedDoctorIds.includes(bookingDoctor.id)) {
-      const updated = [...connectedDoctorIds, bookingDoctor.id];
-      setConnectedDoctorIds(updated);
-      localStorage.setItem(`nanolabs_connected_doctors_${activeProfile?.id || 'self'}`, JSON.stringify(updated));
-    }
 
     setBookingDoctor(null);
     setPatientBookingNotice(
-      `Appointment request sent to ${bookingDoctor.name} for ${appDate} at ${appTime}! You will receive a confirmation alert.`
+      `Appointment request sent to ${bookingDoctor.name} for ${appDate} at ${appTime}.`
     );
-    setTimeout(() => setPatientBookingNotice(null), 6000);
+    setTimeout(() => setPatientBookingNotice(null), 5000);
   };
 
   return (
     <div className="max-w-4xl mx-auto py-3 px-3 sm:px-6 text-slate-900 animate-in fade-in duration-300 space-y-6">
-      {/* Toast Notice */}
       {patientBookingNotice && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 text-xs shadow-md">
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 text-xs shadow-sm">
           <div className="flex items-center gap-2">
             <Check className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-bold">{patientBookingNotice}</span>
           </div>
-          <button 
-            onClick={() => setPatientBookingNotice(null)} 
+          <button
+            onClick={() => setPatientBookingNotice(null)}
             className="text-emerald-700 hover:text-emerald-950 font-bold p-1 cursor-pointer"
           >
             ✕
           </button>
         </div>
       )}
+
       {/* Top Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -270,10 +274,10 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
           </button>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Physicians & Clinical Consultations
+              Physicians &amp; Clinical Consultations
             </h1>
             <p className="text-[11px] text-slate-500">
-              National Medical Council (ONMC) certified practitioners &bull; Patient: <strong className="text-slate-800">{activeProfile?.fullName || 'Family Member'}</strong>
+              Your search alias for doctors: <strong className="font-mono text-[#006978]">@{activePatientAlias}</strong> &bull; PID <strong className="font-mono">{activePatientPid}</strong>
             </p>
           </div>
         </div>
@@ -281,7 +285,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
         {onViewAppointments && (
           <button
             onClick={onViewAppointments}
-            className="px-4 py-2 bg-[#E0F2F1] hover:bg-[#B2DFDB] text-[#006978] rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            className="px-4 py-2 bg-[#E0F2F1] hover:bg-[#B2DFDB] text-[#006978] rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
           >
             <Clock className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">My Appointments</span>
@@ -290,10 +294,10 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
       </div>
 
       {/* 3 Main View Tabs */}
-      <div className="flex items-center border-b border-slate-200">
+      <div className="flex items-center border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setTopTab('directory')}
-          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
+          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
             topTab === 'directory'
               ? 'border-[#006978] text-[#006978]'
               : 'border-transparent text-slate-400 hover:text-slate-700'
@@ -305,26 +309,26 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
 
         <button
           onClick={() => setTopTab('messages')}
-          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
+          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
             topTab === 'messages'
               ? 'border-[#006978] text-[#006978]'
               : 'border-transparent text-slate-400 hover:text-slate-700'
           }`}
         >
           <MessageCircle className="w-4 h-4" />
-          <span>My Messages & Chats ({connectedDoctors.length})</span>
+          <span>Encrypted Chats ({connectedDoctors.length})</span>
         </button>
 
         <button
           onClick={() => setTopTab('requests')}
-          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
+          className={`pb-3 px-4 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
             topTab === 'requests'
               ? 'border-[#006978] text-[#006978]'
               : 'border-transparent text-slate-400 hover:text-slate-700'
           }`}
         >
           <UserPlus className="w-4 h-4" />
-          <span>Connection Requests ({incomingRequests.length + outgoingRequests.length})</span>
+          <span>Follow Requests ({incomingRequests.length + outgoingRequests.length})</span>
           {incomingRequests.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
           )}
@@ -334,13 +338,12 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
       {/* TAB 1: ACCREDITED DOCTORS DIRECTORY */}
       {topTab === 'directory' && (
         <div className="space-y-4">
-          {/* Search & Category Filter */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
               <input
                 type="text"
-                placeholder="Search by physician name, specialty, or hospital..."
+                placeholder="Search registered physician by name, specialty, or hospital..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-medium text-slate-900 focus:outline-hidden focus:border-[#006978] shadow-xs"
@@ -348,7 +351,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {(['All', 'General', 'Specialist'] as const).map(cat => (
+              {(['All', 'General', 'Specialist'] as const).map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
@@ -364,158 +367,203 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
             </div>
           </div>
 
-          {/* Doctors Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredDoctors.map(doctor => {
-              const isConnected = connectedDoctorIds.includes(doctor.id);
-              const isRequested = outgoingRequests.includes(doctor.id);
+          {loadingDoctors ? (
+            <div className="p-10 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200">
+              Loading registered physicians from Firestore...
+            </div>
+          ) : filteredDoctors.length === 0 ? (
+            <div className="p-10 text-center bg-white rounded-3xl border border-slate-200 space-y-2">
+              <Stethoscope className="w-8 h-8 text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-800">No Matching Registered Physicians</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Only real doctors who have registered on nanoLabs appear in this directory. Your doctor can also find you directly by your alias <strong>@{activePatientAlias}</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredDoctors.map((doctor) => {
+                const isConnected = connectedDoctorIds.has(doctor.id);
+                const isRequested = outgoingDoctorIds.has(doctor.id);
 
-              return (
-                <div
-                  key={doctor.id}
-                  onClick={() => onSelectDoctor(doctor)}
-                  className="p-5 bg-white border border-slate-200 hover:border-[#006978] rounded-3xl shadow-xs space-y-3 cursor-pointer transition-all group"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
-                      <div className="relative shrink-0">
-                        <img
-                          src={doctor.avatarUrl}
-                          alt={doctor.name}
-                          className="w-14 h-14 rounded-2xl object-cover border border-slate-200"
-                        />
-                        {doctor.online && (
-                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 absolute -bottom-0.5 -right-0.5 border-2 border-white" />
+                return (
+                  <div
+                    key={doctor.id}
+                    onClick={() => onSelectDoctor(doctor)}
+                    className="p-5 bg-white border border-slate-200 hover:border-[#006978] rounded-3xl shadow-xs space-y-3 cursor-pointer transition-all group"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3.5">
+                        <div className="relative shrink-0">
+                          <img
+                            src={doctor.avatarUrl}
+                            alt={doctor.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-slate-200"
+                          />
+                          {doctor.online && (
+                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 absolute -bottom-0.5 -right-0.5 border-2 border-white" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
+                              {doctor.name}
+                            </h4>
+                            <span className="flex items-center text-amber-500 text-xs font-bold">
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 mr-0.5" />
+                              {doctor.rating}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-[#006978] mt-0.5">
+                            {doctor.specialty}
+                          </p>
+                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <Building2 className="w-3 h-3" />
+                            <span>{doctor.hospital}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {doctor.about}
+                    </p>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {doctor.services.slice(0, 2).map((s, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md text-[10px] font-semibold"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isConnected ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onOpenChatWithDoctor) {
+                                onOpenChatWithDoctor(doctor);
+                              } else {
+                                onSelectDoctor(doctor);
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Encrypted Chat</span>
+                          </button>
+                        ) : isRequested ? (
+                          <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold">
+                            Request Sent
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => handleSendRequest(doctor, e)}
+                            className="px-3.5 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Follow / Connect</span>
+                          </button>
                         )}
                       </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: ENCRYPTED CHATS WITH DOCTORS */}
+      {topTab === 'messages' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between text-xs shadow-2xs">
+            <span className="text-slate-600 flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-[#006978]" />
+              <span>End-to-end AES-256-GCM encrypted channels with your connected physicians.</span>
+            </span>
+            <span className="font-bold text-[#006978]">{connectedDoctors.length} Connected</span>
+          </div>
+
+          {connectedDoctors.length > 0 ? (
+            <div className="space-y-3">
+              {connectedDoctors.map((doctor) => {
+                const conn = acceptedConnections.find((c) => c.doctorId === doctor.id);
+                return (
+                  <div
+                    key={doctor.id}
+                    onClick={() =>
+                      onOpenChatWithDoctor ? onOpenChatWithDoctor(doctor) : onSelectDoctor(doctor)
+                    }
+                    className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all group"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <img
+                        src={doctor.avatarUrl}
+                        alt={doctor.name}
+                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0"
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
                             {doctor.name}
                           </h4>
-                          <span className="flex items-center text-amber-500 text-xs font-bold">
-                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 mr-0.5" />
-                            {doctor.rating}
-                          </span>
+                          {(conn?.unreadForPatient || 0) > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-bold">
+                              New
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs font-semibold text-[#006978] mt-0.5">{doctor.specialty}</p>
-                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Building2 className="w-3 h-3" />
-                          <span>{doctor.hospital}</span>
+                        <p className="text-xs text-[#006978] font-medium">
+                          {doctor.specialty} &bull; {doctor.hospital}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                          {conn?.lastMessagePreview ||
+                            'Open encrypted chat to receive lab requests or share your signed lab reports.'}
                         </p>
                       </div>
                     </div>
-                  </div>
 
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {doctor.about}
-                  </p>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {doctor.services.slice(0, 2).map((s, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md text-[10px] font-semibold">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {isConnected ? (
-                        <>
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-[11px] font-bold flex items-center gap-1">
-                            <Check className="w-3 h-3" />
-                            <span>Connected</span>
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectDoctor(doctor);
-                            }}
-                            className="px-3 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>Chat</span>
-                          </button>
-                        </>
-                      ) : isRequested ? (
-                        <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold">
-                          Request Sent
-                        </span>
-                      ) : (
-                        <button
-                          onClick={(e) => handleSendRequest(doctor.id, e)}
-                          className="px-3.5 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>Connect</span>
-                        </button>
-                      )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBookingDoctor(doctor);
+                        }}
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer hidden sm:flex items-center gap-1"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Schedule</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenChatWithDoctor) onOpenChatWithDoctor(doctor);
+                          else onSelectDoctor(doctor);
+                        }}
+                        className="px-4 py-2 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>Chat</span>
+                      </button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: MY MESSAGES & CHATS WITH DOCTORS */}
-      {topTab === 'messages' && (
-        <div className="space-y-4">
-          <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between text-xs shadow-2xs">
-            <span className="text-slate-600">
-              Direct encrypted clinical channels between you and your verified ONMC physicians.
-            </span>
-            <span className="font-bold text-[#006978]">{connectedDoctors.length} Connected Doctors</span>
-          </div>
-
-          {connectedDoctors.length > 0 ? (
-            <div className="space-y-3">
-              {connectedDoctors.map(doctor => (
-                <div
-                  key={doctor.id}
-                  onClick={() => onSelectDoctor(doctor)}
-                  className="p-4 bg-white hover:border-[#006978] border border-slate-200 rounded-3xl shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <img
-                      src={doctor.avatarUrl}
-                      alt={doctor.name}
-                      className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0"
-                    />
-                    <div>
-                      <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-[#006978]">
-                        {doctor.name}
-                      </h4>
-                      <p className="text-xs text-[#006978] font-medium">{doctor.specialty} &bull; {doctor.hospital}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                        Click to open chat, discuss lab investigations, or request prescription renewal.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectDoctor(doctor);
-                      }}
-                      className="px-4 py-2 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      <span>Chat</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
               <Inbox className="w-8 h-8 text-slate-300 mx-auto" />
               <h4 className="text-sm font-bold text-slate-800">No active doctor conversations yet</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Connect with an accredited physician in the directory tab to start messaging and sharing test reports.
+                Send a follow request to a registered physician or share your alias <strong>@{activePatientAlias}</strong> with your doctor.
               </p>
             </div>
           )}
@@ -525,10 +573,9 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
       {/* TAB 3: TWO-WAY CONNECTION REQUESTS */}
       {topTab === 'requests' && (
         <div className="space-y-6">
-          {/* Incoming requests from Doctors */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <span>Incoming Doctor Requests ({incomingRequests.length})</span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Incoming Follow Requests from Doctors ({incomingRequests.length})
             </h3>
 
             {incomingRequests.length > 0 ? (
@@ -541,30 +588,34 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h4 className="text-sm font-extrabold text-slate-900">{req.doctorName}</h4>
-                        <p className="text-xs text-[#006978] font-semibold">{req.specialty} &bull; {req.hospital}</p>
+                        <p className="text-xs text-[#006978] font-semibold">
+                          {req.doctorSpecialty} &bull; {req.doctorHospital}
+                        </p>
                       </div>
-                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
-                        New Request
+                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold">
+                        Doctor Request
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100 leading-relaxed">
-                      "{req.note}"
-                    </p>
+                    {req.note && (
+                      <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100 leading-relaxed">
+                        &ldquo;{req.note}&rdquo;
+                      </p>
+                    )}
 
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <button
-                        onClick={() => handleDeclineIncoming(req.id)}
+                        onClick={() => handleDeclineIncoming(req)}
                         className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold cursor-pointer"
                       >
                         Decline
                       </button>
                       <button
-                        onClick={() => handleAcceptIncoming(req.id, req.doctorId)}
+                        onClick={() => handleAcceptIncoming(req)}
                         className="px-4 py-1.5 bg-[#006978] hover:bg-[#005a66] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        <span>Accept & Connect</span>
+                        <span>Accept &amp; Open Channel</span>
                       </button>
                     </div>
                   </div>
@@ -572,12 +623,11 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
               </div>
             ) : (
               <div className="p-6 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
-                No incoming doctor requests at this time.
+                No incoming doctor requests right now. Give your doctor your alias <strong>@{activePatientAlias}</strong> to receive a follow request.
               </div>
             )}
           </div>
 
-          {/* Outgoing requests sent by patient */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Your Sent Requests to Doctors ({outgoingRequests.length})
@@ -585,30 +635,29 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
 
             {outgoingRequests.length > 0 ? (
               <div className="space-y-2">
-                {outgoingRequests.map((docId) => {
-                  const doc = doctorsList.find(d => d.id === docId);
-                  return (
-                    <div
-                      key={docId}
-                      className="p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Stethoscope className="w-4 h-4 text-[#006978]" />
-                        <div>
-                          <strong className="text-slate-900 block">{doc?.name || 'Accredited Doctor'}</strong>
-                          <span className="text-[11px] text-slate-500">{doc?.specialty}</span>
-                        </div>
+                {outgoingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Stethoscope className="w-4 h-4 text-[#006978]" />
+                      <div>
+                        <strong className="text-slate-900 block">{req.doctorName}</strong>
+                        <span className="text-[11px] text-slate-500">
+                          {req.doctorSpecialty} &bull; {req.doctorHospital}
+                        </span>
                       </div>
-                      <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[10px] font-bold">
-                        Pending Doctor Review
-                      </span>
                     </div>
-                  );
-                })}
+                    <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] font-bold">
+                      Awaiting Doctor Acceptance
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="p-6 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
-                No pending outgoing requests. You can connect with any doctor from the directory.
+                No pending outgoing requests.
               </div>
             )}
           </div>
@@ -617,7 +666,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
 
       {/* Patient Appointment Booking Modal */}
       {bookingDoctor && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-3xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
@@ -646,7 +695,7 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                   type="date"
                   value={appDate}
                   onChange={(e) => setAppDate(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
                   required
                 />
               </div>
@@ -656,10 +705,20 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                 <select
                   value={appTime}
                   onChange={(e) => setAppTime(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
                 >
-                  {['08:30 AM', '09:30 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:30 PM', '04:30 PM'].map(t => (
-                    <option key={t} value={t}>{t}</option>
+                  {[
+                    '08:30 AM',
+                    '09:30 AM',
+                    '10:00 AM',
+                    '11:00 AM',
+                    '02:00 PM',
+                    '03:30 PM',
+                    '04:30 PM',
+                  ].map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -700,15 +759,15 @@ export const MyDoctorsScreen: React.FC<MyDoctorsScreenProps> = ({
                   type="text"
                   value={appReason}
                   onChange={(e) => setAppReason(e.target.value)}
-                  placeholder="e.g. Discuss recent blood test results or symptoms"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-hidden focus:border-[#006978]"
+                  placeholder="e.g. Discuss recent blood test results"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
                   required
                 />
               </div>
 
               <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-[11px] text-teal-800 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-                <span>Request sent directly to doctor's clinical agenda.</span>
+                <span>Synced in real time to the doctor&apos;s agenda &amp; encrypted chat.</span>
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-slate-100">

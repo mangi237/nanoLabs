@@ -1,30 +1,71 @@
-// context/authContext.tsx - ENHANCED SECURITY (Web Compatible)
+// context/authContext.tsx - Persistent Firestore-Backed Session (Zero Timeout / Zero Loading Bounce)
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import errorHandler from '../utils/errorHandler';
-import { ensureFirebaseAuth } from '../services/firebase';
+import { db, doc, getDoc, ensureFirebaseAuth } from '../services/firebase';
 import { getActiveLabLogo, setActiveLabLogo } from '../utils/labBranding';
 
-// Web localStorage adapter providing standard AsyncStorage API (getItem, setItem, multiRemove)
-const AsyncStorage = {
-  getItem: async (key: string): Promise<string | null> => {
+const SESSION_USER_KEY = 'nanolabs_session_user_v3';
+const SESSION_LAB_KEY = 'nanolabs_session_lab_v3';
+
+function readInitialSessionUser(): any | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    // Always purge localStorage user tokens to prevent auto-login across app entries
     try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem: async (key: string, value: string): Promise<void> => {
-    try {
-      localStorage.setItem(key, value);
+      window.localStorage.removeItem(SESSION_USER_KEY);
+      window.localStorage.removeItem('user');
     } catch {}
-  },
-  multiRemove: async (keys: string[]): Promise<void> => {
-    try {
-      keys.forEach(k => localStorage.removeItem(k));
-    } catch {}
+
+    // Only allow active in-tab session if explicitly active during this browsing session
+    const raw = window.sessionStorage.getItem(SESSION_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
-};
+}
+
+function readInitialSessionLab(): any | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    try {
+      window.localStorage.removeItem(SESSION_LAB_KEY);
+      window.localStorage.removeItem('lab');
+    } catch {}
+    const raw = window.sessionStorage.getItem(SESSION_LAB_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionUser(val: any | null) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (val) {
+      const serialized = JSON.stringify(val);
+      window.sessionStorage.setItem(SESSION_USER_KEY, serialized);
+    } else {
+      window.sessionStorage.removeItem(SESSION_USER_KEY);
+      window.localStorage.removeItem(SESSION_USER_KEY);
+      window.localStorage.removeItem('user');
+    }
+  } catch {}
+}
+
+function persistSessionLab(val: any | null) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (val) {
+      const serialized = JSON.stringify(val);
+      window.sessionStorage.setItem(SESSION_LAB_KEY, serialized);
+    } else {
+      window.sessionStorage.removeItem(SESSION_LAB_KEY);
+      window.localStorage.removeItem(SESSION_LAB_KEY);
+      window.localStorage.removeItem('lab');
+    }
+  } catch {}
+}
 
 interface AuthContextType {
   user: any;
@@ -32,7 +73,7 @@ interface AuthContextType {
   lab: any;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (accessCode: string, labId: string) => Promise<any>;
+  login: (accessCode?: string, labId?: string) => Promise<any>;
   loginDoctor: (phoneOrIdentifier: string, passwordOrCode: string) => Promise<any>;
   loginPatient: (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => Promise<any>;
   logout: () => void;
@@ -46,175 +87,142 @@ interface AuthContextType {
   setUser: (user: any) => void;
   setLab: (lab: any) => void;
   createStaffWithCode: (staffData: any, adminUser?: any) => Promise<any>;
-  resetStaffAccessCode: (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => Promise<any>;
-  verifyAccessCode: (code: string, labId: string) => Promise<any>;
-  verifyStaffActionCode: (inputCode: string, allowedRoles: string[], currentUserCode?: string) => Promise<any>;
+  resetStaffAccessCode: (
+    staffId: string,
+    email: string,
+    newAccessCode: string,
+    labId?: string,
+    adminUser?: any
+  ) => Promise<any>;
+  verifyAccessCode: (code?: string, labId?: string) => Promise<any>;
+  verifyStaffActionCode: (
+    inputCode: string,
+    allowedRoles: string[],
+    currentUserCode?: string,
+    labId?: string
+  ) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const SESSION_TIMEOUT = 30 * 24 * 60 * 60 * 1000; // 30 days persistent clinical session
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null);
-  const [lab, setLab] = useState<any>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    checkAuthStatus();
-
-    // Refresh lastLogin timestamp when user interacts with the app (throttled to every 5 minutes)
-    let lastTouch = 0;
-    const touchSession = () => {
-      const now = Date.now();
-      if (now - lastTouch > 5 * 60 * 1000) {
-        lastTouch = now;
-        try {
-          if (localStorage.getItem('user')) {
-            localStorage.setItem('lastLogin', String(now));
-          }
-        } catch {}
-      }
-    };
-    window.addEventListener('pointerdown', touchSession, { passive: true });
-    window.addEventListener('keydown', touchSession, { passive: true });
-
-    // Auto logout only after full 30-day inactivity window
-    const interval = setInterval(async () => {
-      const storedUser = await AsyncStorage.getItem('user');
-      if (!storedUser) return;
-      const lastLogin = await AsyncStorage.getItem('lastLogin');
-      if (lastLogin) {
-        const parsedTs = parseInt(lastLogin, 10);
-        if (Number.isFinite(parsedTs)) {
-          const elapsed = Date.now() - parsedTs;
-          if (elapsed > SESSION_TIMEOUT) {
-            await clearSession();
-          }
-        } else {
-          await AsyncStorage.setItem('lastLogin', String(Date.now()));
-        }
-      } else {
-        await AsyncStorage.setItem('lastLogin', String(Date.now()));
-      }
-    }, 60000);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('pointerdown', touchSession);
-      window.removeEventListener('keydown', touchSession);
-    };
-  }, []);
+  const [user, setUser] = useState<any>(() => readInitialSessionUser());
+  const [lab, setLab] = useState<any>(() => readInitialSessionLab());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() =>
+    Boolean(readInitialSessionUser())
+  );
+  // Instant synchronous hydration: never block UI with a loading spinner or auto-expire active sessions
+  const [isLoading] = useState<boolean>(false);
 
   const setUserWithPersistence = (newUser: any) => {
     setUser(newUser);
     if (newUser) {
       setIsAuthenticated(true);
-      AsyncStorage.setItem('user', JSON.stringify(newUser));
-      AsyncStorage.setItem('lastLogin', String(Date.now()));
+      persistSessionUser(newUser);
     } else {
       setIsAuthenticated(false);
-      localStorage.removeItem('user');
+      persistSessionUser(null);
     }
   };
 
   const setLabWithPersistence = (newLab: any) => {
-    let labToSave = newLab;
     if (newLab) {
       const activeLogo = getActiveLabLogo(newLab) || newLab.logoUrl;
-      if (newLab.logoUrl) {
+      let labToSave = newLab;
+      if (newLab.logoUrl && newLab.id) {
         setActiveLabLogo(newLab.logoUrl, newLab.id);
       } else if (activeLogo) {
         labToSave = { ...newLab, logoUrl: activeLogo };
       }
       setLab(labToSave);
-      AsyncStorage.setItem('lab', JSON.stringify(labToSave));
-      try {
-        localStorage.setItem('lab', JSON.stringify(labToSave));
-      } catch {}
+      persistSessionLab(labToSave);
     } else {
       setLab(null);
-      localStorage.removeItem('lab');
+      persistSessionLab(null);
     }
   };
 
-  const checkAuthStatus = async () => {
-    try {
-      await ensureFirebaseAuth();
-      const storedUser = await AsyncStorage.getItem('user');
-      const storedLab = await AsyncStorage.getItem('lab');
-      const lastLogin = await AsyncStorage.getItem('lastLogin');
-      
-      // Check session timeout safely
-      if (lastLogin) {
-        const parsedTs = parseInt(lastLogin, 10);
-        if (Number.isFinite(parsedTs)) {
-          const elapsed = Date.now() - parsedTs;
-          if (elapsed > SESSION_TIMEOUT) {
-            await clearSession();
-            return;
-          }
-        }
-      }
-      
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        let parsedLab = storedLab ? JSON.parse(storedLab) : null;
-        
-        if (!parsedLab && parsedUser?.labId) {
-          parsedLab = { id: parsedUser.labId, name: parsedUser.labName || 'Laboratory Center' };
-        }
+  // Silent background sync with Firestore so user/lab profile stays fresh without ever resetting or timing out
+  useEffect(() => {
+    let active = true;
+    const syncLiveFirestoreIdentity = async () => {
+      try {
+        await ensureFirebaseAuth();
+        if (!user?.id) return;
 
-        // Refresh live lab metadata (package, mobile phlebotomist opt-in, limits) in background
-        if (parsedLab?.id && parsedLab.id !== 'global-network' && parsedLab.id !== 'network-doctors') {
-          authService.getLabDetails(parsedLab.id).then((freshLab) => {
-            if (freshLab && freshLab.name) {
-              setLabWithPersistence({ ...parsedLab, ...freshLab });
+        if (user.role === 'patient') {
+          const patSnap = await getDoc(doc(db, 'patients', user.id)).catch(() => null);
+          if (active && patSnap && patSnap.exists()) {
+            const fresh = patSnap.data();
+            const merged = {
+              ...user,
+              ...fresh,
+              id: patSnap.id,
+              role: 'patient',
+              roles: ['patient'],
+            };
+            delete merged.passwordHash;
+            delete merged.passwordSalt;
+            setUserWithPersistence(merged);
+
+            if (merged.labId) {
+              const freshLab: any = await authService.getLabDetails(merged.labId);
+              if (active && freshLab?.name) {
+                setLabWithPersistence(freshLab);
+              }
             }
-          }).catch(() => {});
-        }
-
-        if (parsedLab) {
-          const cachedLogo = getActiveLabLogo(parsedLab);
-          if (cachedLogo) {
-            parsedLab.logoUrl = cachedLogo;
           }
-          setLab(parsedLab);
+        } else if (user.role === 'doctor') {
+          const docSnap = await getDoc(doc(db, 'doctors', user.id)).catch(() => null);
+          if (active && docSnap && docSnap.exists()) {
+            const fresh = docSnap.data();
+            const merged = {
+              ...user,
+              ...fresh,
+              id: docSnap.id,
+              role: 'doctor',
+              roles: ['doctor'],
+            };
+            delete merged.password;
+            delete merged.passwordHash;
+            delete merged.passwordSalt;
+            setUserWithPersistence(merged);
+          }
+        } else if (
+          lab?.id &&
+          lab.id !== 'global-network' &&
+          lab.id !== 'network-doctors'
+        ) {
+          const freshLab: any = await authService.getLabDetails(lab.id);
+          if (active && freshLab?.name) {
+            setLabWithPersistence({ ...lab, ...freshLab });
+          }
         }
-
-        setUser(parsedUser);
-        setIsAuthenticated(true);
-        await AsyncStorage.setItem('lastLogin', String(Date.now()));
+      } catch (err) {
+        console.warn('Silent session sync notice:', err);
       }
-    } catch (error) {
-      console.error('Error checking auth:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const login = async (accessCode: string, labId: string) => {
+    syncLiveFirestoreIdentity();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.role]);
+
+  const login = async (accessCode: string = '', labId: string = '') => {
     try {
-      const result = await authService.verifyAccessCode(accessCode, labId);
-      
+      const cleanAccessCode = (accessCode || '').trim();
+      const cleanLabId = (labId || '').trim();
+      const result = await authService.verifyAccessCode(cleanAccessCode, cleanLabId);
+
       if (result.success && result.user) {
         if (result.user.role === 'patient') {
-          throw new Error('Invalid Staff Access Code. Patient codes cannot authenticate on the Laboratory Staff portal.');
+          throw new Error(
+            'Invalid Staff Access Code. Patient codes cannot authenticate on the Laboratory Staff portal.'
+          );
         }
-        setUser(result.user);
-        setLab(result.lab);
-        setIsAuthenticated(true);
-        
-        // Store session data
-        await AsyncStorage.setItem('user', JSON.stringify(result.user));
-        if (result.lab) {
-          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
-        }
-        await AsyncStorage.setItem('lastLogin', String(Date.now()));
-        await AsyncStorage.setItem('accessCode', accessCode);
-        await AsyncStorage.setItem('labId', labId || '');
-        
+        setUserWithPersistence(result.user);
+        setLabWithPersistence(result.lab || null);
         return result;
       } else {
         throw new Error(result.error || 'Invalid credentials');
@@ -225,24 +233,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginDoctor = async (phoneOrIdentifier: string, passwordOrCode: string) => {
+  const loginDoctor = async (phoneOrIdentifier: string = '', passwordOrCode: string = '') => {
     try {
       const result = await authService.loginDoctor(phoneOrIdentifier, passwordOrCode);
-      
+
       if (result.success && result.user) {
-        setUser(result.user);
-        setLab(result.lab);
-        setIsAuthenticated(true);
-        
-        // Store session data
-        await AsyncStorage.setItem('user', JSON.stringify(result.user));
-        if (result.lab) {
-          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
-        }
-        await AsyncStorage.setItem('lastLogin', String(Date.now()));
-        await AsyncStorage.setItem('accessCode', passwordOrCode);
-        await AsyncStorage.setItem('labId', 'network-doctors');
-        
+        setUserWithPersistence(result.user);
+        setLabWithPersistence(result.lab || null);
         return result;
       } else {
         throw new Error(result.error || 'Doctor authentication failed');
@@ -253,24 +250,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginPatient = async (phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string) => {
+  const loginPatient = async (
+    phoneOrIdentifier: string = '',
+    passwordOrCode: string = '',
+    targetLabId?: string
+  ) => {
     try {
-      const result = await authService.loginPatient(phoneOrIdentifier, passwordOrCode, targetLabId);
-      
+      const result = await authService.loginPatient(
+        phoneOrIdentifier,
+        passwordOrCode,
+        targetLabId
+      );
+
       if (result.success && result.user) {
-        setUser(result.user);
-        setLab(result.lab);
-        setIsAuthenticated(true);
-        
-        // Store session data
-        await AsyncStorage.setItem('user', JSON.stringify(result.user));
-        if (result.lab) {
-          await AsyncStorage.setItem('lab', JSON.stringify(result.lab));
-        }
-        await AsyncStorage.setItem('lastLogin', String(Date.now()));
-        await AsyncStorage.setItem('accessCode', passwordOrCode);
-        await AsyncStorage.setItem('labId', result.lab?.id || targetLabId || 'lab-1');
-        
+        setUserWithPersistence(result.user);
+        setLabWithPersistence(result.lab || null);
         return result;
       } else {
         throw new Error(result.error || 'Patient authentication failed');
@@ -281,26 +275,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = async () => {
-    await clearSession();
+  const clearSession = async () => {
+    setUserWithPersistence(null);
+    setLabWithPersistence(null);
   };
 
-  const clearSession = async () => {
-    setUser(null);
-    setLab(null);
-    setIsAuthenticated(false);
-    await AsyncStorage.multiRemove(['user', 'lab', 'lastLogin', 'accessCode', 'labId']);
+  const logout = () => {
+    clearSession();
   };
 
   const refreshToken = async () => {
-    const accessCode = await AsyncStorage.getItem('accessCode');
-    const labId = await AsyncStorage.getItem('labId');
-    if (accessCode && labId) {
-      await login(accessCode, labId);
-    }
+    await ensureFirebaseAuth();
   };
 
-  const registerPatient = async (labId: string, data: any) => {
+  const registerPatient = async (labId: string = '', data: any = {}) => {
     return await authService.registerPatient(labId, data);
   };
 
@@ -308,7 +296,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await authService.getAllLabs();
   };
 
-  const getLabDetails = async (labId: string) => {
+  const getLabDetails = async (labId: string = '') => {
     return await authService.getLabDetails(labId);
   };
 
@@ -316,16 +304,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await authService.createStaffWithCode(staffData, adminUser);
   };
 
-  const resetStaffAccessCode = async (staffId: string, email: string, newAccessCode: string, labId?: string, adminUser?: any) => {
-    return await authService.resetStaffAccessCode(staffId, email, newAccessCode, labId, adminUser);
+  const resetStaffAccessCode = async (
+    staffId: string = '',
+    email: string = '',
+    newAccessCode: string = '',
+    labId?: string,
+    adminUser?: any
+  ) => {
+    return await authService.resetStaffAccessCode(
+      staffId,
+      email,
+      newAccessCode,
+      labId,
+      adminUser
+    );
   };
 
-  const verifyAccessCode = async (code: string, labId: string) => {
+  const verifyAccessCode = async (code: string = '', labId: string = '') => {
     return await authService.verifyAccessCode(code, labId);
   };
 
-  const verifyStaffActionCode = async (inputCode: string, allowedRoles: string[], currentUserCode?: string) => {
-    return await authService.verifyStaffActionCode(inputCode, allowedRoles, currentUserCode);
+  const verifyStaffActionCode = async (
+    inputCode: string = '',
+    allowedRoles: string[] = [],
+    currentUserCode?: string,
+    targetLabId?: string
+  ) => {
+    return await authService.verifyStaffActionCode(
+      inputCode,
+      allowedRoles,
+      currentUserCode,
+      targetLabId
+    );
   };
 
   const hasRole = (roleOrRoles: string | string[]): boolean => {
@@ -338,30 +348,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      currentUser: user,
-      lab,
-      isAuthenticated,
-      isLoading,
-      login,
-      loginDoctor,
-      loginPatient,
-      logout,
-      hasRole,
-      refresh: refreshToken,
-      registerPatient,
-      getAllLabs,
-      getLabDetails,
-      refreshToken,
-      clearSession,
-      setUser: setUserWithPersistence,
-      setLab: setLabWithPersistence,
-      createStaffWithCode,
-      resetStaffAccessCode,
-      verifyAccessCode,
-      verifyStaffActionCode
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        currentUser: user,
+        lab,
+        isAuthenticated,
+        isLoading,
+        login,
+        loginDoctor,
+        loginPatient,
+        logout,
+        hasRole,
+        refresh: refreshToken,
+        registerPatient,
+        getAllLabs,
+        getLabDetails,
+        refreshToken,
+        clearSession,
+        setUser: setUserWithPersistence,
+        setLab: setLabWithPersistence,
+        createStaffWithCode,
+        resetStaffAccessCode,
+        verifyAccessCode,
+        verifyStaffActionCode,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

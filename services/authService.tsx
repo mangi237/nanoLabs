@@ -9,7 +9,7 @@ import {
   addDoc,
   updateDoc
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, ensureFirebaseAuth } from './firebase';
 import { cleanFirestoreData } from '../utils/sanitizeData';
 import { verifyPassword } from '../utils/passwordHash';
 
@@ -45,20 +45,23 @@ export const authService = {
    */
   async verifyAccessCode(code: string = '', labId: string = ''): Promise<AuthResult> {
     try {
+      await ensureFirebaseAuth();
       const cleanCode = (code || '').trim();
 
       if (!cleanCode) {
         return { success: false, error: 'Please enter your access code.' };
       }
 
-      const targetLabId = labId || 'lab-1';
+      const targetLabId = labId || '';
       let fullLabRecord: any = null;
-      try {
-        const labSnap = await getDoc(doc(db, 'labs', targetLabId));
-        if (labSnap.exists()) {
-          fullLabRecord = { id: labSnap.id, ...labSnap.data() };
-        }
-      } catch {}
+      if (targetLabId) {
+        try {
+          const labSnap = await getDoc(doc(db, 'labs', targetLabId));
+          if (labSnap.exists()) {
+            fullLabRecord = { id: labSnap.id, ...labSnap.data() };
+          }
+        } catch {}
+      }
 
       // 1. Try Server-Side Zero-Knowledge Staff Verification (Hashed OTP or Hashed Permanent Password)
       try {
@@ -226,22 +229,6 @@ export const authService = {
         }
       } catch (authErr) {
         console.warn('Error during laboratory credential verification:', authErr);
-      }
-
-      // Check local patient cache - reject with patient error if it matches
-      try {
-        const localPatientRaw = localStorage.getItem('last_registered_patient');
-        if (localPatientRaw) {
-          const localPatient = JSON.parse(localPatientRaw);
-          if ((!localPatient.labId || localPatient.labId === targetLabId) && matchesPatient({ id: localPatient.id }, localPatient)) {
-            return {
-              success: false,
-              error: 'Invalid Staff Access Code. Please enter a valid laboratory staff credential.'
-            };
-          }
-        }
-      } catch {
-        // ignore
       }
 
       return {
@@ -672,42 +659,25 @@ export const authService = {
 
   async getAllLabs(options?: { includePending?: boolean }) {
     try {
+      await ensureFirebaseAuth();
       const labsRef = collection(db, 'labs');
       const snapshot = await getDocs(labsRef);
-      let labs = snapshot.docs.map(doc => {
-        const data = doc.data();
+      let labs = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
         return {
-          id: doc.id,
+          id: docSnap.id,
           ...data,
           logoUrl: data.logoUrl || data.logo || null
         };
       });
 
       if (!options?.includePending) {
-        labs = labs.filter(l => (l as any).status !== 'suspended' && (l as any).status !== 'rejected');
+        labs = labs.filter(l => (l as any).status !== 'suspended' && (l as any).status !== 'rejected' && Boolean((l as any).name));
       }
-
-      // Also check local cache for registered laboratory
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id && !labs.some(l => l.id === cLab.id)) {
-            labs.unshift(cLab);
-          }
-        }
-      } catch {}
 
       return labs;
     } catch (error) {
       console.error('Error fetching labs:', error);
-      try {
-        const cachedLabRaw = localStorage.getItem('nanolabs_active_lab') || localStorage.getItem('current_lab') || localStorage.getItem('lab');
-        if (cachedLabRaw) {
-          const cLab = JSON.parse(cachedLabRaw);
-          if (cLab && cLab.id) return [cLab];
-        }
-      } catch {}
       return [];
     }
   },
@@ -715,12 +685,13 @@ export const authService = {
   async getLabDetails(labId: string) {
     try {
       if (!labId) return null;
+      await ensureFirebaseAuth();
       const labRef = doc(db, 'labs', labId);
       const labDoc = await getDoc(labRef);
       if (labDoc.exists()) {
         return { id: labDoc.id, ...labDoc.data() };
       }
-      return { id: labId, name: 'nanoLabs Diagnostic Center' };
+      return null;
     } catch (error) {
       console.error('Error fetching lab details:', error);
       return null;
@@ -728,254 +699,220 @@ export const authService = {
   },
 
   async registerPatient(labId: string, patientData: any) {
-    try {
-      const targetLabId = labId || 'lab-1';
-      const patientsRef = collection(db, 'labs', targetLabId, 'patients');
-      
-      const newPatient = cleanFirestoreData({
-        ...patientData,
-        status: patientData.status || 'registered',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
+    await ensureFirebaseAuth();
+    const now = new Date().toISOString();
+    const aliasClean = String(patientData.alias || patientData.nickname || patientData.name || '')
+      .trim()
+      .replace(/^@+/, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_.\-]/g, '');
 
-      let patientDocId = `pat_${Date.now()}`;
-      try {
-        const docRef = await addDoc(patientsRef, newPatient);
-        if (docRef?.id) {
-          patientDocId = docRef.id;
-        }
-      } catch (fsErr) {
-        console.warn('Firestore patient write notice, falling back to local storage:', fsErr);
-      }
-
-      // Persist in local storage for instant offline/portal access
-      try {
-        const record = { id: patientDocId, ...newPatient };
-        localStorage.setItem('last_registered_patient', JSON.stringify(record));
-        const rawList = localStorage.getItem(`nanolabs_local_patients_${targetLabId}`);
-        const pList = rawList ? JSON.parse(rawList) : [];
-        pList.push(record);
-        localStorage.setItem(`nanolabs_local_patients_${targetLabId}`, JSON.stringify(pList));
-      } catch {}
-
-      return {
-        success: true,
-        patientId: patientDocId,
-        accessCode: patientData.accessCode
-      };
-    } catch (error: any) {
-      console.error('Error registering patient:', error);
-      const fallbackId = `pat_${Date.now()}`;
-      return { 
-        success: true, 
-        patientId: fallbackId, 
-        accessCode: patientData?.accessCode || 'PAT123' 
-      };
+    let resolvedLabName = patientData.labName || '';
+    if (labId && !resolvedLabName) {
+      const labRec = await this.getLabDetails(labId);
+      if (labRec?.name) resolvedLabName = labRec.name;
     }
+
+    const newPatient = cleanFirestoreData({
+      ...patientData,
+      alias: aliasClean,
+      aliasLower: aliasClean,
+      nickname: aliasClean,
+      labId: labId || '',
+      labName: resolvedLabName,
+      status: patientData.status || 'registered',
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const globalRef = await addDoc(collection(db, 'patients'), newPatient);
+    if (labId) {
+      try {
+        await addDoc(
+          collection(db, 'labs', labId, 'patients'),
+          cleanFirestoreData({ ...newPatient, globalPatientDocId: globalRef.id })
+        );
+      } catch {}
+    }
+
+    return {
+      success: true,
+      patientId: globalRef.id,
+      accessCode: patientData.accessCode
+    };
   },
 
   /**
-   * Dedicated Patient Portal Authentication
-   * Validates phone number or Patient ID (PID) and access code / passcode.
+   * Dedicated Patient Portal Authentication (100% Firestore — Zero Mock / Zero LocalStorage Leaks)
+   * Validates Phone Number, Patient ID (PAT-XXXXXX), @alias, or Email + Password.
    */
   async loginPatient(phoneOrIdentifier: string, passwordOrCode: string, targetLabId?: string): Promise<AuthResult> {
     try {
+      await ensureFirebaseAuth();
       const cleanIdentifier = (phoneOrIdentifier || '').trim();
       const cleanPassword = (passwordOrCode || '').trim();
 
       if (!cleanIdentifier) {
-        return { success: false, error: 'Please enter your registered phone number or Patient ID (PID).' };
+        return { success: false, error: 'Please enter your phone number, Patient ID, or @alias.' };
       }
       if (!cleanPassword) {
-        return { success: false, error: 'Please enter your patient access code or PIN.' };
+        return { success: false, error: 'Please enter your password.' };
       }
 
       const upperId = cleanIdentifier.toUpperCase();
       const lowerId = cleanIdentifier.toLowerCase();
+      const lowerAlias = lowerId.replace(/^@+/, '');
       const cleanIdDigits = cleanIdentifier.replace(/\D/g, '');
       const upperPass = cleanPassword.toUpperCase();
 
-      // STRICT ROLE CHECK: Reject staff credentials on Patient Portal login
-      if (DEFAULT_STAFF_MAP[upperPass] && DEFAULT_STAFF_MAP[upperPass].role !== 'patient') {
-        return {
-          success: false,
-          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
-        };
-      }
+      // Reject staff credentials on Patient Portal login
       if (['SUPER123', 'ADMIN123', 'TECH123', 'LABTECH123', 'CASH123', 'CASHIER123', 'REC123', 'RECEPTION123', 'ANALYZER123', 'PHLEB123', 'SAMPLE123'].includes(upperPass)) {
         return {
           success: false,
-          error: 'This access code belongs to a laboratory staff account. Please log in via the Laboratory Staff Portal.'
+          error: 'This access code belongs to a laboratory staff account. Please sign in via Laboratory Staff.'
         };
       }
 
-      // 1. Check local storage cache for recently registered patients
-      try {
-        const localPatientRaw = localStorage.getItem('last_registered_patient');
-        if (localPatientRaw) {
-          const lp = JSON.parse(localPatientRaw);
-          const lpPhone = (lp.phone || '').replace(/\D/g, '');
-          const lpPid = (lp.patientId || lp.id || '').toUpperCase();
-          const lpCode = (lp.accessCode || lp.code || lp.passcode || '').toUpperCase();
-          
-          const idMatches = (cleanIdDigits.length >= 7 && lpPhone.includes(cleanIdDigits)) || lpPid === upperId;
-          const passMatches = lpCode === upperPass || upperPass === '1234' || upperPass === 'PAT123';
+      const resolvePatientLab = async (lid?: string, fallbackName?: string) => {
+        if (!lid) return null;
+        try {
+          const snap = await getDoc(doc(db, 'labs', lid));
+          if (snap.exists()) return { id: snap.id, ...snap.data() };
+        } catch {}
+        return fallbackName ? { id: lid, name: fallbackName } : null;
+      };
 
-          if (idMatches && passMatches) {
-            return {
-              success: true,
-              user: {
-                id: lp.id || lp.patientId,
-                ...lp,
-                role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false
-              },
-              lab: { id: lp.labId || 'lab-1', name: lp.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false
-            };
+      // 1. Query Global 'patients' Collection in Firestore (PBKDF2 Hashed Password Accounts + @alias)
+      const globalPatientsSnap = await getDocs(collection(db, 'patients'));
+      for (const pDoc of globalPatientsSnap.docs) {
+        const pData = pDoc.data();
+        const dPhone = String(pData.phoneDigits || pData.phone || '').replace(/\D/g, '');
+        const dPid = String(pData.patientId || pDoc.id || '').toUpperCase();
+        const dEmail = String(pData.email || '').toLowerCase();
+        const dAlias = String(pData.alias || pData.aliasLower || pData.nickname || '')
+          .trim()
+          .replace(/^@+/, '')
+          .toLowerCase();
+
+        const isIdMatch =
+          (cleanIdDigits.length >= 7 &&
+            dPhone.length >= 7 &&
+            (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
+          dPid === upperId ||
+          (Boolean(dEmail) && dEmail === lowerId) ||
+          (Boolean(dAlias) && dAlias === lowerAlias);
+
+        if (!isIdMatch) continue;
+
+        let isPassValid = false;
+        if (pData.passwordSalt && pData.passwordHash) {
+          isPassValid = await verifyPassword(cleanPassword, pData.passwordSalt, pData.passwordHash);
+        }
+        if (!isPassValid) {
+          const rawPass = String(pData.passcode || pData.accessCode || '').trim();
+          if (rawPass && (rawPass === cleanPassword || rawPass.toUpperCase() === upperPass)) {
+            isPassValid = true;
           }
         }
-      } catch (locErr) {}
 
-      // 1B. Query Global Top-Level 'patients' Collection (PBKDF2 Hashed Password Accounts)
-      try {
-        const globalPatientsSnap = await getDocs(collection(db, 'patients')).catch(() => ({ docs: [] as any[] }));
-        for (const pDoc of globalPatientsSnap.docs) {
-          const pData = pDoc.data();
-          const dPhone = String(pData.phoneDigits || pData.phone || '').replace(/\D/g, '');
-          const dPid = String(pData.patientId || pDoc.id || '').toUpperCase();
-          const dEmail = String(pData.email || '').toLowerCase();
+        if (isPassValid) {
+          const safeUser: any = {
+            id: pDoc.id,
+            ...pData,
+            alias: dAlias || String(pData.name || '').split(' ')[0].toLowerCase(),
+            role: 'patient',
+            roles: ['patient'],
+            mustChangePassword: false,
+          };
+          delete safeUser.passwordHash;
+          delete safeUser.passwordSalt;
 
-          const isIdMatch =
-            (cleanIdDigits.length >= 7 &&
-              dPhone.length >= 7 &&
-              (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
-            dPid === upperId ||
-            (Boolean(dEmail) && dEmail === lowerId);
+          const labObj = await resolvePatientLab(
+            targetLabId || pData.labId,
+            pData.labName
+          );
 
-          if (!isIdMatch) continue;
+          return {
+            success: true,
+            user: safeUser,
+            lab: labObj,
+            role: 'patient',
+            mustChangePassword: false,
+          };
+        } else {
+          return {
+            success: false,
+            error: 'Incorrect password for this patient account. Please check your password and try again.',
+          };
+        }
+      }
 
-          let isPassValid = false;
-          if (pData.passwordSalt && pData.passwordHash) {
-            isPassValid = await verifyPassword(cleanPassword, pData.passwordSalt, pData.passwordHash);
-          }
-          if (!isPassValid) {
-            const rawPass = String(pData.passcode || pData.accessCode || '').trim();
-            if (rawPass && (rawPass === cleanPassword || rawPass.toUpperCase() === upperPass)) {
-              isPassValid = true;
+      // 2. Check lab-registered walk-in patients across real Firestore labs
+      const labsSnap = await getDocs(collection(db, 'labs'));
+      const labIdsToSearch = targetLabId
+        ? [targetLabId]
+        : labsSnap.docs.map(d => d.id);
+
+      for (const lId of labIdsToSearch) {
+        try {
+          const pSnap = await getDocs(collection(db, 'labs', lId, 'patients'));
+          for (const d of pSnap.docs) {
+            const data = d.data();
+            const dPhone = String(data.phone || data.phoneNumber || '').replace(/\D/g, '');
+            const dPid = String(data.patientId || data.pid || d.id || '').toUpperCase();
+            const dEmail = String(data.email || '').toLowerCase();
+            const dAlias = String(data.alias || data.nickname || '').replace(/^@+/, '').toLowerCase();
+
+            const isId =
+              (cleanIdDigits.length >= 7 &&
+                dPhone.length >= 7 &&
+                (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
+              dPid === upperId ||
+              (Boolean(dEmail) && dEmail === lowerId) ||
+              (Boolean(dAlias) && dAlias === lowerAlias);
+
+            if (!isId) continue;
+
+            let isPass = false;
+            if (data.passwordSalt && data.passwordHash) {
+              isPass = await verifyPassword(cleanPassword, data.passwordSalt, data.passwordHash);
             }
-          }
+            if (!isPass) {
+              const rawPass = String(data.passcode || data.accessCode || data.pin || data.code || '').trim();
+              if (rawPass && (rawPass === cleanPassword || rawPass.toUpperCase() === upperPass)) {
+                isPass = true;
+              }
+            }
 
-          if (isPassValid) {
-            return {
-              success: true,
-              user: {
-                id: pDoc.id,
-                ...pData,
+            if (isPass) {
+              const labObj = await resolvePatientLab(lId, data.labName);
+              const safeUser: any = {
+                id: data.globalPatientDocId || d.id,
+                ...data,
+                labId: lId,
+                labName: labObj?.name || data.labName || '',
                 role: 'patient',
                 roles: ['patient'],
                 mustChangePassword: false,
-              },
-              lab: { id: pData.labId || targetLabId || 'lab-1', name: pData.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false,
-            };
-          } else {
-            return {
-              success: false,
-              error: 'Incorrect password for this patient account. Please verify your password and try again.',
-            };
-          }
-        }
-      } catch (gpErr) {
-        console.warn('Global patients lookup note:', gpErr);
-      }
+              };
+              delete safeUser.passwordHash;
+              delete safeUser.passwordSalt;
 
-      // 2. Query Firestore patients across target lab or labs
-      const labIdsToSearch = targetLabId ? [targetLabId] : ['lab-1', 'lab-2', 'lab-3'];
-      
-      for (const lId of labIdsToSearch) {
-        try {
-          const pSnap = await getDocs(collection(db, 'labs', lId, 'patients')).catch(() => ({ docs: [] as any[] }));
-          const matchedDoc = pSnap.docs.find(d => {
-            const data = d.data();
-            const dPhone = (data.phone || data.phoneNumber || '').replace(/\D/g, '');
-            const dPid = (data.patientId || data.pid || d.id || '').toUpperCase();
-            const dEmail = (data.email || '').toLowerCase();
-            const rawPass = (data.passcode || data.accessCode || data.pin || data.code || '').trim();
-            const dAccess = rawPass.toUpperCase();
-
-            const isId = (cleanIdDigits.length >= 7 && (dPhone === cleanIdDigits || dPhone.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhone))) ||
-                         dPid === upperId ||
-                         (dEmail && dEmail === lowerId);
-
-            const isPass = rawPass === cleanPassword ||
-                           dAccess === upperPass ||
-                           upperPass === '1234' ||
-                           upperPass === 'PAT123' ||
-                           upperPass === 'PATIENT123';
-
-            return isId && isPass;
-          });
-
-          if (matchedDoc) {
-            const patientData = matchedDoc.data();
-            return {
-              success: true,
-              user: {
-                id: matchedDoc.id,
-                ...patientData,
+              return {
+                success: true,
+                user: safeUser,
+                lab: labObj,
                 role: 'patient',
-                roles: ['patient'],
-                mustChangePassword: false
-              },
-              lab: { id: lId, name: patientData.labName || 'nanoLabs Central Diagnostics' },
-              role: 'patient',
-              mustChangePassword: false
-            };
+                mustChangePassword: false,
+              };
+            }
           }
-        } catch (fErr) {}
-      }
-
-      // 3. Fallback demo patient for instant onboarding if standard demo code is provided
-      if (cleanPassword === '1234' || upperPass === 'PAT123' || upperPass === 'PATIENT123') {
-        // Determine dynamic display name from identifier or stored session
-        let patientDisplayName = 'Valued Patient';
-        if (cleanIdentifier.includes('@')) {
-          patientDisplayName = cleanIdentifier.split('@')[0];
-        } else if (cleanIdentifier.length > 2 && !cleanIdentifier.startsWith('+') && !/^\d+$/.test(cleanIdentifier)) {
-          patientDisplayName = cleanIdentifier;
-        }
-
-        const demoPatient = {
-          id: 'demo-pat-1',
-          patientId: cleanIdentifier.startsWith('PAT-') ? cleanIdentifier : 'PAT-2026-0891',
-          name: patientDisplayName,
-          phone: cleanIdDigits.length >= 7 ? cleanIdentifier : '+237 670 11 22 33',
-          gender: 'Male',
-          dateOfBirth: '1988-04-12',
-          role: 'patient',
-          roles: ['patient'],
-          labId: targetLabId || 'lab-1',
-          labName: 'nanoLabs Central Diagnostics',
-          mustChangePassword: false
-        };
-
-        return {
-          success: true,
-          user: demoPatient,
-          lab: { id: targetLabId || 'lab-1', name: 'nanoLabs Central Diagnostics' },
-          role: 'patient',
-          mustChangePassword: false
-        };
+        } catch {}
       }
 
       return {
         success: false,
-        error: 'No patient record found matching this Phone Number / PID and Access Code. Please verify or click "Create Patient Account" below.'
+        error: 'No patient account found matching those credentials. Please verify your details or create a patient account.'
       };
     } catch (err: any) {
       console.error('Patient login error:', err);
@@ -984,19 +921,19 @@ export const authService = {
   },
 
   /**
-   * Dedicated Doctor & Physician Network Authentication
-   * Validates phone number and password / passcode / access code across accredited doctors.
+   * Dedicated Doctor & Physician Network Authentication (100% Firestore)
    */
   async loginDoctor(phoneOrIdentifier: string, passwordOrCode: string): Promise<AuthResult> {
     try {
+      await ensureFirebaseAuth();
       const cleanIdentifier = (phoneOrIdentifier || '').trim();
       const cleanPassword = (passwordOrCode || '').trim();
 
       if (!cleanIdentifier) {
-        return { success: false, error: 'Please enter your registered phone number or doctor ID.' };
+        return { success: false, error: 'Please enter your registered phone number, email, or ONMC license.' };
       }
       if (!cleanPassword) {
-        return { success: false, error: 'Please enter your password or access passcode.' };
+        return { success: false, error: 'Please enter your password.' };
       }
 
       const upperId = cleanIdentifier.toUpperCase();
@@ -1004,17 +941,22 @@ export const authService = {
       const cleanIdDigits = cleanIdentifier.replace(/\D/g, '');
       const upperPass = cleanPassword.toUpperCase();
 
-      const doctorsSnap = await getDocs(collection(db, 'doctors')).catch(() => ({ docs: [] as any[] }));
-      
-      // Find doctor by phone, email, license number, or access code
+      const doctorsSnap = await getDocs(collection(db, 'doctors'));
+
       const foundDoctorDoc = doctorsSnap.docs.find(d => {
         const docData = d.data();
-        const dPhoneDigits = (docData.phone || '').replace(/\D/g, '');
-        const dEmail = (docData.email || '').trim().toLowerCase();
-        const dLicense = (docData.licenseNumber || '').trim().toUpperCase();
-        const dAccessCode = (docData.accessCode || docData.code || '').trim().toUpperCase();
+        const dPhoneDigits = String(docData.phoneDigits || docData.phone || '').replace(/\D/g, '');
+        const dEmail = String(docData.email || '').trim().toLowerCase();
+        const dLicense = String(docData.licenseNumber || '').trim().toUpperCase();
+        const dAccessCode = String(docData.accessCode || docData.code || '').trim().toUpperCase();
 
-        if (cleanIdDigits.length >= 7 && dPhoneDigits && (dPhoneDigits === cleanIdDigits || dPhoneDigits.endsWith(cleanIdDigits) || cleanIdDigits.endsWith(dPhoneDigits))) {
+        if (
+          cleanIdDigits.length >= 7 &&
+          dPhoneDigits.length >= 7 &&
+          (dPhoneDigits === cleanIdDigits ||
+            dPhoneDigits.endsWith(cleanIdDigits) ||
+            cleanIdDigits.endsWith(dPhoneDigits))
+        ) {
           return true;
         }
         if (dEmail && dEmail === lowerId) return true;
@@ -1026,42 +968,53 @@ export const authService = {
       if (!foundDoctorDoc) {
         return {
           success: false,
-          error: 'No registered doctor account found for this phone number. Please check your phone number or create an account.'
+          error: 'No registered doctor account found. Please check your phone/license or create a doctor account.'
         };
       }
 
       const doctorData = foundDoctorDoc.data();
-      const storedPassword = (doctorData.password || '').trim();
-      const storedPasscode = (doctorData.passcode || '').trim();
-      const storedAccessCode = (doctorData.accessCode || doctorData.code || '').trim().toUpperCase();
+      let isPasswordMatch = false;
 
-      // Check if password or passcode matches
-      const isPasswordMatch = 
-        (storedPassword && (storedPassword === cleanPassword || storedPassword.toUpperCase() === upperPass)) ||
-        (storedPasscode && (storedPasscode === cleanPassword || storedPasscode.toUpperCase() === upperPass)) ||
-        (storedAccessCode && storedAccessCode === upperPass) ||
-        cleanPassword === 'DOC123' ||
-        cleanPassword === 'SUPER123';
+      if (doctorData.passwordSalt && doctorData.passwordHash) {
+        isPasswordMatch = await verifyPassword(
+          cleanPassword,
+          doctorData.passwordSalt,
+          doctorData.passwordHash
+        );
+      }
+
+      if (!isPasswordMatch) {
+        const storedPassword = String(doctorData.password || '').trim();
+        const storedPasscode = String(doctorData.passcode || '').trim();
+        const storedAccessCode = String(doctorData.accessCode || doctorData.code || '').trim().toUpperCase();
+        isPasswordMatch =
+          Boolean(storedPassword && storedPassword === cleanPassword) ||
+          Boolean(storedPasscode && storedPasscode === cleanPassword) ||
+          Boolean(storedAccessCode && storedAccessCode === upperPass);
+      }
 
       if (!isPasswordMatch) {
         return {
           success: false,
-          error: 'Incorrect password for this phone number. Please check your password and try again.'
+          error: 'Incorrect password for this doctor account. Please check your password and try again.'
         };
       }
 
-      const doctorUser = {
+      const doctorUser: any = {
         id: foundDoctorDoc.id,
         ...doctorData,
         role: 'doctor',
         roles: ['doctor'],
         mustChangePassword: false
       };
+      delete doctorUser.password;
+      delete doctorUser.passwordHash;
+      delete doctorUser.passwordSalt;
 
       return {
         success: true,
         user: doctorUser,
-        lab: { id: 'network-doctors', name: 'nanoLabs Accredited Medical Network', primaryColor: '#0D9488' },
+        lab: null,
         role: 'doctor',
         mustChangePassword: false
       };

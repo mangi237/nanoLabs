@@ -1,86 +1,150 @@
-import React, { useEffect, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../context/authContext';
-import { useLiveDocument } from '../../../hooks/useDoctorDataExtra';
-import { Card, Button, PageHeader, Toggle, Skeleton } from '../../../components/doctor/ui';
-import { Field } from './ProfileEdit';
+import { useNav } from '../../../components/doctor/nav';
+import { SubScreenHeader, SectionCard } from '../../../components/doctor/ui';
+import { db, ensureFirebaseAuth, doc, getDoc, setDoc } from '../../../services/firebase';
+import { cleanFirestoreData } from '../../../utils/sanitizeData';
 
-const input = 'h-12 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-4 text-[15px] outline-none focus:border-[#006978]';
-const DAYS = [
-  ['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'],
-  ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']
-] as const;
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function AvailabilityScreen() {
+export const AvailabilityScreen: React.FC = () => {
   const { user } = useAuth();
-  const { data, loading } = useLiveDocument<any>(user?.id ? `doctors/${user.id}` : null);
-  const [accepting, setAccepting] = useState(true);
-  const [days, setDays] = useState<Record<string, boolean>>({ mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false });
-  const [start, setStart] = useState('09:00');
-  const [end, setEnd] = useState('17:00');
-  const [slot, setSlot] = useState('30');
+  const { pop } = useNav();
+
+  const [schedule, setSchedule] = useState<
+    Record<string, { enabled: boolean; start: string; end: string }>
+  >(() =>
+    Object.fromEntries(
+      DAYS.map((d) => [d, { enabled: d !== 'Saturday', start: '08:30', end: '16:30' }])
+    )
+  );
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (data?.availability) {
-      const a = data.availability;
-      setAccepting(a.accepting ?? true);
-      setDays({ ...days, ...(a.days || {}) });
-      setStart(a.start || '09:00');
-      setEnd(a.end || '17:00');
-      setSlot(String(a.slotMinutes || 30));
-    }
-  }, [data?.id]);
-
-  const save = async () => {
     if (!user?.id) return;
-    await setDoc(
-      doc(db, 'doctors', user.id),
-      { availability: { accepting, days, start, end, slotMinutes: Number(slot) }, updatedAt: new Date().toISOString() },
-      { merge: true }
-    );
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    let active = true;
+    (async () => {
+      await ensureFirebaseAuth();
+      const snap = await getDoc(doc(db, 'doctors', user.id)).catch(() => null);
+      if (active && snap?.exists()) {
+        const d = snap.data();
+        if (d.availability && typeof d.availability === 'object') {
+          setSchedule((prev) => ({ ...prev, ...d.availability }));
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await ensureFirebaseAuth();
+      await setDoc(
+        doc(db, 'doctors', user.id),
+        cleanFirestoreData({
+          availability: schedule,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <Skeleton className="h-64 w-full" />;
-
   return (
-    <>
-      <PageHeader title="Availability" subtitle="When patients can book you" />
+    <div className="min-h-[100dvh] bg-slate-50">
+      <SubScreenHeader title="Consultation Availability" onBack={pop} />
+      <form onSubmit={handleSave} className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+        <SectionCard
+          title="Weekly Clinic & Teleconsultation Hours"
+          subtitle="Patients see these windows when requesting consultations"
+        >
+          <div className="divide-y divide-slate-100">
+            {DAYS.map((day) => {
+              const slot = schedule[day] || { enabled: false, start: '08:30', end: '16:30' };
+              return (
+                <div
+                  key={day}
+                  className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                >
+                  <label className="flex items-center gap-2.5 text-sm font-bold text-slate-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={slot.enabled}
+                      onChange={(e) =>
+                        setSchedule((prev) => ({
+                          ...prev,
+                          [day]: { ...slot, enabled: e.target.checked },
+                        }))
+                      }
+                      className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    {day}
+                  </label>
 
-      <Card className="mb-6 flex items-center justify-between p-4">
-        <span className="text-[15px] font-medium">Accept consultation requests</span>
-        <Toggle label="Accept requests" checked={accepting} onChange={setAccepting} />
-      </Card>
-
-      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Working days</p>
-      <Card className="mb-6">
-        {DAYS.map(([k, label], i) => (
-          <div key={k} className={`flex items-center justify-between p-4 ${i ? 'border-t border-[#E5E7EB]' : ''}`}>
-            <span className="text-[15px]">{label}</span>
-            <Toggle label={label} checked={!!days[k]} onChange={(v) => setDays({ ...days, [k]: v })} />
+                  {slot.enabled ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={slot.start}
+                        onChange={(e) =>
+                          setSchedule((prev) => ({
+                            ...prev,
+                            [day]: { ...slot, start: e.target.value },
+                          }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs"
+                      />
+                      <span className="text-xs text-slate-400">to</span>
+                      <input
+                        type="time"
+                        value={slot.end}
+                        onChange={(e) =>
+                          setSchedule((prev) => ({
+                            ...prev,
+                            [day]: { ...slot, end: e.target.value },
+                          }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs"
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400">Unavailable</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </Card>
+        </SectionCard>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Start time"><input type="time" className={input} value={start} onChange={(e) => setStart(e.target.value)} /></Field>
-        <Field label="End time"><input type="time" className={input} value={end} onChange={(e) => setEnd(e.target.value)} /></Field>
-        <Field label="Minutes per consultation">
-          <select className={input} value={slot} onChange={(e) => setSlot(e.target.value)}>
-            {['15', '20', '30', '45', '60'].map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </Field>
-      </div>
+        {saved && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            Availability saved to Firestore.
+          </div>
+        )}
 
-      <div className="mt-6 flex items-center gap-3">
-        <Button onClick={save}>Save availability</Button>
-        {saved && <span className="text-[14px] font-medium text-[#15803D]">Saved</span>}
-      </div>
-    </>
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save Availability
+        </button>
+      </form>
+    </div>
   );
-}
+};
+
+export default AvailabilityScreen;

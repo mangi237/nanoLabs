@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
-import { db, addDoc, collection } from '../../services/firebase';
+import { db, ensureFirebaseAuth, addDoc, collection } from '../../services/firebase';
 import { uploadService } from '../../api/upload';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
+import { formatPatientAlias } from '../../services/doctorPatientFirestoreService';
 import { limsService } from '../../services/limsService';
 import { ReferringDoctor, Doctor } from '../../types';
 import { yeboVerifyService } from '../../services/yeboVerifyService';
@@ -136,6 +137,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
   const fetchLabs = async () => {
     try {
       setLoadingLabs(true);
+      await ensureFirebaseAuth();
       const list = await getAllLabs();
       if (list && list.length > 0) {
         setLabs(list);
@@ -145,17 +147,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
           fetchAccreditedDoctors(initialLab.id);
         }
       } else {
-        const fallback = { id: 'lab-1', name: 'Main Medical Laboratory', location: 'Central Diagnostic Hub' };
-        setLabs([fallback]);
-        setSelectedLab(fallback);
-        fetchAccreditedDoctors('lab-1');
+        setLabs([]);
+        setSelectedLab(null);
       }
     } catch (e) {
       console.error('Error fetching labs for registration:', e);
-      const fallback = { id: 'lab-1', name: 'Main Medical Laboratory', location: 'Central Diagnostic Hub' };
-      setLabs([fallback]);
-      setSelectedLab(fallback);
-      fetchAccreditedDoctors('lab-1');
+      setLabs([]);
+      setSelectedLab(null);
     } finally {
       setLoadingLabs(false);
     }
@@ -426,18 +424,32 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
         labTests: []
       };
 
-      // Recursively strip any undefined properties
-      const cleanedPatient = cleanFirestoreData(rawPatientPayload);
+      const generatedAlias = formatPatientAlias('', formData.name.trim());
+      const cleanedPatient = cleanFirestoreData({
+        ...rawPatientPayload,
+        alias: generatedAlias,
+        aliasLower: generatedAlias.toLowerCase(),
+        nickname: generatedAlias,
+        phoneDigits: phoneValidation.digits,
+        role: 'patient',
+        roles: ['patient'],
+      });
 
-      // Save to Firestore under the selected lab's patients subcollection
+      await ensureFirebaseAuth();
       let patientDocId = `pat_${Date.now()}`;
       try {
-        const docRef = await addDoc(collection(db, 'labs', targetLabId, 'patients'), cleanedPatient);
-        if (docRef?.id) {
-          patientDocId = docRef.id;
+        const globalRef = await addDoc(collection(db, 'patients'), cleanedPatient);
+        if (globalRef?.id) {
+          patientDocId = globalRef.id;
+        }
+        if (targetLabId) {
+          await addDoc(
+            collection(db, 'labs', targetLabId, 'patients'),
+            cleanFirestoreData({ ...cleanedPatient, globalPatientDocId: patientDocId })
+          );
         }
       } catch (fsErr) {
-        console.warn('Firestore write warning, continuing with local profile:', fsErr);
+        console.warn('Firestore write warning:', fsErr);
       }
 
       // If patient selected a network doctor or provided other doctor details, register in lab's referring doctors
@@ -476,11 +488,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
       }
 
       const fullPatientRecord = { id: patientDocId, ...cleanedPatient };
-      try {
-        localStorage.setItem('last_registered_patient', JSON.stringify(fullPatientRecord));
-      } catch (e) {
-        // ignore localStorage quota errors
-      }
 
       if (onRegisterSuccess) {
         onRegisterSuccess(fullPatientRecord);
@@ -526,7 +533,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onBackToLogin, o
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F4FAF8] via-[#EDF6F4] to-[#E3F2EE] text-slate-900 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-teal-500/20 selection:text-teal-900">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-br from-[#F4FAF8] via-[#EDF6F4] to-[#E3F2EE] text-slate-900 flex flex-col justify-center py-4 sm:py-10 px-3 sm:px-6 lg:px-8 font-sans selection:bg-teal-500/20 selection:text-teal-900">
       <div className="max-w-2xl w-full mx-auto space-y-5">
         
         {/* Navigation back to login & demo fill button */}

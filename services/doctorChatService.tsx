@@ -117,132 +117,9 @@ const STORAGE_CONNECTIONS_KEY = 'nanoLabs_active_connections_v2';
 const STORAGE_REQUESTS_KEY = 'nanoLabs_social_connect_requests_v2';
 const STORAGE_PROFILES_KEY = 'nanoLabs_social_user_profiles_v2';
 
-// Baseline accredited specialists directory available for patient connection discovery
-const ACCREDITED_DOCTOR_PROFILES: UserSocialProfile[] = [
-  {
-    id: 'doc_tankua_allen_001',
-    role: 'doctor',
-    legalName: 'Dr. Tankua Allen, MD',
-    nickname: 'Dr. Tankua Allen',
-    isAnonymous: false,
-    specialty: 'Pediatrician & Clinical Diagnostics',
-    hospital: 'Biodiagnostic Labo / Centre Pédiatrique',
-    licenseNumber: 'ONMC #7421-DLA',
-    phone: '+237 672 63 80 94',
-    city: 'Douala',
-    bio: 'Pediatric diagnostic consultant and general practitioner with Biodiagnostic Labo. Available for direct consultations and teleconsultation.',
-    avatarUrl: '/src/assets/images/dr_tankua_allen_portrait_1790889682898.jpg',
-    isOnline: true
-  },
-  {
-    id: 'doc_kamga_101',
-    role: 'doctor',
-    legalName: 'Dr. Joseph Kamga, MD',
-    nickname: 'Dr. Kamga',
-    isAnonymous: false,
-    specialty: 'Internal Medicine & Infectious Diseases',
-    hospital: 'Hôpital Général de Douala / Clinique des Roses',
-    licenseNumber: 'ONMC #4829-DLA',
-    phone: '+237 671 22 33 44',
-    city: 'Douala',
-    bio: 'Specialist in metabolic syndromic follow-up, infectious diseases, and routine diagnostic panel evaluations.',
-    avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
-    isOnline: true
-  },
-  {
-    id: 'doc_mbongo_102',
-    role: 'doctor',
-    legalName: 'Dr. Suzanne Mbongo, MD',
-    nickname: 'Dr. Suzanne Mbongo',
-    isAnonymous: false,
-    specialty: 'Clinical Biology & Hematology Specialist',
-    hospital: 'Laboratoire Central Akwa',
-    licenseNumber: 'ONMC #5102-DLA',
-    phone: '+237 690 88 77 66',
-    city: 'Douala',
-    bio: 'Lead biologist specializing in complete blood count delta-checks, hemoglobinopathies, and coagulation screening.',
-    avatarUrl: 'https://images.unsplash.com/photo-1594824813587-251d18471c53?w=150&auto=format&fit=crop&q=80',
-    isOnline: true
-  },
-  {
-    id: 'doc_tran_103',
-    role: 'doctor',
-    legalName: 'Dr. Lisa Tran, MD',
-    nickname: 'Dr. Lisa Tran',
-    isAnonymous: false,
-    specialty: 'Clinical Diagnostic Consult & ENT',
-    hospital: 'Centre Médical Laquintinie',
-    licenseNumber: 'ONMC #6034-DLA',
-    phone: '+237 677 12 34 56',
-    city: 'Douala',
-    bio: 'General practitioner and diagnostic triage consultant assisting patients with lab preparation and interpretation.',
-    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80',
-    isOnline: false
-  },
-  {
-    id: 'doc_ndongo_104',
-    role: 'doctor',
-    legalName: 'Dr. Christian Ndongo, MD',
-    nickname: 'Dr. Christian Ndongo',
-    isAnonymous: false,
-    specialty: 'Public Health & Anatomopathology',
-    hospital: 'Centre Hospitalier Universitaire (CHU) Yaoundé',
-    licenseNumber: 'ONMC #3918-YDE',
-    phone: '+237 699 44 55 66',
-    city: 'Yaoundé',
-    bio: 'Anatomic pathologist and preventive medicine specialist with expertise in biopsy correlation and biochemical markers.',
-    avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80',
-    isOnline: true
-  }
-];
-
-// Baseline registered patients directory so doctors can search and send connection requests
-const INITIAL_PATIENT_PROFILES: UserSocialProfile[] = [
-  {
-    id: 'pat_claire_01',
-    role: 'patient',
-    legalName: 'Mme. Claire Ngo',
-    nickname: 'Claire_Health',
-    isAnonymous: true,
-    phone: '+237 671 22 33 44',
-    city: 'Douala',
-    bio: 'Ongoing metabolic and hematology panel follow-up',
-    isOnline: true
-  },
-  {
-    id: 'pat_jean_02',
-    role: 'patient',
-    legalName: 'M. Jean-Paul Manga',
-    nickname: 'JP_Diagnostic',
-    isAnonymous: true,
-    phone: '+237 699 55 66 77',
-    city: 'Douala',
-    bio: 'Cardiovascular checkup & lipid profile monitoring',
-    isOnline: true
-  },
-  {
-    id: 'pat_marcelle_03',
-    role: 'patient',
-    legalName: 'Mme. Marcelle Bella',
-    nickname: 'Marcelle_B',
-    isAnonymous: false,
-    phone: '+237 677 88 99 00',
-    city: 'Yaoundé',
-    bio: 'Prenatal and routine biochemistry screenings',
-    isOnline: false
-  },
-  {
-    id: 'pat_samuel_04',
-    role: 'patient',
-    legalName: 'M. Samuel Eto’o Fosso',
-    nickname: 'Samuel_Bio',
-    isAnonymous: true,
-    phone: '+237 655 12 34 56',
-    city: 'Bafoussam',
-    bio: 'Infectious disease & routine parasitology screening',
-    isOnline: true
-  }
-];
+// Zero Mock Data: All physician and patient profiles come strictly from Firestore
+const ACCREDITED_DOCTOR_PROFILES: UserSocialProfile[] = [];
+const INITIAL_PATIENT_PROFILES: UserSocialProfile[] = [];
 
 class DoctorChatService {
   // =========================================================================
@@ -486,10 +363,22 @@ class DoctorChatService {
     const connections = this.getConnections(currentUserId);
     const requests = this.getRequests(currentUserId);
 
+    // Check if real doctors from Firestore database are available
+    const hasRealDatabaseDoctors = profiles.some(p => 
+      p.role === 'doctor' && 
+      !['doc_kamga_101', 'doc_mbongo_102', 'doc_fotso_103', 'doc_atangana_104'].includes(p.id)
+    );
+
     return profiles
       .filter(p => {
         if (p.id === currentUserId) return false;
         if (p.role !== searchRole) return false;
+
+        // If real database doctors are registered, filter out dummy seed profiles
+        if (searchRole === 'doctor' && hasRealDatabaseDoctors && ['doc_kamga_101', 'doc_mbongo_102', 'doc_fotso_103', 'doc_atangana_104'].includes(p.id)) {
+          return false;
+        }
+
         if (!q) return true;
 
         if (p.role === 'patient') {

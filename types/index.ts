@@ -13,7 +13,7 @@ export type BatchStatus =
   | 'signed' 
   | 'ready';
 
-export type PaymentStatus = 'pending' | 'verified' | 'rejected' | 'unpaid' | 'verified';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
 
 export type PaymentMethod = 'cash' | 'mtn_momo' | 'orange_money';
 
@@ -284,8 +284,7 @@ export interface ConnectionRequest {
 
 export interface ReferringDoctor {
   id: string;
-  labId?
-  : string;
+  labId: string;
   doctorId?: string;
   name: string;
   specialty?: string;
@@ -344,7 +343,7 @@ export interface User {
 }
 
 export type PricingModelType = 'pay_per_test' | 'flat_subscription' | 'lifetime_space';
-export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise' | 'budget';
+export type SubscriptionTierType = 'small' | 'medium' | 'large' | 'starter' | 'growth' | 'business' | 'enterprise';
 
 export interface Lab {
   id: string;
@@ -353,7 +352,6 @@ export interface Lab {
   city?: string;
   slogan?: string;
   tagline?: string;
-  tier: SubscriptionTierType;
   motto?: string;
   address?: string;
   phone?: string;
@@ -375,10 +373,6 @@ export interface Lab {
   royaltyEarnings?: number;
   primaryColor?: string;
   secondaryColor?: string;
-  lat?: string;
-  lng?: string;
-  averageTurnaroundHours?: number;
-  tatHours?: number;
   accentColor?: string;
   logoUrl?: string;
   avatarUrl?: string;
@@ -589,6 +583,7 @@ export interface PatientBooking {
   biologistName?: string;
   referringDoctorId?: string;
   referringDoctor?: string;
+  referringDoctorPromoCode?: string;
   referralHospital?: string;
   referralNotes?: string;
   insuranceProvider?: string;

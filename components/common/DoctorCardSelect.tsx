@@ -54,21 +54,17 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
 
   const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
 
-  // Fetch real registered doctors from database and registered local directory (zero mock data)
+  // Fetch real registered doctors strictly from Firestore (zero mock data, zero localStorage)
   useEffect(() => {
     let isMounted = true;
     const fetchLive = async () => {
       try {
-        const { limsService } = await import('../../services/limsService');
-        const liveList = await limsService.searchAllAccreditedDoctors('');
-        const localRaw = localStorage.getItem('nanolabs_registered_doctors');
-        const localDocs: any[] = localRaw ? JSON.parse(localRaw) : [];
-
-        const combinedRaw = [...(liveList || []), ...localDocs];
+        const { doctorPatientFirestoreService } = await import('../../services/doctorPatientFirestoreService');
+        const liveList = await doctorPatientFirestoreService.listDoctors('');
         if (isMounted) {
           const seen = new Set<string>();
           const mapped: DoctorOption[] = [];
-          combinedRaw.forEach((d, idx) => {
+          liveList.forEach((d, idx) => {
             if (!d || !d.name) return;
             const formattedName = d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`;
             const key = (d.id || formattedName).toLowerCase().trim();
@@ -78,7 +74,7 @@ export const DoctorCardSelect: React.FC<DoctorCardSelectProps> = ({
               id: d.id || `live-doc-${idx}`,
               name: formattedName,
               specialty: d.specialty || 'General Medicine & Diagnostics',
-              hospital: d.hospitalAffiliation || d.hospital || 'Registered Medical Practice',
+              hospital: d.hospital || 'Registered Medical Practice',
               verified: true,
               code: d.licenseNumber || undefined,
               phone: d.phone || undefined

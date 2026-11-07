@@ -16,7 +16,7 @@ import {
   Check,
   Lock,
 } from 'lucide-react';
-import { db, addDoc, collection } from '../../services/firebase';
+import { db, ensureFirebaseAuth, addDoc, collection } from '../../services/firebase';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 import { LAB_PACKAGE_LIST, LAB_PACKAGES, LabPackageId } from '../../utils/labPackages';
 
@@ -27,7 +27,7 @@ interface LabRegistrationModalProps {
 }
 
 const field =
-  'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:bg-white transition';
+  'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:bg-white transition';
 const label = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
 const makeAccessCode = () => {
@@ -99,6 +99,7 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
 
     setSaving(true);
     try {
+      await ensureFirebaseAuth();
       const accessCode = 'ADM-' + makeAccessCode();
       const now = new Date().toISOString();
       const pkg = LAB_PACKAGES[form.planId] || LAB_PACKAGES.december_promo;
@@ -167,13 +168,6 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
         })
       );
 
-      try {
-        localStorage.setItem(
-          'nanolabs_active_lab',
-          JSON.stringify({ id: labDoc.id, ...labRecord })
-        );
-      } catch {}
-
       setSubmitted({
         labId: labDoc.id,
         labName: form.labName.trim(),
@@ -201,14 +195,14 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-xl border border-slate-200/80 my-auto max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 bg-white sm:bg-slate-900/60 sm:backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-2xl rounded-none sm:rounded-3xl shadow-none sm:shadow-xl border-0 sm:border sm:border-slate-200/80 flex flex-col overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {submitted ? 'Laboratory Registered' : 'Register a Laboratory'}
             </h2>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
               {submitted
                 ? 'Save your administrator access code below — your subscription package and service rules are active.'
                 : 'Select your operating package, mobile phlebotomist preference, and facility credentials.'}
@@ -218,13 +212,13 @@ export const LabRegistrationModal: React.FC<LabRegistrationModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="flex-1 p-5 sm:p-6 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           {submitted ? (
             <div className="space-y-6">
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm">

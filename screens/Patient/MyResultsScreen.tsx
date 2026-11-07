@@ -3,6 +3,7 @@ import { ArrowLeft, FileText, ChevronRight, CheckCircle2, Inbox, Layers } from '
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { doesBookingBelongToPatient } from '../../utils/patientOwnership';
 
 export interface PatientResultItem {
   id: string;
@@ -64,23 +65,9 @@ export const MyResultsScreen: React.FC<MyResultsScreenProps> = ({
         user?.labId ? [user.labId] : []
       );
 
-      const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
-      const activeId = activeProfile?.id || '';
-      const userId = user?.id || '';
-      const userName = (user?.name || '').toLowerCase().trim();
-
-      // Strictly show results ONLY once signed & released by the Biologist (or overallStatus === 'Completed')
+      // Strictly show results ONLY for this exact patient AND once signed & released by the Biologist
       const releasedBookings = allBookings.filter((b) => {
-        const bPid = (b.patientPid || b.patientId || '').trim();
-        const bName = (b.patientName || '').toLowerCase().trim();
-        const isMatch = isDependentActive
-          ? Boolean((activeId && bPid === activeId) || (activeName && bName === activeName))
-          : Boolean(
-              (activeId && bPid === activeId) ||
-                (userId && bPid === userId) ||
-                (activeName && bName === activeName) ||
-                (userName && bName === userName)
-            );
+        const isMatch = doesBookingBelongToPatient(b, user, activeProfile, isDependentActive);
         const isBiologistCertified = Boolean(
           b.biologistSigned || b.resultsReleased || b.overallStatus === 'Completed'
         );

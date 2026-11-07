@@ -16,7 +16,9 @@ import {
   FileText,
   Receipt,
   ExternalLink,
-  Bell
+  Bell,
+  MessageCircle,
+  TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
@@ -25,6 +27,9 @@ import { TestCatalogItem } from './SearchTestsScreen';
 import { BatchConsolidatedReportModal } from '../../components/patient/BatchConsolidatedReportModal';
 import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
+import { PatientSpendingTrackerModal } from '../../components/patient/PatientSpendingTrackerModal';
+import { doesBookingBelongToPatient } from '../../utils/patientOwnership';
+import { buildLabWhatsAppOrderUrl } from '../../utils/whatsappGateway';
 
 interface HomeScreenProps {
   onNavigateScan: () => void;
@@ -157,6 +162,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedBatchForReport, setSelectedBatchForReport] = useState<any | null>(null);
   const [selectedBookingForPdf, setSelectedBookingForPdf] = useState<any | null>(null);
   const [selectedBookingForReceipt, setSelectedBookingForReceipt] = useState<any | null>(null);
+  const [showSpendingModal, setShowSpendingModal] = useState<boolean>(false);
 
   const fetchMemberData = async () => {
     try {
@@ -165,27 +171,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         user?.labId ? [user.labId] : []
       );
 
-      const activeName = (activeProfile?.fullName || '').toLowerCase().trim();
-      const activeId = activeProfile?.id || '';
-      const userId = user?.id || '';
-      const userPhone = (user?.phone || '').replace(/\D/g, '');
-      const userName = (user?.name || '').toLowerCase().trim();
-
-      const matching = allBookings.filter((b) => {
-        const bPid = (b.patientPid || b.patientId || '').trim();
-        const bName = (b.patientName || '').toLowerCase().trim();
-        const bPhone = (b.patientPhone || '').replace(/\D/g, '');
-
-        if (isDependentActive) {
-          return Boolean((activeId && bPid === activeId) || (activeName && bName === activeName));
-        }
-        const matchPid = Boolean((activeId && bPid === activeId) || (userId && bPid === userId));
-        const matchName = Boolean((activeName && bName === activeName) || (userName && bName === userName));
-        const matchPhone = Boolean(
-          userPhone && bPhone && (bPhone.includes(userPhone) || userPhone.includes(bPhone))
-        );
-        return matchPid || matchName || matchPhone;
-      });
+      const matching = allBookings.filter((b) =>
+        doesBookingBelongToPatient(b, user, activeProfile, isDependentActive)
+      );
 
       setProfileBookings(matching);
     } catch (err) {
@@ -456,6 +444,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         </button>
                       )}
 
+                      {/* Direct WhatsApp Bridge to Lab (No LIMS Required) */}
+                      {!isCompleted && (
+                        <a
+                          href={buildLabWhatsAppOrderUrl({
+                            bookingCode: b.bookingCode || b.id,
+                            patientName: b.patientName || patientDisplayName,
+                            patientPhone: b.patientPhone,
+                            patientAlias: b.patientAlias,
+                            tests: b.tests || [],
+                            totalAmount: b.totalAmount,
+                            homeCollection: b.homeCollection,
+                            pickupLocation: b.pickupLocation,
+                            userCoords: b.userCoords,
+                            labName: labTitle,
+                            labPhone: b.labPhone,
+                          }).waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          title="Relancer / Notifier le laboratoire directement sur WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>WhatsApp Labo</span>
+                        </a>
+                      )}
+
                       {/* Live Audit Log */}
                       <button
                         type="button"
@@ -534,31 +548,61 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <ChevronRight className="w-4 h-4 text-slate-400" />
       </button>
 
-      {/* 7. REAL DIAGNOSTIC SPEND SUMMARY */}
+      {/* 7. REAL DIAGNOSTIC SPEND SUMMARY & SPENDING PER LAB */}
       <div className="p-5 bg-white border border-slate-200 rounded-3xl shadow-xs space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
             <CreditCard className="w-4 h-4 text-[#006978]" />
-            <span>Verified Diagnostic Spend ({activeProfile?.fullName || 'Primary Account'})</span>
+            <span>Suivi des Dépenses de Santé ({activeProfile?.fullName || 'Compte Principal'})</span>
           </div>
-          <span className="font-mono tabular-nums text-sm font-black text-[#006978]">
-            {formatXAF(totalMemberSpend)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono tabular-nums text-sm font-black text-[#006978]">
+              {formatXAF(totalMemberSpend)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSpendingModal(true)}
+              className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-[#006978] font-extrabold text-[11px] rounded-lg border border-teal-200 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Détails Dépenses &amp; Labos</span>
+            </button>
+          </div>
         </div>
 
         {Object.keys(spendByLab).length > 0 ? (
-          <div className="space-y-1.5 pt-1">
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span>Laboratoire d&apos;Analyses</span>
+              <span>Montant Réglé</span>
+            </div>
             {Object.entries(spendByLab).map(([lName, amount]) => (
-              <div key={lName} className="flex items-center justify-between text-xs">
-                <span className="font-medium text-slate-700">{lName}</span>
-                <span className="font-mono tabular-nums font-bold text-slate-900">{formatXAF(amount)}</span>
+              <div key={lName} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-none">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-teal-600"></div>
+                  <span className="font-semibold text-slate-800">{lName}</span>
+                </div>
+                <span className="font-mono tabular-nums font-black text-slate-900">{formatXAF(amount)}</span>
               </div>
             ))}
+            <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span>Tarification équitable nanoLabs :</span>
+              <strong className="text-teal-800 font-bold">5% par lot d&apos;analyses (aucun forfait abusif)</strong>
+            </div>
           </div>
         ) : (
-          <div className="py-1.5 text-xs text-slate-400 flex items-center gap-2">
-            <Inbox className="w-4 h-4 text-slate-300" />
-            <span>No verified payments yet. Settled invoices and receipts sync automatically once Cashier confirms.</span>
+          <div className="py-2 text-xs text-slate-400 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Inbox className="w-4 h-4 text-slate-300" />
+              <span>Aucun règlement enregistré pour l&apos;instant. Les factures réglées et reçus de caisse se synchronisent ici.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowSpendingModal(true)}
+              className="px-2.5 py-1 text-slate-600 hover:text-slate-900 text-xs font-bold underline shrink-0 cursor-pointer"
+            >
+              Ouvrir le Suivi
+            </button>
           </div>
         )}
       </div>
@@ -634,6 +678,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           isOpen={!!selectedBookingForReceipt}
           onClose={() => setSelectedBookingForReceipt(null)}
           booking={selectedBookingForReceipt}
+        />
+      )}
+
+      {showSpendingModal && (
+        <PatientSpendingTrackerModal
+          isOpen={showSpendingModal}
+          onClose={() => setShowSpendingModal(false)}
+          bookings={profileBookings}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { db, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, setDoc } from './firebase';
+import { db, ensureFirebaseAuth, collection, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, setDoc } from './firebase';
 import { auditService } from './auditService';
 import { MASTER_TESTS_CATALOG, MasterTestItem } from '../data/masterTestsData';
 import { cleanFirestoreData } from '../utils/sanitizeData';
@@ -118,6 +118,9 @@ export interface PatientBooking {
   labLogoUrl?: string;
   platformFeePercent?: number;
   platformFeeAmount?: number;
+  patientAccountId?: string;
+  dependentProfileId?: string;
+  patientAlias?: string;
   patientId: string;
   patientName: string;
   patientAge?: number;
@@ -131,6 +134,7 @@ export interface PatientBooking {
   doctorName?: string; // Referring physician
   referringDoctorId?: string;
   referringDoctor?: string;
+  referringDoctorPromoCode?: string;
   referralHospital?: string;
   referralNotes?: string;
   sampleCollectedAt?: string;
@@ -346,6 +350,9 @@ export const limsService = {
    */
   async createBooking(params: {
     labId: string;
+    patientAccountId?: string;
+    dependentProfileId?: string;
+    patientAlias?: string;
     patientId: string;
     patientName: string;
     patientAge?: number;
@@ -357,6 +364,7 @@ export const limsService = {
     doctorName?: string;
     referringDoctorId?: string;
     referringDoctor?: string;
+    referringDoctorPromoCode?: string;
     referralHospital?: string;
     referralNotes?: string;
     isStaffExemption?: boolean;
@@ -416,12 +424,16 @@ export const limsService = {
     platformFeeAmount?: number;
     batchId?: string;
   }): Promise<PatientBooking> {
+    await ensureFirebaseAuth();
     const {
       labId = 'lab-1',
       labName,
       labAddress,
       labPhone,
       labLogoUrl,
+      patientAccountId,
+      dependentProfileId,
+      patientAlias,
       patientId,
       patientName,
       patientAge = 30,
@@ -433,12 +445,13 @@ export const limsService = {
       doctorName = 'Attending Physician',
       referringDoctorId,
       referringDoctor,
+      referringDoctorPromoCode,
       referralHospital,
       referralNotes,
       isStaffExemption = false,
       staffMemberName,
       staffDesignation,
-      sampleCollectedAt = 'Central Diagnostic Facility',
+      sampleCollectedAt = labName || 'Selected Laboratory',
       selectedMasterTestIds = [],
       selectedTests = [],
       creatorName,
@@ -543,7 +556,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp : any ) => ({
+          subParameters: t.subParameters ? t.subParameters.map((sp : any) => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -552,7 +565,7 @@ export const limsService = {
       });
     } else {
       const catalog = await this.getMasterTestCatalog(labId);
-      testItems = (selectedMasterTestIds || []).map((masterId : any , idx : any ) => {
+      testItems = (selectedMasterTestIds || []).map((masterId : any, idx : any) => {
         const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       {
@@ -618,6 +631,9 @@ export const limsService = {
       bookingCode,
       labId,
       labName: labName || undefined,
+      patientAccountId: patientAccountId || undefined,
+      dependentProfileId: dependentProfileId || undefined,
+      patientAlias: patientAlias || undefined,
       labAddress: labAddress || undefined,
       labPhone: labPhone || undefined,
       labLogoUrl: labLogoUrl || undefined,
@@ -634,6 +650,7 @@ export const limsService = {
       doctorName: referringDoctor || doctorName,
       referringDoctorId,
       referringDoctor,
+      referringDoctorPromoCode: referringDoctorPromoCode || undefined,
       referralHospital,
       referralNotes,
       isStaffExemption,
@@ -693,32 +710,11 @@ export const limsService = {
       updatedAt: timestamp
     };
 
-    // Save to local ledger for instant cross-tab & offline availability
-    try {
-      const existingLedgerRaw = localStorage.getItem('nanolabs_bookings_ledger');
-      const ledger: PatientBooking[] = existingLedgerRaw ? JSON.parse(existingLedgerRaw) : [];
-      const idx = ledger.findIndex(b => b.id === newBooking.id || b.bookingCode === newBooking.bookingCode);
-      if (idx >= 0) {
-        ledger[idx] = newBooking;
-      } else {
-        ledger.unshift(newBooking);
-      }
-      localStorage.setItem('nanolabs_bookings_ledger', JSON.stringify(ledger.slice(0, 100)));
-    } catch (err) {
-      console.warn('Could not cache booking to localStorage:', err);
-    }
+    // Persist exclusively to Firestore under the selected laboratory (/labs/{labId}/bookings)
+    const bookingsCol = collection(db, 'labs', labId, 'bookings');
+    const createdDoc = await addDoc(bookingsCol, cleanFirestoreData(newBooking));
+    newBooking.id = createdDoc.id || newBooking.id;
 
-    // Save to Firestore /labs/{labId}/bookings (and mirror to lab-1 if online booking to partner lab alias so default Staff workstation receives it live)
-    try {
-      const bookingsCol = collection(db, 'labs', labId, 'bookings');
-      await addDoc(bookingsCol, cleanFirestoreData(newBooking));
-      if (newBooking.isOnlineBooking && labId !== 'lab-1') {
-        const primaryBookingsCol = collection(db, 'labs', 'lab-1', 'bookings');
-        await addDoc(primaryBookingsCol, cleanFirestoreData(newBooking));
-      }
-    } catch (e) {
-      console.warn('Firestore booking save bypassed, using local memory state:', e);
-    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('nanolabs_booking_updated', { detail: { bookingId: newBooking.id } }));
     }
@@ -2680,6 +2676,7 @@ export const limsService = {
    * Fetch all bookings and requisitions for a lab (merging Firestore + local ledger with newest-wins timestamp resolution)
    */
   async fetchAllBookings(labId: string): Promise<PatientBooking[]> {
+    await ensureFirebaseAuth();
     const mapByKey = new Map<string, PatientBooking>();
     const upsertBooking = (item: PatientBooking) => {
       const key = item.bookingCode || item.id;
@@ -2709,19 +2706,6 @@ export const limsService = {
       console.warn('Error fetching bookings from Firestore:', e);
     }
 
-    // Merge from local ledger cache
-    try {
-      const raw = localStorage.getItem('nanolabs_bookings_ledger');
-      if (raw) {
-        const localList: PatientBooking[] = JSON.parse(raw);
-        localList.forEach(lb => {
-          if (!lb.labId || lb.labId === labId || labId === 'lab-1' || lb.isOnlineBooking) {
-            upsertBooking(lb);
-          }
-        });
-      }
-    } catch {}
-
     return Array.from(mapByKey.values()).sort((a, b) => {
       const timeA = new Date(a.createdAt || 0).getTime();
       const timeB = new Date(b.createdAt || 0).getTime();
@@ -2730,10 +2714,11 @@ export const limsService = {
   },
 
   /**
-   * Fetch all bookings across partner labs for Patient Portal live views
+   * Fetch all bookings across registered Firestore laboratories for Patient Portal live views
    */
   async fetchPatientBookingsAcrossLabs(extraLabIds: string[] = []): Promise<PatientBooking[]> {
-    const labIds = Array.from(new Set(['lab-1', 'lab-biosante', 'lab-central', 'lab-plus', ...extraLabIds.filter(Boolean)]));
+    await ensureFirebaseAuth();
+    const labIds = Array.from(new Set([...extraLabIds.filter(Boolean)]));
     try {
       const labsSnap = await getDocs(collection(db, 'labs'));
       labsSnap.docs.forEach(d => {
@@ -2771,14 +2756,6 @@ export const limsService = {
       })
     );
 
-    try {
-      const raw = localStorage.getItem('nanolabs_bookings_ledger');
-      if (raw) {
-        const localList: PatientBooking[] = JSON.parse(raw);
-        localList.forEach(lb => upsertBooking(lb));
-      }
-    } catch {}
-
     return Array.from(mapByKey.values()).sort((a, b) => {
       const timeA = new Date(a.createdAt || 0).getTime();
       const timeB = new Date(b.createdAt || 0).getTime();
@@ -2787,91 +2764,47 @@ export const limsService = {
   },
 
   /**
-   * Real-Time Live Subscription to Bookings and Test Statuses
+   * Real-Time Live Subscription to Bookings and Test Statuses (100% Firestore)
    */
   subscribeToBookings(
     labId: string = 'lab-1',
     onUpdate: (bookings: PatientBooking[]) => void,
     onError?: (err: any) => void
   ): () => void {
-    let latestFirestoreDocs: PatientBooking[] = [];
-
-    const emitMerged = () => {
-      const mapByKey = new Map<string, PatientBooking>();
-      const upsert = (item: PatientBooking) => {
-        const key = item.bookingCode || item.id;
-        if (!key) return;
-        const existing = mapByKey.get(key);
-        if (!existing) {
-          mapByKey.set(key, item);
-          return;
-        }
-        const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
-        const incomingTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
-        mapByKey.set(key, incomingTime >= existingTime ? { ...existing, ...item } : { ...item, ...existing });
-      };
-
-      latestFirestoreDocs.forEach(upsert);
-      try {
-        const raw = localStorage.getItem('nanolabs_bookings_ledger');
-        if (raw) {
-          const localList: PatientBooking[] = JSON.parse(raw);
-          localList.forEach(lb => {
-            if (!lb.labId || lb.labId === labId || labId === 'lab-1' || lb.isOnlineBooking) {
-              upsert(lb);
-            }
-          });
-        }
-      } catch {}
-
-      const sorted = Array.from(mapByKey.values()).sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
-        return timeB - timeA;
-      });
-      onUpdate(sorted);
-    };
-
-    const handleLocalEvent = () => emitMerged();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('nanolabs_booking_updated', handleLocalEvent);
-    }
-
+    ensureFirebaseAuth();
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
       const unsubscribe = onSnapshot(
         bookingsCol,
         (snap) => {
           try {
-            latestFirestoreDocs = snap.docs.map(d => {
-              const data = d.data() as PatientBooking;
-              return { ...data, id: data.id || d.id };
-            });
-            emitMerged();
+            const docsList = snap.docs
+              .map(d => {
+                const data = d.data() as PatientBooking;
+                return { ...data, id: data.id || d.id };
+              })
+              .sort((a, b) => {
+                const timeA = new Date(a.createdAt || 0).getTime();
+                const timeB = new Date(b.createdAt || 0).getTime();
+                return timeB - timeA;
+              });
+            onUpdate(docsList);
           } catch (e) {
             console.warn('[LIMS Real-time Subscription Parse Error]:', e);
           }
         },
         (err) => {
           console.warn('[LIMS Real-time Subscription] Error:', err);
-          emitMerged();
           if (onError) onError(err);
         }
       );
       return () => {
         unsubscribe();
-        if (typeof window !== 'undefined') {
-          window.removeEventListener('nanolabs_booking_updated', handleLocalEvent);
-        }
       };
     } catch (err) {
       console.warn('[LIMS Real-time Subscription Init] Error:', err);
       this.fetchAllBookings(labId).then(onUpdate).catch(() => onUpdate([]));
-      return () => {
-        if (typeof window !== 'undefined') {
-          window.removeEventListener('nanolabs_booking_updated', handleLocalEvent);
-        }
-      };
+      return () => {};
     }
   },
 
@@ -3216,25 +3149,9 @@ export const limsService = {
    */
   syncLocalBookingUpdate(bookingId: string, patch: Partial<PatientBooking>) {
     try {
-      const raw = localStorage.getItem('nanolabs_bookings_ledger');
-      const ledger: PatientBooking[] = raw ? JSON.parse(raw) : [];
-      const idx = ledger.findIndex(b => b.id === bookingId || b.bookingCode === bookingId);
-      if (idx >= 0) {
-        ledger[idx] = { ...ledger[idx], ...patch, updatedAt: new Date().toISOString() };
-      } else {
-        ledger.unshift({
-          id: bookingId,
-          bookingCode: bookingId.startsWith('BK-') ? bookingId : `BK-${bookingId.slice(-6).toUpperCase()}`,
-          ...patch,
-          updatedAt: new Date().toISOString()
-        } as any);
-      }
-      localStorage.setItem('nanolabs_bookings_ledger', JSON.stringify(ledger.slice(0, 150)));
-
-      // Broadcast real-time event for Patient and Staff views
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('nanolabs_booking_updated', { 
-          detail: { bookingId, patch } 
+        window.dispatchEvent(new CustomEvent('nanolabs_booking_updated', {
+          detail: { bookingId, patch }
         }));
       }
     } catch {}
@@ -3710,6 +3627,7 @@ export const limsService = {
       id: d.id,
       doctorId: d.id,
       name: d.name,
+      labId: labId,
       specialty: d.specialty,
       licenseNumber: d.licenseNumber,
       hospital: d.hospital,
@@ -4093,7 +4011,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return { ...existingData,  id: d.id,};
+            return {...existingData ,  id: d.id, };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -4515,7 +4433,7 @@ export const limsService = {
     try {
       await addDoc(collection(db, 'doctor_shared_results'), cleanFirestoreData(shareRecord));
       return { success: true, shareId, expiresAt };
-    } catch (e) { 
+    } catch (e) {
       console.warn('Error saving doctor shared result in Firestore:', e);
       return { success: true, shareId, expiresAt };
     }

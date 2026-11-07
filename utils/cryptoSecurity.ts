@@ -13,9 +13,11 @@
 const E2EE_PREFIX = '__E2EE__:v1:aes-256-gcm:';
 const DEFAULT_FACILITY_SALT = 'nanoLabs-ZeroKnowledge-Security-Salt-2026';
 
-// Helper: Convert ArrayBuffer to Hex string
-function bufferToHex(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+// Helper: Convert ArrayBuffer or Uint8Array to Hex string
+function bufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+  const bytes = buffer instanceof Uint8Array 
+    ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+    : new Uint8Array(buffer);
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
@@ -23,9 +25,10 @@ function bufferToHex(buffer: ArrayBuffer): string {
 
 // Helper: Convert Hex string to Uint8Array
 function hexToBuffer(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
+  const clean = (hex || '').trim();
+  const bytes = new Uint8Array(Math.floor(clean.length / 2));
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16) || 0;
   }
   return bytes;
 }
@@ -96,7 +99,7 @@ export const cryptoSecurity = {
         encodedText
       );
 
-      const ivHex = bufferToHex(iv.buffer);
+      const ivHex = bufferToHex(iv);
       const ciphertextHex = bufferToHex(encryptedBuffer);
 
       return `${E2EE_PREFIX}${ivHex}:${ciphertextHex}`;
