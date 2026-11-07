@@ -4,7 +4,7 @@ import { UserRole } from '../../types';
 import PatientApp from '../../screens/Patient/PatientApp';
 import DoctorApp from '../../screens/doctor/DoctorApp';
 import LabApp from '../../screens/Lab/LabApp';
-import SuperAdminApp from '../../screens/SuperAdmin/SuperAdminApp';
+import SuperAdminApp from '../../screens/superAdmin/SuperAdminApp';
 import { Shield, ChevronDown, Check, UserCheck, RefreshCw } from 'lucide-react';
 
 interface RoleRouterProps {
