@@ -700,7 +700,8 @@ export const authService = {
   }
 },
 
-async registerPatient(labId: string, patientData: any) {
+
+async registerPatient(labId: string, patientData: any, ) {
   await ensureFirebaseAuth();
   const now = new Date().toISOString();
   const aliasClean = String(patientData.alias || patientData.nickname || patientData.name || '')
@@ -719,8 +720,7 @@ async registerPatient(labId: string, patientData: any) {
       resolvedLabName = labRec.id; // Or labRec.name, depending on your business logic
     }
   }
-}
-,
+},
 
   /**
    * Dedicated Patient Portal Authentication (100% Firestore — Zero Mock / Zero LocalStorage Leaks)
