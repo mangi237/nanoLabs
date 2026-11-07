@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LabLayout, LabNavTab } from '../../components/layouts/LabLayout';
+import { LabLayout, LabNavTab } from '../../components/Layout/LabLayout';
 import { ReceptionIntakeScreen } from './ReceptionIntakeScreen';
 import { BatchWorklistScreen } from './BatchWorklistScreen';
 import { CashierScreen } from './CashierScreen';
@@ -29,7 +29,7 @@ export const LabApp: React.FC = () => {
   const renderContent = () => {
     switch (currentTab) {
       case 'reception':
-        return <ReceptionIntakeScreen />;
+        return  <ReceptionIntakeScreen />;
       case 'worklist':
         return <BatchWorklistScreen />;
       case 'cashier':
