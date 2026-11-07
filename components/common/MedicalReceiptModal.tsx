@@ -902,7 +902,8 @@ import {
   Sparkles,
   Layers,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import { PatientBooking } from '../../services/limsService';
 import { formatDOBDisplay, CAMEROON_INSURANCE_PROVIDERS, CameroonInsuranceCompany, PRELEVEMENT_ACT_CODES } from '../../data/cameroonInsurances';
@@ -1296,8 +1297,81 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
     ? new Date(booking.paidAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  const handleOpenInNewTab = () => {
+    const receiptEl = document.getElementById('medical-receipt-sheet');
+    if (!receiptEl) {
+      window.print();
+      return;
+    }
+    const newWin = window.open('', '_blank');
+    if (!newWin) {
+      window.print();
+      return;
+    }
+    const cleanContent = receiptEl.innerHTML;
+    newWin.document.write(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reçu Médical & Facture - ${booking.bookingCode || 'nanoLabs'}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @page { size: A4; margin: 10mm 12mm; }
+    body { 
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      background-color: #f1f5f9; 
+      margin: 0; 
+      padding: 24px; 
+      color: #020617; 
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    @media print {
+      body { background-color: #ffffff !important; padding: 0 !important; }
+      .no-print { display: none !important; }
+      #printable-receipt-card { 
+        box-shadow: none !important; 
+        border: none !important; 
+        padding: 0 !important; 
+        margin: 0 !important;
+        width: 100% !important; 
+        max-width: 100% !important; 
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Floating Action Toolbar (Hidden during print) -->
+  <div class="no-print" style="max-width: 820px; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 12px 24px; border-radius: 16px; color: white; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2);">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 9999px; background: #14b8a6;"></span>
+      <div>
+        <div style="font-weight: 800; font-size: 14px; letter-spacing: -0.01em;">Facture & Reçu Médical Officiel</div>
+        <div style="font-size: 11px; color: #94a3b8;">${labName} • Dossier: ${booking.bookingCode || ''}</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button onclick="window.print()" style="background: #0d9488; hover:background: #0f766e; color: white; border: none; padding: 9px 20px; border-radius: 10px; font-weight: 800; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(13,148,136,0.35);">
+        🖨️ Imprimer la Facture (A4)
+      </button>
+      <button onclick="window.close()" style="background: #334155; color: #cbd5e1; border: none; padding: 9px 16px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer;">
+        Fermer
+      </button>
+    </div>
+  </div>
+
+  <!-- A4 Printable Card with Centered Watermark -->
+  <div id="printable-receipt-card" style="max-width: 820px; margin: 0 auto; background: white; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 8px 30px rgba(0,0,0,0.06); padding: 36px; position: relative; overflow: hidden;">
+    ${cleanContent}
+  </div>
+</body>
+</html>`);
+    newWin.document.close();
+  };
+
   const handlePrint = () => {
-    window.print();
+    handleOpenInNewTab();
   };
 
   return (
@@ -1377,6 +1451,16 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
             )}
 
             <button
+              type="button"
+              onClick={handleOpenInNewTab}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 hover:text-teal-200 text-xs font-extrabold rounded-xl border border-teal-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Ouvrir la facture en pleine page isolée dans un nouvel onglet avec filigrane"
+            >
+              <ExternalLink className="w-4 h-4 text-teal-400" />
+              <span>Ouvrir dans un nouvel onglet</span>
+            </button>
+
+            <button
               onClick={handlePrint}
               className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
             >
@@ -1397,9 +1481,25 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
           
           <div 
             id="medical-receipt-sheet"
-            className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs"
+            className="bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden max-w-3xl mx-auto font-sans text-slate-950 p-6 sm:p-8 space-y-4 print:shadow-none print:border-none print:max-w-none print:p-0 text-xs relative"
           >
-            
+            {/* Laboratory Logo / Official Watermark Effect */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.04] select-none overflow-hidden z-0">
+              {(labInfo?.logoUrl || (booking as any).labLogoUrl) ? (
+                <img 
+                  src={labInfo?.logoUrl || (booking as any).labLogoUrl} 
+                  alt="" 
+                  className="w-[420px] h-[420px] object-contain -rotate-12 filter grayscale" 
+                />
+              ) : (
+                <div className="w-[380px] h-[380px] flex flex-col items-center justify-center font-black text-5xl text-slate-900 -rotate-12 uppercase tracking-widest text-center border-8 border-dashed border-slate-900 rounded-full p-8">
+                  <span>{labName.slice(0, 18)}</span>
+                  <span className="text-lg font-bold mt-2">SCEAU OFFICIEL</span>
+                </div>
+              )}
+            </div>
+
+            <div className="relative z-10 space-y-4">
             {/* Custom Uploaded Header Image if provided */}
             {tplConfig.headerImageUrl && (
               <div className="border-b-2 border-slate-900 pb-2">
@@ -1752,7 +1852,7 @@ export const MedicalReceiptModal: React.FC<MedicalReceiptModalProps> = ({
 
               </div>
             )}
-
+            </div>
           </div>
         </div>
 

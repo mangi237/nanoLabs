@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   UserPlus, 
@@ -10,7 +11,10 @@ import {
   Plus, 
   Trash2,
   Calendar,
-  Activity
+  Activity,
+  CreditCard,
+  Droplet,
+  IdCard
 } from 'lucide-react';
 import { FamilyMemberProfile, FamilyRelationship } from '../../types';
 import { RELATIONSHIP_LABELS } from '../../services/familyProfileServices';
@@ -185,8 +189,8 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex min-h-full items-start sm:items-center justify-center p-2.5 sm:p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] overflow-y-auto bg-slate-950/85 backdrop-blur-sm flex min-h-full items-start sm:items-center justify-center p-2.5 sm:p-4">
       <div className="my-auto bg-white rounded-3xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header - Fixed & Pinned */}
@@ -197,10 +201,10 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-[#0D3B38]">
-                {initialData ? 'Edit Family Account Profile' : 'Add Family Member Account'}
+                {initialData ? 'Modifier le Dossier Familial' : 'Ajouter un Bénéficiaire / Proche'}
               </h2>
               <p className="text-[11px] sm:text-xs text-[#6B7F7D]">
-                Independent medical record for your child, elderly parent, or spouse
+                Dossier médical autonome pour votre enfant, aïeul, parent ou conjoint
               </p>
             </div>
           </div>
@@ -222,8 +226,71 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
               </div>
             )}
 
-          {/* Photo Uploader */}
-          <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            {/* LIVE MOCKUP OVERLAY PREVIEW CARD */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0F766E] to-[#0B1F1D] text-white shadow-lg border border-teal-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <IdCard className="w-4 h-4 text-teal-300" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-teal-300">
+                    Aperçu Carte Santé Familiale
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-teal-100 border border-white/10">
+                  ID: FAM-2026-DP
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                  {photoUrl ? (
+                    <img src={photoUrl} alt="Photo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Users className="w-6 h-6 text-white" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-black text-sm text-white truncate">
+                      {fullName.trim() || 'Nom du Bénéficiaire'}
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-400 text-teal-950 uppercase">
+                      {RELATIONSHIP_LABELS[relationship] || relationship}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-teal-200 mt-0.5 flex-wrap">
+                    <span>{age ? `${age} ans` : 'Âge à préciser'}</span>
+                    <span>&bull;</span>
+                    <span>{gender === 'female' ? 'Féminin' : 'Masculin'}</span>
+                    <span>&bull;</span>
+                    <span className="font-bold text-white flex items-center gap-0.5">
+                      <Droplet className="w-3 h-3 text-rose-300" />
+                      {bloodGroup}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-white/15 flex items-center justify-between text-[11px] text-teal-100 flex-wrap gap-2">
+                <span className="flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-teal-300" />
+                  <span>
+                    {insuranceMode === 'ayant_droit'
+                      ? `Ayant-Droit (${primaryUserInsurance})`
+                      : insuranceMode === 'own_policy'
+                        ? `Assurance Propre (${ownProvider})`
+                        : 'Paiement Direct au Guichet'}
+                  </span>
+                </span>
+                {allergies.length > 0 && (
+                  <span className="text-[10px] font-bold text-amber-300">
+                    {allergies.length} allergie(s)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Photo Uploader */}
+            <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
             <div className="relative w-14 h-14 rounded-2xl bg-teal-100 border-2 border-teal-300 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
               {photoUrl ? (
                 <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
@@ -651,4 +718,6 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };

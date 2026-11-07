@@ -231,7 +231,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [showResultTemplateModal, setShowResultTemplateModal] = useState(false);
 
   const handleApplyCustomTemplate = (template: CustomResultTemplate) => {
-    const newParams = template.parameters.map((p, idx) => ({
+    const newParams = template.parameters.map((p: any, idx : any ) => ({
       id: p.id || `param-${Date.now()}-${idx}`,
       name: p.name,
       unit: p.unit,
@@ -1708,28 +1708,25 @@ CLINICAL REAGENTS USED:
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleAttemptPrint()}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    isCurrentBookingBiologistConfirmed
-                      ? 'bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 border border-emerald-500/40'
-                      : 'bg-slate-800/80 hover:bg-slate-800 text-amber-300 border border-amber-500/30'
-                  }`}
-                  title={isCurrentBookingBiologistConfirmed ? "Print official validated report" : "Print locked: Biologist validation required"}
-                >
-                  {isCurrentBookingBiologistConfirmed ? (
-                    <>
-                      <Printer className="w-4 h-4 text-emerald-400" />
-                      <span>Print PDF (Confirmed)</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4 text-amber-400" />
-                      <span>Print (Wait for Biologist)</span>
-                    </>
-                  )}
-                </button>
+                {isCurrentBookingBiologistConfirmed ? (
+                  <div 
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5"
+                    title="Rapport officiel validé et signé par le Biologiste Médical"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Validé par le Biologiste (Impression Desk Biologiste)</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowBiologistWaitModal(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-purple-900/30 transition-all cursor-pointer"
+                    title="Signer avec votre code technicien et transmettre au Biologiste pour validation finale"
+                  >
+                    <Send className="w-4 h-4 text-purple-200" />
+                    <span>Signer & Transmettre au Biologiste</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveBooking(null)}
                   className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"

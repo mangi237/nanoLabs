@@ -43,21 +43,31 @@ export const LAB_PACKAGES: Record<LabPackageId, LabPackageDefinition> = {
     priceLabel: '15,000 FCFA / month',
     maxTestsPerMonth: 500,
     maxStaff: 5,
-    detail: 'Up to 500 tests/mo • Max 5 staff accounts',
-    summary: 'Festive December onboarding package for clinics & diagnostic centers getting started digitally.',
-    includedFeatures: ['core_lims', 'online_invoicing', 'mobile_phlebotomist', 'templates'],
+    detail: 'Up to 500 tests/mo • Max 5 staff • Core Inventory (15 reagents)',
+    summary: 'Festive December onboarding package for clinics & diagnostic centers with complete essential workflows.',
+    includedFeatures: [
+      'core_lims',
+      'online_invoicing',
+      'mobile_phlebotomist',
+      'templates',
+      'insurance',
+      'inventory',
+      'doctors',
+      'analytics',
+      'reports'
+    ],
     includedBullets: [
       'Up to 500 diagnostic tests / month',
       'Up to 5 staff accounts (Reception, Cashier, Lab Tech, Biologist)',
+      'Reagent & Consumables Stock Manager (Starter volume: up to 15 reagents)',
+      'Cameroon Insurance & COTE Split-Billing Engine',
+      'Referring Doctor Prescriber Network & Commission Tracking',
       'Online Patient Test Requests & Dynamic Cashier Invoicing',
-      'Signed Official Laboratory Result PDFs',
+      'Signed Official Laboratory Result PDFs with Biologist Watermark',
       'Optional Mobile Phlebotomist Home Sample Pickup (if selected)',
     ],
     excludedBullets: [
-      'Insurance & Corporate Split Billing (Requires Clinic 25k+)',
-      'Inventory & Reagent Stock Manager (Requires District 45k+)',
-      'Referring Doctor Commission Network (Requires District 45k+)',
-      'Executive Analytics & Audit Reports (Requires Regional 75k)',
+      'Advanced Automated AI Diagnostic Reporting (Requires Regional)',
     ],
   },
   clinic: {
@@ -68,32 +78,8 @@ export const LAB_PACKAGES: Record<LabPackageId, LabPackageDefinition> = {
     priceLabel: '25,000 FCFA / month',
     maxTestsPerMonth: 1000,
     maxStaff: 8,
-    detail: 'Up to 1,000 tests/mo • Max 8 staff accounts',
-    summary: 'Complete outpatient laboratory workflow with Cameroon Insurance COTE & split-billing support.',
-    includedFeatures: ['core_lims', 'online_invoicing', 'mobile_phlebotomist', 'templates', 'insurance'],
-    includedBullets: [
-      'Up to 1,000 diagnostic tests / month',
-      'Up to 8 staff accounts',
-      'Cameroon Insurance & COTE Split-Billing Engine',
-      'Custom Header & Footer Report Templates + Signed PDFs',
-      'Optional Mobile Phlebotomist Home Sample Pickup (if selected)',
-    ],
-    excludedBullets: [
-      'Inventory & Reagent Stock Manager (Requires District 45k+)',
-      'Referring Doctor Commission Network (Requires District 45k+)',
-      'Executive Analytics & Audit Reports (Requires Regional 75k)',
-    ],
-  },
-  district: {
-    id: 'district',
-    legacyTier: 'medium',
-    name: 'District Hospital',
-    priceMonthlyXaf: 45000,
-    priceLabel: '45,000 FCFA / month',
-    maxTestsPerMonth: 1400,
-    maxStaff: 20,
-    detail: 'Up to 1,400 tests/mo • Max 20 staff accounts',
-    summary: 'Full hospital diagnostics with reagent inventory control and partner physician referral tracking.',
+    detail: 'Up to 1,000 tests/mo • Max 8 staff • Standard Inventory (35 reagents)',
+    summary: 'Complete outpatient laboratory workflow with inventory control and insurance split-billing.',
     includedFeatures: [
       'core_lims',
       'online_invoicing',
@@ -102,30 +88,66 @@ export const LAB_PACKAGES: Record<LabPackageId, LabPackageDefinition> = {
       'insurance',
       'inventory',
       'doctors',
+      'analytics',
+      'reports'
     ],
     includedBullets: [
-      'Up to 1,400 diagnostic tests / month',
-      'Up to 20 staff accounts',
-      'Reagent & Consumables Inventory Manager',
-      'Referring Doctor Commission & Partner Network',
-      'Insurance Split Billing + Optional Mobile Phlebotomist',
+      'Up to 1,000 diagnostic tests / month',
+      'Up to 8 staff accounts across all desks',
+      'Reagent Inventory Manager (Standard volume: up to 35 reagents)',
+      'Cameroon Insurance & COTE Split-Billing Engine',
+      'Custom Header & Footer Report Templates + Signed PDFs with Logo Watermark',
+      'Referring Doctor Network & Prescriber Mobile Money Affiliates',
+      'Optional Mobile Phlebotomist Home Sample Pickup (if selected)',
     ],
     excludedBullets: [
-      'Unlimited Monthly Tests & Staff (Requires Regional 75k)',
-      'Executive Analytics & Financial Audit Suite (Requires Regional 75k)',
+      'Advanced Automated AI Diagnostic Reporting (Requires Regional)',
+    ],
+  },
+  district: {
+    id: 'district',
+    legacyTier: 'medium',
+    name: 'District Hospital',
+    priceMonthlyXaf: 45000,
+    priceLabel: '45,000 FCFA / month',
+    maxTestsPerMonth: 2000,
+    maxStaff: 20,
+    detail: 'Up to 2,000 tests/mo • Max 20 staff • High-Volume Inventory (100 reagents)',
+    summary: 'Full hospital diagnostics with high-volume reagent inventory control and partner physician referral tracking.',
+    includedFeatures: [
+      'core_lims',
+      'online_invoicing',
+      'mobile_phlebotomist',
+      'templates',
+      'insurance',
+      'inventory',
+      'doctors',
+      'analytics',
+      'reports',
+    ],
+    includedBullets: [
+      'Up to 2,000 diagnostic tests / month',
+      'Up to 20 staff accounts',
+      'High-Volume Reagent & Consumables Inventory Manager (Up to 100 reagents)',
+      'Referring Doctor Commission & Partner Network',
+      'Insurance Split Billing + Optional Mobile Phlebotomist',
+      'Full Financial Audit & Departmental Worksheets',
+    ],
+    excludedBullets: [
+      'Unlimited Monthly Capacity & Advanced AI Diagnostics (Requires Regional)',
     ],
   },
   regional: {
     id: 'regional',
     legacyTier: 'large',
     name: 'Regional Reference',
-    badge: 'All Features Unlocked',
+    badge: 'All Features + AI Reporting Unlocked',
     priceMonthlyXaf: 75000,
     priceLabel: '75,000 FCFA / month',
     maxTestsPerMonth: 999999,
     maxStaff: 999,
-    detail: 'Unlimited tests/mo • Unlimited staff accounts',
-    summary: 'Enterprise reference laboratory suite with unlimited capacity, full analytics, and audit intelligence.',
+    detail: 'Unlimited tests/mo • Unlimited staff • Unlimited Inventory & AI Reporting',
+    summary: 'Enterprise reference laboratory suite with unlimited capacity, full analytics, and automated AI interpretations.',
     includedFeatures: [
       'core_lims',
       'online_invoicing',
@@ -139,9 +161,10 @@ export const LAB_PACKAGES: Record<LabPackageId, LabPackageDefinition> = {
     ],
     includedBullets: [
       'Unlimited diagnostic tests / month',
-      'Unlimited staff accounts across all desks',
+      'Unlimited staff accounts across all clinical desks',
+      'Unlimited Reagent Inventory Tracking with Automated Expiration Alerts',
       'Executive Financial Analytics & Tamper-Proof Audit Logs',
-      'Inventory Automation + Referring Doctors + Insurance COTE',
+      'Advanced AI Clinical Biomarker Interpretation & Report Generation',
       'Optional Mobile Phlebotomist GPS Dispatch & Live Tracking',
     ],
     excludedBullets: [],
@@ -224,13 +247,23 @@ export function isLabMobilePhlebotomyEnabled(lab: any): boolean {
 
 /**
  * Checks whether a lab's active subscription package unlocks a specific feature/module.
+ * NOTE: All operational modules (inventory, cashier, reception, insurance, doctors) are available on all tiers,
+ * with volume/staff scaling, keeping full functionality accessible to all paying labs.
  */
 export function canLabUseFeature(lab: any, feature: LabFeatureKey): boolean {
   if (feature === 'mobile_phlebotomist') {
     return isLabMobilePhlebotomyEnabled(lab);
   }
-  if (lab?.pricingModel === 'pay_per_test') {
-    // Commission per-test model unlocks operational modules
+  if (
+    feature === 'core_lims' ||
+    feature === 'online_invoicing' ||
+    feature === 'templates' ||
+    feature === 'insurance' ||
+    feature === 'inventory' ||
+    feature === 'doctors' ||
+    feature === 'analytics' ||
+    feature === 'reports'
+  ) {
     return true;
   }
   const pkg = getLabPackageConfig(lab);

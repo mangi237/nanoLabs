@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/authContext';
 import { db, doc, updateDoc, setDoc } from '../../services/firebase';
 import { 
@@ -235,8 +236,8 @@ export const FamilyProfileSwitcherModal: React.FC<FamilyProfileSwitcherModalProp
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex min-h-full items-start sm:items-center justify-center p-2.5 sm:p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] overflow-y-auto bg-slate-950/85 backdrop-blur-sm flex min-h-full items-start sm:items-center justify-center p-2.5 sm:p-4">
       <div className="my-auto bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl relative border border-slate-200 max-h-[92dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
@@ -496,6 +497,8 @@ export const FamilyProfileSwitcherModal: React.FC<FamilyProfileSwitcherModalProp
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };
 
 export default FamilyProfileSwitcherModal;

@@ -251,7 +251,7 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
     }));
 
     const combined = [...allTestsFromBookings];
-    directLabTests.forEach((dt : any) => {
+    directLabTests.forEach(dt => {
       const alreadyIn = combined.some(ct => 
         (ct.id && ct.id === dt.id) || 
         (ct.bookingId && ct.bookingId === dt.bookingId && ct.testName?.toLowerCase() === dt.testName?.toLowerCase())
@@ -779,124 +779,145 @@ export const ReceptionistView: React.FC<ReceptionistViewProps> = ({
 
       {/* 1. RECEPTIONIST INCOMING REVIEW & ACCEPTANCE QUEUE */}
       {unvalidatedBookings.length > 0 && (
-        <div className="bg-rose-500/10 rounded-2xl border-2 border-rose-300 p-5 space-y-4 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
-              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                Incoming Patient Bookings Requiring Receptionist Review ({unvalidatedBookings.length})
-              </h3>
+        <div className="bg-white rounded-2xl border border-rose-200 shadow-sm overflow-hidden">
+          {/* Executive Section Header */}
+          <div className="bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent px-5 py-3.5 border-b border-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+              </span>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                  File d'Attente des Admissions / Incoming Queue
+                  <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white shadow-xs">
+                    {unvalidatedBookings.length}
+                  </span>
+                </h3>
+              </div>
             </div>
-            <span className="text-xs font-bold text-rose-700 bg-rose-100/80 px-3 py-1 rounded-full border border-rose-200">
-              Must be accepted here before Cashier can generate invoice
+            <span className="text-xs font-bold text-rose-800 bg-rose-100/80 px-3 py-1 rounded-lg border border-rose-200/80 self-start sm:self-auto">
+              Validation requise avant émission de facture par la Caisse
             </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          {/* Compact Horizontal Queue List */}
+          <div className="divide-y divide-slate-100">
             {unvalidatedBookings.map(b => {
               const isHome = b.homeCollection || b.pickupLocation;
               const mapUrl = b.userCoords 
                 ? `https://www.google.com/maps/search/?api=1&query=${b.userCoords.lat},${b.userCoords.lng}`
                 : b.pickupLocation ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.pickupLocation + ', Cameroon')}` : null;
+              const initials = (b.patientName || 'Patient').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
 
               return (
-                <div key={b.id} className="p-4 bg-white rounded-2xl border border-rose-200 shadow-sm hover:border-rose-300 transition-all space-y-3">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div 
+                  key={b.id} 
+                  className="p-4 hover:bg-slate-50/80 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                >
+                  {/* Left: Patient Demographic Profile */}
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-[260px]">
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                      {initials}
+                    </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-black text-sm text-slate-900">{b.patientName}</h4>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          PID: {b.patientPid || b.patientId}
+                        <h4 className="font-extrabold text-sm text-slate-950 notranslate" translate="no">
+                          {b.patientName}
+                        </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          {b.patientPid || b.patientId}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-                          {b.patientGender || 'Adult'} • {b.patientAge || '30'} yrs
-                        </span>
-                        {isHome ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
-                            <Home className="w-3 h-3" /> Home Sample Collection
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                            <Building2 className="w-3 h-3" /> Walk-in to Laboratory
-                          </span>
-                        )}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+                        <span>{b.patientGender || 'Adulte'} • {b.patientAge || '30'} ans</span>
                         {b.patientPhone && (
-                          <span className="flex items-center gap-1 font-mono font-medium">
-                            <Phone className="w-3 h-3 text-slate-400" /> {b.patientPhone}
-                          </span>
+                          <>
+                            <span>•</span>
+                            <span className="font-mono text-slate-700 flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" /> {b.patientPhone}
+                            </span>
+                          </>
                         )}
-                        <span className="font-mono text-teal-700 font-bold">Booking: {b.bookingCode}</span>
-                        {b.doctorName && (
-                          <span className="text-slate-600 flex items-center gap-1">
-                            <Stethoscope className="w-3 h-3 text-teal-600" /> Ref: {b.doctorName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400 font-semibold uppercase">Payable Total</div>
-                      <div className="text-lg font-black text-slate-900 font-mono">
-                        {(b.totalAmount || 0).toLocaleString()} XAF
+                        <span>•</span>
+                        <span className="font-mono text-teal-700 font-bold">{b.bookingCode}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Location & Home Sample Details */}
-                  {isHome && (
-                    <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold text-purple-950">Patient Address / GPS Location: </span>
-                          <span className="text-purple-900 font-medium">{b.pickupLocation || 'Douala Central / Akwa'}</span>
-                          {b.landmark && (
-                            <span className="block text-[11px] text-purple-700 mt-0.5">
-                              Landmark: <span className="font-bold">{b.landmark}</span>
+                  {/* Middle: Service Mode & Tests Summary */}
+                  <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
+                    <div className="shrink-0">
+                      {isHome ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1">
+                            <Home className="w-3.5 h-3.5" /> Domicile
+                          </span>
+                          {b.pickupLocation && (
+                            <span className="text-slate-600 truncate max-w-[180px]" title={b.pickupLocation}>
+                              📍 {b.pickupLocation}
                             </span>
                           )}
-                          {b.userCoords && (
-                            <span className="block text-[10px] font-mono text-purple-600 mt-0.5">
-                              GPS: {b.userCoords.lat.toFixed(5)}, {b.userCoords.lng.toFixed(5)}
-                            </span>
+                          {mapUrl && (
+                            <a
+                              href={mapUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-600 hover:text-purple-800 font-bold inline-flex items-center gap-0.5"
+                              title="Ouvrir coordonnées GPS"
+                            >
+                              <Navigation className="w-3 h-3" /> GPS
+                            </a>
                           )}
                         </div>
-                      </div>
-                      {mapUrl && (
-                        <a
-                          href={mapUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shrink-0 self-start sm:self-center shadow-xs"
-                        >
-                          <Navigation className="w-3.5 h-3.5" /> View Map Coordinates <ExternalLink className="w-3 h-3" />
-                        </a>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5" /> En Laboratoire
+                        </span>
                       )}
                     </div>
-                  )}
 
-                  {/* Tests Requested */}
-                  <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-slate-600">Requested Tests:</span>
-                      {b.tests?.map((t, idx) => (
-                        <span key={idx} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
-                          {t.testName} ({(t.price || 0).toLocaleString()} XAF)
+                    <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
+                      <span className="font-semibold text-slate-500 shrink-0">Analyses:</span>
+                      {b.tests?.slice(0, 3).map((t, idx) => (
+                        <span 
+                          key={idx} 
+                          className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200/80 truncate max-w-[160px]"
+                          title={t.testName}
+                        >
+                          {t.testName}
                         </span>
                       ))}
+                      {(b.tests?.length || 0) > 3 && (
+                        <span className="text-[11px] font-bold text-slate-500">
+                          +{b.tests.length - 3} autre(s)
+                        </span>
+                      )}
+                      {b.doctorName && (
+                        <span className="text-[11px] text-teal-700 font-semibold flex items-center gap-1 ml-1">
+                          <Stethoscope className="w-3 h-3" /> Dr. {b.doctorName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Payable Total & PIN Acceptance Action */}
+                  <div className="flex items-center justify-between lg:justify-end gap-4 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                    <div className="text-left lg:text-right">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Montant Total</div>
+                      <div className="text-base font-black text-slate-900 font-mono">
+                        {(b.totalAmount || 0).toLocaleString()} <span className="text-xs font-semibold text-slate-500">XAF</span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 ml-auto">
-                      <button
-                        onClick={() => handleOpenConfirmBookingModal(b)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
-                      >
-                        <CheckCheck className="w-4 h-4" />
-                        Confirm Booking (Staff PIN)
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenConfirmBookingModal(b)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer shrink-0"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      <span>Valider l'Admission (PIN)</span>
+                    </button>
                   </div>
                 </div>
               );

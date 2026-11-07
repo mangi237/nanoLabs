@@ -671,6 +671,17 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                 </div>
               </div>
 
+              {/* End-to-End Encryption (E2EE) Medical Privacy Seal */}
+              <div className="p-3 bg-slate-900 text-slate-100 rounded-2xl text-[11px] space-y-1 border border-slate-800">
+                <div className="flex items-center gap-1.5 font-extrabold text-teal-400">
+                  <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
+                  <span>Chiffrement de Bout-en-Bout Garanti (E2EE AES-256)</span>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-relaxed">
+                  Conformément aux normes de confidentialité médicale, ce rapport de diagnostic est signé et scellé de bout-en-bout. nanoLabs ne stocke aucun compte-rendu médical en clair : seuls le patient détenteur et le laboratoire peuvent consulter le document officiel.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-700">
                   Biologist Security Access PIN / Passcode *
