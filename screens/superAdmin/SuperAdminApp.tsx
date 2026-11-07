@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { SuperAdminLayout, SuperAdminNavTab } from '../../components/layouts/SuperAdminLayout';
-import { LabManagementScreen } from './LabManagementScreen';
-import { MonthlySettlementScreen } from './MonthlySettlementScreen';
-import { SystemAuditScreen } from './SystemAuditScreen';
-import { MasterCatalogScreen } from './MasterCatalogScreen';
+import { SuperAdminLayout, SuperAdminNavTab } from '../../components/Layout/SuperAdminLayout';
+import { LabManagementScreen } from '../../screens/superAdmin/LabManagementScreen';
+import { MonthlySettlementScreen } from '../../screens/superAdmin/MonthlySettlementScreen';
+import { SystemAuditScreen } from '../../screens/superAdmin/SystemAuditScreen';
+import { MasterCatalogScreen } from '../../screens/superAdmin/MasterCatalogScreen';
 import { UserManagementScreen } from './UserManagementScreen';
 import { useAuth } from '../../context/authContext';
 
