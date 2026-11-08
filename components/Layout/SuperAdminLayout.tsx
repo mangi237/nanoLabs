@@ -69,7 +69,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
                 {user?.name || user?.email || 'Super Administrator'}
               </p>
               <p className="text-[10px] text-teal-400 font-mono">
-                Root Clearance &bull; CEMAC
+                Platform administration
               </p>
             </div>
 

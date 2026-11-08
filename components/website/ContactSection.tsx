@@ -20,12 +20,8 @@ export const ContactSection: React.FC = () => {
       setError('Please fill in all required fields (Name, Email, Message).');
       return;
     }
-    setLoading(true);
-    setError('');
-    setTimeout(() => {
-      setLoading(false);
-      setSubmitted(true);
-    }, 900);
+    setError('Website message delivery is not configured. Your message has not been sent. Please use the email or telephone listed here.');
+    setLoading(false);
   };
 
   return (

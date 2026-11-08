@@ -1,0 +1,10 @@
+import React, { useEffect, useState } from 'react';
+import { apiJson } from '../../services/apiClient';
+import { useAuth } from '../../context/authContext';
+export function ProfilePage() {
+  const { refresh } = useAuth(); const [profile, setProfile] = useState<any>(null); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
+  const load = async () => { setError(''); try { setProfile((await apiJson('/api/portal/profile')).profile); } catch (err: any) { setError(err.message); } };
+  useEffect(() => { void load(); }, []);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setBusy(true); setNotice(''); setError(''); const data = new FormData(event.currentTarget); try { await apiJson('/api/portal/profile', { name: String(data.get('name')), city: String(data.get('city')) }, { method: 'PATCH' }); await refresh(); await load(); setNotice('Profile updated.'); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
+  return <section className="max-w-2xl space-y-5"><h1 className="text-2xl font-bold">My profile</h1>{error && <p role="alert" className="text-red-800">{error} <button onClick={load}>Retry</button></p>}{notice && <p role="status">{notice}</p>}{profile && <><dl className="bg-white rounded-xl border p-5 space-y-2">{[['Patient ID',profile.patientId],['Alias',profile.alias],['Email',profile.email],['Phone',profile.phone],['Date of birth',profile.dateOfBirth]].filter(([,value]) => value).map(([label,value]) => <div key={label}><dt className="text-sm text-slate-500">{label}</dt><dd className="break-all">{value}</dd></div>)}</dl><form onSubmit={submit} className="space-y-4"><label className="block">Full name<input name="name" required defaultValue={profile.name} className="block border rounded-xl p-3 w-full" /></label><label className="block">City<input name="city" defaultValue={profile.city ?? ''} className="block border rounded-xl p-3 w-full" /></label><button disabled={busy} className="bg-teal-800 text-white rounded-xl p-3">{busy ? 'Saving…' : 'Save profile'}</button></form></>}</section>;
+}

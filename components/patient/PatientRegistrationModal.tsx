@@ -14,7 +14,7 @@ export const PatientRegistrationModal: React.FC<Props> = ({ isOpen, onClose, onS
     if (!phone.isValid) return setError(phone.errorMessage ?? 'Enter a valid Cameroon phone number.');
     if (form.password !== form.confirm) return setError('Passwords do not match.');
     setSaving(true);
-    try { const { confirm, ...data } = form; const result = await authService.registerPatient('', { ...data, alias: data.alias.replace(/^@/, '').trim().toLowerCase(), phone: phone.formatted }); onSuccess?.(result.patient); onClose(); }
+    try { const { confirm, ...data } = form; const result = await authService.registerPatient('', { ...data, alias: data.alias.replace(/^@/, '').trim().toLowerCase(), phone: phone.formatted }); if (onSuccess) onSuccess(result.patient); else onClose(); }
     catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
   };

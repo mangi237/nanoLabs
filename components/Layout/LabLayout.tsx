@@ -26,7 +26,7 @@ export type LabNavTab =
   | 'release'
   | 'inventory'
   | 'stats'
-  | 'audit';
+  | 'audit' | 'catalog' | 'staff' | 'payments' | 'profile' | 'patients';
 
 interface LabLayoutProps {
   currentTab: LabNavTab;
@@ -46,10 +46,10 @@ export const LabLayout: React.FC<LabLayoutProps> = ({
 
   const allTabs = [
     { id: 'reception' as LabNavTab, label: 'Reception Intake', icon: Users, roles: ['receptionist', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
-    { id: 'worklist' as LabNavTab, label: 'Batch Worklist', icon: CheckSquare, roles: ['technician', 'lab_tech', 'biologist', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
+    { id: 'worklist' as LabNavTab, label: 'Batch Worklist', icon: CheckSquare, roles: ['labtech', 'biologist', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
     { id: 'cashier' as LabNavTab, label: 'Cashier Desk', icon: CreditCard, roles: ['cashier', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
-    { id: 'phlebotomy' as LabNavTab, label: 'Phlebotomy Dispatch', icon: Syringe, roles: ['phlebotomist', 'nurse', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
-    { id: 'bench' as LabNavTab, label: 'Analyzer Bench', icon: Cpu, roles: ['technician', 'lab_tech', 'analyzer', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
+    { id: 'phlebotomy' as LabNavTab, label: 'Phlebotomy Dispatch', icon: Syringe, roles: ['analyzer', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
+    { id: 'bench' as LabNavTab, label: 'Analyzer Bench', icon: Cpu, roles: ['labtech', 'analyzer', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
     { id: 'validation' as LabNavTab, label: 'Biologist Validation', icon: FileCheck2, roles: ['biologist', 'admin', 'lab_admin', 'superadmin', 'lab_staff'] },
     { id: 'inventory' as LabNavTab, label: 'Reagent Inventory', icon: Boxes, roles: ['inventory_manager', 'admin', 'lab_admin', 'superadmin'] },
     { id: 'stats' as LabNavTab, label: 'Analytics', icon: BarChart3, roles: ['admin', 'lab_admin', 'superadmin'] },
@@ -62,7 +62,7 @@ export const LabLayout: React.FC<LabLayoutProps> = ({
       userRole === 'admin' ||
       userRole === 'superadmin' ||
       userRole === 'lab_admin' ||
-      tab.roles.includes(userRole)
+      (user?.roles ?? [userRole]).some((role: string) => tab.roles.includes(role))
   );
 
   return (
@@ -80,12 +80,10 @@ export const LabLayout: React.FC<LabLayoutProps> = ({
                 <span className="font-black text-sm text-[#0D3B38] tracking-tight">
                   {lab?.name || 'Laboratoire Partenaire Certifié'}
                 </span>
-                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-[#0F766E] border border-teal-200">
-                  ISO 15189 / MINSANTE
-                </span>
+
               </div>
               <p className="text-[11px] text-[#6B7F7D] font-medium truncate max-w-xs sm:max-w-md">
-                nanoLabs LIMS Core &bull; Akwa / Bonanjo Node &bull; TVA Exempt
+                nanoLabs laboratory workspace
               </p>
             </div>
           </div>

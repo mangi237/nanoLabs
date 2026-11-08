@@ -87,6 +87,8 @@ export async function scanPrescriptionDocument(
     }
   }
 
+  if (errorMessage) throw new Error(errorMessage);
+  if (!extractedText.trim() && !detectedTests.length) throw new Error('No prescription text could be read. Select tests manually or upload a clearer image.');
   const combinedInput = [
     ...detectedTests,
     extractedText,

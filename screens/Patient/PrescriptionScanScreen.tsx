@@ -29,6 +29,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   onProceedToBooking,
   onBack
 }) => {
+  const [scanError, setScanError] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scannedImage, setScannedImage] = useState<string | null>(null);
   const [matchedTests, setMatchedTests] = useState<MatchedPrescriptionTest[]>([]);
@@ -41,6 +42,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
   const [scanCompletedOnce, setScanCompletedOnce] = useState(false);
 
   const handleRunScan = async (sourceTextOrFile: string | File) => {
+    setScanError('');
     setIsScanning(true);
     setScanCompletedOnce(false);
     try {
@@ -60,8 +62,8 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
       }
       setScanCompletedOnce(true);
     } catch (e) {
-      console.error(e);
-      setScanCompletedOnce(true);
+      setScanError(e instanceof Error ? e.message : 'The prescription could not be scanned.');
+      setScanCompletedOnce(false);
     } finally {
       setIsScanning(false);
     }
@@ -117,6 +119,7 @@ export const PrescriptionScanScreen: React.FC<PrescriptionScanScreenProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+      {scanError && <p role="alert" className="p-4 rounded-xl bg-red-50 text-red-800">{scanError}</p>}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

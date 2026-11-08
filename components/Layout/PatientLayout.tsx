@@ -13,10 +13,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { TestBatch } from '../../types';
-import { FamilyProfileSwitcher } from '../patient/FamilyProfileSwitcher';
-import { useFamilyProfile } from '../../context/familyProfileContext';
 
-export type PatientNavTab = 'home' | 'tests' | 'tracking' | 'doctors' | 'profile' | 'book' | 'results' | 'messages' | 'connect' | 'booklet' | 'chat';
+
+
+export type PatientNavTab = 'home' | 'tests' | 'tracking' | 'doctors' | 'profile' | 'book' | 'results' | 'messages' | 'connect' | 'booklet' | 'chat' | 'insurance' | 'family' | 'transfer' | 'scan' | 'ai' | 'labs' | 'appointments' | 'notifications';
 
 interface PatientLayoutProps {
   currentTab: PatientNavTab;
@@ -40,7 +40,8 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({
   hideBottomNav = false
 }) => {
   const { user } = useAuth();
-  const { activeProfile, isDependentActive } = useFamilyProfile();
+  const activeProfile = { fullName: user?.name, relationshipLabel: 'Self' };
+  const isDependentActive = false;
 
   const navItems = [
     { id: 'home' as PatientNavTab, label: 'Home', icon: Home },
@@ -116,7 +117,7 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({
               </button>
             )}
 
-            <FamilyProfileSwitcher />
+            <button onClick={() => onTabChange('family')} className="text-xs px-3 py-2 border rounded-xl">Family profiles</button>{onLogout && <button onClick={onLogout} className="text-xs px-3 py-2 border rounded-xl">Sign out</button>}
           </div>
         </div>
 
@@ -130,6 +131,8 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({
           </div>
         )}
       </header>
+
+      <nav aria-label="Patient pages" className="max-w-5xl mx-auto w-full flex flex-wrap gap-2 p-4">{(['results','appointments','labs','insurance','messages','booklet','transfer','scan','notifications'] as PatientNavTab[]).map(page => <button key={page} onClick={() => onTabChange(page)} aria-current={currentTab === page ? 'page' : undefined} className={`rounded-xl px-3 py-2 text-sm border capitalize ${currentTab === page ? 'bg-teal-800 text-white' : 'bg-white'}`}>{page === 'booklet' ? 'Health booklet' : page === 'scan' ? 'Scan prescription' : page}</button>)}</nav>
 
       {/* Main Content Viewport - Optimized for both Mobile & Desktop Web */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-32 md:pb-32">

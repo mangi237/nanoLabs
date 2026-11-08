@@ -62,9 +62,9 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
     setMobileDrawerOpen(false);
   };
 
-  const doctorDisplayName = user?.name || user?.fullName || 'Dr. Emmanuel Nkuo';
-  const doctorSpecialty = user?.specialty || 'Internal Medicine & Diagnostics';
-  const doctorAvatar = user?.profilePicture || user?.avatarUrl || localStorage.getItem(`nanolabs_doctor_avatar_${user?.id || 'demo'}`) || localStorage.getItem('nanolabs_doctor_avatar_demo');
+  const doctorDisplayName = user?.name || user?.fullName || 'Physician';
+  const doctorSpecialty = user?.specialty || 'Specialty not recorded';
+  const doctorAvatar = user?.profilePicture || user?.avatarUrl;
 
   return (
     <div className="min-h-screen bg-[#F4F7F6] text-[#0A2624] flex antialiased font-sans selection:bg-[#E0F2F1] selection:text-[#006978]">
@@ -253,7 +253,7 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
               </span>
               <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>ONMC Accredited</span>
+                <span>Physician account</span>
               </span>
             </div>
           </div>
@@ -265,7 +265,7 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F2F1] hover:bg-[#B2DFDB] text-[#006978] rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>Connect QR</span>
+              <span>Care connections</span>
             </button>
 
             <button
@@ -280,7 +280,7 @@ export const DoctorLayout: React.FC<DoctorLayoutProps> = ({
                   {doctorDisplayName}
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium">
-                  Verified Doctor
+                  Physician
                 </span>
               </div>
             </button>
