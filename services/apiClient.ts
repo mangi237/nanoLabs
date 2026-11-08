@@ -22,7 +22,11 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
       throw new Error(data?.error ?? `Request failed (${response.status}). Please retry.`);
     }
     return response;
-  } catch (error) { reportApiError(error); throw error; }
+  } catch (error) {
+    // An explicit caller cancellation is a completed Stop/Close action, not an outage. Timeouts still surface.
+    if (!(init.signal?.aborted && init.signal.reason?.name === 'AbortError')) reportApiError(error);
+    throw error;
+  }
 }
 export async function apiJson<T = any>(path: string, data?: unknown, init: RequestInit = {}): Promise<T> {
   const response = await apiFetch(path, { ...init, method: init.method ?? (data === undefined ? 'GET' : 'POST'), headers: { 'Content-Type': 'application/json', ...init.headers }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });

@@ -109,3 +109,49 @@
       visibility: visible !important;
     }
   }}
+@font-face { font-family: 'Poppins'; src: url('./assets/fonts/Poppins/Poppins-Regular.ttf') format('truetype'); font-weight:400; font-display:swap; }
+@font-face { font-family: 'Poppins'; src: url('./assets/fonts/Poppins/Poppins-SemiBold.ttf') format('truetype'); font-weight:600 900; font-display:swap; }
+@layer base {
+  body { @apply text-slate-800; font-family: 'Poppins',system-ui,sans-serif; }
+  button,a,input,select,textarea { -webkit-tap-highlight-color: transparent; }
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid #2dd4bf; outline-offset:3px; }
+  button { cursor:pointer; } button:disabled { cursor:not-allowed; }
+}
+@layer components {
+ .portal-shell { @apply min-h-screen bg-[#f3f7f6]; }
+ .portal-sidebar { @apply fixed inset-y-0 left-0 z-[70] w-64 flex flex-col text-white invisible lg:visible -translate-x-full lg:translate-x-0 transition-transform; background:#103d38; }
+ .portal-sidebar.is-open { transform:translateX(0); visibility:visible; }
+ .portal-brand { @apply flex items-center gap-3 px-7 pt-8 pb-6 text-2xl font-semibold tracking-tight; }
+ .portal-brand small { @apply block mt-1 text-[8px] tracking-[.25em] text-teal-100/60; }
+ .brand-mark { @apply w-10 h-11 rounded-2xl bg-teal-300/10 text-teal-300 flex items-center justify-center; }
+ .workspace-label { @apply mx-5 rounded-xl border border-white/10 bg-white/5 p-4 mb-3; }
+ .portal-nav { @apply flex-1 overflow-y-auto px-4 pb-5; scrollbar-width:thin; }
+ .nav-group { @apply text-[9px] uppercase tracking-[.2em] text-teal-100/40 px-3 mt-5 mb-2; }
+ .portal-nav button { @apply w-full flex items-center gap-3 rounded-xl px-3 py-2.5 my-1 text-xs text-teal-50/70 text-left hover:bg-white/5 transition-colors; }
+ .portal-nav button.active { @apply bg-[#c7f5e4] text-[#103d38] font-semibold; }
+ .sidebar-account { @apply p-5 border-t border-white/10; }
+ .avatar { @apply rounded-full bg-teal-200 text-teal-950 w-10 h-10 flex items-center justify-center font-semibold shrink-0; }
+ .portal-main { @apply lg:ml-64 min-w-0; }
+ .portal-topbar { @apply h-20 bg-white border-b border-slate-200/70 px-4 sm:px-8 lg:px-10 flex items-center justify-between gap-2; }
+ .assistant-top-button { @apply flex items-center gap-2 bg-teal-50 text-teal-800 text-xs font-semibold rounded-full px-4 py-2.5; }
+ .portal-content { @apply p-4 sm:p-8 lg:p-10 max-w-[1440px] mx-auto min-h-[calc(100vh-150px)]; }
+ .portal-footer { @apply flex flex-wrap justify-between gap-2 text-xs text-slate-400 px-6 lg:px-10 py-6; }
+ .portal-backdrop { @apply hidden fixed inset-0 bg-slate-950/50 z-[60]; }
+ .portal-backdrop.is-open { @apply block lg:hidden; }
+ .portal-card { @apply bg-white border border-slate-200/80 rounded-2xl shadow-sm; }
+ .primary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 bg-teal-800 hover:bg-teal-900 text-white text-sm font-semibold disabled:opacity-40 transition-colors; }
+ .page-eyebrow { @apply uppercase tracking-[.2em] text-[10px] text-teal-700 font-semibold mb-2; }
+ .page-title { @apply text-2xl sm:text-3xl font-semibold text-[#143d37] tracking-tight; }
+ .page-description { @apply text-sm text-slate-500 mt-3 leading-7 max-w-2xl; }
+ .empty-state { @apply flex flex-col items-center text-center p-8 sm:p-14 rounded-2xl border border-dashed border-teal-200 bg-white; }
+ .status-badge { @apply inline-block rounded-full px-3 py-1 text-[10px] font-semibold bg-teal-50 text-teal-800 capitalize; }
+ .metric-grid { @apply grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5; }
+ .metric-card { @apply portal-card p-4 sm:p-5; }
+ .metric-card strong { @apply block text-3xl font-semibold text-teal-950 mt-3; }
+ .metric-card span { @apply text-xs text-slate-500; }
+ .assistant-launch { @apply fixed bottom-6 right-6 z-50 bg-teal-900 text-white rounded-full px-5 py-4 shadow-xl flex items-center gap-2 text-sm font-semibold border border-white/20; }
+ .assistant-panel { @apply fixed bottom-0 right-0 sm:bottom-5 sm:right-5 z-[80] bg-white sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden; width:min(430px,100vw);height:min(730px,100dvh); }
+ .assistant-history { @apply p-5 flex-1 min-h-0 overflow-y-auto; }
+}
+@media print { .portal-sidebar,.portal-topbar,.portal-footer,.assistant-root { display:none!important; } .portal-main { margin:0!important; } .portal-content { padding:0!important; } }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; } }

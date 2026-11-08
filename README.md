@@ -33,3 +33,13 @@ This intentionally changes the old account model; existing accounts require a re
 Production web build and TypeScript checks passed. API unit/invariant tests and real Firebase Auth/Firestore emulator HTTP/rule tests passed. A Chrome browser check completed synthetic signup/sign-in recovery, quote, request, laboratory acceptance, invoice, cashier confirmation, sample collection, draft results, separate biologist release, patient result viewing, share creation and revocation. No production database, real payment or external messaging provider was used.
 
 The local demo additionally provides patient@demo.invalid, doctor@demo.invalid and superadmin@demo.invalid with the same local-only demo password.
+
+## Assistant and hands-free voice
+
+The app-wide assistant shares one session across portal pages. Text chat calls the authenticated `/api/assistant/chat` endpoint. It can look up permitted bookings, laboratories, profile, care connections, inventory and analytics through the existing resource APIs. It guides users to the existing task pages; booking, payment and clinical changes still require review and submission there. Chat history is kept in memory for the current account and cleared on sign-out, not persisted to a database.
+
+Click **Start voice** for a continuous hands-free session. Listening pauses while the request is processed and the answer is spoken, then resumes. **Stop**, closing the panel, hiding the tab and signing out stop microphone recognition and speech. A denied microphone, unavailable browser speech support, failed playback or failed AI request is shown as an error and stops the loop. Browser speech recognition may use the browser vendor's speech service; the panel explains this before starting. Typed chat remains available separately.
+
+The API reuses its existing `GEMINI_API_KEY` and `GEMINI_MODEL` settings. No private keys belong in the frontend. With no configured AI provider, the assistant shows an explicit unavailable error. This local demo has no AI key; successful live provider replies and actual microphone capture have not been verified. `npm test` runs five injected-adapter voice lifecycle tests on Node 24; these test continuous restart, echo avoidance, stop/cancel and failure behavior without recording audio.
+
+The portals now share a responsive sidebar, mobile menu, local fonts, record search, useful empty states and actual-record metrics. No sample metrics are substituted when a request fails.

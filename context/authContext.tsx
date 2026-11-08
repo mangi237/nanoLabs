@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const establish = async (request: Promise<any>) => {
     const result = await request; updateUser(result.user); updateLab(result.lab); return result;
   };
-  const logout = () => { void authService.logout().then(() => { updateUser(null); updateLab(null); }).catch(reportApiError); };
+  const logout = () => { window.dispatchEvent(new Event('nanolabs_assistant_stop')); void authService.logout().then(() => { updateUser(null); updateLab(null); }).catch(reportApiError); };
   const value: AuthContextType = {
     user, currentUser: user, lab, isAuthenticated: Boolean(user), isLoading,
     login: (password = '', identifier = '') => establish(authService.verifyAccessCode(password, identifier)),
