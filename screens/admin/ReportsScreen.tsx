@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/apiClient';
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
@@ -308,7 +309,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     };
 
     try {
-      const res = await fetch('/api/reports/generate-ai-summary', {
+      const res = await apiFetch('/api/reports/generate-ai-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

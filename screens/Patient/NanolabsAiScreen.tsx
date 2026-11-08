@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/apiClient';
 import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
@@ -98,7 +99,7 @@ export const NanoLabsAIScreen: React.FC<NanoLabsAIScreenProps> = ({
     setLoading(true);
 
     try {
-      const response = await fetch('/api/ai/nanolabs-consult', {
+      const response = await apiFetch('/api/ai/nanolabs-consult', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

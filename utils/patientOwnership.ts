@@ -57,50 +57,8 @@ export function doesBookingBelongToPatient(
 ): boolean {
   if (!booking || !user) return false;
 
-  const userDocId = isValidUniqueId(user.id) ? String(user.id).trim() : '';
-  const userPid = isValidUniqueId(user.patientId) ? String(user.patientId).trim() : '';
-  const userPhone9 = normalizeCameroonDigits(user.phone || user.phoneDigits);
-
-  const bookingAccountId = isValidUniqueId(booking.patientAccountId)
-    ? String(booking.patientAccountId).trim()
-    : '';
-  const bookingPid = isValidUniqueId(booking.patientPid) ? String(booking.patientPid).trim() : '';
-  const bookingPatientId = isValidUniqueId(booking.patientId)
-    ? String(booking.patientId).trim()
-    : '';
-  const bookingDepId = isValidUniqueId(booking.dependentProfileId)
-    ? String(booking.dependentProfileId).trim()
-    : '';
-  const bookingPhone9 = normalizeCameroonDigits(booking.patientPhone);
-
-  // If booking explicitly belongs to a DIFFERENT registered patientAccountId, immediately reject!
-  if (bookingAccountId && userDocId && bookingAccountId !== userDocId && bookingAccountId !== userPid) {
-    return false;
-  }
-
-  if (isDependentActive && activeProfile) {
-    const depId = isValidUniqueId(activeProfile.id) ? String(activeProfile.id).trim() : '';
-    if (!depId) return false;
-    return bookingDepId === depId || bookingPid === depId || bookingPatientId === depId;
-  }
-
-  // If booking is tagged for a dependent sub-profile, don't mix into 'self' primary view unless ID matches self
-  if (bookingDepId && bookingDepId !== userDocId && bookingDepId !== userPid) {
-    return false;
-  }
-
-  // 1. Direct cryptographic/database account ID or unique PID match
-  if (userDocId && (bookingAccountId === userDocId || bookingPatientId === userDocId || bookingPid === userDocId)) {
-    return true;
-  }
-  if (userPid && (bookingPid === userPid || bookingPatientId === userPid || bookingAccountId === userPid)) {
-    return true;
-  }
-
-  // 2. Walk-in lab order linked by verified unique 9-digit phone number (ONLY when no conflicting unique PID/accountId exists)
-  if (!bookingAccountId && !bookingPid.startsWith('PAT-') && userPhone9 && bookingPhone9 && userPhone9 === bookingPhone9) {
-    return true;
-  }
-
-  return false;
+  const accountId = isValidUniqueId(user.id) ? String(user.id).trim() : '';
+  if (!accountId || booking.patientAccountId !== accountId) return false;
+  if (isDependentActive) return Boolean(activeProfile?.id && booking.dependentProfileId === activeProfile.id);
+  return !booking.dependentProfileId;
 }

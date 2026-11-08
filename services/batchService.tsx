@@ -1,3 +1,4 @@
+import { doesBookingBelongToPatient, isValidUniqueId } from '../utils/patientOwnership';
 /**
  * Test Batch Service
  * Manages the canonical lifecycle of clinical test batches:
@@ -15,8 +16,8 @@ export function getStoredBatches(): TestBatch[] {
     if (raw) {
       batches = JSON.parse(raw);
     }
-  } catch (e) {
-    batches = [];
+  } catch (error) {
+    throw new Error('Stored batches could not be read.');
   }
 
   // Also bridge with real bookings from nanolabs_bookings_ledger
@@ -78,9 +79,9 @@ export function getStoredBatches(): TestBatch[] {
           createdAt: b.createdAt || new Date().toISOString(),
           updatedAt: b.updatedAt || new Date().toISOString(),
           signedAt: b.overallStatus === 'Completed' ? (b.completedAt || b.updatedAt) : undefined,
-          biologistName: b.biologistName || (b.overallStatus === 'Completed' ? 'Dr. Suzanne Mbongo, MD' : undefined),
-          biologistLicense: b.biologistLicense || (b.overallStatus === 'Completed' ? 'ONMC-BIO-9921' : undefined),
-          qrAuditHash: b.overallStatus === 'Completed' ? `NL-${b.id}-${b.bookingCode}` : undefined
+          biologistName: b.biologistName,
+          biologistLicense: b.biologistLicense,
+          qrAuditHash: b.qrAuditHash
         };
 
         if (existingIdx >= 0) {
@@ -103,6 +104,7 @@ export function saveStoredBatches(batches: TestBatch[]): void {
     localStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify(batches));
   } catch (e) {
     console.error('Failed to save batches to storage', e);
+    throw e;
   }
 }
 
@@ -123,16 +125,8 @@ export function getBatchById(id: string): TestBatch | undefined {
 }
 
 export function getBatchesForPatient(patientId: string, patientPhone?: string, patientName?: string): TestBatch[] {
-  const all = getStoredBatches();
-  const filtered = all.filter((b) => {
-    if (b.patientId === patientId) return true;
-    if (patientPhone && b.patientPhone && b.patientPhone.replace(/\s+/g, '') === patientPhone.replace(/\s+/g, '')) return true;
-    if (patientName && b.patientName && b.patientName.toLowerCase() === patientName.toLowerCase()) return true;
-    if (patientId === 'demo_patient' && (!b.patientId || b.patientId === 'demo_patient' || b.patientName.includes('Claire Ngo'))) return true;
-    return false;
-  });
-
-  return filtered.length > 0 ? filtered : all;
+  if (!isValidUniqueId(patientId)) return [];
+  return getStoredBatches().filter(batch => doesBookingBelongToPatient(batch, { id: patientId, patientId }));
 }
 
 export function getBatchesForLab(labId: string): TestBatch[] {

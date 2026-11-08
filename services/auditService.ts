@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 import { db, collection, addDoc, doc, updateDoc, getDocs } from './firebase';
 import { cryptoSecurity } from '../utils/cryptoSecurity';
 
@@ -226,11 +227,11 @@ export const auditService = {
 
     // 1. Post to Server Audit Log Subsystem
     try {
-      fetch('/api/audit/log-access', {
+      apiFetch('/api/audit/log-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fullLogEntry)
-      }).catch(err => console.warn('Non-blocking server audit log sync error:', err));
+      }).catch((err: unknown) => console.warn('Non-blocking server audit log sync error:', err));
     } catch {
       // non-blocking
     }
@@ -470,7 +471,7 @@ export const auditService = {
         patientEmail: patientEmail || '',
         patientCode: patientCode || ''
       });
-      const res = await fetch(`/api/audit/patient-logs/${encodeURIComponent(patientId || 'patient')}?${queryParams.toString()}`);
+      const res = await apiFetch(`/api/audit/patient-logs/${encodeURIComponent(patientId || 'patient')}?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.logs)) {

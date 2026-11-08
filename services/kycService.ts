@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 /**
  * YeboVerify KYC & Identity Verification Service
  * Server-Side Integration with live API Key
@@ -43,7 +44,7 @@ export interface KycVerificationRequest {
      */
     async verifyIdentity(payload: KycVerificationRequest): Promise<KycVerificationResponse> {
       try {
-        const res = await fetch('/api/kyc/verify-identity', {
+        const res = await apiFetch('/api/kyc/verify-identity', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

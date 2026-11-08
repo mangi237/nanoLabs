@@ -4,3 +4,10 @@ google-cloud-sdk/
 google-cloud-cli-*.tar.gz
 .qodo/
 .DS_Store
+
+dist/
+.env
+.env.*
+!.env.example
+*.log
+!.env.demo

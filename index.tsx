@@ -1,34 +1,10 @@
-import './utils/domPatch';
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import App from './App';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './style.css';
-
-// Google Maps Platform Tier-1 Quota & Auth Failure Defense
-(window as any).gm_authFailure = () => {
-  window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-};
-const origError = console.error;
-console.error = (...args: unknown[]) => {
-  origError.apply(console, args);
-  const msg = args.map((a) => String(a)).join(' ');
-  if (msg.includes('OverQuotaMapError') || msg.includes('QuotaExceededError')) {
-    window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-  }
-};
-
-// Console hygiene: silence log, debug, info in all environments as requested
-const noop = () => {};
-console.log = noop;
-console.info = noop;
-console.debug = noop;
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-);
-
+const root = createRoot(document.getElementById('root')!);
+import('./App').then(({ default: App }) => {
+  root.render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);
+}).catch(error => {
+  root.render(<main className="max-w-xl mx-auto p-8 space-y-4"><h1 className="text-2xl font-bold">nanoLabs could not start</h1><p role="alert">{error instanceof Error ? error.message : 'The application configuration could not be loaded.'}</p><button onClick={() => window.location.reload()} className="underline">Retry</button></main>);
+});

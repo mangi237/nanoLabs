@@ -73,17 +73,18 @@ export const cryptoSecurity = {
    */
   async encryptField(
     plainText: string, 
-    facilityKey: string = 'nanoLabs-Primary-Cluster-Key', 
+    facilityKey: string = '',
     salt: string = DEFAULT_FACILITY_SALT
   ): Promise<string> {
     if (!plainText || typeof plainText !== 'string') return plainText;
+    if (!facilityKey) throw new Error('A private encryption key is required.');
     // Prevent double encryption
     if (this.isEncrypted(plainText)) return plainText;
 
     try {
       if (typeof window === 'undefined' || !window.crypto || !window.crypto.subtle) {
         // Fallback Base64 obfuscation if WebCrypto unavailable in test runner
-        return `${E2EE_PREFIX}b64:${btoa(unescape(encodeURIComponent(plainText)))}`;
+        throw new Error('Secure encryption is unavailable.');
       }
 
       const key = await deriveEncryptionKey(facilityKey, salt);
@@ -105,7 +106,7 @@ export const cryptoSecurity = {
       return `${E2EE_PREFIX}${ivHex}:${ciphertextHex}`;
     } catch (err) {
       console.warn('Client-side encryption fallback:', err);
-      return `${E2EE_PREFIX}enc:${btoa(encodeURIComponent(plainText))}`;
+      throw new Error('Encryption failed. The record was not encrypted.');
     }
   },
 
@@ -114,7 +115,7 @@ export const cryptoSecurity = {
    */
   async decryptField(
     cipherText: string, 
-    facilityKey: string = 'nanoLabs-Primary-Cluster-Key', 
+    facilityKey: string = '',
     salt: string = DEFAULT_FACILITY_SALT
   ): Promise<string> {
     if (!cipherText || typeof cipherText !== 'string') return cipherText;
@@ -123,15 +124,9 @@ export const cryptoSecurity = {
     try {
       const payload = cipherText.replace(E2EE_PREFIX, '');
 
-      if (payload.startsWith('b64:')) {
-        return decodeURIComponent(escape(atob(payload.replace('b64:', ''))));
-      }
-      if (payload.startsWith('enc:')) {
-        return decodeURIComponent(atob(payload.replace('enc:', '')));
-      }
-
+      if (!facilityKey || payload.startsWith('b64:') || payload.startsWith('enc:')) throw new Error('A securely encrypted record and private key are required.');
       const [ivHex, ciphertextHex] = payload.split(':');
-      if (!ivHex || !ciphertextHex) return cipherText;
+      if (!ivHex || !ciphertextHex) throw new Error('Encrypted record is invalid.');
 
       const key = await deriveEncryptionKey(facilityKey, salt);
       const iv = hexToBuffer(ivHex);
@@ -149,7 +144,7 @@ export const cryptoSecurity = {
       return new TextDecoder().decode(decryptedBuffer);
     } catch (err) {
       console.warn('Client-side decryption failed or key mismatch:', err);
-      return cipherText;
+      throw new Error('The record could not be decrypted.');
     }
   },
 

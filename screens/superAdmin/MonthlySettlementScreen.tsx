@@ -29,12 +29,6 @@ export const MonthlySettlementScreen: React.FC = () => {
 
   const loadSettlements = () => {
     let list = getMonthlySettlements();
-    if (list.length === 0) {
-      // Seed default monthly settlements
-      const s1 = generateMonthlySettlementForLab('lab_central_douala', 'Laboratoire Central Akwa - Douala', '2026-09');
-      const s2 = generateMonthlySettlementForLab('lab_bonanjo_douala', 'Centre Diagnostic Bonanjo', '2026-09');
-      list = [s1, s2];
-    }
     setSettlements(list);
     if (list.length > 0 && !selectedSettlement) {
       setSelectedSettlement(list[0]);
@@ -148,7 +142,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                   <div className="flex items-center justify-between pb-1">
                     <span className="font-bold text-xs text-slate-900 truncate">{s.labName}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      s.settlementStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      s.settlementStatus === 'settled' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                     }`}>
                       {s.settlementStatus}
                     </span>

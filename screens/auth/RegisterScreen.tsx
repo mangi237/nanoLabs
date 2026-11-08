@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/authContext';
 import { db, ensureFirebaseAuth, addDoc, collection } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 import { cleanFirestoreData, validatePhoneNumber } from '../../utils/sanitizeData';
 import { formatPatientAlias } from '../../services/doctorPatientFirestoreService';
 import { limsService } from '../../services/limsService';

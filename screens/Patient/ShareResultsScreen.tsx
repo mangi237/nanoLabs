@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/apiClient';
 // src/screens/patient/ShareResultsScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import Header from '../../components/common/Header';
@@ -443,7 +444,7 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
 
       // 1. Call Server SMS/WhatsApp OTP API
       try {
-        await fetch('/api/sms/send-otp', {
+        await apiFetch('/api/sms/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -461,7 +462,7 @@ export const ShareResultsScreen: React.FC<ShareResultsScreenProps> = ({
       // 2. Also send backup email OTP if email is present
       if (patientEmail && patientEmail.includes('@')) {
         try {
-          await fetch('/api/email/send-otp', {
+          await apiFetch('/api/email/send-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

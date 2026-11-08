@@ -186,26 +186,7 @@ export const securityService = {
    * Generates a signed cryptographic assurance certificate for the lab
    */
   async generateAttestation(facilityId: string, facilityName: string): Promise<SecurityAttestation> {
-    const rawData = `${facilityId}:${facilityName}:${Date.now()}:AES-GCM-256:v2-RBAC`;
-    const hash = await cryptoSecurity.hashPasscode(rawData, 'nanoLabs-CertAuthority');
-    const signature = `NL-CERT-${hash.substring(0, 8).toUpperCase()}-${hash.substring(8, 16).toUpperCase()}-${hash.substring(16, 24).toUpperCase()}`;
-
-    return {
-      facilityId,
-      facilityName,
-      issuedAt: new Date().toISOString(),
-      cryptographicSignature: signature,
-      encryptionStandard: 'AES-GCM-256 with PBKDF2 100,000 Iterations',
-      zeroKnowledgeStatus: 'VERIFIED (Client-Side Field-Level Encryption Active)',
-      complianceStandards: {
-        hipaaDataAtRest: true,
-        hipaaDataInTransit: true,
-        gdprArticle32: true,
-        roleBasedAccessIsolation: true,
-        immutableAuditLogs: true
-      },
-      activeRulesVersion: 'Firestore Security Rules v2.4 (Multi-Tenant RBAC)'
-    };
+    throw new Error('Security attestations require an independent review. No compliance certificate has been issued.');
   },
 
   /**

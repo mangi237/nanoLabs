@@ -1,3 +1,4 @@
+import { reportApiError } from '../../services/apiClient';
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
@@ -125,14 +126,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
       const extras = distinctCats.filter(c => !(OFFICIAL_CATEGORIES as readonly string[]).includes(c));
       setCustomCategories(Array.from(new Set(extras)));
 
-      // If lab hasn't saved a custom catalog yet, fallback to master default list
-      if (list.length === 0) {
-        list = OFFICIAL_MASTER_TEST_CATALOG.map((item, idx) => ({
-          ...item,
-          actCode: item.id?.toUpperCase() || `ACT-${idx + 100}`,
-          cote: item.category === 'Microbiology' ? 'B95' : item.category === 'Biochemistry' ? 'B30' : 'B45'
-        }));
-      }
+
       setCatalog(list);
     } catch (e) {
       console.error('Test catalog fetch error:', e);
@@ -352,7 +346,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
       setShowModal(false);
       fetchCatalog();
     } catch (err) {
-      console.error('Error saving test catalog item:', err);
+      reportApiError(err);
     }
   };
 

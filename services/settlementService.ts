@@ -21,8 +21,8 @@ export function getStoredSettlements(): LabSettlement[] {
     const raw = localStorage.getItem(SETTLEMENT_STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw);
-  } catch (e) {
-    return [];
+  } catch (error) {
+    throw new Error('Stored records could not be read. Please contact support before continuing.');
   }
 }
 
@@ -31,6 +31,7 @@ export function saveSettlements(settlements: LabSettlement[]): void {
     localStorage.setItem(SETTLEMENT_STORAGE_KEY, JSON.stringify(settlements));
   } catch (e) {
     console.error('Failed to save settlements', e);
+    throw e;
   }
 }
 
@@ -39,7 +40,7 @@ export function saveSettlements(settlements: LabSettlement[]): void {
  * Matches exact sum of 5% platform fee lines on verified invoices.
  */
 export function calculateMonthlySettlements(monthStr: string = '2026-09'): LabSettlement[] {
-  const invoices = getStoredInvoices().filter((inv) => inv.paymentStatus === 'verified');
+  const invoices = getStoredInvoices().filter((inv) => inv.paymentStatus === 'verified' && (inv.paymentVerifiedAt ?? '').startsWith(monthStr));
   const batches = getStoredBatches();
   const existingSettlements = getStoredSettlements();
 
@@ -73,26 +74,6 @@ export function calculateMonthlySettlements(monthStr: string = '2026-09'): LabSe
     entry.platformFee += roundXAF(inv.platformFeeAmount || 0);
   }
 
-  // Fallback default labs if no invoices recorded yet
-  if (labMap.size === 0) {
-    labMap.set('lab_central_douala', {
-      labName: 'Laboratoire Central Akwa - Douala',
-      batches: new Set(['b1', 'b2', 'b3']),
-      gross: 450000,
-      insurance: 360000,
-      patientShare: 90000,
-      platformFee: 4500 // exactly 5% of 90,000
-    });
-    labMap.set('lab_pasteur_yaounde', {
-      labName: 'Centre Diagnostic Bonanjo & Pasteur',
-      batches: new Set(['b4', 'b5']),
-      gross: 280000,
-      insurance: 224000,
-      patientShare: 56000,
-      platformFee: 2800 // exactly 5% of 56,000
-    });
-  }
-
   const result: LabSettlement[] = [];
 
   labMap.forEach((data, labId) => {
@@ -104,7 +85,7 @@ export function calculateMonthlySettlements(monthStr: string = '2026-09'): LabSe
       labId,
       labName: data.labName,
       totalBatches: data.batches.size,
-      totalTestsCount: data.batches.size * 3,
+      totalTestsCount: batches.filter(batch => data.batches.has(batch.id)).reduce((count, batch) => count + batch.tests.length, 0),
       grossRevenue: data.gross,
       grossTestsRevenue: data.gross,
       totalInsuranceBilled: data.insurance,
@@ -161,27 +142,8 @@ export function generateMonthlySettlementForLab(
   const existing = getStoredSettlements().find((s) => s.labId === labId && s.settlementMonth === monthStr);
   if (existing) return existing;
 
-  const newSettlement: LabSettlement = {
-    id: `stl_${labId}_${monthStr.replace('-', '')}`,
-    settlementMonth: monthStr,
-    monthYear: monthStr,
-    labId,
-    labName,
-    totalBatches: 24,
-    totalTestsCount: 72,
-    grossRevenue: 980000,
-    grossTestsRevenue: 980000,
-    totalInsuranceBilled: 588000,
-    totalPatientCollected: 392000,
-    totalPatientShareRevenue: 392000,
-    totalPlatformFeeOwed: 19600, // exact 5% of 392,000 XAF
-    platformFeeTotalDue: 19600,
-    settlementStatus: 'pending'
-  };
-
-  const all = getStoredSettlements();
-  all.unshift(newSettlement);
-  saveSettlements(all);
-  return newSettlement;
+  const settlement = calculateMonthlySettlements(monthStr).find(record => record.labId === labId);
+  if (!settlement) throw new Error('No verified invoice records exist for this laboratory and month.');
+  return settlement;
 }
 

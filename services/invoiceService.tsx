@@ -8,7 +8,7 @@
  */
 
 import { Invoice, InvoiceLine, TestBatch, PaymentMethod, PaymentStatus } from '../types';
-import { roundXAF, splitInsurance, applyPlatformFee, sumLines } from '../shared/money';
+import { roundXAF, calculateBill, sumLines } from '../shared/money';
 import { PLATFORM_FEE_PCT } from '../shared/percentage';
 
 const INVOICE_STORAGE_KEY = 'nanolabs_invoices_ledger';
@@ -18,8 +18,8 @@ export function getStoredInvoices(): Invoice[] {
     const raw = localStorage.getItem(INVOICE_STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw);
-  } catch (e) {
-    return [];
+  } catch (error) {
+    throw new Error('Stored records could not be read. Please contact support before continuing.');
   }
 }
 
@@ -28,6 +28,7 @@ export function saveStoredInvoices(invoices: Invoice[]): void {
     localStorage.setItem(INVOICE_STORAGE_KEY, JSON.stringify(invoices));
   } catch (e) {
     console.error('Failed to save invoices to storage', e);
+    throw e;
   }
 }
 
@@ -63,18 +64,10 @@ export function generateInvoiceForBatch(
   }));
 
   const subtotal = sumLines(lines);
-  const homeFee = roundXAF(options?.homeCollectionFee || 0);
-  const grossTotal = subtotal + homeFee;
-
-  // Insurance calculation
-  const coveragePct = options?.insuranceCoveragePercent || 0;
-  const { coveredAmount, patientShare } = splitInsurance(grossTotal, coveragePct);
-
-  // 5% nanoLabs platform fee applied ONLY to patient share
-  const platformFeeAmount = applyPlatformFee(patientShare);
-
-  // Total payable by patient at cashier counter
-  const totalPatientDue = patientShare + platformFeeAmount;
+  const homeFee = roundXAF(options?.homeCollectionFee ?? 0);
+  const coveragePct = options?.insuranceCoveragePercent ?? 0;
+  const bill = calculateBill({ testPrices: lines.map(line => line.amount), homeCollectionFee: homeFee, insuranceCoveragePercent: coveragePct });
+  const { grossTotal, insuranceCoveredAmount: coveredAmount, patientShare, platformFeeAmount, totalPatientDue } = bill;
 
   const invoice: Invoice = {
     id: invoiceId,

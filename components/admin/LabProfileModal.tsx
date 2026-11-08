@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { db, doc, updateDoc } from '../../services/firebase';
-import { uploadService } from '../../api/upload';
+import { uploadService } from '../../services/uploadService';
 
 interface LabProfileModalProps {
   isOpen: boolean;

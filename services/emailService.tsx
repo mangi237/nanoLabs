@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 // src/services/emailService.ts
 export interface OtpSendResult {
   success: boolean;
@@ -53,7 +54,7 @@ export const sendOtpVerification = async (
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    const res = await fetch('/api/email/send-otp', {
+    const res = await apiFetch('/api/email/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
@@ -100,7 +101,7 @@ export const verifyOtpCode = async (
   const cleanCode = code.trim();
 
   try {
-    const res = await fetch('/api/email/verify-otp', {
+    const res = await apiFetch('/api/email/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
@@ -141,7 +142,7 @@ export const sendDoctorReportEmail = async (
   payload: DoctorReportEmailPayload
 ): Promise<{ success: boolean; message?: string; provider?: string; error?: string }> => {
   try {
-    const res = await fetch('/api/email/send-doctor-report', {
+    const res = await apiFetch('/api/email/send-doctor-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -179,7 +180,7 @@ export const sendLabWelcomeEmail = async (params: {
   tier?: string;
 }): Promise<{ success: boolean; message?: string; provider?: string; error?: string }> => {
   try {
-    const res = await fetch('/api/email/send-lab-welcome', {
+    const res = await apiFetch('/api/email/send-lab-welcome', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
@@ -203,7 +204,7 @@ export const sendEmail = async (
   extraParams: Record<string, any> = {}
 ) => {
   try {
-    const response = await fetch('/api/send-email', {
+    const response = await apiFetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

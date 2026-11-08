@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import "tailwindcss";
 @layer utilities {
   .watermark-layer {
     position: absolute;

@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/apiClient';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   BookOpen,
@@ -1325,7 +1326,7 @@ export const HowToUseGuideModal: React.FC<HowToUseGuideModalProps> = ({
 
     setIsAiLoading(true);
     try {
-      const response = await fetch('/api/guide-ai-search', {
+      const response = await apiFetch('/api/guide-ai-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

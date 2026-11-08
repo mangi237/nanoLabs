@@ -32,8 +32,8 @@ export function getAuditChain(): AuditLog[] {
     const raw = localStorage.getItem(AUDIT_STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw);
-  } catch (e) {
-    return [];
+  } catch (error) {
+    throw new Error('Stored records could not be read. Please contact support before continuing.');
   }
 }
 
@@ -80,6 +80,7 @@ export function recordAuditAction(params: {
     localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(chain));
   } catch (e) {
     console.error('Failed to append to audit ledger', e);
+    throw e;
   }
 
   return entry;

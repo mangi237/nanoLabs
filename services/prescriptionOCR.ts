@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 /**
  * Clinical Prescription OCR Service
  * Sends captured prescription images/PDFs to the server-side Gemini 3.8 Flash OCR endpoint
@@ -48,7 +49,7 @@ export async function scanPrescriptionDocument(
       const mimeType = mimeMatch?.[1] || 'image/jpeg';
       const imageBase64 = mimeMatch?.[2] || source;
       try {
-        const res = await fetch('/api/ocr/prescription', {
+        const res = await apiFetch('/api/ocr/prescription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64, mimeType }),
@@ -69,7 +70,7 @@ export async function scanPrescriptionDocument(
   } else {
     try {
       const { base64, mimeType } = await fileToBase64(source);
-      const res = await fetch('/api/ocr/prescription', {
+      const res = await apiFetch('/api/ocr/prescription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mimeType }),

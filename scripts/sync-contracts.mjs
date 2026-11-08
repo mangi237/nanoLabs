@@ -1,0 +1,13 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const source = resolve('../nanolabs-api/packages/contracts');
+const contract = JSON.parse(readFileSync(resolve(source, 'package.json'), 'utf8'));
+if (contract.name !== '@nanolabs/contracts') throw new Error('Expected the API-owned contracts package.');
+mkdirSync('vendor', { recursive: true });
+const result = JSON.parse(execFileSync('npm', ['pack', source, '--pack-destination', resolve('vendor'), '--ignore-scripts', '--json'], { encoding: 'utf8' }));
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+pkg.dependencies['@nanolabs/contracts'] = `file:vendor/${result[0].filename}`;
+writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+execFileSync('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], { stdio: 'inherit' });
+console.info('Updated the versioned contracts artifact and lockfile from the API source.');
