@@ -4,7 +4,7 @@ import { VoiceSession } from '../services/voiceSession.ts';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));
 function harness(ask=async()=> 'The answer') {
  const recognizers=[];const states=[];const events=[];let finishSpeech;
- const voice=new VoiceSession({recognition:()=>{const recognition={start(){events.push('mic:start');},abort(){events.push('mic:abort');},onresult:null,onend:null,onerror:null};recognizers.push(recognition);return recognition;},ask:async text=>{events.push('ask:'+text);return ask(text);},speak:async text=>{events.push('speak:'+text);await new Promise(resolve=>{finishSpeech=resolve;});},cancelSpeech:()=>events.push('speech:cancel'),state:(state,error)=>states.push({state,error}),delay:1});
+ const voice=new VoiceSession({recognition:()=>{const recognition={start(){events.push('mic:start');this.onstart?.();},abort(){events.push('mic:abort');},onresult:null,onend:null,onerror:null};recognizers.push(recognition);return recognition;},ask:async text=>{events.push('ask:'+text);return ask(text);},speak:async text=>{events.push('speak:'+text);await new Promise(resolve=>{finishSpeech=resolve;});},cancelSpeech:()=>events.push('speech:cancel'),state:(state,error)=>states.push({state,error}),delay:1});
  const speak=()=>finishSpeech();const result=(index=0)=>recognizers[index].onresult({resultIndex:0,results:[{0:{transcript:'Track my booking'},isFinal:true}]});
  return {voice,recognizers,states,events,speak,result};
 }
@@ -26,6 +26,15 @@ test('browser end-of-session restarts only while active; cancelled restarts cann
  const h=harness();h.voice.start();h.recognizers[0].onend();await tick();assert.equal(h.recognizers.length,2);h.recognizers[1].onend();h.voice.stop();await tick();assert.equal(h.recognizers.length,2);
 });
 test('playback failure stops recognition and surfaces the error instead of silently resuming',async()=>{
- const states=[];let recognition;const voice=new VoiceSession({recognition:()=>{recognition={start(){},abort(){},onresult:null,onend:null,onerror:null};return recognition;},ask:async()=> 'Answer',speak:async()=>{throw new Error('Playback failed');},cancelSpeech(){},state:(state,error)=>states.push({state,error})});
+ const states=[];let recognition;const voice=new VoiceSession({recognition:()=>{recognition={start(){this.onstart?.();},abort(){},onresult:null,onend:null,onerror:null};return recognition;},ask:async()=> 'Answer',speak:async()=>{throw new Error('Playback failed');},cancelSpeech(){},state:(state,error)=>states.push({state,error})});
  voice.start();await recognition.onresult({resultIndex:0,results:[{0:{transcript:'Question'},isFinal:true}]});assert.equal(voice.active,false);assert.equal(states.at(-1).error,'Playback failed');
+});
+test('Listening appears only after native recognition confirms startup',()=>{
+ const states=[];let recognition;const voice=new VoiceSession({recognition:()=>{recognition={start(){},abort(){},onresult:null,onend:null,onerror:null};return recognition;},ask:async()=>'',speak:async()=>{},cancelSpeech(){},state:state=>states.push(state)});
+ voice.start();assert.equal(states.at(-1),'starting');recognition.onstart();assert.equal(states.at(-1),'listening');voice.stop();
+});
+test('a recognizer that never starts fails visibly and releases the session',t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const states=[];let aborted=false;
+ const voice=new VoiceSession({recognition:()=>({start(){},abort(){aborted=true;},onresult:null,onend:null,onerror:null}),ask:async()=>'',speak:async()=>{},cancelSpeech(){},state:(state,error)=>states.push({state,error})});
+ voice.start();t.mock.timers.tick(10001);assert.equal(voice.active,false);assert.equal(aborted,true);assert.equal(states.at(-1).state,'error');assert.match(states.at(-1).error,/did not start/);
 });
