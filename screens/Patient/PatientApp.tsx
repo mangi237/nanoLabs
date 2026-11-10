@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,8 +17,8 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-import { CBCResultDetailScreen } from './CBCResultDetailScreen';
-import { MyDoctorsScreen, DoctorDirectoryItem } from './MyDoctorsScreen';
+// import { CBCResultDetailScreen } from './CBCResultDetailScreen';
+import { MyDoctorsScreen, DoctorDirectoryItem } from './MyDoctorScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
 import { AppointmentsScreen } from './AppointmentsScreen';
@@ -26,7 +26,7 @@ import { PatientProfileScreen } from './ProfileScreen';
 import { SuccessScreen } from './SuccessScreen';
 import { PrescriptionScanScreen } from './PrescriptionScanScreen';
 import { HealthBookletScreen } from './HealthBookletScreen';
-import { NanoLabsAIScreen } from './NanoLabsAIScreen';
+import { NanoLabsAIScreen } from './NanolabsAiScreen';
 import { useAuth } from '../../context/authContext';
 import { FamilyProfileProvider, useFamilyProfile } from '../../context/familyProfileContext';
 
@@ -474,17 +474,17 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      case 'result_detail':
-        return (
-          <CBCResultDetailScreen
-            result={selectedResult}
-            onBack={() => setCurrentView('results')}
-            onAskAI={(res) => {
-              setSelectedResult(res);
-              setCurrentView('nanolabs_ai');
-            }}
-          />
-        );
+      // case 'result_detail':
+      //   return (
+      //     <CBCResultDetailScreen
+      //       result={selectedResult}
+      //       onBack={() => setCurrentView('results')}
+      //       onAskAI={(res) => {
+      //         setSelectedResult(res);
+      //         setCurrentView('nanolabs_ai');
+      //       }}
+      //     />
+      //   );
 
       case 'doctors':
         return (
