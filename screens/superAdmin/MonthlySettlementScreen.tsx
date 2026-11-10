@@ -28,16 +28,12 @@ export const MonthlySettlementScreen: React.FC = () => {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const loadSettlements = () => {
-    let list = getMonthlySettlements();
-    if (list.length === 0) {
-      // Seed default monthly settlements
-      const s1 = generateMonthlySettlementForLab('lab_central_douala', 'Laboratoire Central Akwa - Douala', '2026-09');
-      const s2 = generateMonthlySettlementForLab('lab_bonanjo_douala', 'Centre Diagnostic Bonanjo', '2026-09');
-      list = [s1, s2];
-    }
+    const list = getMonthlySettlements();
     setSettlements(list);
     if (list.length > 0 && !selectedSettlement) {
       setSelectedSettlement(list[0]);
+    } else if (list.length === 0) {
+      setSelectedSettlement(null);
     }
   };
 
@@ -133,38 +129,48 @@ export const MonthlySettlementScreen: React.FC = () => {
           </h2>
 
           <div className="space-y-2">
-            {settlements.map((s) => {
-              const isSelected = selectedSettlement?.id === s.id;
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => setSelectedSettlement(s)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-[#0F766E] bg-white shadow-sm ring-2 ring-teal-100'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between pb-1">
-                    <span className="font-bold text-xs text-slate-900 truncate">{s.labName}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      s.settlementStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {s.settlementStatus}
-                    </span>
-                  </div>
+            {settlements.length === 0 ? (
+              <div className="p-6 text-center bg-white rounded-2xl border border-slate-200 space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <p className="text-xs font-bold text-slate-800">Aucun impayé enregistré</p>
+                <p className="text-[11px] text-slate-500">
+                  Toutes les structures partenaires sont à jour (0 FCFA de commission en attente). Les commissions de 5% s&apos;enregistrent automatiquement lorsqu&apos;un patient règle ses examens.
+                </p>
+              </div>
+            ) : (
+              settlements.map((s) => {
+                const isSelected = selectedSettlement?.id === s.id;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => setSelectedSettlement(s)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-[#0F766E] bg-white shadow-sm ring-2 ring-teal-100'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="font-bold text-xs text-slate-900 truncate">{s.labName}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        s.settlementStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {s.settlementStatus}
+                      </span>
+                    </div>
 
-                  <p className="text-[11px] text-slate-500">
-                    {s.totalBatches} batches &bull; {s.totalTestsCount} tests processed
-                  </p>
+                    <p className="text-[11px] text-slate-500">
+                      {s.totalBatches} batches &bull; {s.totalTestsCount} tests processed
+                    </p>
 
-                  <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-xs font-bold">
-                    <span className="text-slate-500">5% Platform Fee:</span>
-                    <span className="font-mono text-[#0F766E]">{formatXAF(s.platformFeeTotalDue ?? 0 )}</span>
+                    <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-xs font-bold">
+                      <span className="text-slate-500">5% Platform Fee:</span>
+                      <span className="font-mono text-[#0F766E]">{formatXAF(s.platformFeeTotalDue)}</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -195,7 +201,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Gross Laboratory Revenue</div>
                   <div className="text-lg font-black font-mono text-slate-900">
-                    {formatXAF(selectedSettlement.grossTestsRevenue ?? 0)}
+                    {formatXAF(selectedSettlement.grossTestsRevenue)}
                   </div>
                   <p className="text-[10px] text-slate-500">100% collected by facility</p>
                 </div>
@@ -203,7 +209,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Patient Share Encaissée</div>
                   <div className="text-lg font-black font-mono text-slate-900">
-                    {formatXAF(selectedSettlement.totalPatientShareRevenue ?? 0)}
+                    {formatXAF(selectedSettlement.totalPatientShareRevenue)}
                   </div>
                   <p className="text-[10px] text-slate-500">Subject to 5% fee calculation</p>
                 </div>
@@ -211,7 +217,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-teal-50 rounded-2xl border border-teal-200 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-[#0F766E]">nanoLabs Fee Due (5%)</div>
                   <div className="text-lg font-black font-mono text-[#0D3B38]">
-                    {formatXAF(selectedSettlement.platformFeeTotalDue ?? 0)}
+                    {formatXAF(selectedSettlement.platformFeeTotalDue)}
                   </div>
                   <p className="text-[10px] text-teal-800 font-semibold">TVA Exonérée (0%)</p>
                 </div>

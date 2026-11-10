@@ -73,24 +73,41 @@ export function calculateMonthlySettlements(monthStr: string = '2026-09'): LabSe
     entry.platformFee += roundXAF(inv.platformFeeAmount || 0);
   }
 
-  // Fallback default labs if no invoices recorded yet
-  if (labMap.size === 0) {
-    labMap.set('lab_central_douala', {
-      labName: 'Laboratoire Central Akwa - Douala',
-      batches: new Set(['b1', 'b2', 'b3']),
-      gross: 450000,
-      insurance: 360000,
-      patientShare: 90000,
-      platformFee: 4500 // exactly 5% of 90,000
-    });
-    labMap.set('lab_pasteur_yaounde', {
-      labName: 'Centre Diagnostic Bonanjo & Pasteur',
-      batches: new Set(['b4', 'b5']),
-      gross: 280000,
-      insurance: 224000,
-      patientShare: 56000,
-      platformFee: 2800 // exactly 5% of 56,000
-    });
+  // Also bridge with real paid bookings from nanolabs_bookings_ledger if any
+  try {
+    const rawLedger = localStorage.getItem('nanolabs_bookings_ledger');
+    if (rawLedger) {
+      const bookings = JSON.parse(rawLedger);
+      if (Array.isArray(bookings)) {
+        bookings.forEach((b: any) => {
+          const isPaid = b.paymentStatus === 'paid' || b.paymentStatus === 'verified' || b.paid === true || b.invoiceStatus === 'paid';
+          if (isPaid && b.labId) {
+            if (!labMap.has(b.labId)) {
+              labMap.set(b.labId, {
+                labName: b.labName || 'Laboratoire Partenaire',
+                batches: new Set(),
+                gross: 0,
+                insurance: 0,
+                patientShare: 0,
+                platformFee: 0
+              });
+            }
+            const entry = labMap.get(b.labId)!;
+            const batchKey = b.id || b.bookingCode || 'batch';
+            if (!entry.batches.has(batchKey)) {
+              entry.batches.add(batchKey);
+              const total = Number(b.totalAmount || b.actualPaidAmount || b.price || 0);
+              const fee = Number(b.platformFeeAmount || Math.round(total * 0.05));
+              entry.gross += roundXAF(total);
+              entry.patientShare += roundXAF(total);
+              entry.platformFee += roundXAF(fee);
+            }
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading bookings ledger in settlementService', err);
   }
 
   const result: LabSettlement[] = [];
@@ -104,7 +121,7 @@ export function calculateMonthlySettlements(monthStr: string = '2026-09'): LabSe
       labId,
       labName: data.labName,
       totalBatches: data.batches.size,
-      totalTestsCount: data.batches.size * 3,
+      totalTestsCount: data.batches.size,
       grossRevenue: data.gross,
       grossTestsRevenue: data.gross,
       totalInsuranceBilled: data.insurance,
@@ -167,15 +184,15 @@ export function generateMonthlySettlementForLab(
     monthYear: monthStr,
     labId,
     labName,
-    totalBatches: 24,
-    totalTestsCount: 72,
-    grossRevenue: 980000,
-    grossTestsRevenue: 980000,
-    totalInsuranceBilled: 588000,
-    totalPatientCollected: 392000,
-    totalPatientShareRevenue: 392000,
-    totalPlatformFeeOwed: 19600, // exact 5% of 392,000 XAF
-    platformFeeTotalDue: 19600,
+    totalBatches: 0,
+    totalTestsCount: 0,
+    grossRevenue: 0,
+    grossTestsRevenue: 0,
+    totalInsuranceBilled: 0,
+    totalPatientCollected: 0,
+    totalPatientShareRevenue: 0,
+    totalPlatformFeeOwed: 0,
+    platformFeeTotalDue: 0,
     settlementStatus: 'pending'
   };
 

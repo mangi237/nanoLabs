@@ -256,6 +256,50 @@ export const PartnerOrderActionScreen: React.FC<PartnerOrderActionScreenProps> =
     }
   };
 
+  // 1b. Mark Payment Collected at Counter (Direct Patient Settlement)
+  const handleMarkPaymentCollected = async () => {
+    if (!booking) return;
+    setSubmitting(true);
+    try {
+      await ensureFirebaseAuth();
+      const now = new Date().toISOString();
+      const totalToPay = Number(booking.totalAmount || (Number(testAmount) + Number(prelevementFee) + Number(homePickupFee)) || 0);
+      const updates = cleanFirestoreData({
+        paymentStatus: 'paid',
+        invoiceStatus: 'paid',
+        paid: true,
+        actualPaidAmount: totalToPay,
+        paymentReceivedAt: now,
+        paymentMethod: 'Comptoir Labo (Espèces / Mobile Money)',
+        updatedAt: now,
+      });
+
+      const ref = doc(db, 'labs', booking.labDocId, 'bookings', booking.id);
+      await updateDoc(ref, updates);
+
+      // Also sync to local ledger
+      try {
+        const raw = localStorage.getItem('nanolabs_bookings_ledger');
+        if (raw) {
+          const list = JSON.parse(raw);
+          const idx = list.findIndex((b: any) => b.id === booking.id || b.bookingCode === booking.bookingCode);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...updates };
+            localStorage.setItem('nanolabs_bookings_ledger', JSON.stringify(list));
+          }
+        }
+      } catch {}
+
+      setBooking({ ...booking, ...updates });
+      setActionSuccess(`Paiement de ${totalToPay.toLocaleString()} FCFA validé au comptoir avec succès !`);
+      setTimeout(() => setActionSuccess(null), 5000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Erreur lors de la validation du paiement.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // 2. Mark Sample Drawn / Collected
   const handleMarkSampleCollected = async () => {
     if (!booking) return;
@@ -619,6 +663,46 @@ export const PartnerOrderActionScreen: React.FC<PartnerOrderActionScreenProps> =
               <Send className="w-3.5 h-3.5" />
               {isInvoiceReady ? 'Mettre à jour la facture du patient' : 'Confirmer & Envoyer la facture au patient'}
             </button>
+          </div>
+        </section>
+
+        {/* INTERMEDIATE STEP: Payment Settlement at Lab Counter */}
+        <section className={`border rounded-3xl p-5 space-y-3 shadow-xs transition-colors ${
+          isPaid ? 'bg-emerald-50/60 border-emerald-200' : 'bg-white border-amber-200'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                isPaid ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'
+              }`}>
+                $
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Règlement Patient au Comptoir du Laboratoire
+                </h3>
+                <p className="text-xs text-slate-500">
+                  100% encaissé directement par votre laboratoire (Espèces ou Mobile Money)
+                </p>
+              </div>
+            </div>
+
+            {isPaid ? (
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl border border-emerald-300 flex items-center gap-1.5 self-start sm:self-center">
+                <Check className="w-4 h-4 text-emerald-700" />
+                <span>Paiement de {Number(booking.actualPaidAmount || booking.totalAmount || 0).toLocaleString()} FCFA Encaissé</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleMarkPaymentCollected}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm transition disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" />
+                <span>Encaisser le règlement patient ({Number(booking.totalAmount || (Number(testAmount) + Number(prelevementFee) + Number(homePickupFee))).toLocaleString()} FCFA)</span>
+              </button>
+            )}
           </div>
         </section>
 
