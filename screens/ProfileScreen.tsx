@@ -19,19 +19,19 @@ import {
   Phone,
   TrendingUp
 } from 'lucide-react';
-import { useAuth } from '../../context/authContext';
-import { useFamilyProfile } from '../../context/familyProfileContext';
-import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
-import { formatXAF } from '../../shared/money';
-import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
-import { PatientSpendingTrackerModal } from '../../components/patient/PatientSpendingTrackerModal';
-import { doesBookingBelongToPatient } from '../../utils/patientOwnership';
+import { useAuth } from '../context/authContext';
+import { useFamilyProfile } from '../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../data/cameroonInsurances';
+import { formatXAF } from '../shared/money';
+import { MedicalReceiptModal } from '../components/common/MedicalReceiptModal';
+import { PatientSpendingTrackerModal } from '../components/patient/PatientSpendingTrackerModal';
+import { doesBookingBelongToPatient } from '../utils/patientOwnership';
 import {
   doctorPatientFirestoreService,
   formatPatientAlias,
-} from '../../services/doctorPatientFirestoreService';
-import { db, ensureFirebaseAuth, doc, setDoc } from '../../services/firebase';
-import { cleanFirestoreData } from '../../utils/sanitizeData';
+} from '../services/doctorPatientFirestoreService';
+import { db, ensureFirebaseAuth, doc, setDoc } from '../services/firebase';
+import { cleanFirestoreData } from '../utils/sanitizeData';
 
 interface PatientProfileScreenProps {
   onBack?: () => void;
@@ -101,7 +101,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        const { limsService } = await import('../../services/limsService');
+        const { limsService } = await import('../../nanoLabs/services/limsService');
         const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
           user?.labId ? [user.labId] : []
         );
@@ -489,7 +489,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
                   onChange={(e) => setSelectedInsurance(e.target.value)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
                 >
-                  {CAMEROON_INSURANCE_COMPANIES.map((ins) => (
+                  {CAMEROON_INSURANCE_COMPANIES.map((ins : any) => (
                     <option key={ins.id} value={ins.name}>
                       {ins.name} ({ins.city})
                     </option>
