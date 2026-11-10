@@ -1,0 +1,21 @@
+{
+  "firebase": {
+    "apiKey": "AIzaSyA8cg05IhCQAGm7YCczAxLkEyC0B2TV0Z4",
+    "authDomain": "hiyebo.firebaseapp.com",
+    "projectId": "hiyebo",
+    "appId": "1:438855261609:web:dd446af83d90060264f8b8",
+    "storageBucket": "hiyebo.firebasestorage.app"
+  },
+  "environments": {
+    "dev": {
+      "apiUrl": "https://nanolabs-api-dev-dysic27f5a-ew.a.run.app",
+      "tenantId": "nanolabs-dev-s9bnv",
+      "frontend": "https://nanolabs-dev.eneza.workers.dev"
+    },
+    "prod": {
+      "apiUrl": "https://nanolabs-api-prod-dysic27f5a-ew.a.run.app",
+      "tenantId": "nanolabs-prod-pz2ou",
+      "frontend": "https://nanolabs.eneza.workers.dev"
+    }
+  }
+}

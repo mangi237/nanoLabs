@@ -1,6 +1,6 @@
 {
   "name": "nanolabs",
-  "compatibility_date": "2026-11-11",
+  "compatibility_date": "2026-11-10",
   "assets": { "directory": "./dist", "not_found_handling": "single-page-application" },
   "env": { "dev": { "name": "nanolabs-dev", "assets": { "directory": "./dist", "not_found_handling": "single-page-application" } } }
 }

@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import worker from '../handoff/worker.mjs';
+const token='a'.repeat(43);
+const accounts=Object.fromEntries(['patient','receptionist','cashier','labtech','biologist','doctor','admin','analyzer','superadmin'].map(role=>[role,{identifier:`${role}@test.invalid`,password:'synthetic<password>&'}]));
+const env={HANDOFF_TOKEN_SHA256:createHash('sha256').update(token).digest('hex'),TEST_LOGINS:JSON.stringify(accounts),EXPIRES_AT:'2099-01-01T00:00:00Z'};
+const request=(path=`/handoff/${token}`,method='GET')=>new Request(`https://handoff.invalid${path}`,{method});
+test('wrong and missing handoff links never expose test logins',async()=>{for(const path of ['/','/handoff/'+ 'b'.repeat(43),'/handoff/'+token+'/extra']){const response=await worker.fetch(request(path),env);assert.equal(response.status,404);assert.doesNotMatch(await response.text(),/synthetic|test.invalid/);}});
+test('private handoff escapes credentials, disables caching/indexing and expires',async()=>{const response=await worker.fetch(request(),env);assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'no-store, private');assert.match(response.headers.get('X-Robots-Tag'),/noindex/);assert.match(await response.text(),/synthetic&lt;password&gt;&amp;/);assert.equal((await worker.fetch(request(),{...env,EXPIRES_AT:'2000-01-01T00:00:00Z'})).status,410);assert.equal((await worker.fetch(request(),{...env,EXPIRES_AT:'invalid'})).status,410);});
+test('handoff rejects writes and incomplete configuration loudly',async()=>{assert.equal((await worker.fetch(request(undefined,'POST'),env)).status,405);assert.equal((await worker.fetch(request(),{...env,TEST_LOGINS:'{}'})).status,503);assert.equal((await worker.fetch(request(),{...env,TEST_LOGINS:'invalid'})).status,503);assert.equal(await (await worker.fetch(request(undefined,'HEAD'),env)).text(),'');});
