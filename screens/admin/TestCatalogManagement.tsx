@@ -2,7 +2,7 @@ import { reportApiError } from '../../services/apiClient';
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
 import { useAuth } from '../../context/authContext';
-import { db, getDocs, collection, addDoc, updateDoc, deleteDoc, doc, setDoc } from '../../services/firebase';
+import { apiJson } from '../../services/apiClient';
 import { 
   OFFICIAL_MASTER_TEST_CATALOG, 
   OFFICIAL_CATEGORIES, 
@@ -62,7 +62,7 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   onProfilePress
 }) => {
   const { lab } = useAuth();
-  const targetLabId = lab?.id || 'lab-1';
+  const targetLabId = lab?.id;
 
   const [catalog, setCatalog] = useState<any[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
@@ -117,20 +117,18 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const ref = collection(db, 'labs', targetLabId, 'testCatalog');
-      const snap = await getDocs(ref);
-      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = (await apiJson('/api/portal/catalog')).records;
 
       // Extract unique custom categories if present
-      const distinctCats = list.map((item: any) => item.category).filter(Boolean);
+      const distinctCats: string[] = list.map((item: any) => String(item.category ?? '')).filter(Boolean);
       const extras = distinctCats.filter(c => !(OFFICIAL_CATEGORIES as readonly string[]).includes(c));
       setCustomCategories(Array.from(new Set(extras)));
 
 
       setCatalog(list);
     } catch (e) {
-      console.error('Test catalog fetch error:', e);
-      setCatalog(OFFICIAL_MASTER_TEST_CATALOG);
+      setCatalog([]);
+      reportApiError(e);
     } finally {
       setLoading(false);
     }
@@ -141,29 +139,13 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
       setSyncing(true);
       setSyncSuccess(false);
 
-      for (const item of OFFICIAL_MASTER_TEST_CATALOG) {
-        const itemRef = doc(db, 'labs', targetLabId, 'testCatalog', item.id);
-        await setDoc(itemRef, {
-          name: item.name,
-          category: item.category,
-          actCode: item.id?.toUpperCase() || 'ACT-LAB',
-          cote: item.category === 'Microbiology' ? 'B95' : item.category === 'Biochemistry' ? 'B30' : 'B45',
-          price: item.price,
-          turnaroundTime: item.turnaroundTime,
-          method: item.method,
-          conditions: item.conditions,
-          sampleType: item.sampleType,
-          description: item.description,
-          aliases: item.aliases,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
+      await apiJson('/api/portal/catalog', { tests: OFFICIAL_MASTER_TEST_CATALOG.map(item => ({ ...item, actCode: item.id.toUpperCase(), cote: item.category === 'Microbiology' ? 'B95' : item.category === 'Biochemistry' ? 'B30' : 'B45' })) }, { method: 'PUT' });
 
       await fetchCatalog();
       setSyncSuccess(true);
       setTimeout(() => setSyncSuccess(false), 4000);
     } catch (err) {
-      console.error('Error syncing official catalog:', err);
+      reportApiError(err);
     } finally {
       setSyncing(false);
     }
@@ -329,20 +311,8 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
     if (!formData.name.trim()) return;
 
     try {
-      if (editingTest) {
-        await updateDoc(doc(db, 'labs', targetLabId, 'testCatalog', editingTest.id), {
-          ...formData,
-          testName: formData.name,
-          updatedAt: new Date().toISOString()
-        });
-      } else {
-        await addDoc(collection(db, 'labs', targetLabId, 'testCatalog'), {
-          ...formData,
-          testName: formData.name,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-      }
+      await apiJson(editingTest ? `/api/portal/catalog/${encodeURIComponent(editingTest.id)}` : '/api/portal/catalog', formData, { method: editingTest ? 'PUT' : 'POST' });
+
       setShowModal(false);
       fetchCatalog();
     } catch (err) {
@@ -353,10 +323,10 @@ export const TestCatalogManagement: React.FC<TestCatalogManagementProps> = ({
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to remove this test from your laboratory catalog?')) {
       try {
-        await deleteDoc(doc(db, 'labs', targetLabId, 'testCatalog', id));
+        await apiJson(`/api/portal/catalog/${encodeURIComponent(id)}`, undefined, { method: 'DELETE' });
         fetchCatalog();
       } catch (err) {
-        console.error('Error deleting catalog item:', err);
+        reportApiError(err);
       }
     }
   };

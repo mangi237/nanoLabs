@@ -62,6 +62,7 @@ try {
 
 const storage = getStorage(app);
 const auth = getAuth(app);
+if (env.VITE_FIREBASE_TENANT_ID) auth.tenantId = env.VITE_FIREBASE_TENANT_ID;
 if (useEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: false });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);

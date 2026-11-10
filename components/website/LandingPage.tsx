@@ -1,69 +1,32 @@
-import React, { useState } from 'react';
-import { Navbar } from '../../components/website/Navbar';
-import { Hero } from '../../components/website/Hero';
-import { PortalEntranceBanner } from '../../components/website/PortalEntranceBanner';
-import { EcosystemSection } from '../../components/website/EcosystemSection';
-import { ProblemSection } from '../../components/website/ProblemSection';
-import { ProductShowcase } from '../../components/website/ProductShowcase';
-import { WorkflowSection } from '../../components/website/WorkflowSection';
-import { CameroonAfricaSection } from '../../components/website/CameroonAfricaSection';
-import { ImpactSection } from '../../components/website/ImpactSection';
-import { FounderSection } from '../../components/website/FounderSection';
-import { TeamSection } from '../../components/website/TeamSection';
-import { WhyNanoLabsSection } from '../../components/website/WhyNanoLabsSection';
-import { FAQSection } from '../../components/website/FAQSection';
-import { ContactSection } from '../../components/website/ContactSection';
-import { FinalPortalCTA } from '../../components/website/FinalPortalCTA';
-import { Footer } from '../../components/website/Footer';
-import { LegalModals } from '../../components/website/LegalModals';
-
-interface LandingPageProps {
-  onGoToPortal: (roleHint?: 'patient' | 'doctor' | 'lab') => void;
+import React, { useEffect, useState } from 'react';
+import { Activity, ArrowRight, ArrowUpRight, FlaskConical, Stethoscope, Building2, ShieldCheck, FileCheck2, CreditCard, Navigation, MessageCircle, Sparkles, Mail, Check, ClipboardList } from 'lucide-react';
+import { apiJson } from '../../services/apiClient';
+interface LandingPageProps { onGoToPortal: (roleHint?: 'patient' | 'doctor' | 'lab') => void; }
+const journey = [
+  ['Choose your tests', 'Select published tests and a laboratory.'],
+  ['Review your quote', 'See the patient portion, confirmed coverage and platform fee.'],
+  ['Laboratory acceptance', 'Reception reviews your request before an invoice is issued.'],
+  ['Cashier verification', 'The cashier confirms the amount received.'],
+  ['Collection and testing', 'Laboratory staff record collection and test results.'],
+  ['Reviewed results', 'A biologist reviews and releases the report to you.'],
+];
+export function LandingPage({ onGoToPortal }: LandingPageProps) {
+  const [labs, setLabs] = useState<any[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = async () => { setLoading(true); setError(''); try { const result = await apiJson('/api/labs'); if (!Array.isArray(result.labs)) throw new Error('The laboratory directory could not be read.'); setLabs(result.labs); } catch (err) { setError(err instanceof Error ? err.message : 'The laboratory directory is unavailable.'); } finally { setLoading(false); } };
+  useEffect(() => { void load(); }, []);
+  return <div className="min-h-screen bg-[#f7faf8] text-[#173d36]">
+    <header className="bg-white/95 border-b border-slate-100"><nav className="max-w-7xl mx-auto px-5 sm:px-8 py-5 flex gap-6 items-center justify-between" aria-label="Main navigation"><a href="#" className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Activity className="text-teal-700" size={27}/>nano<span className="text-teal-600 -ml-2">Labs</span></a><div className="hidden md:flex gap-7 text-xs text-slate-600"><a href="#workspaces">Workspaces</a><a href="#journey">How it works</a><a href="#laboratories">Laboratories</a></div><button onClick={() => onGoToPortal('patient')} className="primary-button !py-2.5 !text-xs">Sign in<ArrowUpRight size={15}/></button></nav></header>
+    <main>
+      <section className="max-w-7xl mx-auto px-5 sm:px-8 pt-14 sm:pt-24 pb-16 grid lg:grid-cols-2 items-center gap-12 lg:gap-20">
+        <div><p className="page-eyebrow flex items-center gap-2"><span className="w-6 h-px bg-teal-600"/>Care, connected.</p><h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.18] mt-5">Your laboratory<br/>journey,<br/><span className="text-teal-600">connected.</span></h1><p className="text-sm sm:text-base leading-8 text-slate-500 max-w-lg mt-7">A shared workspace for patients, doctors, and laboratories. Request tests, understand your invoice, follow each recorded step, and receive results after biologist review.</p><div className="flex flex-wrap gap-3 mt-8"><button onClick={() => onGoToPortal('patient')} className="primary-button">Open patient workspace<ArrowRight size={17}/></button><a href="#journey" className="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold">See the journey<ArrowUpRight size={17}/></a></div><div className="flex flex-wrap gap-5 text-[11px] text-slate-500 mt-8"><span className="flex items-center gap-2"><Check size={14} className="text-teal-600"/>Clear price breakdown</span><span className="flex items-center gap-2"><Check size={14} className="text-teal-600"/>Separate clinical review</span></div></div>
+        <div className="rounded-[2rem] bg-[#153f38] p-7 sm:p-10 relative overflow-hidden shadow-xl shadow-teal-950/10"><div className="absolute -top-12 -right-16 w-64 h-64 rounded-full border-[40px] border-white/5 pointer-events-none"/><div className="relative"><div className="flex justify-between items-center"><span className="text-[10px] uppercase tracking-[.2em] text-teal-200">One clear path</span><FlaskConical className="text-teal-200" size={28}/></div><h2 className="text-white font-semibold text-2xl mt-7">From request<br/>to reviewed results.</h2><p className="text-teal-100/60 text-xs mt-3 mb-8">The steps behind your laboratory booking</p><div className="space-y-3">{[{label:'Request and quote',detail:'Choose tests · review the amount',icon:ClipboardList},{label:'Payment confirmation',detail:'Verified by the laboratory cashier',icon:CreditCard},{label:'Collection and testing',detail:'Recorded by your laboratory team',icon:FlaskConical},{label:'Biologist release',detail:'Results become available after review',icon:FileCheck2}].map(({label,detail,icon:Icon},index)=><div key={label} className="flex items-center gap-4 rounded-2xl bg-white/[.07] border border-white/10 p-4"><span className="w-10 h-10 rounded-xl bg-teal-100/10 text-teal-200 flex items-center justify-center"><Icon size={19}/></span><div className="flex-1"><p className="text-white font-semibold text-xs">{label}</p><p className="text-teal-100/50 text-[10px] mt-1">{detail}</p></div><span className="text-teal-100/30 text-xs">0{index+1}</span></div>)}</div></div></div>
+      </section>
+      <section id="workspaces" className="border-y border-slate-200/60 bg-white"><div className="max-w-7xl mx-auto px-5 sm:px-8 py-14"><p className="page-eyebrow">Three workspaces, one journey</p><h2 className="page-title">The right door for your next step.</h2><div className="grid md:grid-cols-3 gap-5 mt-9">{[{role:'patient' as const,title:'For patients',text:'Find published tests, follow your bookings, manage family profiles, and share released reports.',icon:Activity,link:'Patient workspace'},{role:'doctor' as const,title:'For doctors',text:'Manage accepted care connections, send laboratory requests, and view reports patients share with you.',icon:Stethoscope,link:'Doctor workspace'},{role:'lab' as const,title:'For laboratories',text:'Keep your catalog, reception, cashier, testing, biologist review, team, and inventory in one workspace.',icon:Building2,link:'Laboratory workspace'}].map(({role,title,text,icon:Icon,link})=><article key={role} className="portal-card !shadow-none p-7 flex flex-col"><span className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center"><Icon size={21}/></span><h3 className="text-lg font-semibold mt-5">{title}</h3><p className="text-xs text-slate-500 leading-7 mt-3 flex-1">{text}</p><button onClick={()=>onGoToPortal(role)} className="flex items-center justify-between gap-3 text-xs font-semibold text-teal-800 border-t border-slate-100 mt-6 pt-5">{link}<ArrowUpRight size={17}/></button></article>)}</div></div></section>
+      <section id="journey" className="max-w-7xl mx-auto px-5 sm:px-8 py-16 sm:py-20"><div className="max-w-xl"><p className="page-eyebrow">A step at a time</p><h2 className="page-title">Know what happens next.</h2><p className="page-description">Your booking shows stages recorded by the laboratory. Payment references stay pending until the cashier verifies them, and results stay private until clinical release.</p></div><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-9 gap-y-8 mt-10">{journey.map(([title,description],index)=><article key={title} className="border-t border-teal-900/15 pt-5"><span className="text-xs text-teal-600 font-semibold">0{index+1}</span><h3 className="text-sm font-semibold mt-3">{title}</h3><p className="text-xs text-slate-500 leading-7 mt-2">{description}</p></article>)}</div></section>
+      <section id="laboratories" className="max-w-7xl mx-auto px-5 sm:px-8 pb-16"><div className="portal-card p-7 sm:p-10"><div className="flex flex-wrap justify-between gap-5"><div><p className="page-eyebrow">Laboratory directory</p><h2 className="page-title">Published by participating laboratories.</h2><p className="page-description">Availability and prices come from each laboratory’s published catalog.</p></div><Building2 size={30} className="text-teal-600"/></div>{loading?<p role="status" className="mt-7 text-sm text-slate-500">Loading laboratories…</p>:error?<p role="alert" className="mt-7 text-sm text-red-800">{error} <button onClick={load} className="underline">Retry</button></p>:labs.length?<div className="grid sm:grid-cols-3 gap-4 mt-7">{labs.slice(0,3).map(lab=><article key={lab.id} className="rounded-xl border border-slate-200 p-5"><h3 className="font-semibold text-sm">{lab.name}</h3><p className="text-xs text-slate-500 mt-2">{lab.city}</p><p className="text-xs text-teal-700 mt-4">{lab.catalog.length} published test{lab.catalog.length===1?'':'s'}</p><button onClick={()=>onGoToPortal('patient')} className="mt-4 text-xs underline">Open patient workspace</button></article>)}</div>:<div className="mt-7 rounded-xl bg-teal-50 p-5 sm:p-6"><h3 className="text-sm font-semibold">Laboratory onboarding is in progress.</h3><p className="text-xs text-slate-600 leading-7 mt-2 max-w-3xl">The live directory starts empty. Laboratories become bookable after their details are verified and their test catalog is published. You can create your patient account and keep your profile ready.</p></div>}</div></section>
+      <section className="bg-[#e7f3ee]"><div className="max-w-7xl mx-auto px-5 sm:px-8 py-14 grid md:grid-cols-3 gap-8">{[{icon:ShieldCheck,title:'Access with clear boundaries',text:'Use your own account. Laboratory actions are limited by role and assignment, and patients see their released results.'},{icon:MessageCircle,title:'Stay connected to care',text:'Patients and doctors can accept a care connection before exchanging messages or sharing reports.'},{icon:Sparkles,title:'Ask or talk to the assistant',text:'Chat or start a hands-free conversation for guidance. Questions and requested information go to the configured AI provider; clinical decisions stay with your care team.'}].map(({icon:Icon,title,text})=><div key={title}><Icon size={23} className="text-teal-700"/><h3 className="font-semibold text-sm mt-4">{title}</h3><p className="text-xs leading-7 text-slate-600 mt-3">{text}</p></div>)}</div></section>
+    </main>
+    <footer className="bg-white"><div className="max-w-7xl mx-auto px-5 sm:px-8 py-8 flex flex-wrap items-center justify-between gap-5"><div><span className="font-semibold text-lg">nanoLabs</span><p className="text-xs text-slate-400 mt-2">One clear path from request to results.</p></div><a href="mailto:nanolabsolutions26@gmail.com" className="flex gap-2 items-center text-xs text-teal-800"><Mail size={15}/>Contact the nanoLabs team</a><p className="text-[10px] text-slate-400">© {new Date().getFullYear()} nanoLabs</p></div></footer>
+  </div>;
 }
-
-export const LandingPage: React.FC<LandingPageProps> = ({ onGoToPortal }) => {
-  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
-
-  return (
-    <div className="min-h-screen bg-white text-nl-ink font-sans flex flex-col selection:bg-nl-mint selection:text-nl-deep">
-      <Navbar
-        onGoToPortal={onGoToPortal}
-        onOpenTerms={() => setLegalModal('terms')}
-        onOpenPrivacy={() => setLegalModal('privacy')}
-      />
-
-      <main>
-        <Hero onGoToPortal={onGoToPortal} />
-        <PortalEntranceBanner onGoToPortal={onGoToPortal} />
-        <EcosystemSection onGoToPortal={onGoToPortal} />
-        <ProblemSection onGoToPortal={onGoToPortal} />
-        <ProductShowcase onGoToPortal={onGoToPortal} />
-        <WorkflowSection onGoToPortal={onGoToPortal} />
-        <CameroonAfricaSection />
-        <ImpactSection />
-        <FounderSection />
-        <TeamSection />
-        <WhyNanoLabsSection onGoToPortal={onGoToPortal} />
-        <FAQSection onGoToPortal={onGoToPortal} />
-        <ContactSection />
-        <FinalPortalCTA onGoToPortal={onGoToPortal} />
-      </main>
-
-      <Footer
-        onGoToPortal={onGoToPortal}
-        onOpenTerms={() => setLegalModal('terms')}
-        onOpenPrivacy={() => setLegalModal('privacy')}
-      />
-
-      <LegalModals
-        isOpen={legalModal !== null}
-        onClose={() => setLegalModal(null)}
-        type={legalModal || 'terms'}
-      />
-    </div>
-  );
-};
-
 export default LandingPage;
-
-

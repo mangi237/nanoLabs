@@ -1,6 +1,6 @@
 # nanoLabs frontend v2
 
-The frontend lives in this repository; its API lives in the separate sibling `nanolabs-api` repository. Both use `v2-branch`. No production deployment or remote push was performed.
+The frontend lives in this repository; its API lives in the separate sibling `nanolabs-api` repository. Both use `v2-branch`. The live and isolated test environments are now hosted; see DEPLOYMENT.md. No Git remote push was performed.
 
 ## Run locally
 
@@ -22,7 +22,7 @@ For your own configured environment, copy `.env.example` to `.env`, fill the pub
 
 The backend has been extracted, not duplicated. Shared administrator codes, anonymous access, browser-only authorization, permissive shared-report codes, fabricated KYC approvals and sample financial fallbacks have been removed from the active workflow. Authentication uses server-provisioned accounts and Firebase ID tokens. The app never decides its own role or whether a booking is paid/released.
 
-Patients choose actual configured tests and laboratories, see the API's itemized quote, and submit a request with a stable retry key. The app displays confirmed server stages, not optimistic acceptance/payment/release. API failures use visible error messages. Bookings survive reload because they are stored in Firestore through the API. A disconnected browser cannot confirm an operation; retry it when connected. This version does not claim offline payment/result saving.
+Patients choose actual configured tests and laboratories, see the API's itemized quote, and submit a request with a stable retry key. The app displays confirmed server stages, not optimistic acceptance/payment/release. API failures use visible error messages. Bookings survive reload because they are stored in Neon through the hosted API (Firestore is used only by the explicit local demo emulators). A disconnected browser cannot confirm an operation; retry it when connected. This version does not claim offline payment/result saving.
 
 Cashiers see amounts and payment details without draft clinical results. Only a biologist can release a complete report. Sharing uses an expiring, revocable link. No external page translator runs over patient records. Authentication is per-browser-tab and signing out clears the Firebase session. No private file is uploaded to a public IPFS gateway or represented by a local data URL as if uploaded.
 
@@ -49,3 +49,11 @@ The portals now share a responsive sidebar, mobile menu, local fonts, record sea
 Start both demo servers, then open `http://127.0.0.1:8085/tests/browser/voice-qa.html` and sign in with the synthetic patient account. Click **Prepare synthetic audio test**, then **Start voice**. The two committed WAV fixtures are routed through a live `MediaStreamTrack` into Chrome’s actual speech recognizer. They ask which tests are available and how to book one. The production assistant and browser voice adapters handle the real authenticated API call and native spoken reply. No result event, transcript, Gemini answer or playback completion is mocked. The page reports PASS only after two real playback intervals complete and listening resumes. Stop and close the assistant afterward.
 
 This QA page requires demo mode, a demo Firebase project and localhost. Its assistant is mounted only after a synthetic input track exists, so the page cannot silently select a microphone. It and its audio fixtures are excluded from the normal production build. Native capture readiness has a visible starting state and timeout; playback that ends before audio can play produces an explicit error.
+
+## Hosted release
+
+Live: https://nanolabs.eneza.workers.dev
+
+Isolated test: https://nanolabs-dev.eneza.workers.dev
+
+The public homepage now describes verified app behavior and loads its laboratory directory from the API. It does not present sample clinics, live GPS, unconnected payment rails or unsupported regulatory claims as available services. The live directory starts empty until real laboratories are verified and onboarded. The test site uses separate data, credentials and Firebase identity tenancy, with a visible test banner. See DEPLOYMENT.md for build and deployment settings.
