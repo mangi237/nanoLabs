@@ -2,13 +2,13 @@
 
 Frontend: https://github.com/mangi237/nanoLabs/tree/v2-branch
 
-API: https://github.com/Eneza/nanoLabs-api (private; accept the administrator invitation as `mangi237`). Repository administration lets you manage API source, collaborators and Actions; it does not grant unrelated Omevision cloud access.
+API: https://github.com/Eneza/nanoLabs-api (private; `mangi237` now has confirmed administrator access). Repository administration lets you manage API source, collaborators and Actions; it does not grant unrelated Omevision cloud access.
 
 Use Node 24 and run `npm ci` in both repositories. The frontend is independently installable: its API-owned contracts are vendored as a versioned npm artifact. After changing shared contracts in the sibling API, run `npm run sync:contracts`, review the package/lockfile changes, and commit them together. Read both READMEs for the local Firebase emulator demo (Java 21 required).
 
 ## Automated checks and deployment
 
-`.github/workflows/release.yml` checks pull requests targeting `v2-branch` without deployment credentials. Pushes to `v2-branch` run tests, build the test configuration and deploy to `nanolabs-dev.eneza.workers.dev`. Release tags matching `nanolabs-v2-*` build and deploy production at `nanolabs.eneza.workers.dev`. A tagged commit must belong to `v2-branch`. Deployment errors or unavailable readiness checks fail the workflow.
+`.github/workflows/release.yml` checks pull requests targeting `v2-branch` without deployment credentials. Pushes to `v2-branch` run tests, build the test configuration and deploy to `nanolabs-dev.eneza.workers.dev`. Release tags matching `nanolabs-v2-*` build and deploy production at `nanolabs.eneza.workers.dev`. A tagged commit must belong to `v2-branch`. Deployment errors, unavailable readiness checks, or a hosted `/release.json` that does not match the exact source commit and environment fail the workflow.
 
 The Cloudflare token in the repository's encrypted `CLOUDFLARE_API_TOKEN` secret is limited to the existing `nanolabs` and `nanolabs-dev` Workers. It grants no API token management, DNS, R2 or unrelated Worker access. `CLOUDFLARE_ACCOUNT_ID` is a public repository variable. Application credentials are not embedded in the build. Public Firebase and API environment selection is centralized in `config/hosting.json`; `scripts/build-hosted.mjs` uses the same build for local and CI releases.
 
