@@ -1733,7 +1733,7 @@ app.post('/api/email/send-otp', async (req: Request, res: Response) => {
       otpCode: rawOtp,
       reason: reason || reasonText,
       recipientName: recipientName || cleanEmail.split('@')[0],
-      labName: labName || 'nanoLabs Health Care Network',
+      labName: labName || ' Health Care Network',
       expiresInMinutes: 15
     });
 

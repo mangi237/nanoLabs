@@ -6,6 +6,10 @@ export interface WhatsAppOrderDispatchParams {
   patientName: string;
   patientPhone?: string;
   patientAlias?: string;
+  patientAge?: number | string;
+  patientGender?: string;
+  bloodGroup?: string;
+  clinicalDetails?: string;
   tests: Array<{ name: string; price?: number }>;
   totalAmount?: number;
   homeCollection?: boolean;
@@ -40,7 +44,13 @@ export function buildLabWhatsAppOrderUrl(params: WhatsAppOrderDispatchParams): {
     params.accessKey ? `&key=${encodeURIComponent(params.accessKey)}` : ''
   }`;
 
-  const testsList = params.tests.map((t) => `• ${t.name}`).join('\n');
+  const testsList = (params.tests && params.tests.length > 0)
+    ? params.tests.map((t) => {
+        const p = typeof t.price === 'number' && t.price > 0 ? ` (${t.price.toLocaleString()} XAF)` : '';
+        return `• ${t.name || 'Examen de laboratoire'}${p}`;
+      }).join('\n')
+    : '• Analyses prescrites (se référer au dossier patient)';
+
   const collectionType = params.homeCollection
     ? `🏠 Prélèvement à domicile (GPS: ${params.pickupLocation || 'Localisé'})`
     : `🏥 Prélèvement sur place au laboratoire`;
@@ -48,6 +58,16 @@ export function buildLabWhatsAppOrderUrl(params: WhatsAppOrderDispatchParams): {
   const mapLink = params.userCoords?.lat && params.userCoords?.lng
     ? `\n📍 Position GPS: https://maps.google.com/?q=${params.userCoords.lat},${params.userCoords.lng}`
     : '';
+
+  const ageStr = params.patientAge ? `${params.patientAge} ans` : '';
+  const genderStr = params.patientGender ? params.patientGender : '';
+  const demoParts = [ageStr, genderStr].filter(Boolean).join(', ');
+  const demoText = demoParts ? ` (${demoParts})` : '';
+
+  const bloodGroupText = params.bloodGroup ? params.bloodGroup : 'Non spécifié';
+  const clinicalText = params.clinicalDetails && params.clinicalDetails.trim() 
+    ? params.clinicalDetails.trim() 
+    : 'Bilan de routine / Aucun antécédent particulier mentionné';
 
   const insuranceSection = params.insuranceProvider && params.insurancePolicyNumber
     ? `\n🛡️ *Assurance (Tiers-Payant):* ${params.insuranceProvider}\n   • Matricule / Police: ${params.insurancePolicyNumber}\n   • Taux Couverture: ${params.insuranceCoveragePercent ?? 80}%\n   • Ticket Modérateur Patient à encaisser: ${params.patientCoPayPercent ?? (100 - (params.insuranceCoveragePercent ?? 80))}%`
@@ -57,24 +77,31 @@ export function buildLabWhatsAppOrderUrl(params: WhatsAppOrderDispatchParams): {
     ? `\n🩺 *Prescripteur:* ${params.referringDoctor}${params.prescriberPromoCode ? ` (Code: ${params.prescriberPromoCode})` : ''}`
     : '';
 
+  const totalText = typeof params.totalAmount === 'number' && params.totalAmount > 0
+    ? `${params.totalAmount.toLocaleString()} XAF`
+    : 'Tarif labo à confirmer';
+
   const messageText = `🧪 *NOUVELLE DEMANDE D'EXAMEN - nanoLabs*
 ━━━━━━━━━━━━━━━━━━━━
-Bonjour *${params.labName}*,
+Bonjour *${params.labName || 'Laboratoire'}*,
 
 Vous avez reçu une nouvelle commande d'analyses médicales :
 
 📋 *Commande #:* ${params.bookingCode}
-👤 *Patient:* ${params.patientName}${params.patientAlias ? ` (@${params.patientAlias})` : ''}
+👤 *Patient:* ${params.patientName || 'Patient'}${params.patientAlias ? ` (@${params.patientAlias})` : ''}${demoText}
+🩸 *Groupe Sanguin:* ${bloodGroupText}
+📝 *Renseignements Cliniques:* ${clinicalText}
 📞 *Tél Patient:* ${params.patientPhone || 'Non renseigné'}
 🩺 *Modalité:* ${collectionType}${mapLink}${prescriberSection}
 ${insuranceSection}
 
 🔬 *Analyses demandées :*
 ${testsList}
+💰 *Total Estimé:* ${totalText}
 
 ━━━━━━━━━━━━━━━━━━━━
-⚡ *TRAITEMENT DIRECT (SANS APPLICATION) :*
-Cliquez ci-dessous pour confirmer, fixer votre devis/facture, ou déposer le résultat :
+⚡ *PORTAIL LABO SÉCURISÉ (ACCÈS DIRECT SANS APPLICATION) :*
+Consultez la demande, ajustez vos tarifs ou frais de prélèvement, puis déposez le résultat certifié :
 👉 ${actionUrl}
 ━━━━━━━━━━━━━━━━━━━━
 _nanoLabs Diagnostic Gateway & Care Network Cameroon_`;

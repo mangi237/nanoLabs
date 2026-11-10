@@ -62,7 +62,7 @@ export const DEFAULT_PARTNER_LABS: PartnerLabItem[] = OFFICIAL_MINSANTE_DOUALA_L
   directorDegree: oLab.directorDegree,
   agrementNumber: oLab.agrementNumber,
   cbeabmNumber: oLab.cbeabmNumber,
-  isExternalBench: true,
+  isExternalBench: oLab.id !== 'lab-1' && oLab.id !== 'douala-central-lab' && !(oLab as any).hasLims,
 }));
 
 interface ChooseLabScreenProps {
@@ -402,6 +402,17 @@ export const ChooseLabScreen: React.FC<ChooseLabScreenProps> = ({
                           <Award className="w-3 h-3 text-blue-600" />
                           Agréé MINSANTE
                         </span>
+                        {lab.isExternalBench ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                            <Building2 className="w-3 h-3 text-amber-600" />
+                            Banc Partenaire Référencé (Passerelle Directe)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                            <ShieldCheck className="w-3 h-3 text-teal-600" />
+                            nanoLabs LIMS Intégré
+                          </span>
+                        )}
                       </div>
 
                       {/* Technical Director & Accreditation info */}

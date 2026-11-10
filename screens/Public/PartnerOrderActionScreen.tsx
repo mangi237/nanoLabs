@@ -96,11 +96,65 @@ export const PartnerOrderActionScreen: React.FC<PartnerOrderActionScreenProps> =
           } catch {}
         }
 
+        // Local ledger fallback
+        if (!foundBooking) {
+          try {
+            const raw = localStorage.getItem('nanolabs_bookings_ledger');
+            if (raw) {
+              const list = JSON.parse(raw);
+              const matched = list.find((b: any) => {
+                const bCode = String(b.bookingCode || '').trim().toUpperCase();
+                const bId = String(b.id || '').trim().toUpperCase();
+                return bCode === upperCode || bId === upperCode;
+              });
+              if (matched) {
+                foundBooking = {
+                  ...matched,
+                  labDocId: matched.labId || 'lab-1',
+                  labName: matched.labName || 'Laboratoire Partenaire',
+                };
+              }
+            }
+          } catch {}
+        }
+
         if (active) {
           if (foundBooking) {
             setBooking(foundBooking);
             setTestAmount(foundBooking.testsAmount || foundBooking.totalAmount || 0);
             setHomePickupFee(foundBooking.homePickupFee || 0);
+
+            // Restore saved extra prelevement fee
+            const existingPrelevement = Array.isArray(foundBooking.addOns)
+              ? foundBooking.addOns.find((a: any) => 
+                  a?.name?.toLowerCase().includes('prélèvement') || 
+                  a?.name?.toLowerCase().includes('prelevement') ||
+                  a?.name?.toLowerCase().includes('ponction')
+                )?.price
+              : undefined;
+
+            if (typeof existingPrelevement === 'number') {
+              setPrelevementFee(existingPrelevement);
+            } else if (typeof foundBooking.prelevementFee === 'number') {
+              setPrelevementFee(foundBooking.prelevementFee);
+            }
+
+            if (foundBooking.cashierNotes) {
+              setCashierNotes(foundBooking.cashierNotes);
+            }
+            if (foundBooking.biologistName) {
+              setBiologistName(foundBooking.biologistName);
+            }
+            if (foundBooking.biologistRemarks) {
+              setBiologistRemarks(foundBooking.biologistRemarks);
+            }
+            if (foundBooking.pdfReportUrl) {
+              setReportFileBase64(foundBooking.pdfReportUrl);
+            }
+            if (foundBooking.externalReportName) {
+              setReportFileName(foundBooking.externalReportName);
+            }
+
             const initialMap: Record<string, { value: string; unit: string; flag: string }> = {};
             (foundBooking.tests || []).forEach((t: any) => {
               const k = t.testName || t.name;

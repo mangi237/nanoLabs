@@ -19,34 +19,30 @@ import {
   Phone,
   TrendingUp
 } from 'lucide-react';
-import { useAuth } from '../context/authContext';
-import { useFamilyProfile } from '../context/familyProfileContext';
-import { CAMEROON_INSURANCE_COMPANIES } from '../data/cameroonInsurances';
-import { formatXAF } from '../shared/money';
-import { MedicalReceiptModal } from '../components/common/MedicalReceiptModal';
-import { PatientSpendingTrackerModal } from '../components/patient/PatientSpendingTrackerModal';
-import { doesBookingBelongToPatient } from '../utils/patientOwnership';
+import { useAuth } from '../../context/authContext';
+import { useFamilyProfile } from '../../context/familyProfileContext';
+import { CAMEROON_INSURANCE_COMPANIES } from '../../data/cameroonInsurances';
+import { formatXAF } from '../../shared/money';
+import { MedicalReceiptModal } from '../../components/common/MedicalReceiptModal';
+import { PatientSpendingTrackerModal } from '../../components/patient/PatientSpendingTrackerModal';
+import { doesBookingBelongToPatient } from '../../utils/patientOwnership';
 import {
   doctorPatientFirestoreService,
   formatPatientAlias,
-} from '../services/doctorPatientFirestoreService';
-import { db, ensureFirebaseAuth, doc, setDoc } from '../services/firebase';
-import { cleanFirestoreData } from '../utils/sanitizeData';
+} from '../../services/doctorPatientFirestoreService';
+import { db, ensureFirebaseAuth, doc, setDoc } from '../../services/firebase';
+import { cleanFirestoreData } from '../../utils/sanitizeData';
 
 interface PatientProfileScreenProps {
   onBack?: () => void;
   onNavigateInsurance?: () => void;
   onNavigateHealthRecords?: () => void;
   onLogout?: () => void;
-  onNotificationPress?: () => void;
-  onNavigateRoleSwitcher?: () => void;
 }
 
 export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onBack,
-  onLogout,
-  onNavigateRoleSwitcher,
-  onNotificationPress,
+  onLogout
 }) => {
   const { user, setUser, logout } = useAuth();
   const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();
@@ -105,7 +101,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        const { limsService } = await import('../services/limsService');
+        const { limsService } = await import('../../services/limsService');
         const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
           user?.labId ? [user.labId] : []
         );
@@ -239,13 +235,6 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (insurancePolicyNumber.trim() && !nationalId.trim()) {
-      setSaveNotice(
-        'National ID Card Number (CNI) is required alongside your policy number to activate insurance.'
-      );
-      setTimeout(() => setSaveNotice(null), 5000);
-      return;
-    }
 
     const cleanAlias = formatPatientAlias(nickname, fullName);
     setNickname(cleanAlias);

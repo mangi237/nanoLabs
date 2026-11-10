@@ -475,10 +475,10 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                               <span>Print Single Test</span>
                             </button>
 
-                            {!hasSubParams && test.resultValue && (
+                            {!hasSubParams && (
                               <div className="text-right">
                                 <span className="font-mono font-black text-sm text-purple-900">
-                                  {test.resultValue} {test.units || ''}
+                                  {test.resultValue || (test as any).measuredValue || (test as any).result || 'Validé conforme'} {test.units || ''}
                                 </span>
                               </div>
                             )}
@@ -508,11 +508,13 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                                     ? sp.refRangeFemale || `${sp.femaleMin || 0} - ${sp.femaleMax || 100}`
                                     : sp.refRangeMale || `${sp.maleMin || 0} - ${sp.maleMax || 100}`;
 
+                                  const valStr = sp.value || (sp as any).resultValue || (sp as any).measuredValue || (sp as any).result || 'Conforme';
+
                                   return (
                                     <tr key={sp.id || spIdx} className="hover:bg-slate-50/50">
                                       <td className="py-2 px-3 font-semibold text-slate-800">{sp.name}</td>
                                       <td className="py-2 px-3 font-mono font-bold text-slate-900">
-                                        {sp.value || 'Pending'}
+                                        {valStr}
                                       </td>
                                       <td className="py-2 px-3 font-mono text-slate-500 text-[11px]">{sp.unit || '-'}</td>
                                       <td className="py-2 px-3 font-mono text-slate-600 text-[11px]">{refStr}</td>
@@ -531,6 +533,13 @@ export const BiologistView: React.FC<BiologistViewProps> = ({
                               </tbody>
                             </table>
                           </div>
+                        )}
+
+                        {test.richReportHtml && (
+                          <div 
+                            className="text-xs bg-white p-3 rounded-xl border border-slate-200 prose prose-slate max-w-none"
+                            dangerouslySetInnerHTML={{ __html: test.richReportHtml }}
+                          />
                         )}
 
                         {test.labNotes && (

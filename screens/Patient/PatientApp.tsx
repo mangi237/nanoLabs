@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PatientLayout, PatientNavTab } from '../../components/Layout/PatientLayout';
+import { PatientLayout, PatientNavTab } from '../../components/layouts/PatientLayout';
 import { HomeScreen } from './HomeScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 import { InsuranceSetupScreen } from './InsuranceSetupScreen';
@@ -17,8 +17,8 @@ import { LiveTrackingScreen } from './LiveTrackingScreen';
 import { SampleCollectedScreen } from './SampleCollectedScreen';
 import { AuditTimelineScreen } from './AuditTimelineScreen';
 import { MyResultsScreen, PatientResultItem, DEFAULT_RESULT_TEMPLATE } from './MyResultsScreen';
-// import { CBCResultDetailScreen } from './CBCResultDetailScreen';
-import { MyDoctorsScreen, DoctorDirectoryItem } from './MyDoctorScreen';
+import { CBCResultDetailScreen } from './CBCResultDetailScreen';
+import { MyDoctorsScreen, DoctorDirectoryItem } from './MyDoctorsScreen';
 import { DoctorProfileScreen } from './DoctorProfileScreen';
 import { DoctorChatScreen } from './DoctorChatScreen';
 import { AppointmentsScreen } from './AppointmentsScreen';
@@ -26,7 +26,7 @@ import { PatientProfileScreen } from './ProfileScreen';
 import { SuccessScreen } from './SuccessScreen';
 import { PrescriptionScanScreen } from './PrescriptionScanScreen';
 import { HealthBookletScreen } from './HealthBookletScreen';
-import { NanoLabsAIScreen } from './NanolabsAiScreen';
+import { NanoLabsAIScreen } from './NanoLabsAIScreen';
 import { useAuth } from '../../context/authContext';
 import { FamilyProfileProvider, useFamilyProfile } from '../../context/familyProfileContext';
 
@@ -414,8 +414,42 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onViewResults={() => {
-              setCurrentView('results');
+            onViewResults={(targetBooking) => {
+              const b = targetBooking || currentBooking;
+              if (b) {
+                const hasFlag = (b.tests || []).some((t: any) =>
+                  (t.subParameters || []).some((sp: any) => sp.flag === 'High' || sp.flag === 'Low')
+                );
+                setSelectedResult({
+                  id: b.id || b.bookingCode,
+                  bookingId: b.id,
+                  bookingCode: b.bookingCode,
+                  labId: b.labId,
+                  testName: b.tests?.map((t: any) => t.testName || t.name).join(', ') || 'Bilan de Biologie Médicale',
+                  labName: b.labName || selectedLab?.name || 'Laboratoire Agréé',
+                  date: b.biologistSignedAt || b.sampleCollectedAt || b.createdAt || new Date().toISOString(),
+                  biologistName: b.biologistName || 'Biologiste Médical',
+                  booking: b,
+                  status: hasFlag ? 'flagged' : 'normal',
+                  statusText: hasFlag ? 'Valeurs d\'alerte détectées' : 'Valeurs normales conformes',
+                  parameters: (b.tests || []).flatMap((t: any) =>
+                    (t.subParameters || []).map((sp: any) => {
+                      const isHigh = sp.flag === 'High';
+                      const isLow = sp.flag === 'Low';
+                      return {
+                        name: sp.name,
+                        value: sp.value || sp.resultValue || (t as any).resultValue || 'Normal',
+                        unit: sp.unit || '',
+                        referenceRange: sp.refRangeFemale || sp.refRangeMale || 'Normal',
+                        isNormal: !isHigh && !isLow
+                      };
+                    })
+                  )
+                });
+                setCurrentView('result_detail');
+              } else {
+                setCurrentView('results');
+              }
             }}
             onShareWithDoctor={() => {
               setCurrentTab('doctors');
@@ -440,17 +474,17 @@ const PatientAppInner: React.FC = () => {
           />
         );
 
-      // case 'result_detail':
-      //   return (
-      //     <CBCResultDetailScreen
-      //       result={selectedResult}
-      //       onBack={() => setCurrentView('results')}
-      //       onAskAI={(res : any) => {
-      //         setSelectedResult(res);
-      //         setCurrentView('nanolabs_ai');
-      //       }}
-      //     />
-      //   );
+      case 'result_detail':
+        return (
+          <CBCResultDetailScreen
+            result={selectedResult}
+            onBack={() => setCurrentView('results')}
+            onAskAI={(res) => {
+              setSelectedResult(res);
+              setCurrentView('nanolabs_ai');
+            }}
+          />
+        );
 
       case 'doctors':
         return (
@@ -459,11 +493,11 @@ const PatientAppInner: React.FC = () => {
               setCurrentTab('home');
               setCurrentView('home');
             }}
-            onSelectDoctor={(doc : any) => {
+            onSelectDoctor={(doc) => {
               setSelectedDoctor(doc);
               setCurrentView('doctor_profile');
             }}
-            onOpenChatWithDoctor={(doc : any) => {
+            onOpenChatWithDoctor={(doc) => {
               setSelectedDoctor(doc);
               setCurrentView('doctor_chat');
             }}
@@ -476,11 +510,11 @@ const PatientAppInner: React.FC = () => {
           return (
             <MyDoctorsScreen
               onBack={() => setCurrentView('home')}
-              onSelectDoctor={(doc : any) => {
+              onSelectDoctor={(doc) => {
                 setSelectedDoctor(doc);
                 setCurrentView('doctor_profile');
               }}
-              onOpenChatWithDoctor={(doc: any) => {
+              onOpenChatWithDoctor={(doc) => {
                 setSelectedDoctor(doc);
                 setCurrentView('doctor_chat');
               }}
@@ -538,7 +572,7 @@ const PatientAppInner: React.FC = () => {
           return (
             <MyDoctorsScreen
               onBack={() => setCurrentView('home')}
-              onSelectDoctor={(doc :any) => {
+              onSelectDoctor={(doc) => {
                 setSelectedDoctor(doc);
                 setCurrentView('doctor_profile');
               }}

@@ -239,7 +239,7 @@ export const AnalyzerView: React.FC<AnalyzerViewProps> = ({
   const pendingCollection = bookings.filter(b => {
     if (b.overallStatus === 'Completed' || b.overallStatus === 'Ready_For_Pickup') return false;
     if (b.paymentStatus !== 'paid') return false;
-    const isHomeOrder = Boolean(b.homeCollection || b.pickupLocation);
+    const isHomeOrder = Boolean(b.homeCollection || (b as any).homePickupRequested);
     if (isHomeOrder && !b.sampleHandoverVerified && b.transitStatus !== 'arrived_at_lab') {
       return false;
     }

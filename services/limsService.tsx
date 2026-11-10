@@ -536,7 +536,7 @@ export const limsService = {
     let testItems: BookingTestItem[] = [];
 
     if (selectedTests && selectedTests.length > 0) {
-      testItems = selectedTests.map((t : any, idx : any ) => {
+      testItems = selectedTests.map((t, idx) => {
         const base = t.basePrice || t.price || 5000;
         const sFee = t.systemFee !== undefined ? t.systemFee : feePerTest;
         const tot = t.totalPrice || (base + sFee);
@@ -556,7 +556,7 @@ export const limsService = {
           price: isStaffExemption ? 0 : tot,
           totalPrice: isStaffExemption ? 0 : tot,
           status: isValidated ? 'Pending_Payment' : 'Pending_Validation',
-          subParameters: t.subParameters ? t.subParameters.map((sp : any) => ({
+          subParameters: t.subParameters ? t.subParameters.map(sp => ({
             ...sp,
             value: '',
             flag: 'Normal' as const
@@ -565,7 +565,7 @@ export const limsService = {
       });
     } else {
       const catalog = await this.getMasterTestCatalog(labId);
-      testItems = (selectedMasterTestIds || []).map((masterId : any, idx : any) => {
+      testItems = (selectedMasterTestIds || []).map((masterId, idx) => {
         const found = catalog.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       MASTER_TESTS_CATALOG.find(m => m.id === masterId || m.code === masterId || m.name?.toLowerCase() === masterId?.toLowerCase()) || 
                       {
@@ -2447,10 +2447,11 @@ export const limsService = {
     labId: string;
     bookingId: string;
     techName: string;
-    techCode: string;
+    techCode?: string;
+    tests?: BookingTestItem[] | any[];
     reagentsUsed?: Array<{ reagentId?: string; reagentName: string; quantity: number; unit: string }>;
   }): Promise<{ success: boolean; error?: string }> {
-    const { labId, bookingId, techName, techCode, reagentsUsed } = params;
+    const { labId, bookingId, techName, techCode, tests: passedTests, reagentsUsed } = params;
     const timestamp = new Date().toISOString();
     try {
       const bookingsCol = collection(db, 'labs', labId, 'bookings');
@@ -2459,10 +2460,12 @@ export const limsService = {
 
       if (bookingDoc) {
         const data = bookingDoc.data() as PatientBooking;
-        const currentTests = Array.isArray(data.tests) ? data.tests : [];
+        const sourceTests = (Array.isArray(passedTests) && passedTests.length > 0)
+          ? passedTests
+          : (Array.isArray(data.tests) ? data.tests : []);
 
-        // Mark tests as completed by tech
-        const updatedTests = currentTests.map(t => ({
+        // Mark tests as completed by tech while preserving all biomarker values and subParameters
+        const updatedTests = sourceTests.map(t => ({
           ...t,
           status: 'Completed' as TestStatus,
           labTechSigned: true,
@@ -3627,7 +3630,6 @@ export const limsService = {
       id: d.id,
       doctorId: d.id,
       name: d.name,
-      labId: labId,
       specialty: d.specialty,
       licenseNumber: d.licenseNumber,
       hospital: d.hospital,
@@ -4011,7 +4013,7 @@ export const limsService = {
         if (isExactMatch) {
           // If already active or accepted, do not downgrade to pending!
           if (existingData.status === 'active' || existingData.invitationStatus === 'accepted') {
-            return {...existingData ,  id: d.id, };
+            return { id: d.id, ...existingData };
           }
           // If pending, merge new details and return existing
           const merged: ReferringDoctor = {
@@ -4283,7 +4285,7 @@ export const limsService = {
 
       const existingBucket = doctorStatsMap.get(bucketKey)!;
       const billAmount = b.actualPaidAmount !== undefined ? b.actualPaidAmount : (b.totalAmount || b.originalTotalAmount || 0);
-      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1);
+      const testCount = Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1);
 
       existingBucket.totalReferrals += 1;
       existingBucket.totalTestsDone += testCount;
@@ -4356,7 +4358,7 @@ export const limsService = {
     }
 
     const totalReferredPatients = enrichedDoctors.reduce((acc, d) => acc + (d.totalReferrals || 0), 0);
-    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.tests?.length || 1)), 0);
+    const totalTestsPrescribed = referralBookings.reduce((acc, b) => acc + (Array.isArray(b.tests) && b.tests.length > 0 ? b.tests.length : (b.labTests?.length || 1)), 0);
     const totalRevenueFromReferrals = enrichedDoctors.reduce((acc, d) => acc + (d.totalRevenueGenerated || 0), 0);
 
     return {

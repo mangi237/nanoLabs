@@ -10,7 +10,14 @@ import {
   Info,
   Send,
   Gift,
-  Tag
+  Tag,
+  Loader2,
+  Check,
+  Clock, 
+  UserPlus,
+  ShieldCheck,
+  Lock,
+  AlertCircle
 } from 'lucide-react';
 import { PartnerLabItem } from './ChooseLabScreen';
 import { formatXAF } from '../../shared/money';
@@ -20,6 +27,7 @@ import { limsService } from '../../services/limsService';
 import {
   doctorPatientFirestoreService,
   formatPatientAlias,
+  DoctorPatientConnectionRecord,
 } from '../../services/doctorPatientFirestoreService';
 import { DoctorOption } from '../../components/common/DoctorCardSelect';
 import { canLabUseFeature } from '../../utils/labPackages';
@@ -70,7 +78,20 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
   const [policyNumberInput, setPolicyNumberInput] = useState<string>(configuredPolicyNumber);
   const [pickupAddress, setPickupAddress] = useState<string>(initialPickupAddress || '');
   const [submitting, setSubmitting] = useState(false);
+  const [submittingStep, setSubmittingStep] = useState<string>('');
   const [bookingError, setBookingError] = useState<string>('');
+
+  // Auto-populate saved insurance whenever useInsurance is toggled or profile changes
+  useEffect(() => {
+    if (useInsurance) {
+      if (configuredInsuranceProvider) {
+        setInsuranceProviderInput(configuredInsuranceProvider);
+      }
+      if (configuredPolicyNumber) {
+        setPolicyNumberInput(configuredPolicyNumber);
+      }
+    }
+  }, [useInsurance, configuredInsuranceProvider, configuredPolicyNumber]);
 
   // Real platform doctors directory from Firestore (zero mock doctors, zero localStorage)
   const [platformDoctors, setPlatformDoctors] = useState<DoctorOption[]>([]);
@@ -81,6 +102,29 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
   const [prescriberPromoCode, setPrescriberPromoCode] = useState<string>(() => {
     return (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('nanolabs_prescriber_code') : '') || '';
   });
+
+  // Doctor Connections for patient permission guard
+  const [patientConnections, setPatientConnections] = useState<DoctorPatientConnectionRecord[]>([]);
+  const [connectingDoctorId, setConnectingDoctorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const pId = isDependentActive ? activeProfile.id : user?.patientId || user?.id || '';
+    const unsub = doctorPatientFirestoreService.subscribePatientConnections(
+      pId,
+      user?.patientId,
+      (conns) => {
+        setPatientConnections(conns || []);
+      }
+    );
+    return () => unsub();
+  }, [user?.id, user?.patientId, activeProfile.id, isDependentActive]);
+
+  const acceptedDoctorIds = new Set(
+    patientConnections.filter((c) => c.status === 'accepted').map((c) => c.doctorId)
+  );
+  const pendingDoctorIds = new Set(
+    patientConnections.filter((c) => c.status === 'pending').map((c) => c.doctorId)
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -96,6 +140,7 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
           name: d.name?.startsWith('Dr') ? d.name : `Dr. ${d.name}`,
           specialty: d.specialty || 'General Medicine',
           hospital: d.hospital || 'Accredited Medical Center',
+          phone: d.phone,
           verified: true
         }));
 
@@ -108,8 +153,6 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
             setReferringDoctorType('other');
             setManualDoctorName(scannedDoc);
             if (scannedHosp) setManualHospitalName(scannedHosp);
-          } else if (mapped.length > 0) {
-            setSelectedDoctorId(mapped[0].id);
           }
         }
       } catch (e) {
@@ -121,6 +164,41 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       mounted = false;
     };
   }, []);
+
+  const handleConnectDoctor = async (doc: DoctorOption, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      setConnectingDoctorId(doc.id);
+      const resolvedPatientName = isDependentActive
+        ? activeProfile.fullName
+        : user?.name || activeProfile.fullName || 'Patient';
+      const resolvedAlias = formatPatientAlias(
+        (user as any)?.alias || activeProfile?.nickname,
+        resolvedPatientName
+      );
+      const pId = isDependentActive ? activeProfile.id : user?.patientId || user?.id || `PAT-${Date.now()}`;
+
+      await doctorPatientFirestoreService.requestConnection({
+        doctorId: doc.id,
+        doctorName: doc.name,
+        doctorSpecialty: doc.specialty,
+        doctorHospital: doc.hospital,
+        doctorPhone: doc.phone,
+        patientId: pId,
+        patientPid: pId,
+        patientName: resolvedPatientName,
+        patientAlias: resolvedAlias,
+        patientPhone: activeProfile.phone || user?.phone || '',
+        patientCity: activeProfile.city || (user as any)?.city || 'Douala',
+        requestedBy: 'patient',
+        note: `Demande de suivi médical et partage de bilan d'analyses de ${resolvedPatientName} (@${resolvedAlias})`
+      });
+    } catch (err) {
+      console.warn('Could not send connection request:', err);
+    } finally {
+      setConnectingDoctorId(null);
+    }
+  };
 
   const coveragePercent = 80;
   const platformFeePercent = 5;
@@ -141,7 +219,22 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         setBookingError('Please select a registered laboratory before sending your test request.');
         return;
       }
+
+      // DOCTOR CONNECTION GUARD: Verify patient has an accepted mutual connection before sending tests to accredited physician
+      if (referringDoctorType === 'accredited') {
+        if (!selectedDoctorId) {
+          setBookingError('Please select a physician from the registered doctors list, or choose "Self-Referred".');
+          return;
+        }
+        if (!acceptedDoctorIds.has(selectedDoctorId)) {
+          setBookingError('Permission denied: You must have an accepted mutual connection with an accredited physician before you can refer lab test results to them. Please click "Follow / Connect" and wait for the doctor to accept, or switch to "Self-Referred".');
+          return;
+        }
+      }
+
       setSubmitting(true);
+      setSubmittingStep('Génération du dossier médical numérique...');
+
       const uniqueAccountId = user?.id || user?.patientId || `PAT-${Date.now()}`;
       const uniquePid = isDependentActive
         ? activeProfile.id
@@ -170,6 +263,15 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       const insuranceActive = Boolean(useInsurance && policyNumberInput.trim());
       const perTestBasePrice = Math.round(labTestTariff / Math.max(1, tests.length));
 
+      // Gather complete clinical details
+      const conditions = [
+        ...(activeProfile.chronicConditions || []),
+        ...(activeProfile.allergies ? activeProfile.allergies.map(a => `Allergie: ${a}`) : [])
+      ].filter(Boolean);
+      const clinicalNotes = conditions.length > 0 
+        ? conditions.join(', ') 
+        : (activeProfile.notes || 'Bilan de routine');
+
       const created = await limsService.createBooking({
         labId: lab.id,
         labName: lab.name,
@@ -182,11 +284,12 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         patientPid: uniquePid,
         patientName: resolvedPatientName,
         patientAlias: resolvedAlias,
-        patientAge: activeProfile.age || 30,
+        patientAge: activeProfile.age || (user as any)?.age || 30,
         patientGender: (activeProfile.gender as any) || (user as any)?.gender || 'Female',
         patientPhone: activeProfile.phone || user?.phone || '',
         patientEmail: user?.email || '',
         creatorName: resolvedPatientName,
+        clinicalNotes,
         isOnlineBooking: true,
         registrationType: 'online',
         registeredBy: 'Online Patient App',
@@ -217,9 +320,9 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
           id: `t-${Date.now()}-${idx}`,
           name: t.name,
           testName: t.name,
-          price: perTestBasePrice,
-          basePrice: perTestBasePrice,
-          totalPrice: perTestBasePrice
+          price: t.price || perTestBasePrice,
+          basePrice: t.price || perTestBasePrice,
+          totalPrice: t.price || perTestBasePrice
         }))
       });
 
@@ -227,15 +330,20 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
       sessionStorage.removeItem('nanolabs_scanned_hospital');
       sessionStorage.removeItem('nanolabs_rx_doctor_id');
 
-      // Proactively open WhatsApp dispatch link to laboratory in new tab if lab has a registered phone
+      // Automated WhatsApp Dispatch: The system automatically triggers the WhatsApp message with complete clinical payload
       if (lab.phone) {
+        setSubmittingStep('Transmission automatisée WhatsApp au laboratoire...');
         try {
           const { waUrl } = buildLabWhatsAppOrderUrl({
             bookingCode: created.bookingCode || created.id,
             patientName: resolvedPatientName,
             patientPhone: activeProfile.phone || user?.phone,
             patientAlias: resolvedAlias,
-            tests,
+            patientAge: activeProfile.age || (user as any)?.age || 30,
+            patientGender: (activeProfile.gender as any) || (user as any)?.gender || 'Female',
+            bloodGroup: activeProfile.bloodGroup || (user as any)?.bloodGroup || 'O+',
+            clinicalDetails: clinicalNotes,
+            tests: tests.map((t) => ({ name: t.name, price: t.price || perTestBasePrice })),
             totalAmount: labTestTariff,
             homeCollection: collectionMethod === 'home',
             pickupLocation: collectionMethod === 'home' ? pickupAddress : lab.address,
@@ -249,11 +357,18 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
             referringDoctor: resolvedReferringDoc,
             prescriberPromoCode: prescriberPromoCode.trim() ? prescriberPromoCode.trim().toUpperCase() : undefined,
           });
+
+          // Proactively open automated WhatsApp message window
           window.open(waUrl, '_blank', 'noopener,noreferrer');
-        } catch {}
+        } catch (waErr) {
+          console.warn('Automated WhatsApp dispatch warning:', waErr);
+        }
       }
 
-      onBookingRequested(created);
+      setSubmittingStep('Demande transmise avec succès !');
+      setTimeout(() => {
+        onBookingRequested(created);
+      }, 700);
     } catch (err: any) {
       console.error('Failed to submit online test request:', err);
       setBookingError(
@@ -404,29 +519,138 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         </div>
 
         {referringDoctorType === 'accredited' && (
-          <div className="pt-1 space-y-1.5">
+          <div className="pt-2 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-700">
+                Registered Platform Physicians ({platformDoctors.length})
+              </label>
+              <span className="text-[10px] text-slate-500 font-medium">
+                Mutual connection required to send results
+              </span>
+            </div>
+
             {platformDoctors.length > 0 ? (
-              <>
-                <label className="text-[11px] font-bold text-slate-600 block">
-                  Registered Platform Physicians:
-                </label>
-                <select
-                  value={selectedDoctorId}
-                  onChange={(e) => setSelectedDoctorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-[#006978]"
-                >
-                  {platformDoctors.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} &middot; {d.specialty} ({d.hospital})
-                    </option>
-                  ))}
-                </select>
-              </>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                {platformDoctors.map((doc) => {
+                  const isConnected = acceptedDoctorIds.has(doc.id);
+                  const isPending = pendingDoctorIds.has(doc.id);
+                  const isSelected = selectedDoctorId === doc.id;
+                  const isConnecting = connectingDoctorId === doc.id;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => {
+                        if (isConnected) {
+                          setSelectedDoctorId(doc.id);
+                          setBookingError('');
+                        }
+                      }}
+                      className={`p-3 rounded-2xl border transition-all relative flex flex-col justify-between ${
+                        isConnected
+                          ? isSelected
+                            ? 'border-[#006978] bg-[#E0F2F1]/80 ring-2 ring-[#006978]/30 shadow-xs cursor-pointer'
+                            : 'border-slate-200 bg-white hover:border-[#006978]/60 hover:bg-slate-50 cursor-pointer'
+                          : 'border-slate-200/80 bg-slate-50/60 opacity-95'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#006978] text-white' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              <Stethoscope className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-900 leading-tight">
+                                {doc.name}
+                              </div>
+                              <span className="text-[10px] font-semibold text-[#006978] block">
+                                {doc.specialty}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Selection indicator if connected */}
+                          {isConnected && (
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${
+                              isSelected
+                                ? 'bg-[#006978] border-[#006978] text-white'
+                                : 'border-slate-300 bg-white'
+                            }`}>
+                              {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{doc.hospital}</span>
+                        </div>
+                      </div>
+
+                      {/* Connection status / Action Button */}
+                      <div className="mt-3 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[10px]">
+                        {isConnected ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            <span>Connected &middot; Ready</span>
+                          </span>
+                        ) : isPending ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold border border-amber-200">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Connection Pending...</span>
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-slate-400 text-[10px] flex items-center gap-0.5">
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              <span>Not Connected</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleConnectDoctor(doc, e)}
+                              disabled={isConnecting}
+                              className="px-2.5 py-1 rounded-lg bg-[#006978] hover:bg-[#005a66] text-white font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs text-[10px]"
+                            >
+                              {isConnecting ? (
+                                <>
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  <span>Sending...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="w-2.5 h-2.5" />
+                                  <span>Follow / Connect</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {isConnected && (
+                          <span className="text-[10px] font-bold text-[#006978]">
+                            {isSelected ? 'Selected' : 'Click to Select'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 No platform doctors registered yet. Switch to <strong>External Doctor</strong> to type your prescribing physician's name and hospital.
               </p>
             )}
+
+            <div className="p-2.5 bg-sky-50/70 border border-sky-200 rounded-xl flex items-center gap-2 text-[11px] text-sky-900">
+              <Info className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+              <span>
+                To protect medical privacy, tests can only be sent to physicians who have accepted a mutual clinical connection with your profile.
+              </span>
+            </div>
           </div>
         )}
 
@@ -628,10 +852,19 @@ export const BookingSummaryScreen: React.FC<BookingSummaryScreenProps> = ({
         <button
           onClick={handleRequestBooking}
           disabled={submitting}
-          className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+          className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] disabled:opacity-75 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
-          <Send className="w-4 h-4" />
-          <span>{submitting ? 'Sending Test Request to Receptionist...' : 'Send Test Request to Laboratory (No Payment Now)'}</span>
+          {submitting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>{submittingStep || 'Traitement asynchrone en cours...'}</span>
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4" />
+              <span>Send Test Request to Laboratory (No Payment Now)</span>
+            </>
+          )}
         </button>
       </div>
     </div>

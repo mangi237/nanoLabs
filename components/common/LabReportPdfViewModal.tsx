@@ -446,26 +446,28 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             <button
               type="button"
               onClick={handleOpenInNewTab}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-purple-200 text-xs font-extrabold rounded-xl border border-purple-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-purple-200 text-xs font-bold rounded-xl border border-purple-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
               title="Ouvrir le rapport officiel en pleine page isolée dans un nouvel onglet avec filigrane"
             >
-              <ExternalLink className="w-4 h-4 text-purple-400" />
-              <span>Ouvrir dans un nouvel onglet</span>
+              <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400 shrink-0" />
+              <span className="hidden sm:inline">Ouvrir dans un nouvel onglet</span>
+              <span className="sm:hidden">Nouvel onglet</span>
             </button>
 
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer shrink-0"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
+              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Print / Save PDF</span>
+              <span className="sm:hidden">Imprimer</span>
             </button>
             {!inlineEmbedded && (
               <button
                 onClick={onClose}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                className="p-1.5 sm:p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer shrink-0"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
           </div>
@@ -508,17 +510,17 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
             className="bg-white rounded-xl shadow-lg border border-slate-300 p-6 sm:p-8 max-w-3xl mx-auto font-sans text-slate-900 print:shadow-none print:border-none print:max-w-none print:p-0 print:bg-white space-y-4 relative overflow-hidden"
           >
             {/* Laboratory Logo / Official Seal Background Watermark Effect */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.04] select-none overflow-hidden z-0">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-10 select-none overflow-hidden z-0">
               {effectiveLogoUrl ? (
                 <img 
                   src={effectiveLogoUrl} 
                   alt="" 
-                  className="w-[440px] h-[440px] object-contain -rotate-12 filter grayscale" 
+                  className="w-[320px] h-[320px] sm:w-[460px] sm:h-[460px] object-contain -rotate-12 filter grayscale" 
                 />
               ) : (
-                <div className="w-[400px] h-[400px] flex flex-col items-center justify-center font-black text-5xl text-slate-900 -rotate-12 uppercase tracking-widest text-center border-8 border-dashed border-slate-900 rounded-full p-8">
+                <div className="w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] flex flex-col items-center justify-center font-black text-3xl sm:text-5xl text-slate-900 -rotate-12 uppercase tracking-widest text-center border-4 sm:border-8 border-dashed border-slate-900/60 rounded-full p-6 sm:p-8">
                   <span>{(activeLabName || 'LABORATOIRE').slice(0, 18)}</span>
-                  <span className="text-base font-bold mt-2">VALIDÉ BIOLOGISTE</span>
+                  <span className="text-xs sm:text-base font-bold mt-2">VALIDÉ BIOLOGISTE</span>
                 </div>
               )}
             </div>
@@ -624,84 +626,46 @@ export const LabReportPdfViewModal: React.FC<LabReportPdfViewModalProps> = ({
               </div>
             )}
 
-            {/* Patient Metadata Grid Box */}
-            <div className="border border-slate-300 print:border-black rounded-xl p-3 sm:p-4 bg-white print:bg-white grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
-              
-              {/* Left Demographic Column */}
-              <div className="md:col-span-4 space-y-1.5">
+            {/* Patient Metadata Compact Horizontal Row */}
+            <div className="border border-slate-300 print:border-black rounded-xl p-3 bg-slate-50/70 print:bg-white text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 items-center">
                 <div>
-                  <div className="text-base font-black text-slate-900 notranslate" translate="no">
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">Patient</span>
+                  <div className="font-black text-slate-900 truncate notranslate text-xs" translate="no">
                     {booking.patientName || 'Patient'}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-slate-700">
-                  <div>
-                    <span className="text-slate-500">Age: </span>
-                    <strong className="text-slate-900">{booking.patientAge ? `${booking.patientAge} Years` : 'Adult'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Sex: </span>
-                    <strong className="text-slate-900">{booking.patientGender || 'Unspecified'}</strong>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">Age / Sexe</span>
+                  <div className="font-bold text-slate-800 text-xs">
+                    {booking.patientAge ? `${booking.patientAge} ans` : 'Adulte'} &middot; {booking.patientGender === 'Female' ? 'F' : booking.patientGender === 'Male' ? 'M' : booking.patientGender || '-'}
                   </div>
                 </div>
                 <div>
-                  <span className="text-slate-500">PID / Code: </span>
-                  <strong className="font-mono text-slate-900">{booking.patientPid || booking.bookingCode}</strong>
-                </div>
-                {booking.sampleBarcode && (
-                  <div>
-                    <span className="text-slate-500">Tube Barcode: </span>
-                    <strong className="font-mono text-slate-900">{booking.sampleBarcode}</strong>
-                  </div>
-                )}
-              </div>
-
-              {/* Middle Sample / Ref By Column */}
-              <div className="md:col-span-4 border-y md:border-y-0 md:border-x border-slate-200 py-2 md:py-0 md:px-3 flex flex-col justify-between space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-white border border-slate-300 rounded-lg shadow-2xs">
-                    <QrCode className="w-10 h-10 text-slate-900" />
-                  </div>
-                  <div className="text-[10px] text-slate-600 leading-tight">
-                    <div className="font-bold text-slate-800">Sample Matrix:</div>
-                    <div>{booking.tests?.[0]?.sampleTypeRequired || 'Whole Blood / Plasma'}</div>
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">PID / Dossier</span>
+                  <div className="font-mono font-bold text-slate-900 truncate text-xs">
+                    {booking.patientPid || booking.bookingCode}
                   </div>
                 </div>
-                <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-                  <div className="text-slate-500 text-[10px] uppercase font-bold">Prescribing Physician:</div>
-                  <div className="text-slate-900 text-[11px] font-black notranslate" translate="no">
-                    {formatReferringDoctorWithHospital(booking)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Barcode & Timestamps Column */}
-              <div className="md:col-span-4 space-y-1.5 text-right flex flex-col justify-between">
                 <div>
-                  <div className="font-mono text-[9px] tracking-widest text-slate-800 font-bold uppercase inline-block">
-                    ||||| | ||| |||| || | || ||||
-                  </div>
-                  <div className="font-mono text-[9px] text-slate-600">
-                    {booking.sampleBarcode || booking.bookingCode}
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">Prescripteur</span>
+                  <div className="font-bold text-slate-800 truncate notranslate text-xs" translate="no">
+                    {formatReferringDoctorWithHospital(booking) || 'Non spécifié'}
                   </div>
                 </div>
-
-                <div className="text-[10px] space-y-0.5 text-slate-600">
-                  <div>
-                    <span>Registered on: </span>
-                    <strong className="text-slate-800">{registeredTimeStr}</strong>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">Prélèvement</span>
+                  <div className="font-medium text-slate-700 truncate text-[11px]">
+                    {collectedTimeStr || registeredTimeStr || 'Au laboratoire'}
                   </div>
-                  <div>
-                    <span>Collected on: </span>
-                    <strong className="text-slate-800">{collectedTimeStr}</strong>
-                  </div>
-                  <div>
-                    <span>Certified on: </span>
-                    <strong className="text-slate-800">{reportedTimeStr}</strong>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[10px] text-slate-500 uppercase block font-bold">Certification</span>
+                  <div className="font-mono font-bold text-emerald-800 truncate text-[11px]">
+                    {reportedTimeStr || 'Validé Biologiste'}
                   </div>
                 </div>
               </div>
-
             </div>
 
             {/* If Lab Uploaded an Official Signed External PDF or Image for the Entire Dossier, Render It Directly */}

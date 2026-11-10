@@ -7,7 +7,7 @@ import { limsService, PatientBooking, BookingTestItem, MasterTestItem } from '..
 import { MASTER_TESTS_CATALOG } from '../../data/masterTestsData';
 import { OFFICIAL_MASTER_TEST_CATALOG } from '../../data/officialTestCatalog';
 import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
-import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditor';
+import { ResultTemplateEditorModal, CustomResultTemplate } from '../../components/lab/ResultTemplateEditorModal';
 import { SplitScreenResultEntry } from '../../components/results/SplitScreenResultEntry';
 import { A4CanvasResultEditor, A4_CLINICAL_TEMPLATES } from '../../components/results/A4CanvasResultEditor';
 import { clinicalTemplatesService, ClinicalTemplate } from '../../data/clinicalTemplates';
@@ -231,7 +231,7 @@ export const LabTechView: React.FC<LabTechViewProps> = ({
   const [showResultTemplateModal, setShowResultTemplateModal] = useState(false);
 
   const handleApplyCustomTemplate = (template: CustomResultTemplate) => {
-    const newParams = template.parameters.map((p: any, idx : any ) => ({
+    const newParams = template.parameters.map((p, idx) => ({
       id: p.id || `param-${Date.now()}-${idx}`,
       name: p.name,
       unit: p.unit,
@@ -1075,6 +1075,7 @@ CLINICAL REAGENTS USED:
         bookingId: activeBooking.id,
         techName,
         techCode: techStaffCode.trim(),
+        tests: activeBooking.tests,
         reagentsUsed: reagentsList
       });
 

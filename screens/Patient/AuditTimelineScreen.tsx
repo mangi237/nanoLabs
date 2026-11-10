@@ -12,11 +12,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/authContext';
 import { useFamilyProfile } from '../../context/familyProfileContext';
+import { LabReportPdfViewModal } from '../../components/common/LabReportPdfViewModal';
 
 interface AuditTimelineScreenProps {
   booking?: any;
   onBack: () => void;
-  onViewResults: () => void;
+  onViewResults: (booking?: any) => void;
   onShareWithDoctor?: () => void;
   onRequestHomeDelivery?: () => void;
   labName?: string;
@@ -36,6 +37,7 @@ export const AuditTimelineScreen: React.FC<AuditTimelineScreenProps> = ({
 
   const [liveBooking, setLiveBooking] = useState<any | null>(propBooking || null);
   const [loading, setLoading] = useState<boolean>(!propBooking);
+  const [showReportModal, setShowReportModal] = useState<boolean>(false);
 
   const loadAuditBooking = async () => {
     try {
@@ -324,7 +326,12 @@ export const AuditTimelineScreen: React.FC<AuditTimelineScreenProps> = ({
         <div className="space-y-2.5 pt-1">
           {isCompleted && (
             <button
-              onClick={onViewResults}
+              onClick={() => {
+                setShowReportModal(true);
+                if (onViewResults) {
+                  onViewResults(liveBooking || propBooking);
+                }
+              }}
               className="w-full py-4 bg-[#006978] hover:bg-[#005a66] active:scale-[0.98] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#006978]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               <FileCheck className="w-4 h-4" />
@@ -354,6 +361,14 @@ export const AuditTimelineScreen: React.FC<AuditTimelineScreenProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {showReportModal && (
+        <LabReportPdfViewModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          booking={liveBooking || propBooking}
+        />
       )}
     </div>
   );
