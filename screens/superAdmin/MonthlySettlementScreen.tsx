@@ -165,7 +165,7 @@ export const MonthlySettlementScreen: React.FC = () => {
 
                     <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-xs font-bold">
                       <span className="text-slate-500">5% Platform Fee:</span>
-                      <span className="font-mono text-[#0F766E]">{formatXAF(s.platformFeeTotalDue)}</span>
+                      <span className="font-mono text-[#0F766E]">{formatXAF(s.platformFeeTotalDue ?? 0)}</span>
                     </div>
                   </div>
                 );
@@ -201,7 +201,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Gross Laboratory Revenue</div>
                   <div className="text-lg font-black font-mono text-slate-900">
-                    {formatXAF(selectedSettlement.grossTestsRevenue)}
+                    {formatXAF(selectedSettlement.grossTestsRevenue ?? 0)}
                   </div>
                   <p className="text-[10px] text-slate-500">100% collected by facility</p>
                 </div>
@@ -209,7 +209,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Patient Share Encaissée</div>
                   <div className="text-lg font-black font-mono text-slate-900">
-                    {formatXAF(selectedSettlement.totalPatientShareRevenue)}
+                    {formatXAF(selectedSettlement.totalPatientShareRevenue ?? 0)}
                   </div>
                   <p className="text-[10px] text-slate-500">Subject to 5% fee calculation</p>
                 </div>
@@ -217,7 +217,7 @@ export const MonthlySettlementScreen: React.FC = () => {
                 <div className="p-4 bg-teal-50 rounded-2xl border border-teal-200 space-y-1">
                   <div className="text-[10px] uppercase font-bold text-[#0F766E]">nanoLabs Fee Due (5%)</div>
                   <div className="text-lg font-black font-mono text-[#0D3B38]">
-                    {formatXAF(selectedSettlement.platformFeeTotalDue)}
+                    {formatXAF(selectedSettlement.platformFeeTotalDue ?? 0)}
                   </div>
                   <p className="text-[10px] text-teal-800 font-semibold">TVA Exonérée (0%)</p>
                 </div>
