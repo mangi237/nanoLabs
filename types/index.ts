@@ -73,7 +73,7 @@ export interface TestBatch {
   patientPhone?: string;
   patientAge?: number;
   patientGender?: string;
-  labId: string;
+  labId?: string;
   labName: string;
   sampleMode: SampleMode;
   status: BatchStatus;
@@ -284,7 +284,7 @@ export interface ConnectionRequest {
 
 export interface ReferringDoctor {
   id: string;
-  labId: string;
+  labId?: string;
   doctorId?: string;
   name: string;
   specialty?: string;
@@ -610,6 +610,7 @@ export interface Doctor {
   phone: string;
   specialty?: string;
   licenseNumber?: string;
+  labId?: string;
   hospitalAffiliation?: string;
   hospital?: string;
   avatarUrl?: string;
