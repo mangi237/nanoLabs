@@ -24,10 +24,16 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - run: node scripts/check-google-keys.mjs
       - run: npm test
+      - name: Compile pull requests with isolated demo configuration
+        if: github.event_name == 'pull_request'
+        run: npm run build -- --mode demo
       - name: Build matching hosted environment
+        if: github.event_name == 'push'
         run: node scripts/build-hosted.mjs "$TARGET"
         env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.NANOLABS_FIREBASE_BROWSER_API_KEY }}
           TARGET: ${{ github.ref_type == 'tag' && 'prod' || 'dev' }}
       - name: Release only commits from v2-branch
         if: github.ref_type == 'tag'

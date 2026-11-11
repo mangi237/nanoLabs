@@ -6,7 +6,7 @@ Test: https://nanolabs-dev.eneza.workers.dev
 
 `wrangler.jsonc` deploys static Vite assets to Cloudflare Workers (`nanolabs`, or `--env dev` for `nanolabs-dev`). This avoids the existing account’s Pages project limit. GitHub Actions now performs the direct upload after checks on `v2-branch` or a production release tag; see `CI-CD.md`.
 
-Build with environment-specific public settings, then deploy that exact build. `VITE_API_URL` points to the matching Cloud Run API, `VITE_FIREBASE_TENANT_ID` selects the isolated identity tenant, and `VITE_USE_FIREBASE_EMULATORS=false`. `VITE_ENVIRONMENT=staging` displays the test banner; live uses `production`. Other `VITE_FIREBASE_*` settings come from the nanoLabs Firebase web-app configuration. These identify the public Firebase app and are not server credentials. Never add the Gemini or database secrets to any `VITE_` variable.
+Build with environment-specific public settings, then deploy that exact build. `VITE_API_URL` points to the matching Cloud Run API, `VITE_FIREBASE_TENANT_ID` selects the isolated identity tenant, and `VITE_USE_FIREBASE_EMULATORS=false`. `VITE_ENVIRONMENT=staging` displays the test banner; live uses `production`. The dedicated `VITE_FIREBASE_API_KEY` comes from Secret Manager `NANOLABS__FIREBASE_BROWSER_API_KEY` via the encrypted GitHub build secret; it is not tracked in Git. Other `VITE_FIREBASE_*` settings come from the nanoLabs Firebase web-app configuration. These identify the public Firebase app and are not server credentials. Never add the Gemini or database secrets to any `VITE_` variable.
 
 Live API: https://nanolabs-api-prod-dysic27f5a-ew.a.run.app
 
