@@ -30,7 +30,7 @@ export interface RenderedReportData {
 }
 
 export function buildReportModel(batch: TestBatch): RenderedReportData {
-  const branding = getLabBranding(batch.labId);
+  const branding = getLabBranding(batch.labId ?? '');
   const qrAuditHash = batch.qrAuditHash || `NL-${batch.id}-${Date.now().toString(36).toUpperCase()}`;
 
   const currentHost = typeof window !== 'undefined' ? window.location.origin : 'https://nanolabs.cm';

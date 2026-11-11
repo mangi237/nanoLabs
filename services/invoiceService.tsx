@@ -82,7 +82,7 @@ export function generateInvoiceForBatch(
     batchId: batch.id,
     patientId: batch.patientId,
     patientName: batch.patientName,
-    labId: batch.labId,
+    labId: batch.labId ?? '' ,
     labName: batch.labName,
     lines,
     subtotal,

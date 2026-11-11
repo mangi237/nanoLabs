@@ -38,11 +38,16 @@ interface PatientProfileScreenProps {
   onNavigateInsurance?: () => void;
   onNavigateHealthRecords?: () => void;
   onLogout?: () => void;
+  onNotificationPress?: () => void;
+  onNavigateRoleSwitcher?: () => void;
 }
 
 export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onBack,
-  onLogout
+  onLogout,
+  onNavigateRoleSwitcher,
+  onNotificationPress,
+  
 }) => {
   const { user, setUser, logout } = useAuth();
   const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();

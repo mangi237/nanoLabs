@@ -117,7 +117,7 @@ export interface Invoice {
   beneficiaryName?: string;
   policyHolderName?: string;
   patientPhone?: string;
-  labId: string;
+  labId: string ;
   labName: string;
   lines?: InvoiceLine[];
   items?: Array<{ testId: string; code: string; name: string; price: number }>;
