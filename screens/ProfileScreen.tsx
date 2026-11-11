@@ -47,7 +47,7 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   onLogout,
   onNavigateRoleSwitcher,
   onNotificationPress,
-  
+
 }) => {
   const { user, setUser, logout } = useAuth();
   const { activeProfile, isDependentActive, editFamilyMember } = useFamilyProfile();
@@ -106,12 +106,12 @@ export const PatientProfileScreen: React.FC<PatientProfileScreenProps> = ({
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        const { limsService } = await import('../../nanoLabs/services/limsService');
+        const { limsService } = await import('../services/limsService');
         const allBookings = await limsService.fetchPatientBookingsAcrossLabs(
           user?.labId ? [user.labId] : []
         );
 
-        const matchedBookings = allBookings.filter((b) =>
+        const matchedBookings = allBookings.filter((b: any) =>
           doesBookingBelongToPatient(b, user, activeProfile, isDependentActive)
         );
 
